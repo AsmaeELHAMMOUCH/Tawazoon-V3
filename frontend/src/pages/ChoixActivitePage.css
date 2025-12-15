@@ -1,0 +1,320 @@
+/* ----- PAGE WRAPPER AVEC BACKGROUND ----- */
+.choix-page {
+  position: relative;
+  min-height: 100vh;
+  width: 100%;
+  padding: 2rem;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  color: #fff;
+  overflow: hidden;
+
+  background-color: #0a0f1c; /* fallback */
+  background-image: url("/img/bg-barid-esign.jpg"); /* <= ton image fusionnée */
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+
+/* couche teinte + vignette + léger dégradé vert/bleu foncé */
+.choix-overlay {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(
+      circle at 40% 30%,
+      rgba(0, 94, 168, 0.28) 0%,
+      rgba(3, 26, 49, 0.7) 55%,
+      rgba(17, 46, 58, 0.9) 100%
+    ),
+    linear-gradient(
+      130deg,
+      rgba(27, 143, 233, 0.4) 0%,
+      rgba(174, 212, 248, 0.6) 60%
+    );
+  backdrop-filter: blur(3px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ----- CARTE GLASS ----- */
+.choix-card {
+  position: relative;
+  z-index: 1;
+
+  width: 100%;
+  max-width: 420px;
+
+  background: rgba(8, 24, 28, 0.6);
+  background-image: radial-gradient(
+    circle at 20% 0%,
+    rgba(105, 105, 103, 0.18) 0%,
+    rgba(0, 122, 122, 0) 60%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.22);
+
+  border-radius: 1rem;
+  padding: 2rem;
+
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.8),
+    0 0 60px rgba(0, 116, 204, 0.3);
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* ----- HEADER DANS LA CARTE ----- */
+.choix-card-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+
+
+
+.choix-title {
+  font-size: 1.4rem;
+  font-weight: 600;
+  line-height: 1.2;
+  margin: 0;
+  color: #fff;
+  text-shadow: 0 2px 10px rgba(0,0,0,0.8);
+}
+
+.choix-subtitle {
+  font-size: 0.9rem;
+  color: #dbe3ef;
+  line-height: 1.4;
+  margin: 0;
+  opacity: 0.9;
+}
+
+/* ----- CHAMP SELECT ----- */
+.choix-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.choix-label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #cfd8e3;
+}
+
+.choix-select {
+  width: 100%;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.3);
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  color: #fff;
+  font-size: 0.9rem;
+  line-height: 1.2;
+  outline: none;
+  appearance: none;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+
+.choix-select:focus {
+  border: 1px solid rgba(0,116,204,0.9);
+  box-shadow:
+    0 0 0 4px rgba(0,116,204,0.4),
+    0 20px 40px rgba(0,116,204,0.4);
+}
+
+/* ----- CTA BUTTON ----- */
+.choix-button {
+  width: 100%;
+  border: 0;
+  border-radius: 0.75rem;
+  padding: 0.8rem 1rem;
+  font-weight: 600;
+  font-size: 0.95rem;
+  line-height: 1.2;
+  color: #fff;
+  cursor: pointer;
+  text-align: center;
+  background-image: linear-gradient(135deg, #0077b6 0%, #48cae4 100%);
+  box-shadow:
+    0 12px 24px rgba(0, 119, 182, 0.5),
+    0 4px 8px rgba(72, 202, 228, 0.4);
+  transition: all 0.18s ease;
+}
+
+.choix-button:hover {
+  box-shadow:
+    0 16px 32px rgba(0, 119, 182, 0.7),
+    0 6px 12px rgba(72, 202, 228, 0.6);
+  transform: translateY(-2px) scale(1.02);
+}
+
+.choix-button:active {
+  transform: scale(0.99) translateY(0);
+}
+
+
+.choix-button:active {
+  transform: scale(0.99) translateY(0);
+}
+
+/* ----- HELPER TEXT ----- */
+.choix-helper {
+  font-size: 0.7rem;
+  line-height: 1.4;
+  color: #9fb3ca;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+}
+
+.helper-icon {
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(255,255,255,0.4);
+  color: #fff;
+  background: rgba(255,255,255,0.1);
+  font-size: 0.6rem;
+  font-weight: 600;
+  line-height: 1rem;
+  text-align: center;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+}
+/* Masquer la flèche par défaut du select natif */
+.choix-select__control {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+}
+
+/* S'assurer que react-select prend tout l'espace */
+
+.choix-select__value-container,
+.choix-select__placeholder,
+.choix-select__single-value {
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+
+
+/* Style pour le menu déroulant */
+.choix-select .choix__menu {
+  background: white !important;
+  border-radius: 0.5rem !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5) !important;
+  margin-top: 0.5rem !important;
+}
+
+/* Style pour les options */
+.choix-select .choix__option {
+  color: black !important;
+  background: white !important;
+}
+
+/* Style pour l'option sélectionnée */
+.choix-select .choix__option--is-selected {
+  background: rgba(0, 116, 204, 0.3) !important;
+}
+
+/* Style pour l'option survolée */
+.choix-select .choix__option--is-focused {
+  background: rgba(0, 116, 204, 0.1) !important;
+}
+
+/* Style pour le placeholder */
+.choix-select .choix__placeholder {
+  color: #cfd8e3 !important;
+}
+
+/* Style pour la valeur sélectionnée */
+.choix-select .choix__single-value {
+  color: #fff !important;
+}
+
+
+
+/* Style pour le menu déroulant */
+.choix__menu {
+  background: white !important;
+  border-radius: 0.5rem !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5) !important;
+  margin-top: 0.5rem !important;
+}
+
+/* Style pour les options */
+.choix__option {
+  color: black !important;
+  background: white !important;
+}
+
+/* Style pour l'option sélectionnée */
+.choix__option--is-selected {
+  background: rgba(0, 116, 204, 0.3) !important;
+}
+
+/* Style pour l'option survolée */
+.choix__option--is-focused {
+  background: rgba(0, 116, 204, 0.1) !important;
+}
+
+/* Style pour le placeholder */
+.choix__placeholder {
+  color: #cfd8e3 !important;
+}
+
+/* Style pour la valeur sélectionnée */
+.choix__single-value {
+  color: #fff !important;
+}
+
+/* Style pour l'indicateur (flèche) */
+.choix__indicator-separator {
+  display: none !important;
+}
+
+.choix__dropdown-indicator {
+  color: #fff !important;
+}
+
+/* Conteneur pour le logo (centré en haut) */
+.choix-logo-container {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 0.5rem; /* Espace entre le logo et le badge */
+}
+
+/* Style pour le logo (plus grand) */
+.choix-logo {
+  width: 100px; /* Taille plus grande */
+  height: 100px;
+  object-fit: contain;
+}
+
+/* Style pour le badge*/
+.choix-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #ffffff;
+  background: linear-gradient(135deg, #0077b6 0%, #48cae4 100%);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  padding: 0.4rem 0.6rem;
+  line-height: 1;
+  border-radius: 9999px;
+  width: fit-content;
+  box-shadow: 0 4px 12px rgba(0, 119, 182, 0.6);
+  /* margin: 0 auto; Centre le badge */
+  display: block; /* Permet de centrer avec margin: 0 auto */
+}

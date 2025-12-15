@@ -1,0 +1,11 @@
+# Utiliser LF partout (recommandé pour projets pro)
+* text=auto eol=lf
+
+# Fichiers spécifiques
+*.sh text eol=lf
+*.py text eol=lf
+*.js text eol=lf
+*.jsx text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.json text eol=lf

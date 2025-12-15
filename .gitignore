@@ -1,0 +1,39 @@
+node_modules
+# === Python / FastAPI ===
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.sqlite3
+*.db
+.env
+.env.*
+.venv/
+venv/
+env/
+.idea/
+.vscode/
+
+# Logs
+*.log
+
+# Dist / builds
+dist/
+build/
+
+# Migrations (si besoin tu peux ajuster)
+*/migrations/__pycache__/
+
+# === Node / React (frontend) ===
+node_modules/
+frontend/node_modules/
+frontend/build/
+frontend/dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db

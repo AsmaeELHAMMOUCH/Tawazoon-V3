@@ -1,0 +1,39 @@
+﻿import { useNavigate } from 'react-router-dom'
+import { ArrowLeftIcon } from '@heroicons/react/24/outline'
+import { useEffect } from 'react'
+import Chart from '../components/Chart' // ton composant graphique existant
+
+import { useLocation } from 'react-router-dom'
+
+const { state } = useLocation()
+const formData = state?.data || {}
+
+
+export default function GraphPage() {
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    document.title = 'Graphique â€“ Simulation RH'
+  }, [])
+
+  return (
+    <div className="p-6 space-y-6">
+      <div className="flex items-center gap-3">
+        <button
+          onClick={() => navigate(-1)}
+          className="flex items-center gap-1 text-[#0a5aa8] hover:underline"
+        >
+          <ArrowLeftIcon className="w-5 h-5" />
+          Retour
+        </button>
+        <h1 className="text-xl font-semibold text-slate-800">Graphique de Simulation</h1>
+      </div>
+
+      <div className="bg-white rounded-2xl shadow p-5">
+        {/* ton composant de graphique */}
+        <Chart />
+      </div>
+    </div>
+  )
+}
+

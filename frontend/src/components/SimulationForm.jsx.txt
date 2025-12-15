@@ -1,0 +1,252 @@
+﻿// src/components/SimulationForm.jsx
+"use client"
+
+import { useEffect, useMemo, useState } from "react"
+import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import { BarChart3, Play } from "lucide-react"
+
+export default function SimulationForm({
+  initial = {},
+  onRun,           // (payload) => void
+  onShowChart,     // () => void
+}) {
+  const [mode, setMode] = useState(initial.mode ?? "actuel")
+  const [regions, setRegions] = useState([])
+  const [centres, setCentres] = useState([])
+  const [postes, setPostes] = useState([])
+
+  const [formData, setFormData] = useState({
+    regionId: initial.regionId ?? "",
+    centreId: initial.centreId ?? "",
+    posteId: initial.posteId ?? "",
+    categorie: initial.categorie ?? "Activité Postale",
+    sacs: initial.sacs ?? "150",
+    colis: initial.colis ?? "80",
+    courrier: initial.courrier ?? "500",
+    productivite: initial.productivite ?? "85",
+    heuresNet: initial.heuresNet ?? "7.2",
+  })
+
+  // ----- Chargement filtres -----
+  useEffect(() => {
+    fetch("/api/filters/regions")
+      .then(async r => Array.isArray(await r.json()) ? await r.json() : [])
+      .then(setRegions)
+      .catch(() => setRegions([]))
+  }, [])
+
+  useEffect(() => {
+    if (!formData.regionId) { setCentres([]); setFormData(v => ({ ...v, centreId: "" })); return }
+    fetch(`/api/filters/centres?region_id=${encodeURIComponent(formData.regionId)}`)
+      .then(async r => Array.isArray(await r.json()) ? await r.json() : [])
+      .then(setCentres)
+      .catch(() => setCentres([]))
+  }, [formData.regionId])
+
+  useEffect(() => {
+    // si tu as un endpoint des postes par centre/catégorie, adapte ici :
+    fetch(`/api/filters/positions?categorie=${encodeURIComponent(formData.categorie)}`)
+      .then(async r => Array.isArray(await r.json()) ? await r.json() : [])
+      .then(setPostes)
+      .catch(() => setPostes([]))
+  }, [formData.categorie])
+
+  const canRun = useMemo(() => (
+    mode && formData.regionId && formData.centreId && (formData.posteId || postes.length === 0)
+  ), [mode, formData, postes])
+
+  const reset = () => {
+    setMode("actuel")
+    setFormData({
+      regionId: "",
+      centreId: "",
+      posteId: "",
+      categorie: "Activité Postale",
+      sacs: "150",
+      colis: "80",
+      courrier: "500",
+      productivite: "85",
+      heuresNet: "7.2",
+    })
+  }
+
+  const handleRun = () => {
+    if (!canRun) return
+    onRun?.({
+      mode,
+      region_id: formData.regionId,
+      centre_id: formData.centreId,
+      poste_id: formData.posteId || null,
+      categorie: formData.categorie,
+      params: {
+        sacs_jour: Number(formData.sacs || 0),
+        colis_jour: Number(formData.colis || 0),
+        courrier_jour: Number(formData.courrier || 0),
+        productivite_pct: Number(formData.productivite || 0),
+        heures_net_jour: Number(formData.heuresNet || 0),
+      }
+    })
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* En-tête de la page */}
+      <div>
+        <h2 className="text-3xl font-bold text-gray-900 mb-2">Simulation des Effectifs</h2>
+        <p className="text-gray-600">Configurez les paramètres de votre simulation pour analyser les effectifs</p>
+      </div>
+
+      <Card className="p-8 shadow-lg border border-gray-200">
+        <div className="space-y-6">
+          {/* Mode */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-semibold text-gray-900 uppercase tracking-wide mr-2">Mode</span>
+            <div className="inline-flex rounded-lg border border-gray-200 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setMode("actuel")}
+                className={`px-4 py-2 text-sm ${mode === "actuel" ? "bg-[#005EA8] text-white" : "bg-white hover:bg-gray-50"}`}
+              >
+                Actuel
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode("recommande")}
+                className={`px-4 py-2 text-sm ${mode === "recommande" ? "bg-[#005EA8] text-white" : "bg-white hover:bg-gray-50"}`}
+              >
+                Recommandé
+              </button>
+            </div>
+          </div>
+
+          {/* Paramètres principaux */}
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wide mb-4">
+              Paramètres Principaux
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Région</label>
+                <select
+                  value={formData.regionId}
+                  onChange={(e) => setFormData({ ...formData, regionId: e.target.value })}
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#005EA8] focus:border-transparent transition-all"
+                >
+                  <option value="">Sélectionner…</option>
+                  {(regions || []).map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Catégorie</label>
+                <select
+                  value={formData.categorie}
+                  onChange={(e) => setFormData({ ...formData, categorie: e.target.value })}
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#005EA8] focus:border-transparent transition-all"
+                >
+                  <option>Activité Postale</option>
+                  <option>Activité Financière</option>
+                  <option>Activité Logistique</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Centre</label>
+                <select
+                  value={formData.centreId}
+                  onChange={(e) => setFormData({ ...formData, centreId: e.target.value })}
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#005EA8] focus:border-transparent transition-all"
+                  disabled={!formData.regionId}
+                >
+                  <option value="">Sélectionner…</option>
+                  {(centres || []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Poste</label>
+                <select
+                  value={formData.posteId}
+                  onChange={(e) => setFormData({ ...formData, posteId: e.target.value })}
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#005EA8] focus:border-transparent transition-all"
+                >
+                  <option value="">Tous</option>
+                  {(postes || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-gray-200" />
+
+          {/* Volumes & productivité */}
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wide mb-4">
+              Volumes et Productivité
+            </h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              {[
+                { key: "sacs", label: "Sacs/Jour", type: "number" },
+                { key: "colis", label: "Colis/Jour", type: "number" },
+                { key: "courrier", label: "Courrier/Jour", type: "number" },
+                { key: "productivite", label: "Productivité (%)", type: "number" },
+              ].map(f => (
+                <div key={f.key}>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">{f.label}</label>
+                  <input
+                    type={f.type}
+                    value={formData[f.key]}
+                    onChange={(e) => setFormData({ ...formData, [f.key]: e.target.value })}
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#005EA8] focus:border-transparent transition-all"
+                  />
+                </div>
+              ))}
+
+              <div className="col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Heures Net/Jour</label>
+                <input
+                  type="text"
+                  value={formData.heuresNet}
+                  onChange={(e) => setFormData({ ...formData, heuresNet: e.target.value })}
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg bg-gray-50 text-gray-700"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-gray-200" />
+
+          {/* Actions */}
+          <div className="flex flex-wrap gap-3 pt-2">
+            <Button
+              disabled={!canRun}
+              onClick={handleRun}
+              className="bg-[#005EA8] hover:bg-[#004a87] text-white px-6 py-2.5 rounded-lg font-medium transition-all shadow-sm disabled:opacity-60"
+            >
+              <Play className="w-4 h-4 mr-2" />
+              Lancer Simulation
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={onShowChart}
+              className="border-[#0074CC] text-[#0074CC] hover:bg-[#0074CC] hover:text-white bg-white px-6 py-2.5 rounded-lg font-medium transition-all"
+            >
+              <BarChart3 className="w-4 h-4 mr-2" />
+              Afficher Graphe
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={reset}
+              className="border-gray-300 text-gray-700 hover:bg-gray-50 px-6 py-2.5 rounded-lg font-medium transition-all bg-transparent"
+            >
+              Réinitialiser
+            </Button>
+          </div>
+        </div>
+      </Card>
+    </div>
+  )
+}
