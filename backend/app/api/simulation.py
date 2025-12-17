@@ -48,87 +48,12 @@ def compute_global_params_inline(p: GlobalParamsIn) -> GlobalParamsOut:
 def calculate_global_params(p: GlobalParamsIn):
     return compute_global_params_inline(p)
 
-JOURS_OUVRES_AN = 264  # 22 jours * 12 mois
-
-
-# -------------------------------------------------------------------
-# Helpers catégorie / volumes
-# -------------------------------------------------------------------
-def _as_snake_annual(va: Optional[VolumesAnnuels]) -> Dict[str, float]:
-    if not va:
-        return {}
-    try:
-        d = va.dict()
-    except Exception:
-        d = dict(va)
-
-    found_any = False
-
-    def g(*keys, default=0.0):
-        nonlocal found_any
-        for k in keys:
-            if k in d and d[k] is not None:
-                found_any = True
-                return float(d[k] or 0)
-        return float(default)
-
-    annual = {
-        "courrier_ordinaire": g("courrier_ordinaire", "courrierOrdinaire"),
-        "courrier_recommande": g("courrier_recommande", "courrierRecommande"),
-        "ebarkia": g("ebarkia"),
-        "lrh": g("lrh"),
-        "amana": g("amana"),
-    }
-    return annual if found_any else {}
-
-
-def _annual_to_daily_post(vols: Dict[str, float]) -> Dict[str, float]:
-    """
-    Reçoit des volumes ANNUELS (sacs/colis/scellé) et les convertit en /jour.
-    Utilisé aussi bien par le POST que par le GET (via SimulationRequest).
-    """
-    v = {**vols}
-
-    def div_if_present(key: str):
-        val = float(v.get(key, 0) or 0)
-        v[key] = val / JOURS_OUVRES_AN
-
-    div_if_present("sacs")
-    div_if_present("colis")
-    div_if_present("scelle")
-
-    if "colis_amana_par_sac" in v:
-        v["colis_amana_par_sac"] = float(v.get("colis_amana_par_sac") or 5.0)
-    if "courriers_par_sac" in v:
-        v["courriers_par_sac"] = float(v.get("courriers_par_sac") or 4500.0)
-
-    return v
-
-
-def creer_tache_regroupee(nom, taches_list, type_courrier):
-    if not taches_list:
-        return None
-
-    total_moyenne = sum(t.get("moyenne_min", 0) for t in taches_list)
-    moyenne_generique = total_moyenne / len(taches_list)
-    premiere_tache = taches_list[0]
-
-    unite_finale = "courriers"
-    cp_id = premiere_tache.get("centre_poste_id")
-    if cp_id is None:
-        cp_id = f"NA_{type_courrier}"
-
-    return {
-        "id": f"regroupe_{type_courrier}",
-        "nom_tache": nom,
-        "phase": f"traitement_{type_courrier}",
-        "unite_mesure": unite_finale,
-        "moyenne_min": round(moyenne_generique, 4),
-        "centre_poste_id": cp_id,
-        "poste_id": premiere_tache.get("poste_id"),
-        "type_flux": type_courrier,
-    }
-
+from app.services.simulation_shared import (
+    as_snake_annual,
+    annual_to_daily_post,
+    regroup_tasks_for_scenarios,
+    creer_tache_regroupee
+)
 
 # -------------------------------------------------------------------
 # /simulate : Vue Intervenant
@@ -166,54 +91,13 @@ def simulate_effectifs(request: SimulationRequest, db: Session = Depends(get_db)
         rows = db.execute(text(sql), params).mappings().all()
         taches = [dict(r) for r in rows] if rows else []
 
-        # 2) regroupement courrier
-        taches_courrier, taches_autres = [], []
-        for tache in taches:
-            unite = (tache.get("unite_mesure") or "").strip().lower()
-            if unite == "courriers":
-                taches_courrier.append(tache)
-            else:
-                taches_autres.append(tache)
-
-        t_co, t_cr, t_eb, t_lrh, t_gen = [], [], [], [], []
-        for tache in taches_courrier:
-            nom_tache = (tache.get("nom_tache") or "").lower()
-            if any(mot in nom_tache for mot in ["ordinaire", "ordinaires"]):
-                t_co.append(tache)
-            elif any(mot in nom_tache for mot in ["recommandé", "recommandes", "recommandée", "recommand"]):
-                t_cr.append(tache)
-            elif any(mot in nom_tache for mot in ["ebarkia", "e-barkia", "barkia"]):
-                t_eb.append(tache)
-            elif "lrh" in nom_tache:
-                t_lrh.append(tache)
-            else:
-                t_gen.append(tache)
-
-        taches_finales = taches_autres.copy()
-
-        for nom, data, flux in [
-            ("TRAITEMENT COURRIER ORDINAIRE CONSOLIDÉ", t_co, "ordinaire"),
-            ("TRAITEMENT COURRIER RECOMMANDÉ CONSOLIDÉ", t_cr, "recommande"),
-            ("TRAITEMENT E-BARKIA CONSOLIDÉ", t_eb, "ebarkia"),
-            ("TRAITEMENT LRH CONSOLIDÉ", t_lrh, "lrh"),
-        ]:
-            tr = creer_tache_regroupee(nom, data, flux)
-            if tr:
-                taches_finales.append(tr)
-
-        if t_gen:
-            tg = creer_tache_regroupee(
-                "TRAITEMENT TOUS COURRIERS CONSOLIDÉ",
-                t_gen,
-                "tous",
-            )
-            if tg:
-                taches_finales.append(tg)
+        # 2) regroupement courrier (LOGIC SHARED)
+        taches_finales = regroup_tasks_for_scenarios(taches)
 
         # 3) volumes
-        va_dict = _as_snake_annual(getattr(request, "volumes_annuels", None))
+        va_dict = as_snake_annual(getattr(request, "volumes_annuels", None))
         volumes_journaliers = request.volumes.dict() if request.volumes else {}
-        volumes_journaliers = _annual_to_daily_post(volumes_journaliers)
+        volumes_journaliers = annual_to_daily_post(volumes_journaliers)
 
         # conserver les ratios transmis (pas de conversion /jour)
         raw_req = request.dict(exclude_none=False)
@@ -226,9 +110,13 @@ def simulate_effectifs(request: SimulationRequest, db: Session = Depends(get_db)
             except (TypeError, ValueError):
                 return float(fallback)
 
-        volumes_journaliers["colis_amana_par_sac"] = _ratio("colis_amana_par_sac", 5.0)
-        volumes_journaliers["courriers_par_sac"] = _ratio("courriers_par_sac", 4500.0)
+        # Overwrite ratios explicitly if passed in raw request (because annual_to_daily_post sets defaults)
+        if _ratio("colis_amana_par_sac", None) is not None:
+             volumes_journaliers["colis_amana_par_sac"] = _ratio("colis_amana_par_sac", 5.0)
+        if _ratio("courriers_par_sac", None) is not None:
+             volumes_journaliers["courriers_par_sac"] = _ratio("courriers_par_sac", 4500.0)
         volumes_journaliers["colis_par_collecte"] = _ratio("colis_par_collecte", 1.0)
+
 
         # DEBUG : vérifier les ratios reçus (Vue Intervenant)
         print("DEBUG simulate volumes_journaliers =", volumes_journaliers)
@@ -327,54 +215,13 @@ def simulate_vue_centre_optimisee(
         ).mappings().all()
         taches = [dict(r) for r in rows] if rows else []
 
-        # 2) regroupement courrier
-        taches_courrier, taches_autres = [], []
-        for tache in taches:
-            unite = (tache.get("unite_mesure") or "").strip().lower()
-            if unite == "courriers":
-                taches_courrier.append(tache)
-            else:
-                taches_autres.append(tache)
-
-        t_co, t_cr, t_eb, t_lrh, t_gen = [], [], [], [], []
-        for tache in taches_courrier:
-            nom_tache = (tache.get("nom_tache") or "").lower()
-            if any(mot in nom_tache for mot in ["ordinaire", "ordinaires"]):
-                t_co.append(tache)
-            elif any(mot in nom_tache for mot in ["recommandé", "recommandes", "recommandée", "recommand"]):
-                t_cr.append(tache)
-            elif any(mot in nom_tache for mot in ["ebarkia", "e-barkia", "barkia"]):
-                t_eb.append(tache)
-            elif "lrh" in nom_tache:
-                t_lrh.append(tache)
-            else:
-                t_gen.append(tache)
-
-        taches_finales = taches_autres.copy()
-
-        for nom, data, flux in [
-            ("TRAITEMENT COURRIER ORDINAIRE CONSOLIDÉ", t_co, "ordinaire"),
-            ("TRAITEMENT COURRIER RECOMMANDÉ CONSOLIDÉ", t_cr, "recommande"),
-            ("TRAITEMENT E-BARKIA CONSOLIDÉ", t_eb, "ebarkia"),
-            ("TRAITEMENT LRH CONSOLIDÉ", t_lrh, "lrh"),
-        ]:
-            tr = creer_tache_regroupee(nom, data, flux)
-            if tr:
-                taches_finales.append(tr)
-
-        if t_gen:
-            tg = creer_tache_regroupee(
-                "TRAITEMENT TOUS COURRIERS CONSOLIDÉ",
-                t_gen,
-                "tous",
-            )
-            if tg:
-                taches_finales.append(tg)
+        # 2) regroupement courrier (SHARED)
+        taches_finales = regroup_tasks_for_scenarios(taches)
 
         # 3) volumes
-        va_dict = _as_snake_annual(getattr(request, "volumes_annuels", None))
+        va_dict = as_snake_annual(getattr(request, "volumes_annuels", None))
         volumes_journaliers = request.volumes.dict() if request.volumes else {}
-        volumes_journaliers = _annual_to_daily_post(volumes_journaliers)
+        volumes_journaliers = annual_to_daily_post(volumes_journaliers)
 
         # 🔹 préserver les ratios transmis (pas de conversion /jour)
         raw_req = request.dict(exclude_none=False)
@@ -388,9 +235,9 @@ def simulate_vue_centre_optimisee(
                 val = raw_vols.get(key, None)
             return float(val) if val not in (None, "") else float(fallback)
 
-        volumes_journaliers["colis_amana_par_sac"] = _ratio("colis_amana_par_sac", 5.0)
-        volumes_journaliers["courriers_par_sac"] = _ratio("courriers_par_sac", 4500.0)
+        # Ratios specific overrides if needed (usually handled by annual_to_daily_post but safety here)
         volumes_journaliers["colis_par_collecte"] = _ratio("colis_par_collecte", 1.0)
+
 
         # 4) calcul
         sim_result: SimulationResponse = calculer_simulation(
