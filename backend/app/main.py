@@ -1,3 +1,4 @@
+# Force Reload Timestamp
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.refs import router as refs_router
@@ -10,13 +11,23 @@ from app.api.simuler_centre_par_type import router as simuler_centre_par_type_ro
 
 from app.api import refs
 from app.api.simulation import router as simulation_router
+from fastapi.responses import JSONResponse
+from fastapi import Request
+import traceback
 
 app = FastAPI(
     title="API Simulation Effectifs",
     description="API pour la simulation des effectifs avec flux en cascade",
-    version="1.0.0"
+    version="1.0.0",
+    debug=True
 )
-
+@app.exception_handler(Exception)
+async def debug_exception_handler(request: Request, exc: Exception):
+    traceback.print_exc()  # ✅ affiche le traceback complet dans le terminal
+    return JSONResponse(
+        status_code=500,
+        content={"error": str(exc), "where": "unhandled_exception"}
+    )
 # Configuration CORS
 app.add_middleware(
     CORSMiddleware,

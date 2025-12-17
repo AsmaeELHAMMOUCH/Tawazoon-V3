@@ -107,39 +107,68 @@ export function useDirectionData(api) {
     setLoading(prev => ({ ...prev, sim: true }));
     setError(null);
     try {
-      // payload: { direction_id, imported_volumes, productivite_pct, heures_net_jour... }
       const res = await api.simulate(payload);
       
-      // The backend returns { par_direction: [ { direction_id, label, heures, fte_calcule, fte_arrondi }, ... ], totaux: ... }
-      // In 'table' mode (Excel import), 'direction_id' in the response corresponds to the Centre ID.
-      // We merge these results into our existing 'centres' list.
-      
-      if (res && res.par_direction) {
+      // V2 Response Handling
+      if (res && res.rows) {
          setCentres(prevCentres => {
-             // Create a map of results for quick lookup
-             const resultMap = new Map(res.par_direction.map(r => [r.direction_id, r])); // direction_id holds Centre ID in table mode
+             const resultMap = new Map(res.rows.map(r => [r.centre_id, r]));
              
              return prevCentres.map(centre => {
                  const simResult = resultMap.get(centre.id);
                  if (simResult) {
                      return {
                          ...centre,
-                         // Update calculated fields
+                         etp_calcule: simResult.etp_calcule,
+                         etp_actuel: simResult.etp_actuel, // Update actual from simulation source if desired
+                         ecart: simResult.ecart,
+                         categorie: simResult.categorie, // Useful info
+                         heures: simResult.heures_calc
+                     };
+                 }
+                 return centre;
+             });
+         });
+
+         // Update Consolidation/KPIs directly from response
+         if (res.kpis) {
+             setConsolidation({
+                 rows: [], // Detailed rows are in centres list now
+                 totals: {
+                     etp_total: res.kpis.etp_actuel,
+                     etp_requis: res.kpis.etp_calcule,
+                     ecart: res.kpis.ecart_global,
+                     nb_centres: res.kpis.nb_centres
+                 },
+                 // Store charts if needed
+                 charts: {
+                     dist: res.chart_distribution_moi_mod,
+                     top: res.chart_top_gaps
+                 },
+                 report: res.report
+             });
+         }
+      } 
+      // Legacy Fallback (optional, can be removed if strictly V2)
+      else if (res && res.par_direction) {
+         setCentres(prevCentres => {
+             const resultMap = new Map(res.par_direction.map(r => [r.direction_id, r]));
+             return prevCentres.map(centre => {
+                 const simResult = resultMap.get(centre.id);
+                 if (simResult) {
+                     return {
+                         ...centre,
                          etp_calcule: simResult.fte_calcule,
                          etp_arrondi: simResult.fte_arrondi,
                          heures: simResult.heures,
-                         // Recalculate ecart
                          ecart: (simResult.fte_arrondi || 0) - (centre.fte_actuel || 0)
                      };
                  }
                  return centre;
              });
          });
-      }
-      
-      // Refresh consolidation after simulation
-      if (payload.direction_id) {
-          await fetchConsolidation(payload.direction_id, "direction");
+         // Trigger fetch for legacy
+         if (payload.direction_id) await fetchConsolidation(payload.direction_id, "direction");
       }
 
       return res;

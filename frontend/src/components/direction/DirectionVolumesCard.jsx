@@ -43,8 +43,26 @@ export default function DirectionVolumesCard({
     const fileInputRef = React.useRef(null);
 
     const handleDownloadTemplate = () => {
-        const headers = ["Nom du Centre", "Sacs / an", "C. ordinaire / an", "C. recommandé / an", "E-Barkia / an", "LRH / an", "Amana / an"];
-        const sample = [{ "Nom du Centre": "Exemple Centre", "Sacs / an": 0, "C. ordinaire / an": 0, "C. recommandé / an": 0, "E-Barkia / an": 0, "LRH / an": 0, "Amana / an": 0 }];
+        const headers = [
+            "Nom du Centre",
+            "Sacs / an",
+            "Colis / an",
+            "Courrier Ordinaire / an",
+            "Courrier Recommandé / an",
+            "E-Barkia / an",
+            "LRH / an",
+            "Amana / an"
+        ];
+        const sample = [{
+            "Nom du Centre": "Centre Principal",
+            "Sacs / an": 1000,
+            "Colis / an": 500,
+            "Courrier Ordinaire / an": 50000,
+            "Courrier Recommandé / an": 2000,
+            "E-Barkia / an": 100,
+            "LRH / an": 50,
+            "Amana / an": 300
+        }];
         const ws = XLSX.utils.json_to_sheet(sample, { header: headers });
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Modèle Volumes");
