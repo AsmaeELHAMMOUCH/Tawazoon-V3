@@ -417,11 +417,11 @@ export default function VueDirection({ api }) {
         {/* --- HIDDEN REPORT AREA FOR PDF CAPTURE --- */}
         <div
           id="official-report-area"
-          className="absolute top-0 left-[-9999px] w-[210mm] bg-white text-slate-900 p-[10mm] shadow-none"
+          className="fixed top-0 left-0 -z-50 w-[210mm] bg-white text-slate-900 p-[10mm] shadow-none"
           style={{
-            width: '210mm',
             minHeight: '297mm',
-            fontFamily: 'Arial, sans-serif'
+            fontFamily: 'Arial, sans-serif',
+            visibility: 'visible', // Ensure visibility for capture
           }}
         >
           {/* Report Header */}
