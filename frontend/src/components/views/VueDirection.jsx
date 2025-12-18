@@ -52,7 +52,7 @@ export default function VueDirection({ api }) {
   // We prioritize local state for this view to allow "What-If" scenarios without polluting global context immediately
   const [params, setParams] = useState({
     productivite: 100,
-    heuresParJour: 7.5,
+    heuresParJour: 8,
     idleMinutes: 0
   });
 
@@ -207,26 +207,27 @@ export default function VueDirection({ api }) {
   };
 
   const handleExportPDF = async () => {
-    const element = document.getElementById("dashboard-print-area");
+    const element = document.getElementById("official-report-area");
     if (!element) return;
 
-    // Toast or loading state if desired
+    // Temporarily make visible for capture if needed, or rely on off-screen rendering
+    // element.style.display = 'block'; 
+
     try {
       const imgData = await toPng(element, {
         quality: 0.95,
         pixelRatio: 2,
-        cacheBust: true
+        backgroundColor: '#ffffff', // Force white bg
+        cacheBust: true,
+        filter: (node) => !node.classList?.contains('no-print') // Optional filter
       });
 
       const pdf = new jsPDF("p", "mm", "a4");
       const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
 
       const imgProps = pdf.getImageProperties(imgData);
       const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
 
-      // If image is taller than page, we might need multiple pages or just scale? 
-      // For simplicity, just add one image for now.
       pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, imgHeight);
       pdf.save(`Rapport_Direction_${selectedDirection || "Sim"}.pdf`);
     } catch (err) {
@@ -236,7 +237,6 @@ export default function VueDirection({ api }) {
   };
 
   // 5. KPIs Construction
-  // Transform DirectionKPIS (backend) to frontend friendly format
   const backendKPIs = consolidation?.kpis || {};
   const kpis = {
     centers: backendKPIs.nb_centres || centersCountFallback(centres),
@@ -254,10 +254,12 @@ export default function VueDirection({ api }) {
     <div className="min-h-screen bg-slate-50/50 pb-10 space-y-6 animate-in fade-in duration-500" style={{ zoom: 0.9 }}>
       <main className="px-6 max-w-[1900px] mx-auto pt-6">
 
+        {/* ... (Header and Settings - kept same) ... */}
         {/* --- HEADER SELECTOR & SETTINGS --- */}
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
+          {/* ... (Same as before) ... */}
+          {/* Re-implementing simplified header for context of replacement */}
           <div className="flex items-center gap-4 bg-white p-2 pr-4 rounded-xl border border-slate-200 shadow-sm">
-            {/* ... existing selector ... */}
             <div className="bg-[#005EA8]/10 p-2.5 rounded-lg">
               <Building2 className="text-[#005EA8]" size={20} />
             </div>
@@ -280,7 +282,6 @@ export default function VueDirection({ api }) {
 
           {selectedDirection && (
             <div className="flex items-center gap-2">
-              {/* PDF Button */}
               <button
                 onClick={handleExportPDF}
                 className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-slate-50 transition-colors shadow-sm"
@@ -288,13 +289,11 @@ export default function VueDirection({ api }) {
               >
                 <span className="text-red-600">PDF</span>
               </button>
-
-              {/* Parameter Toggles */}
+              {/* ... (Settings Toggle - kept same) ... */}
               <div className={`
                         flex items-center gap-3 bg-white border border-slate-200 rounded-lg px-3 py-1.5 shadow-sm transition-all
                         ${showParams ? 'ring-2 ring-[#005EA8]/20' : ''}
                    `}>
-                {/* ... existing params toolbar ... */}
                 <button
                   onClick={() => setShowParams(!showParams)}
                   className="flex items-center gap-2 text-xs font-semibold text-slate-700 hover:text-[#005EA8]"
@@ -345,10 +344,10 @@ export default function VueDirection({ api }) {
           </div>
         )}
 
-        <div id="dashboard-print-area">
+        {/* --- SCREEN DASHBOARD ONLY --- */}
+        <div id="dashboard-screen">
           {selectedDirection && (
             <>
-              {/* --- GLASS KPIS --- */}
               <div className="mb-8">
                 <IndicateursDirection
                   currentDir={{ label: currentDirLabel || "Direction" }}
@@ -358,10 +357,7 @@ export default function VueDirection({ api }) {
               </div>
 
               <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-                {/* LEFT COLUMN: TABLE (8 cols) */}
                 <div className="xl:col-span-8 flex flex-col gap-6">
-
-                  {/* Result Warning if FTE = 0 (likely no volumes) */}
                   {kpis.etp === 0 && (
                     <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs p-3 rounded-lg flex items-center gap-2">
                       <AlertTriangle size={14} />
@@ -387,17 +383,134 @@ export default function VueDirection({ api }) {
                   )}
                 </div>
 
-                {/* RIGHT COLUMN: ACTIONS & CHARTS (4 cols) */}
                 <div className="xl:col-span-4 space-y-6">
-                  {/* Import Card */}
                   <DirectionVolumesCard onSimulate={handleManualSimulate} loading={loading.sim} />
-
-                  {/* Charts */}
                   <DirectionDonutsRow centres={centres} charts={consolidation.charts} />
                 </div>
               </div>
             </>
           )}
+        </div>
+
+        {/* --- HIDDEN REPORT AREA FOR PDF CAPTURE --- */}
+        <div
+          id="official-report-area"
+          className="absolute top-0 left-[-9999px] w-[210mm] bg-white text-slate-900 p-[10mm] shadow-none"
+          style={{
+            width: '210mm',
+            minHeight: '297mm',
+            fontFamily: 'Arial, sans-serif'
+          }}
+        >
+          {/* Report Header */}
+          <div className="flex items-center justify-between border-b-2 border-slate-800 pb-4 mb-8">
+            <img src="/BaridLogo.png" alt="Barid Al Maghrib" className="h-12 object-contain" />
+            <div className="text-center">
+              <h1 className="text-2xl font-bold uppercase tracking-widest text-[#005EA8]">Rapport de Simulation</h1>
+              <h2 className="text-lg font-semibold text-slate-600 mt-1">{currentDirLabel || "Direction"}</h2>
+              <p className="text-xs text-slate-400 mt-1">Généré le {new Date().toLocaleDateString()} à {new Date().toLocaleTimeString()}</p>
+            </div>
+            <img src="/almav.png" alt="Almav" className="h-10 object-contain" />
+          </div>
+
+          {/* Parameters Block */}
+          <div className="mb-6 bg-slate-50 border border-slate-200 p-4 rounded-lg">
+            <h3 className="text-xs font-bold uppercase text-slate-500 mb-2">Paramètres de Simulation</h3>
+            <div className="grid grid-cols-3 gap-4 text-sm">
+              <div className="flex flex-col">
+                <span className="text-slate-400 text-xs">Productivité</span>
+                <span className="font-bold">{params.productivite}%</span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-slate-400 text-xs">Temps de travail</span>
+                <span className="font-bold">{params.heuresParJour} h/j</span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-slate-400 text-xs">Temps d'attente</span>
+                <span className="font-bold">{params.idleMinutes} min</span>
+              </div>
+            </div>
+          </div>
+
+          {/* KPIs Block - Simplified for Print */}
+          <div className="grid grid-cols-4 gap-4 mb-8">
+            <div className="bg-[#005EA8] text-white p-4 rounded-lg text-center">
+              <div className="text-2xl font-bold">{kpis.centers}</div>
+              <div className="text-[10px] uppercase opacity-80">Centres</div>
+            </div>
+            <div className="bg-slate-100 p-4 rounded-lg text-center border border-slate-200">
+              <div className="text-2xl font-bold text-slate-700">{fmt(kpis.fte)}</div>
+              <div className="text-[10px] uppercase text-slate-500">ETP Actuel</div>
+            </div>
+            <div className="bg-slate-100 p-4 rounded-lg text-center border border-slate-200">
+              <div className="text-2xl font-bold text-slate-700">{fmt(kpis.etp)}</div>
+              <div className="text-[10px] uppercase text-slate-500">ETP Cible</div>
+            </div>
+            <div className={`p-4 rounded-lg text-center border ${kpis.delta > 0 ? 'bg-red-50 border-red-200 text-red-700' : 'bg-green-50 border-green-200 text-green-700'}`}>
+              <div className="text-2xl font-bold">{kpis.delta > 0 ? '+' : ''}{fmt(kpis.delta)}</div>
+              <div className="text-[10px] uppercase opacity-80">Écart</div>
+            </div>
+          </div>
+
+          {/* Data Tables */}
+          <div className="space-y-8">
+            <div>
+              <h3 className="text-sm font-bold border-l-4 border-[#005EA8] pl-2 mb-4 text-slate-800">Détail par Centre</h3>
+              <table className="w-full text-xs text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-100 text-slate-600 uppercase border-b border-slate-300">
+                    <th className="p-2">Centre</th>
+                    <th className="p-2">Catégorie</th>
+                    <th className="p-2 text-right">Actuel</th>
+                    <th className="p-2 text-right">Cible</th>
+                    <th className="p-2 text-right">Écart</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {centres.map((c, idx) => (
+                    <tr key={c.centre_id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
+                      <td className="p-2 font-medium">{c.centre_label}</td>
+                      <td className="p-2 text-slate-500">{c.categorie}</td>
+                      <td className="p-2 text-right">{fmt(c.etp_actuel)}</td>
+                      <td className="p-2 text-right font-bold">{fmt(c.etp_calcule)}</td>
+                      <td className={`p-2 text-right font-bold ${c.ecart > 0 ? 'text-red-600' : c.ecart < 0 ? 'text-green-600' : 'text-slate-400'}`}>
+                        {c.ecart > 0 ? '+' : ''}{fmt(c.ecart)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {consolidation.rows && consolidation.rows.length > 0 && (
+              <div>
+                <h3 className="text-sm font-bold border-l-4 border-purple-600 pl-2 mb-4 text-slate-800">Consolidé par Poste</h3>
+                <table className="w-full text-xs text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-100 text-slate-600 uppercase border-b border-slate-300">
+                      <th className="p-2">Poste</th>
+                      <th className="p-2 text-center">Type</th>
+                      <th className="p-2 text-right">Total Cible</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {consolidation.rows.map((row, idx) => (
+                      <tr key={idx}>
+                        <td className="p-2 font-medium">{row.label}</td>
+                        <td className="p-2 text-center text-[10px] font-bold text-slate-400">{row.type_poste}</td>
+                        <td className="p-2 text-right font-bold">{fmt(row.total_etp)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="absolute bottom-10 left-0 w-full text-center text-[10px] text-slate-400 border-t border-slate-100 pt-4">
+            Document généré automatiquement par la plateforme Tawazoon RH - Confidentiel
+          </div>
         </div>
 
         <DirectionPostesModal
