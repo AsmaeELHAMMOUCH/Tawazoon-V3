@@ -239,6 +239,8 @@ export default function VueDirection({ api }) {
         pixelRatio: 2,
         backgroundColor: '#ffffff', // Force white bg
         cacheBust: true,
+        skipFonts: true,
+        fontEmbedCSS: "", // Disable font embedding to avoid CORS SecurityError
         filter: (node) => !node.classList?.contains('no-print') // Optional filter
       });
 
