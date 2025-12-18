@@ -1,12 +1,12 @@
 import React, { useState, useMemo } from "react";
-import { Search, ChevronLeft, ChevronRight, ArrowUpDown, Eye } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, ArrowUpDown, Eye, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { fmt } from "../../utils/formatters";
 
 export default function DirectionCentresTable({ centres = [], loading, onOpenDetail }) {
     const [search, setSearch] = useState("");
     const [page, setPage] = useState(1);
     const pageSize = 10;
-    const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+    const [sortConfig, setSortConfig] = useState({ key: 'ratioLoad', direction: 'desc' }); // Default sort by criticality
 
     // 1. Filter
     const filtered = useMemo(() => {
@@ -18,13 +18,25 @@ export default function DirectionCentresTable({ centres = [], loading, onOpenDet
         );
     }, [centres, search]);
 
-    // 2. Sort
+    // 2. Prepare Data with Intelligent Metrics
+    const enriched = useMemo(() => {
+        return filtered.map(c => {
+            const actuel = c.fte_actuel || 0;
+            const cible = c.etp_calcule || 0;
+            // Ratio Charge: Cible / Actuel. 
+            // Ex: 10 cible / 5 actuel = 200% charge (Surcharge). 
+            // Ex: 5 cible / 10 actuel = 50% charge (Sous-charge).
+            const ratioLoad = actuel > 0 ? (cible / actuel) * 100 : (cible > 0 ? 999 : 0);
+            return { ...c, ratioLoad };
+        });
+    }, [filtered]);
+
+    // 3. Sort
     const sorted = useMemo(() => {
-        if (!sortConfig.key) return filtered;
-        return [...filtered].sort((a, b) => {
+        if (!sortConfig.key) return enriched;
+        return [...enriched].sort((a, b) => {
             let av = a[sortConfig.key];
             let bv = b[sortConfig.key];
-            // Handle numeric / nulls
             if (av == null) av = -Infinity;
             if (bv == null) bv = -Infinity;
 
@@ -32,9 +44,9 @@ export default function DirectionCentresTable({ centres = [], loading, onOpenDet
             if (av > bv) return sortConfig.direction === 'asc' ? 1 : -1;
             return 0;
         });
-    }, [filtered, sortConfig]);
+    }, [enriched, sortConfig]);
 
-    // 3. Paginate
+    // 4. Paginate
     const totalPages = Math.ceil(sorted.length / pageSize);
     const paginated = sorted.slice((page - 1) * pageSize, page * pageSize);
 
@@ -57,7 +69,6 @@ export default function DirectionCentresTable({ centres = [], loading, onOpenDet
             {/* Toolbar */}
             <div className="px-2 py-1.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                 <div className="flex items-center gap-2">
-                    {/* Optional Icon if you want consistency with others, e.g. <LayoutList size={14} className="text-[#005EA8]" /> */}
                     <h3 className="text-[10px] font-bold text-slate-800 uppercase tracking-wide">Détail Centre</h3>
                 </div>
                 <div className="relative group">
@@ -80,8 +91,8 @@ export default function DirectionCentresTable({ centres = [], loading, onOpenDet
                             <th className="px-2 py-1.5 cursor-pointer hover:bg-slate-100 transition-colors bg-slate-50 text-left" onClick={() => handleSort('label')}>
                                 <div className="flex items-center gap-1">Centre <SortIcon col="label" /></div>
                             </th>
-                            <th className="px-2 py-1.5 text-center bg-slate-50 w-16">
-                                Charge
+                            <th className="px-2 py-1.5 cursor-pointer hover:bg-slate-100 transition-colors text-center bg-slate-50 w-24" onClick={() => handleSort('ratioLoad')}>
+                                <div className="flex items-center justify-center gap-1">Charge <SortIcon col="ratioLoad" /></div>
                             </th>
                             <th className="px-2 py-1.5 text-right bg-slate-50">
                                 Actuel
@@ -103,7 +114,7 @@ export default function DirectionCentresTable({ centres = [], loading, onOpenDet
                             Array.from({ length: 5 }).map((_, i) => (
                                 <tr key={i} className="animate-pulse">
                                     <td className="px-2 py-1.5"><div className="h-2 bg-slate-100 rounded w-20"></div></td>
-                                    <td className="px-2 py-1.5"><div className="h-2 bg-slate-100 rounded w-10 mx-auto"></div></td>
+                                    <td className="px-2 py-1.5"><div className="h-2 bg-slate-100 rounded w-16 mx-auto"></div></td>
                                     <td className="px-2 py-1.5"><div className="h-2 bg-slate-100 rounded w-8 ml-auto"></div></td>
                                     <td className="px-2 py-1.5"><div className="h-2 bg-slate-100 rounded w-8 ml-auto"></div></td>
                                     <td className="px-2 py-1.5"><div className="h-2 bg-slate-100 rounded w-8 ml-auto"></div></td>
@@ -124,33 +135,57 @@ export default function DirectionCentresTable({ centres = [], loading, onOpenDet
                                 const actuel = row.fte_actuel || 0;
                                 const cible = row.etp_calcule || 0;
                                 const ecart = row.ecart || 0;
-                                const ratioLoad = actuel > 0 ? (cible / actuel) * 100 : (cible > 0 ? 100 : 0);
+                                const ratioLoad = row.ratioLoad || 0;
 
                                 let decision = { label: 'Maintenir', color: 'bg-emerald-50 text-emerald-700 border-emerald-100', barColor: 'bg-emerald-500' };
-                                if (ratioLoad > 110) decision = { label: 'Recruter', color: 'bg-red-50 text-red-700 border-red-100', barColor: 'bg-red-500' };
-                                else if (ratioLoad > 102) decision = { label: 'Surveiller', color: 'bg-orange-50 text-orange-700 border-orange-100', barColor: 'bg-orange-400' };
-                                else if (ratioLoad < 85) decision = { label: 'Optimiser', color: 'bg-blue-50 text-blue-700 border-blue-100', barColor: 'bg-blue-500' };
+
+                                if (ratioLoad > 110) {
+                                    decision = { label: 'Recruter', color: 'bg-red-50 text-red-700 border-red-100', barColor: 'bg-red-500' };
+                                } else if (ratioLoad > 102) {
+                                    decision = { label: 'Surveiller', color: 'bg-orange-50 text-orange-700 border-orange-100', barColor: 'bg-orange-400' };
+                                } else if (ratioLoad < 85) {
+                                    decision = { label: 'Optimiser', color: 'bg-blue-50 text-blue-700 border-blue-100', barColor: 'bg-blue-500' };
+                                }
+
+                                const ecartLabel = ecart > 0 ? "Danger" : ecart < 0 ? "Optimisé" : "OK";
+                                const ecartColor = ecart > 0 ? "text-red-600 bg-red-50 border-red-100" : ecart < 0 ? "text-blue-600 bg-blue-50 border-blue-100" : "text-emerald-600 bg-emerald-50 border-emerald-100";
 
                                 return (
                                     <tr key={row.id} className="hover:bg-slate-50 transition-colors group text-[9px]">
                                         <td className="px-2 py-1 font-medium text-slate-800 truncate max-w-[110px]" title={row.label}>
                                             {row.label}
                                         </td>
+
+                                        {/* Intelligent Charge Column */}
                                         <td className="px-2 py-1 text-center">
-                                            <div className="h-1 w-full bg-slate-100 rounded-full overflow-hidden">
-                                                <div className={`h-full rounded-full ${decision.barColor}`} style={{ width: `${Math.min(ratioLoad, 100)}%` }} />
+                                            <div className="flex flex-col gap-0.5 justify-center h-full">
+                                                <div className="flex items-center justify-between text-[8px] leading-none mb-0.5 px-0.5">
+                                                    <span className="font-bold text-slate-600">{Math.round(ratioLoad)}%</span>
+                                                </div>
+                                                <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden border border-slate-50">
+                                                    <div
+                                                        className={`h-full rounded-full ${decision.barColor}`}
+                                                        style={{ width: `${Math.min(ratioLoad, 100)}%` }}
+                                                    />
+                                                </div>
                                             </div>
                                         </td>
+
                                         <td className="px-2 py-1 text-right font-mono text-slate-600">{fmt(actuel)}</td>
                                         <td className="px-2 py-1 text-right font-mono text-slate-600">{fmt(cible)}</td>
-                                        <td className={`px-2 py-1 text-right font-mono font-bold ${ecart > 0 ? "text-rose-600" : ecart < 0 ? "text-emerald-600" : "text-slate-400"}`}>
-                                            {ecart > 0 ? "+" : ""}{fmt(ecart)}
+
+                                        <td className="px-2 py-1 text-right">
+                                            <div className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded-[3px] text-[8px] font-bold border ${ecartColor} min-w-[50px]`}>
+                                                {ecart > 0 ? "+" : ""}{fmt(ecart)}
+                                            </div>
                                         </td>
+
                                         <td className="px-2 py-1 text-center">
-                                            <span className={`inline-block px-1.5 py-0.5 rounded-[3px] text-[8px] font-bold uppercase border min-w-[50px] ${decision.color}`}>
+                                            <span className={`inline-block px-1.5 py-0.5 rounded-[3px] text-[8px] font-bold uppercase border min-w-[60px] shadow-sm ${decision.color}`}>
                                                 {decision.label}
                                             </span>
                                         </td>
+
                                         <td className="px-1 py-1 text-center">
                                             <button
                                                 onClick={() => onOpenDetail(row)}
