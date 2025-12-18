@@ -44,10 +44,96 @@ def normalize_string(s: str) -> str:
     return s
 
 def process_direction_simulation(db: Session, request: DirectionSimRequest) -> DirectionSimResponse:
-    # ... (keep existing up to step 4)
-    # 4) Fetch tasks ... (existing code)
+    # 1) Get Direction Information
+    d_row = db.execute(
+        text("SELECT id, label, region_id FROM dbo.directions WHERE id = :did"),
+        {"did": request.direction_id}
+    ).mappings().first()
     
-    # ... (after fetching tasks, before step 5)
+    if not d_row:
+        raise HTTPException(404, "Direction introuvable")
+    
+    direction = dict(d_row)
+
+    # 2) Identify Scoped Centres
+    sql_centres = """
+        SELECT c.id, c.label, c.code_centre
+        FROM dbo.centres c
+        WHERE c.direction_id = :did
+           OR ((c.direction_id IS NULL OR c.direction_id = 0) AND c.region_id = :rid)
+    """
+    c_rows = db.execute(
+        text(sql_centres),
+        {"did": direction["id"], "rid": direction["region_id"]}
+    ).mappings().all()
+    
+    centres_map = {r.id: dict(r) for r in c_rows}
+    all_centre_ids = list(centres_map.keys())
+
+    # 3) Process Inputs
+    matched_volumes: Dict[int, CentreVolume] = {}
+    label_to_id = {normalize_string(c["label"]): c["id"] for c in centres_map.values()}
+    unknown_labels = []
+    ignored_count = 0
+    
+    for v in request.volumes:
+        cid = None
+        if v.centre_id:
+            cid = v.centre_id
+        elif v.centre_label:
+            norm = normalize_string(v.centre_label)
+            cid = label_to_id.get(norm)
+            
+        if cid and cid in centres_map:
+            matched_volumes[cid] = v
+        else:
+            if v.centre_label:
+                unknown_labels.append(v.centre_label)
+            else:
+                ignored_count += 1
+
+    centre_ids_to_simulate = all_centre_ids
+    
+    # 4) Fetch Postes & Tasks
+    postes_info_by_centre = {cid: {} for cid in centre_ids_to_simulate}
+    tasks_by_centre = {cid: [] for cid in centre_ids_to_simulate}
+    
+    if centre_ids_to_simulate:
+        # A. Postes Info
+        sql_postes = """
+            SELECT cp.centre_id, p.code, p.type_poste, cp.effectif_actuel
+            FROM dbo.centre_postes cp
+            JOIN dbo.postes p ON p.id = cp.poste_id
+            WHERE cp.centre_id IN :cids
+        """
+        p_rows = db.execute(
+            text(sql_postes), 
+            {"cids": tuple(centre_ids_to_simulate)}
+        ).mappings().all()
+        
+        for r in p_rows:
+            postes_info_by_centre[r.centre_id][r.code] = {
+                "effectif": float(r.effectif_actuel or 0),
+                "type": (r.type_poste or "").upper().strip()
+            }
+            
+        # B. Tasks
+        sql_tasks = """
+            SELECT t.*, p.code as poste_code, p.nom_poste, p.type_poste, cp.centre_id
+            FROM dbo.taches t
+            JOIN dbo.postes p ON p.id = t.poste_id
+            JOIN dbo.centre_postes cp ON cp.poste_id = p.id
+            WHERE cp.centre_id IN :cids
+        """
+        t_rows = db.execute(
+            text(sql_tasks),
+            {"cids": tuple(centre_ids_to_simulate)}
+        ).mappings().all()
+        
+        for r in t_rows:
+            tasks_by_centre[r.centre_id].append(dict(r))
+
+    # Next steps continue...
     
     # 4b) Fetch Reference Volumes (Database Mode / Fallback)
     # We fetch them for ALL simulated centers to allow fallback if a line is missing in Excel too

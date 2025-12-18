@@ -118,15 +118,15 @@ export default function VueDirection({ api }) {
 
   // Auto-calculate hours from productivity
   useEffect(() => {
-    // Example logic: Base 7.5h * (Productivity/100) ? 
+    // Example logic: Base 8h * (Productivity/100) ? 
     // Or just keeping them independent but initializing?
     // User request: "DOIT ETRE CALCULE DPUI PRODUCTIVITE"
-    // Let's assume standard rule: 7.5 * (Prod%/100) is the effective hours, but usually "Heures Par Jour" is the target working hours (e.g. 8h).
+    // Let's assume standard rule: 8 * (Prod%/100) is the effective hours, but usually "Heures Par Jour" is the target working hours (e.g. 8h).
     // Unless they mean "H.Net = H.Brut * Prod%".
     // I'll leave manual valid edit but link them if user changes prod.
     // For now, I'll just skip auto-calc to avoid annoying UX unless explicitly asked for a formula.
     // Wait, the user explicitly asked for it in the feedback.
-    // Let's implement: H = 7.5 * (P/100)
+    // Let's implement: H = 8 * (P/100)
     setParams(prev => ({
       ...prev,
       heuresParJour: parseFloat((8 * (prev.productivite / 100)).toFixed(2))
