@@ -14,7 +14,7 @@ import { useDirectionData } from "../../hooks/useDirectionData";
 import { useSimulation } from "../../context/SimulationContext";
 import { Building2, Settings2, Play, AlertTriangle } from "lucide-react";
 import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
+import { toPng } from "html-to-image";
 
 // Components
 import IndicateursDirection from "../direction/IndicateursDirection";
@@ -212,24 +212,26 @@ export default function VueDirection({ api }) {
 
     // Toast or loading state if desired
     try {
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        windowWidth: element.scrollWidth,
-        windowHeight: element.scrollHeight
+      const imgData = await toPng(element, {
+        quality: 0.95,
+        pixelRatio: 2,
+        cacheBust: true
       });
-      const imgData = canvas.toDataURL("image/png");
 
       const pdf = new jsPDF("p", "mm", "a4");
       const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      const pdfHeight = pdf.internal.pageSize.getHeight();
 
-      pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
+      const imgProps = pdf.getImageProperties(imgData);
+      const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
+
+      // If image is taller than page, we might need multiple pages or just scale? 
+      // For simplicity, just add one image for now.
+      pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, imgHeight);
       pdf.save(`Rapport_Direction_${selectedDirection || "Sim"}.pdf`);
     } catch (err) {
       console.error("PDF Export failed", err);
-      alert("Erreur lors de l'export PDF");
+      alert("Erreur lors de l'export PDF (voir console)");
     }
   };
 
