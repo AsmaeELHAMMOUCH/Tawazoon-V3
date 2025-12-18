@@ -104,53 +104,53 @@ export default function DirectionVolumesCard({
     };
 
     return (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="bg-slate-50/50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden h-full flex flex-col">
+            <div className="bg-slate-50/50 px-3 py-2 border-b border-slate-200 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                    <div className="bg-blue-50 text-[#005EA8] p-1.5 rounded">
-                        <Archive size={16} />
+                    <div className="bg-blue-50 text-[#005EA8] p-1 rounded-md">
+                        <Archive size={14} />
                     </div>
                     <div>
-                        <h3 className="text-sm font-bold text-slate-800">Paramètres & Volumes</h3>
-                        <p className="text-[10px] text-slate-500">Importez les données volumétriques pour la simulation</p>
+                        <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wide">Imports & Volumes</h3>
                     </div>
                 </div>
                 <div className="flex gap-2">
                     <button
                         onClick={handleDownloadTemplate}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-[#005EA8] bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+                        className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-[#005EA8] bg-blue-50 hover:bg-blue-100 rounded-md transition-colors border border-blue-100"
+                        title="Télécharger modèle Excel"
                     >
-                        <Download size={14} />
+                        <Download size={12} />
                         Modèle
                     </button>
                     <button
                         onClick={() => fileInputRef.current?.click()}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-white bg-[#005EA8] hover:bg-[#0063A6] rounded-lg transition-colors shadow-sm"
+                        className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-white bg-[#005EA8] hover:bg-[#0063A6] rounded-md transition-colors shadow-sm"
+                        title="Importer fichier Excel"
                     >
-                        <UploadCloud size={14} />
-                        Importer Masse
+                        <UploadCloud size={12} />
+                        Importer
                     </button>
                     <input type="file" ref={fileInputRef} className="hidden" accept=".xlsx,.xls,.osd" onChange={handleFileUpload} />
                 </div>
             </div>
 
-            <div className="p-4">
+            <div className="p-3 flex-1 flex flex-col justify-center">
                 {/* Feedback Message */}
                 {(importMsg || lastImportStatus) && (
-                    <div className={`text-[11px] px-3 py-2 rounded border mb-4 flex items-center gap-2 ${(importMsg?.type === 'error') ? 'bg-red-50 text-red-700 border-red-200' : 'bg-green-50 text-green-700 border-green-200'
+                    <div className={`text-[10px] px-2 py-1.5 rounded border mb-2 flex items-center gap-2 ${(importMsg?.type === 'error') ? 'bg-red-50 text-red-700 border-red-200' : 'bg-green-50 text-green-700 border-green-200'
                         }`}>
-                        {importMsg?.type === 'error' ? <AlertTriangle size={14} /> : <FileCheck size={14} />}
+                        {importMsg?.type === 'error' ? <AlertTriangle size={12} /> : <FileCheck size={12} />}
                         {importMsg?.text || lastImportStatus}
                     </div>
                 )}
 
-                {/* Manual Inputs / Ratios Row */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {/* Just visual indicators or simple manual inputs if needed in future */}
-                    <div className="col-span-3 text-[11px] text-slate-500 flex items-center gap-2 bg-slate-50 p-2 rounded">
-                        <Info size={14} />
-                        L'import Excel doit contenir une colonne <strong>"Nom du Centre"</strong> correspondant exactement aux libellés des centres.
-                    </div>
+                {/* Info Text */}
+                <div className="text-[10px] text-slate-500 flex items-start gap-2 bg-slate-50 p-2 rounded border border-slate-100 leading-tight">
+                    <Info size={12} className="shrink-0 mt-0.5" />
+                    <p>
+                        Importez un fichier Excel pour simuler une nouvelle répartition. Le fichier doit contenir une colonne <strong>"Nom du Centre"</strong>.
+                    </p>
                 </div>
             </div>
         </div>
