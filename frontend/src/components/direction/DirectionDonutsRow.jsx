@@ -1,7 +1,7 @@
 import React from "react";
 import ReactECharts from "echarts-for-react";
 
-const CARD_CLASS = "bg-white rounded-xl border border-slate-200 shadow-sm p-3 flex flex-col h-[280px]";
+const CARD_CLASS = "bg-white rounded-lg border border-slate-200 shadow-sm p-2 flex flex-col h-[200px]";
 
 export default function DirectionDonutsRow({ centres = [], charts = null }) {
 
@@ -22,14 +22,14 @@ export default function DirectionDonutsRow({ centres = [], charts = null }) {
 
         return {
             tooltip: { trigger: 'item' },
-            legend: { bottom: '0%', left: 'center', icon: 'circle', itemHeight: 8, textStyle: { fontSize: 10 } },
+            legend: { bottom: '0%', left: 'center', icon: 'circle', itemHeight: 6, textStyle: { fontSize: 9 } },
             color: ['#005EA8', '#0063A6', '#bae6fd'],
             series: [{
                 name: 'Effectifs (ETP Calculé)',
                 type: 'pie',
-                radius: ['40%', '70%'],
-                center: ['50%', '45%'],
-                itemStyle: { borderRadius: 5, borderColor: '#fff', borderWidth: 2 },
+                radius: ['40%', '65%'],
+                center: ['50%', '42%'],
+                itemStyle: { borderRadius: 4, borderColor: '#fff', borderWidth: 1 },
                 label: { show: false },
                 data: data
             }]
@@ -46,20 +46,20 @@ export default function DirectionDonutsRow({ centres = [], charts = null }) {
             values = charts.top.map(d => d.value);
         } else {
             const sorted = [...centres].sort((a, b) => (b.ecart || 0) - (a.ecart || 0)).slice(0, 5);
-            categories = sorted.map(c => c.label?.substring(0, 15) + '...');
+            categories = sorted.map(c => c.label?.substring(0, 10) + '..');
             values = sorted.map(c => c.ecart);
         }
 
         return {
             tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-            grid: { top: '10%', left: '3%', right: '4%', bottom: '15%', containLabel: true },
+            grid: { top: '10%', left: '3%', right: '4%', bottom: '5%', containLabel: true },
             xAxis: {
                 type: 'category',
                 data: categories,
                 axisTick: { alignWithLabel: true },
-                axisLabel: { interval: 0, rotate: 30, fontSize: 9 }
+                axisLabel: { interval: 0, rotate: 25, fontSize: 8, overflow: 'truncate', width: 40 }
             },
-            yAxis: { type: 'value', axisLabel: { fontSize: 9 } },
+            yAxis: { type: 'value', axisLabel: { fontSize: 8 }, splitLine: { show: false } },
             series: [{
                 name: 'Écart',
                 type: 'bar',
@@ -67,24 +67,22 @@ export default function DirectionDonutsRow({ centres = [], charts = null }) {
                 data: values,
                 itemStyle: {
                     color: (params) => params.value > 0 ? '#e11d48' : '#059669',
-                    borderRadius: [4, 4, 0, 0]
+                    borderRadius: [2, 2, 0, 0]
                 }
             }]
         };
     }, [centres, charts]);
 
-
-
     return (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+        <div className="grid grid-cols-1 gap-2 mt-2">
             <div className={CARD_CLASS}>
-                <h4 className="text-xs font-bold text-slate-700 uppercase mb-2">Répartition MOI / MOD (Estimé)</h4>
+                <h4 className="text-[10px] font-bold text-slate-700 uppercase mb-1">Répartition MOI / MOD</h4>
                 <div className="flex-1 min-h-0">
                     <ReactECharts option={moiModOption} style={{ height: '100%', width: '100%' }} />
                 </div>
             </div>
             <div className={CARD_CLASS}>
-                <h4 className="text-xs font-bold text-slate-700 uppercase mb-2">Top 5 Écarts (Sur-effectifs)</h4>
+                <h4 className="text-[10px] font-bold text-slate-700 uppercase mb-1">Top Écarts</h4>
                 <div className="flex-1 min-h-0">
                     <ReactECharts option={barGapOption} style={{ height: '100%', width: '100%' }} />
                 </div>
