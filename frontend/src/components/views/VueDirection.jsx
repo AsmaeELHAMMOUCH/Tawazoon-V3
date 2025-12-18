@@ -106,11 +106,16 @@ export default function VueDirection({ api }) {
     await actions.runSimulation(payload);
   };
 
-  // Auto-load Logic
+  // Reset initialization flag when direction changes
   useEffect(() => {
-    if (selectedDirection && !initializedRef.current && !loading.sim && !loading.centres) {
-      // Trigger generic simulation (mode database)
-      // We pass empty volumes to trigger the "database/default" mode in backend
+    initializedRef.current = false;
+  }, [selectedDirection]);
+
+  // Auto-Simulate (Zero Click) when direction is ready
+  useEffect(() => {
+    // Only run if we have a direction, centres are loaded, and we haven't run yet for this direction
+    if (selectedDirection && !loading.centres && !initializedRef.current) {
+      console.log("Triggering Auto-Simulation (Database Mode)...");
       runSim("database", []);
       initializedRef.current = true;
     }
