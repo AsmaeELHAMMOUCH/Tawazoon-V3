@@ -230,31 +230,47 @@ export default function VueDirection({ api }) {
     const element = document.getElementById("official-report-area");
     if (!element) return;
 
-    // Temporarily make visible for capture if needed, or rely on off-screen rendering
-    // element.style.display = 'block'; 
-
     try {
+      // 1. Capture the FULL element (scrolled height)
       const imgData = await toPng(element, {
         quality: 0.95,
         pixelRatio: 2,
-        backgroundColor: '#ffffff', // Force white bg
+        backgroundColor: '#ffffff',
         cacheBust: true,
         skipFonts: true,
-        fontEmbedCSS: "", // Disable font embedding to avoid CORS SecurityError
-        filter: (node) => !node.classList?.contains('no-print') // Optional filter
+        fontEmbedCSS: "",
+        filter: (node) => !node.classList?.contains('no-print')
       });
 
+      // 2. Setup PDF (A4)
       const pdf = new jsPDF("p", "mm", "a4");
-      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfWidth = pdf.internal.pageSize.getWidth(); // 210mm
+      const pdfHeight = pdf.internal.pageSize.getHeight(); // 297mm
 
+      // 3. Calculate Image dimensions in PDF units
       const imgProps = pdf.getImageProperties(imgData);
       const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
 
-      pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, imgHeight);
+      // 4. Page Loop
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      // First Page
+      pdf.addImage(imgData, "PNG", 0, position, pdfWidth, imgHeight);
+      heightLeft -= pdfHeight;
+
+      // Subsequent Pages
+      while (heightLeft > 0) {
+        position -= pdfHeight; // Move the image "up" (negative y) to show the next slice
+        pdf.addPage();
+        pdf.addImage(imgData, "PNG", 0, position, pdfWidth, imgHeight);
+        heightLeft -= pdfHeight;
+      }
+
       pdf.save(`Rapport_Direction_${selectedDirection || "Sim"}.pdf`);
     } catch (err) {
       console.error("PDF Export failed", err);
-      alert("Erreur lors de l'export PDF (voir console)");
+      alert("Erreur export PDF (voir console).");
     }
   };
 
