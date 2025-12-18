@@ -180,7 +180,7 @@ export default function DirectionCentresTable({ centres = [], loading, onOpenDet
                                                     />
                                                 </div>
                                                 <span className={`text-[9px] font-bold w-8 text-right ${ratioLoad > 110 ? 'text-red-600' :
-                                                        ratioLoad < 85 ? 'text-blue-600' : 'text-slate-600'
+                                                    ratioLoad < 85 ? 'text-blue-600' : 'text-slate-600'
                                                     }`}>
                                                     {Math.round(ratioLoad)}%
                                                 </span>
