@@ -13,6 +13,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { useDirectionData } from "../../hooks/useDirectionData";
 import { useSimulation } from "../../context/SimulationContext";
 import { Building2, Settings2, Play, AlertTriangle } from "lucide-react";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 
 // Components
 import IndicateursDirection from "../direction/IndicateursDirection";
