@@ -122,22 +122,23 @@ def process_direction_simulation(db: Session, request: DirectionSimRequest) -> D
 
     # ✅ centres à simuler :
     # - si l'import contient des lignes => simuler UNIQUEMENT les centres matchés
-    # - sinon => simuler tous les centres de la direction
+    # - sinon (mode database ou import vide) => simuler TOUS les centres de la direction
     if request.volumes and len(request.volumes) > 0:
         centre_ids_to_simulate = list(matched_volumes.keys())
+        
+        # Cas spécifique : Des volumes fournis mais AUCUN match => Erreur
+        if not centre_ids_to_simulate:
+             raise HTTPException(
+                status_code=422,
+                detail={
+                    "message": "Aucun centre reconnu dans l'import.",
+                    "unknown_centres": list(set(unknown_labels)),
+                    "hint": "Assure-toi que le libellé 'centre_label' (Nom du Centre) correspond exactement à dbo.centres.label, ou ajoute 'centre_id' dans l'import.",
+                },
+            )
     else:
+        # Mode "Auto-load" / Database : on prend tout
         centre_ids_to_simulate = all_centre_ids
-
-    # Si import présent mais aucun match => erreur claire
-    if request.volumes and len(request.volumes) > 0 and not centre_ids_to_simulate:
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "message": "Aucun centre reconnu dans l'import.",
-                "unknown_centres": list(set(unknown_labels)),
-                "hint": "Assure-toi que le libellé 'centre_label' (Nom du Centre) correspond exactement à dbo.centres.label, ou ajoute 'centre_id' dans l'import.",
-            },
-        )
 
     # 4) Fetch tasks + postes info (bulk) pour TOUS les centres de la direction
     # (on récupère tout, mais on calculera uniquement sur centre_ids_to_simulate)

@@ -33,8 +33,8 @@ class GlobalParams(BaseModel):
 
 class DirectionSimRequest(BaseModel):
     direction_id: int
-    mode: str = Field("actuel", pattern="^(actuel|recommande)$")
-    volumes: List[CentreVolume]
+    mode: str = Field("actuel", pattern="^(actuel|recommande|database)$")
+    volumes: Optional[List[CentreVolume]] = []
     global_params: GlobalParams = GlobalParams()
 
 # --- Outputs ---
