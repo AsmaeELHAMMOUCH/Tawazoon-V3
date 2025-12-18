@@ -29,7 +29,7 @@ export default function DirectionConsolideTable({
             <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                 <div className="flex items-center gap-2">
                     <Layers size={16} className="text-[#005EA8]" />
-                    <h3 className="text-sm font-bold text-slate-800">Consolidé par Poste</h3>
+                    <h3 className="text-sm font-bold text-slate-800">Consolidé par Poste RH</h3>
                 </div>
                 <button
                     onClick={exportExcel}
@@ -63,8 +63,8 @@ export default function DirectionConsolideTable({
                                     <td className="px-4 py-2 font-medium">{r.label}</td>
                                     <td className="px-4 py-2 text-center">
                                         <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${(r.type_poste || "").toUpperCase() === "MOD"
-                                                ? "bg-blue-50 text-blue-700"
-                                                : "bg-purple-50 text-purple-700"
+                                            ? "bg-blue-50 text-blue-700"
+                                            : "bg-purple-50 text-purple-700"
                                             }`}>
                                             {r.type_poste || "-"}
                                         </span>

@@ -95,3 +95,30 @@ class Tache(Base):
     moyenne_min = Column(Float, nullable=True, default=0.0)
 
     centre_poste = relationship("CentrePoste", back_populates="taches")
+
+
+class CentreVolumeRef(Base):
+    __tablename__ = "centre_volumes_ref"
+    __table_args__ = {"schema": "dbo"}
+
+    id = Column(Integer, primary_key=True, index=True)
+    centre_id = Column(Integer, ForeignKey("dbo.centres.id"), nullable=False, unique=True)
+    
+    # Volumes annuels de référence
+    sacs = Column(Float, default=0)
+    colis = Column(Float, default=0)
+    courrier_ordinaire = Column(Float, default=0)
+    courrier_recommande = Column(Float, default=0)
+    ebarkia = Column(Float, default=0)
+    lrh = Column(Float, default=0)
+    amana = Column(Float, default=0)
+
+    # Ratios
+    colis_amana_par_sac = Column(Float, nullable=True)
+    courriers_par_sac = Column(Float, nullable=True)
+
+    centre = relationship("Centre", back_populates="volume_ref")
+
+
+# Update Centre class to include persistence relationship
+Centre.volume_ref = relationship("CentreVolumeRef", uselist=False, back_populates="centre")
