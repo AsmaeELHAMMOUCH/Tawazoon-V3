@@ -230,7 +230,19 @@ export default function VueDirection({ api }) {
     const element = document.getElementById("official-report-area");
     if (!element) return;
 
+    // Save original styles to restore later
+    const originalPos = element.style.position;
+    const originalZ = element.style.zIndex;
+    const originalTop = element.style.top;
+    const originalLeft = element.style.left;
+
     try {
+      // Temporarily bring to front to ensure full render capture
+      element.style.position = "absolute";
+      element.style.zIndex = "99999";
+      element.style.top = "0px";
+      element.style.left = "0px";
+
       // 1. Capture the FULL element (scrolled height)
       const imgData = await toPng(element, {
         quality: 0.95,
@@ -271,6 +283,12 @@ export default function VueDirection({ api }) {
     } catch (err) {
       console.error("PDF Export failed", err);
       alert("Erreur export PDF (voir console).");
+    } finally {
+      // Restore hidden state
+      element.style.position = originalPos;
+      element.style.zIndex = originalZ;
+      element.style.top = originalTop;
+      element.style.left = originalLeft;
     }
   };
 
