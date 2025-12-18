@@ -312,8 +312,8 @@ export default function VueDirection({ api }) {
   const currentDirLabel = directions.find(d => String(d.id) === String(selectedDirection))?.label;
 
   return (
-    <div className="min-h-screen bg-slate-50/50 pb-10 space-y-6 animate-in fade-in duration-500" style={{ zoom: 0.9 }}>
-      <main className="px-6 max-w-[1900px] mx-auto pt-6">
+    <div className="min-h-screen bg-slate-50/50 pb-6 space-y-3 animate-in fade-in duration-300">
+      <main className="px-4 max-w-[1280px] mx-auto pt-4">
 
         {/* ... (Header and Settings - kept same) ... */}
         {/* --- HEADER SELECTOR & SETTINGS --- */}
@@ -417,7 +417,7 @@ export default function VueDirection({ api }) {
                 />
               </div>
 
-              <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+              <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
                 <div className="xl:col-span-8 flex flex-col gap-6">
                   {kpis.etp === 0 && (
                     <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs p-3 rounded-lg flex items-center gap-2">
@@ -444,7 +444,7 @@ export default function VueDirection({ api }) {
                   )}
                 </div>
 
-                <div className="xl:col-span-4 space-y-6">
+                <div className="lg:col-span-4 space-y-4">
                   <DirectionVolumesCard onSimulate={handleManualSimulate} loading={loading.sim} />
                   <DirectionDonutsRow centres={centres} charts={consolidation.charts} />
                 </div>
