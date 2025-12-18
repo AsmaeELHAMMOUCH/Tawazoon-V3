@@ -316,21 +316,20 @@ export default function VueDirection({ api }) {
       <main className="px-2 max-w-full mx-auto pt-2">
 
         {/* --- HEADER SELECTOR & SETTINGS --- */}
-        <div className="flex flex-col md:flex-row items-center justify-between gap-2 mb-2">
-          {/* ... (Same as before) ... */}
-          {/* Re-implementing simplified header for context of replacement */}
-          <div className="flex items-center gap-4 bg-white p-2 pr-4 rounded-xl border border-slate-200 shadow-sm">
-            <div className="bg-[#005EA8]/10 p-2.5 rounded-lg">
-              <Building2 className="text-[#005EA8]" size={20} />
+        <div className="flex flex-col md:flex-row items-center justify-between gap-2 mb-1">
+          {/* Selector */}
+          <div className="flex items-center gap-2 bg-white p-1 pr-2 rounded-lg border border-slate-200 shadow-sm">
+            <div className="bg-[#005EA8]/10 p-1.5 rounded-md">
+              <Building2 className="text-[#005EA8]" size={14} />
             </div>
             <div className="flex flex-col">
-              <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Périmètre</span>
+              <span className="text-[8px] text-slate-400 font-bold uppercase tracking-wider leading-none mb-0.5">Périmètre</span>
               <select
-                className="text-sm font-bold text-slate-800 bg-transparent outline-none cursor-pointer min-w-[200px]"
+                className="text-xs font-bold text-slate-800 bg-transparent outline-none cursor-pointer min-w-[180px] py-0"
                 value={selectedDirection || ""}
                 onChange={(e) => handleSelectDirection(e.target.value)}
               >
-                <option value="">-- Sélectionner une direction --</option>
+                <option value="">-- Sélectionner --</option>
                 {directions.map((d) => (
                   <option key={d.id} value={d.id}>
                     {d.label}
@@ -344,51 +343,51 @@ export default function VueDirection({ api }) {
             <div className="flex items-center gap-2">
               <button
                 onClick={handleExportPDF}
-                className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-slate-50 transition-colors shadow-sm"
+                className="flex items-center gap-1 bg-white border border-slate-200 text-slate-600 px-2 py-1 rounded-md text-[10px] font-bold hover:bg-slate-50 transition-colors shadow-sm"
                 title="Exporter en PDF"
               >
                 <span className="text-red-600">PDF</span>
               </button>
-              {/* ... (Settings Toggle - kept same) ... */}
+
               <div className={`
-                        flex items-center gap-3 bg-white border border-slate-200 rounded-lg px-3 py-1.5 shadow-sm transition-all
-                        ${showParams ? 'ring-2 ring-[#005EA8]/20' : ''}
+                        flex items-center gap-2 bg-white border border-slate-200 rounded-md px-2 py-1 shadow-sm transition-all
+                        ${showParams ? 'ring-1 ring-[#005EA8]/20' : ''}
                    `}>
                 <button
                   onClick={() => setShowParams(!showParams)}
-                  className="flex items-center gap-2 text-xs font-semibold text-slate-700 hover:text-[#005EA8]"
+                  className="flex items-center gap-1 text-[10px] font-semibold text-slate-700 hover:text-[#005EA8]"
                 >
-                  <Settings2 size={14} />
+                  <Settings2 size={12} />
                   Paramètres
                 </button>
 
                 {showParams && (
                   <>
-                    <div className="w-px h-4 bg-slate-200" />
-                    <div className="flex items-center gap-2">
-                      <label className="text-[10px] text-slate-500">Prod %</label>
+                    <div className="w-px h-3 bg-slate-200" />
+                    <div className="flex items-center gap-1">
+                      <label className="text-[9px] text-slate-400">Prod%</label>
                       <input
                         type="number"
-                        className="w-12 h-6 text-center text-xs border rounded bg-slate-50"
+                        className="w-10 h-5 text-center text-[10px] border rounded bg-slate-50 focus:ring-1 focus:ring-blue-500 outline-none"
                         value={params.productivite}
                         onChange={e => setParams(p => ({ ...p, productivite: parseFloat(e.target.value) }))}
                       />
                     </div>
-                    <div className="flex items-center gap-2">
-                      <label className="text-[10px] text-slate-500">Heures</label>
+                    <div className="flex items-center gap-1">
+                      <label className="text-[9px] text-slate-400">Hrs</label>
                       <input
                         type="number"
-                        className="w-12 h-6 text-center text-xs border rounded bg-slate-50"
+                        className="w-8 h-5 text-center text-[10px] border rounded bg-slate-50 focus:ring-1 focus:ring-blue-500 outline-none"
                         value={params.heuresParJour}
                         onChange={e => setParams(p => ({ ...p, heuresParJour: parseFloat(e.target.value) }))}
                       />
                     </div>
                     <button
                       onClick={() => runSim()}
-                      className="ml-2 bg-[#005EA8] text-white p-1 rounded hover:bg-[#004e8a]"
-                      title="Relancer simulation avec ces paramètres"
+                      className="ml-1 bg-[#005EA8] text-white p-0.5 rounded-sm hover:bg-[#004e8a]"
+                      title="Relancer"
                     >
-                      <Play size={12} fill="currentColor" />
+                      <Play size={10} fill="currentColor" />
                     </button>
                   </>
                 )}
@@ -408,7 +407,7 @@ export default function VueDirection({ api }) {
         <div id="dashboard-screen">
           {selectedDirection && (
             <>
-              <div className="mb-8">
+              <div className="mb-3">
                 <IndicateursDirection
                   currentDir={{ label: currentDirLabel || "Direction" }}
                   kpis={kpis}
@@ -416,11 +415,11 @@ export default function VueDirection({ api }) {
                 />
               </div>
 
-              <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
-                <div className="xl:col-span-8 flex flex-col gap-6">
+              <div className="grid grid-cols-1 xl:grid-cols-12 gap-2">
+                <div className="xl:col-span-8 flex flex-col gap-2">
                   {kpis.etp === 0 && (
-                    <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs p-3 rounded-lg flex items-center gap-2">
-                      <AlertTriangle size={14} />
+                    <div className="bg-amber-50 border border-amber-200 text-amber-800 text-[10px] p-2 rounded-lg flex items-center gap-2">
+                      <AlertTriangle size={12} />
                       <span>
                         <strong>Attention :</strong> L'ETP Calculé est de 0. Cela signifie probablement qu'aucun volume n'est enregistré pour ces centres.
                         Veuillez importer un fichier de volumes pour obtenir une simulation précise.
@@ -443,7 +442,7 @@ export default function VueDirection({ api }) {
                   )}
                 </div>
 
-                <div className="lg:col-span-4 space-y-4">
+                <div className="lg:col-span-4 space-y-2">
                   <DirectionVolumesCard onSimulate={handleManualSimulate} loading={loading.sim} />
                   <DirectionDonutsRow centres={centres} charts={consolidation.charts} />
                 </div>
