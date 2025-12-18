@@ -312,12 +312,11 @@ export default function VueDirection({ api }) {
   const currentDirLabel = directions.find(d => String(d.id) === String(selectedDirection))?.label;
 
   return (
-    <div className="min-h-screen bg-slate-50/50 pb-6 space-y-3 animate-in fade-in duration-300">
-      <main className="px-4 max-w-[1280px] mx-auto pt-4">
+    <div className="min-h-screen bg-slate-50/50 pb-4 space-y-2 animate-in fade-in duration-300">
+      <main className="px-2 max-w-full mx-auto pt-2">
 
-        {/* ... (Header and Settings - kept same) ... */}
         {/* --- HEADER SELECTOR & SETTINGS --- */}
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-2 mb-2">
           {/* ... (Same as before) ... */}
           {/* Re-implementing simplified header for context of replacement */}
           <div className="flex items-center gap-4 bg-white p-2 pr-4 rounded-xl border border-slate-200 shadow-sm">
