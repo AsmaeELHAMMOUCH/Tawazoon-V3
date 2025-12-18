@@ -490,7 +490,7 @@ export default function VueDirection({ api }) {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {centres.map((c, idx) => (
-                    <tr key={c.centre_id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
+                    <tr key={c.centre_id || idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
                       <td className="p-2 font-medium">{c.centre_label}</td>
                       <td className="p-2 text-slate-500">{c.categorie}</td>
                       <td className="p-2 text-right">{fmt(c.etp_actuel)}</td>
