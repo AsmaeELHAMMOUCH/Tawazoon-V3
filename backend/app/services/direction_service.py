@@ -187,7 +187,6 @@ def process_direction_simulation(db: Session, request: DirectionSimRequest) -> D
             raw_volumes = {
                 "sacs": float(ref_input.sacs or 0),
                 "colis": float(ref_input.colis or 0),
-                "scelle": 0.0, # Not in ref currently?
                 "courrier": 0.0, # Legacy
                 
                 "colis_amana_par_sac": float(ref_input.colis_amana_par_sac) if ref_input.colis_amana_par_sac is not None else None,
@@ -196,7 +195,7 @@ def process_direction_simulation(db: Session, request: DirectionSimRequest) -> D
         else:
             # Default empty
              raw_volumes = {
-                "sacs": 0.0, "colis": 0.0, "scelle": 0.0,
+                "sacs": 0.0, "colis": 0.0,
                 "colis_amana_par_sac": None, "courriers_par_sac": None
              }
 
@@ -252,7 +251,7 @@ def process_direction_simulation(db: Session, request: DirectionSimRequest) -> D
 
         results.append(CentreResultRow(
             centre_id=cid,
-            centre_label=centre_data["label"],
+            centre_label=str(centre_data.get("label") or f"Centre {cid}"),
             categorie=cat,
             etp_actuel=round(etp_actuel, 2),
             etp_calcule=round(etp_calcule, 2),
