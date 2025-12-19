@@ -1,4 +1,4 @@
-﻿from typing import List
+from typing import List
 from fastapi import APIRouter, Depends
 from sqlalchemy import text
 from sqlalchemy.orm import Session
