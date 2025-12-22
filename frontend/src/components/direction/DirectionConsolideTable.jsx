@@ -47,7 +47,7 @@ export default function DirectionConsolideTable({
                             <th className="px-2 py-1 border-b border-slate-200 bg-slate-50">Poste RH</th>
                             <th className="px-2 py-1 border-b border-slate-200 text-center bg-slate-50">Type</th>
                             <th className="px-2 py-1 border-b border-slate-200 text-right bg-slate-50">Actuel</th>
-                            <th className="px-2 py-1 border-b border-slate-200 text-right bg-slate-50">Cible</th>
+                            <th className="px-2 py-1 border-b border-slate-200 text-right bg-slate-50">Effectif</th>
                             <th className="px-2 py-1 border-b border-slate-200 text-right bg-slate-50">Écart</th>
                         </tr>
                     </thead>

@@ -67,43 +67,41 @@ const KpiTile = ({ title, value, note, icon: Icon, theme = "sky" }) => {
   );
 };
 
-/* ========== Section KPIs extraite ========== */
 export default function IndicateursDirection({ currentDir, kpis, fmt }) {
   const dirLabel = currentDir?.label || "Sélection";
   const delta = kpis?.delta ?? 0;
 
   return (
-    <Card title={`Synthèse - ${dirLabel}`}>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-        <KpiTile
-          title="Centres"
-          value={fmt(kpis.centers)}
-          note="Total"
-          icon={Users}
-          theme="sky"
-        />
-        <KpiTile
-          title="Actuel"
-          value={fmt(kpis.fte)}
-          note="ETP Présent"
-          icon={Calculator}
-          theme="cyan"
-        />
-        <KpiTile
-          title="Cible"
-          value={fmt(kpis.etp)}
-          note="ETP Requis"
-          icon={CheckCircle2}
-          theme="amber"
-        />
-        <KpiTile
-          title="Écart"
-          value={`${delta > 0 ? "+" : ""}${fmt(delta)}`}
-          note={delta >= 0 ? "Sur-effectif" : "Sous-effectif"}
-          icon={delta >= 0 ? TrendingUp : TrendingDown}
-          theme={delta >= 0 ? "emerald" : "rose"}
-        />
-      </div>
-    </Card>
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <KpiTile
+        title="Centres Gérés"
+        value={fmt(kpis.centers)}
+        note="Périmètre"
+        icon={Users}
+        theme="sky"
+      />
+      <KpiTile
+        title="Effectif Actuel (Réel)"
+        value={fmt(kpis.fte)}
+        note="Collaborateurs"
+        icon={Calculator}
+        theme="cyan"
+      />
+      <KpiTile
+        title="Effectif Cible (IA)"
+        value={fmt(kpis.etp)}
+        note="Besoin calculé"
+        icon={CheckCircle2}
+        theme="amber"
+        isTarget={true} // Add visual emphasis if supported
+      />
+      <KpiTile
+        title="Écart (Cible - Actuel)"
+        value={`${delta > 0 ? "+" : ""}${fmt(delta)}`}
+        note={delta > 0 ? "Sous-effectif (Besoin)" : delta < 0 ? "Sur-effectif (Excédent)" : "À l'équilibre"}
+        icon={delta !== 0 ? TrendingUp : CheckCircle2}
+        theme={delta > 0 ? "rose" : delta < 0 ? "violet" : "emerald"} // Changed 'cyan' to 'violet' for Surplus to match Pareto style or distinct
+      />
+    </div>
   );
 }

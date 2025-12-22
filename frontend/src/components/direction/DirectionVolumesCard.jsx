@@ -189,51 +189,35 @@ export default function DirectionVolumesCard({
 
     return (
         <React.Fragment>
-            <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden h-full flex flex-col">
-                {/* Header Compact */}
-                <div className="bg-slate-50/50 px-3 py-2 border-b border-slate-100 flex items-center justify-between">
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-3 relative overflow-hidden group">
+                <div className="flex items-center justify-between gap-2 relative z-10">
                     <div className="flex items-center gap-2">
-                        <Archive size={14} className="text-[#005EA8]" />
-                        <h3 className="text-[11px] font-bold text-slate-800 uppercase tracking-wide">Imports</h3>
+                        <div className="bg-blue-50 p-1.5 rounded-lg border border-blue-100 shadow-sm shrink-0">
+                            <Archive size={14} className="text-[#005EA8]" />
+                        </div>
+                        <div className="hidden 2xl:block">
+                            <h4 className="text-[11px] font-bold text-slate-800 uppercase tracking-wide leading-none mb-0.5">Import</h4>
+                            <p className="text-[9px] text-slate-400 font-medium">Volumes</p>
+                        </div>
                     </div>
-                    <button
-                        onClick={handleDownloadTemplate}
-                        className="flex items-center gap-1 text-[9px] font-semibold text-slate-400 hover:text-[#005EA8] transition-colors"
-                        title="Télécharger le modèle"
-                    >
-                        <Download size={10} />
-                        Modèle
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button onClick={handleDownloadTemplate} className="p-1.5 rounded-md border border-slate-200 bg-slate-50 hover:bg-white hover:border-[#005EA8] hover:text-[#005EA8] text-slate-500 transition-all" title="Télécharger Modèle Excel">
+                            <FileSpreadsheet size={14} />
+                        </button>
+                        <button onClick={() => setIsModalOpen(true)} disabled={loading} className="flex items-center gap-1.5 px-3 py-1.5 bg-[#005EA8] hover:bg-[#004e8a] text-white rounded-md shadow-sm hover:shadow transition-all active:scale-95 text-[10px] font-bold">
+                            {loading ? <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <UploadCloud size={12} />}
+                            <span className="hidden xl:inline">Importer</span>
+                        </button>
+                    </div>
                 </div>
-
-                {/* Body Compact */}
-                <div className="p-2 flex-1 flex flex-col justify-center gap-2">
-                    <button
-                        onClick={() => setIsModalOpen(true)}
-                        disabled={loading}
-                        className="flex-1 w-full min-h-[50px] border border-dashed border-blue-200 bg-blue-50/30 hover:bg-blue-50/80 rounded-lg flex flex-col items-center justify-center gap-1 transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        <div className="bg-white p-1 rounded-full shadow-sm border border-blue-100 group-hover:scale-110 transition-transform">
-                            <UploadCloud size={14} className="text-[#005EA8]" />
-                        </div>
-                        <span className="text-[10px] font-bold text-[#005EA8]">
-                            Importer un fichier
-                        </span>
-                    </button>
-
-                    {/* Status Message */}
-                    {importMsg ? (
-                        <div className={`text-[9px] px-2 py-1 rounded border flex items-center gap-1.5 ${(importMsg.type === 'error') ? 'bg-red-50 text-red-700 border-red-100' : 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                            }`}>
+                {importMsg && (
+                    <div className="absolute inset-0 bg-white/95 backdrop-blur-[1px] flex items-center justify-center z-20 animate-in fade-in duration-300" onClick={() => setImportMsg(null)}>
+                        <div className={`text-[9px] font-bold flex items-center gap-1 cursor-pointer ${importMsg.type === 'error' ? 'text-red-600' : 'text-emerald-600'}`}>
                             {importMsg.type === 'error' ? <AlertTriangle size={10} /> : <CheckCircle2 size={10} />}
-                            <span className="truncate font-medium">{importMsg.text}</span>
+                            {importMsg.text}
                         </div>
-                    ) : (
-                        <div className="text-[9px] text-center text-slate-400 py-1">
-                            Aucun import récent
-                        </div>
-                    )}
-                </div>
+                    </div>
+                )}
             </div>
 
             <ImportModal

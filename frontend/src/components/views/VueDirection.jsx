@@ -10,7 +10,7 @@ import { useDirectionData } from "../../hooks/useDirectionData";
 import { useSimulation } from "../../context/SimulationContext";
 import {
   Building2, Settings2, Play, AlertTriangle,
-  FileText, BarChart3
+  FileText, BarChart3, Share2, Mail, MessageCircle
 } from "lucide-react";
 import jsPDF from "jspdf";
 import { toPng } from "html-to-image";
@@ -22,6 +22,7 @@ import DirectionCentresTable from "../direction/DirectionCentresTable";
 import DirectionDonutsRow from "../direction/DirectionDonutsRow";
 import DirectionConsolideTable from "../direction/DirectionConsolideTable";
 import DirectionPostesModal from "../direction/DirectionPostesModal";
+import SmartInsightsPanel from "../direction/SmartInsightsPanel";
 import { normalizePoste, fmt } from "../../utils/formatters";
 
 // ---------- Helpers ----------
@@ -59,6 +60,7 @@ export default function VueDirection({ api }) {
   const [centrePostes, setCentrePostes] = useState([]);
   const [loadingPostes, setLoadingPostes] = useState(false);
   const [showParams, setShowParams] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const initializedRef = useRef(false);
 
   // Persistence State
@@ -161,6 +163,21 @@ export default function VueDirection({ api }) {
         });
 
         if (!v.centre_label && row?.label) v.centre_label = String(row.label).trim();
+
+        // --- IMPROVED MATCHING LOGIC ---
+        // Try to find the centre_id from the existing centres list if not already present
+        if (!v.centre_id && v.centre_label && centres && centres.length > 0) {
+          const normalizedImport = String(v.centre_label).toLowerCase().replace(/\s+/g, "");
+          const match = centres.find(c => {
+            const normalizedDb = String(c.label).toLowerCase().replace(/\s+/g, "");
+            // Exact match after normalization or "includes" if significant length
+            return normalizedDb === normalizedImport || (normalizedDb.includes(normalizedImport) && normalizedImport.length > 5);
+          });
+          if (match) {
+            v.centre_id = match.id;
+          }
+        }
+
         return v;
       })
       : [];
@@ -224,11 +241,122 @@ export default function VueDirection({ api }) {
 
   const currentDirLabel = directions.find(d => String(d.id) === String(selectedDirection))?.label;
 
+  // Force local computation to ensure consistency (Delta = Target - Actual)
+  const computedFte = centres ? centres.reduce((a, b) => a + (b.fte_actuel || 0), 0) : 0;
+  const computedEtp = centres ? centres.reduce((a, b) => a + (b.etp_calcule || 0), 0) : 0;
+
   const kpis = {
-    centers: consolidation?.kpis?.nb_centres || (centres ? centres.length : 0),
-    fte: consolidation?.kpis?.etp_actuel || (centres ? centres.reduce((a, b) => a + (b.fte_actuel || 0), 0) : 0),
-    etp: consolidation?.kpis?.etp_calcule || (centres ? centres.reduce((a, b) => a + (b.etp_calcule || 0), 0) : 0),
-    delta: consolidation?.kpis?.ecart_global || (centres ? centres.reduce((a, b) => a + (b.ecart || 0), 0) : 0)
+    centers: centres ? centres.length : 0,
+    fte: computedFte,
+    etp: computedEtp,
+    delta: computedEtp - computedFte // Consistent math
+  };
+
+  // --- NEW SCENARIO HANDLER ---
+  const handleScenarioApply = async (factor) => {
+    if (!lastVolumes || lastVolumes.length === 0) {
+      alert("Veuillez d'abord importer des volumes ou sélectionner une direction pour activer la projection.");
+      return;
+    }
+
+    // Create a scenario projection
+    const projectedVolumes = lastVolumes.map(v => ({
+      ...v,
+      sacs: Math.round(v.sacs * factor),
+      colis: Math.round(v.colis * factor),
+      courrier_ordinaire: Math.round(v.courrier_ordinaire * factor),
+      courrier_recommande: Math.round(v.courrier_recommande * factor),
+      ebarkia: Math.round(v.ebarkia * factor),
+      lrh: Math.round(v.lrh * factor),
+      amana: Math.round(v.amana * factor)
+    }));
+
+    // Run simulation with scenario
+    await runSim("scenario", projectedVolumes);
+  };
+  // -----------------------------
+
+  const handleShare = (type) => {
+    // 1. WhatsApp Executive Format (Decision Oriented)
+    if (type === 'whatsapp') {
+      const gap = kpis.delta;
+      const ratio = kpis.fte > 0 ? (kpis.etp / kpis.fte) : 1;
+
+      // Icons generated via code points to prevent encoding issues
+      const ICONS = {
+        MEGA: String.fromCodePoint(0x1F4E2), // 📢
+        PIN: String.fromCodePoint(0x1F4CD),  // 📍
+        CAL: String.fromCodePoint(0x1F4C5),  // 📅
+        STAT: String.fromCodePoint(0x1F4CA), // 📊
+        RED: String.fromCodePoint(0x1F534),  // 🔴
+        GREEN: String.fromCodePoint(0x1F7E2),// 🟢
+        ORANGE: String.fromCodePoint(0x1F7E0),// 🟠
+        BLUE: String.fromCodePoint(0x1F535), // 🔵
+        TEAM: String.fromCodePoint(0x1F465), // 👥
+        TARGET: String.fromCodePoint(0x1F3AF),// 🎯
+        DOWN: String.fromCodePoint(0x1F4C9), // 📉
+        FIRE: String.fromCodePoint(0x1F525), // 🔥
+        IDEA: String.fromCodePoint(0x1F4A1), // 💡
+        LINK: String.fromCodePoint(0x1F517)  // 🔗
+      };
+
+      // Diagnostic Global
+      let statusEmoji = ICONS.GREEN;
+      let statusText = "Stabilité";
+      if (ratio > 1.10) { statusEmoji = ICONS.RED; statusText = "CRITIQUE"; }
+      else if (ratio > 1.02) { statusEmoji = ICONS.ORANGE; statusText = "Tension"; }
+      else if (ratio < 0.85) { statusEmoji = ICONS.BLUE; statusText = "Surplus"; }
+
+      // Top 3 Priorités
+      const topActions = [...centres]
+        .sort((a, b) => Math.abs(b.ecart) - Math.abs(a.ecart))
+        .slice(0, 3)
+        .map(c => {
+          const icon = c.ecart > 0 ? ICONS.RED : ICONS.BLUE;
+          const type = c.ecart > 0 ? 'Manque' : 'Trop';
+          return `• *${c.label.substring(0, 15).trim()}..* : ${icon} ${type} ${Math.abs(Number(c.ecart).toFixed(1))} ETP`;
+        });
+
+      const whatsappText = `${ICONS.MEGA} *FLASH DECISION RH*
+${ICONS.PIN} *${currentDirLabel || 'Direction'}* | ${ICONS.CAL} ${new Date().toLocaleDateString().slice(0, 5)}
+
+${ICONS.STAT} *Macro-Vision*
+${statusEmoji} Situation : *${statusText}*
+${ICONS.TEAM} Actuel : *${fmt(kpis.fte)}* | ${ICONS.TARGET} Cible : *${fmt(kpis.etp)}*
+${ICONS.DOWN} Écart Net : *${gap > 0 ? '+' : ''}${fmt(gap)} ETP*
+
+${ICONS.FIRE} *Top 3 Priorités (Action Requise)*
+${topActions.join('\n')}
+
+${ICONS.IDEA} _Recommandation IA :_ ${ratio > 1 ? "Recrutement/Renfort prioritaire sur les sites listés." : "Optimisation et redéploiement recommandés."}
+
+${ICONS.LINK} _Détails sur Tawazoon_`;
+
+      window.open(`https://wa.me/?text=${encodeURIComponent(whatsappText)}`, '_blank');
+      setShareOpen(false);
+      return;
+    }
+
+    // 2. Email Format (Clean & Professional)
+    const emailBody = `Rapport de Simulation RH
+Direction : ${currentDirLabel || 'N/A'}
+Date : ${new Date().toLocaleDateString()}
+
+SYNTHÈSE EXÉCUTIVE :
+--------------------------------
+- Nombre de Centres : ${kpis.centers}
+- Effectif Actuel : ${fmt(kpis.fte)}
+- Effectif Cible : ${fmt(kpis.etp)}
+- Écart Global : ${kpis.delta > 0 ? '+' : ''}${fmt(kpis.delta)}
+
+Veuillez trouver ci-joint le rapport détaillé pour arbitrage.
+
+Cordialement,
+Application Tawazoon RH`;
+
+    const subject = encodeURIComponent(`Arbitrage RH : ${currentDirLabel || 'Direction'}`);
+    window.open(`mailto:?subject=${subject}&body=${encodeURIComponent(emailBody)}`);
+    setShareOpen(false);
   };
 
   return (
@@ -236,38 +364,44 @@ export default function VueDirection({ api }) {
 
       {/* --- 1. PRO NAVBAR --- */}
       <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200 shadow-sm transition-all">
-        <div className="max-w-[1920px] mx-auto px-4 h-14 flex items-center justify-between">
+        <div className="max-w-[1920px] mx-auto px-4 h-14 flex items-center justify-between relative">
 
           {/* Logo / Brand */}
-          <div className="flex items-center gap-3">
-            <div className="bg-[#005EA8] p-1.5 rounded-lg text-white shadow-sm">
-              <BarChart3 size={18} />
+          {/* Left Side: Brand + Selector */}
+          <div className="flex items-center gap-8">
+            {/* Identity */}
+            <div className="flex items-center gap-3">
+              <div className="bg-[#005EA8] p-1.5 rounded-lg text-white shadow-sm">
+                <BarChart3 size={18} />
+              </div>
+              <div>
+                <h1 className="text-sm font-bold text-slate-800 uppercase tracking-wide leading-none">Pilotage Direction</h1>
+                <p className="text-[10px] text-slate-400 font-medium">Vue Consolidée</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-sm font-bold text-slate-800 uppercase tracking-wide leading-none">Pilotage Direction</h1>
-              <p className="text-[10px] text-slate-400 font-medium">Vue Consolidée</p>
+
+            {/* Selector (Left Aligned) */}
+            <div className="hidden md:block">
+              <div className="flex items-center gap-3 px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg shadow-sm focus-within:ring-2 focus-within:ring-[#005EA8]/20 transition-all hover:bg-white cursor-pointer group">
+                <Building2 size={18} className="text-[#005EA8] group-hover:scale-110 transition-transform shrink-0" />
+                <div className="w-px h-5 bg-slate-300 mx-1"></div>
+                <select
+                  className="text-sm font-bold text-slate-700 bg-transparent outline-none cursor-pointer min-w-[320px] max-w-[500px]"
+                  value={selectedDirection || ""}
+                  onChange={(e) => handleSelectDirection(e.target.value)}
+                  title="Choisir une direction"
+                >
+                  <option value="">-- Sélectionner une Direction --</option>
+                  {directions.map((d) => (
+                    <option key={d.id} value={d.id}>{d.label}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
 
-          {/* Controls */}
+          {/* Right Actions */}
           <div className="flex items-center gap-4">
-            {/* Perimeter Selector */}
-            <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg focus-within:ring-2 focus-within:ring-[#005EA8]/20 transition-all">
-              <Building2 size={14} className="text-slate-400" />
-              <div className="w-px h-3 bg-slate-300 mx-1"></div>
-              <select
-                className="text-xs font-bold text-slate-700 bg-transparent outline-none w-48 cursor-pointer"
-                value={selectedDirection || ""}
-                onChange={(e) => handleSelectDirection(e.target.value)}
-              >
-                <option value="">-- Sélectionner une Direction --</option>
-                {directions.map((d) => (
-                  <option key={d.id} value={d.id}>{d.label}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Actions Group */}
             {selectedDirection && (
               <div className="flex items-center gap-2">
 
@@ -281,6 +415,38 @@ export default function VueDirection({ api }) {
                   <Settings2 size={14} className={showParams ? "animate-spin-slow" : ""} />
                   Paramètres
                 </button>
+
+                {/* Share Toggle */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShareOpen(!shareOpen)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all shadow-sm ${shareOpen
+                      ? "bg-[#005EA8] text-white border-[#005EA8]"
+                      : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300"}`}
+                  >
+                    <Share2 size={14} />
+                    Partager
+                  </button>
+
+                  {shareOpen && (
+                    <div className="absolute top-full right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-slate-200 py-1 z-50 animate-in slide-in-from-top-2 fade-in duration-200">
+                      <button
+                        onClick={() => handleShare('email')}
+                        className="w-full text-left px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                      >
+                        <Mail size={14} className="text-slate-400" />
+                        Via Email
+                      </button>
+                      <button
+                        onClick={() => handleShare('whatsapp')}
+                        className="w-full text-left px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                      >
+                        <MessageCircle size={14} className="text-green-500" />
+                        Via WhatsApp
+                      </button>
+                    </div>
+                  )}
+                </div>
 
                 {/* Export PDF */}
                 <button
@@ -296,59 +462,61 @@ export default function VueDirection({ api }) {
         </div>
 
         {/* --- SETTINGS PANEL (Collapsible) --- */}
-        {selectedDirection && showParams && (
-          <div className="absolute top-14 left-0 w-full bg-slate-50/95 backdrop-blur border-b border-slate-200 shadow-lg z-30 animate-in slide-in-from-top-2">
-            <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-center gap-8">
-              <div className="flex items-center gap-3">
-                <div className="bg-white p-2 rounded-full border border-slate-200 shadow-sm">
-                  <Settings2 size={16} className="text-[#005EA8]" />
+        {
+          selectedDirection && showParams && (
+            <div className="absolute top-14 left-0 w-full bg-slate-50/95 backdrop-blur border-b border-slate-200 shadow-lg z-30 animate-in slide-in-from-top-2">
+              <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-center gap-8">
+                <div className="flex items-center gap-3">
+                  <div className="bg-white p-2 rounded-full border border-slate-200 shadow-sm">
+                    <Settings2 size={16} className="text-[#005EA8]" />
+                  </div>
+                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Configuration de la Simulation</span>
                 </div>
-                <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Configuration de la Simulation</span>
+
+                <div className="h-8 w-px bg-slate-300 mx-4"></div>
+
+                <div className="flex items-center gap-6">
+                  <div className="flex flex-col items-center">
+                    <label className="text-[10px] font-bold text-slate-400 mb-1">PRODUCTIVITÉ (%)</label>
+                    <input
+                      type="number"
+                      className="w-16 text-center text-sm font-bold text-slate-800 bg-white border border-slate-300 rounded px-1 py-0.5 focus:ring-2 focus:ring-[#005EA8]"
+                      value={params.productivite}
+                      onChange={e => setParams(p => ({ ...p, productivite: parseFloat(e.target.value) }))}
+                    />
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <label className="text-[10px] font-bold text-slate-400 mb-1">HEURES / JOUR</label>
+                    <input
+                      type="number"
+                      className="w-16 text-center text-sm font-bold text-slate-800 bg-slate-100 border border-slate-300 rounded px-1 py-0.5"
+                      value={params.heuresParJour}
+                      readOnly
+                    />
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <label className="text-[10px] font-bold text-slate-400 mb-1">IDLE (MIN)</label>
+                    <input
+                      type="number"
+                      className="w-16 text-center text-sm font-bold text-slate-800 bg-white border border-slate-300 rounded px-1 py-0.5 focus:ring-2 focus:ring-[#005EA8]"
+                      value={params.idleMinutes}
+                      onChange={e => setParams(p => ({ ...p, idleMinutes: parseFloat(e.target.value) }))}
+                    />
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => runSim()}
+                  className="ml-4 px-4 py-2 bg-[#005EA8] hover:bg-[#004e8a] text-white text-xs font-bold rounded-lg shadow-md flex items-center gap-2 transition-all active:scale-95"
+                >
+                  <Play size={14} fill="currentColor" />
+                  Appliquer
+                </button>
               </div>
-
-              <div className="h-8 w-px bg-slate-300 mx-4"></div>
-
-              <div className="flex items-center gap-6">
-                <div className="flex flex-col items-center">
-                  <label className="text-[10px] font-bold text-slate-400 mb-1">PRODUCTIVITÉ (%)</label>
-                  <input
-                    type="number"
-                    className="w-16 text-center text-sm font-bold text-slate-800 bg-white border border-slate-300 rounded px-1 py-0.5 focus:ring-2 focus:ring-[#005EA8]"
-                    value={params.productivite}
-                    onChange={e => setParams(p => ({ ...p, productivite: parseFloat(e.target.value) }))}
-                  />
-                </div>
-                <div className="flex flex-col items-center">
-                  <label className="text-[10px] font-bold text-slate-400 mb-1">HEURES / JOUR</label>
-                  <input
-                    type="number"
-                    className="w-16 text-center text-sm font-bold text-slate-800 bg-slate-100 border border-slate-300 rounded px-1 py-0.5"
-                    value={params.heuresParJour}
-                    readOnly
-                  />
-                </div>
-                <div className="flex flex-col items-center">
-                  <label className="text-[10px] font-bold text-slate-400 mb-1">IDLE (MIN)</label>
-                  <input
-                    type="number"
-                    className="w-16 text-center text-sm font-bold text-slate-800 bg-white border border-slate-300 rounded px-1 py-0.5 focus:ring-2 focus:ring-[#005EA8]"
-                    value={params.idleMinutes}
-                    onChange={e => setParams(p => ({ ...p, idleMinutes: parseFloat(e.target.value) }))}
-                  />
-                </div>
-              </div>
-
-              <button
-                onClick={() => runSim()}
-                className="ml-4 px-4 py-2 bg-[#005EA8] hover:bg-[#004e8a] text-white text-xs font-bold rounded-lg shadow-md flex items-center gap-2 transition-all active:scale-95"
-              >
-                <Play size={14} fill="currentColor" />
-                Appliquer
-              </button>
             </div>
-          </div>
-        )}
-      </header>
+          )
+        }
+      </header >
 
       <main className="px-4 py-4 max-w-[1920px] mx-auto">
 
@@ -421,9 +589,14 @@ export default function VueDirection({ api }) {
 
               {/* Sidebar / Widgets */}
               <div className="xl:col-span-4 space-y-4">
-                <div className="h-[240px]">
-                  <DirectionVolumesCard onSimulate={handleManualSimulate} loading={loading.sim} />
-                </div>
+                {/* 1. AI Smart Panel (Wow Effect) */}
+                <SmartInsightsPanel
+                  centres={centres}
+                  kpis={kpis}
+                  onScenarioApply={handleScenarioApply}
+                />
+
+                <DirectionVolumesCard onSimulate={handleManualSimulate} loading={loading.sim} />
                 <DirectionDonutsRow centres={centres} charts={consolidation.charts} />
               </div>
             </div>
@@ -459,7 +632,7 @@ export default function VueDirection({ api }) {
               </div>
               <div className="bg-slate-100 p-4 rounded text-center border border-slate-200">
                 <div className="text-2xl font-bold text-slate-700">{fmt(kpis.etp)}</div>
-                <div className="text-[10px] uppercase text-slate-500">Cible</div>
+                <div className="text-[10px] uppercase text-slate-500">Effectif Calculé</div>
               </div>
               <div className="p-4 rounded text-center border border-slate-200">
                 <div className="text-2xl font-bold text-slate-800">{fmt(kpis.delta)}</div>
@@ -469,7 +642,7 @@ export default function VueDirection({ api }) {
             {/* Tables... */}
             <table className="w-full text-xs text-left border-collapse mb-8">
               <thead>
-                <tr className="bg-slate-100 border-b border-slate-300"><th className="p-2">Centre</th><th className="p-2 text-right">Actuel</th><th className="p-2 text-right">Cible</th><th className="p-2 text-right">Écart</th></tr>
+                <tr className="bg-slate-100 border-b border-slate-300"><th className="p-2">Centre</th><th className="p-2 text-right">Actuel</th><th className="p-2 text-right">Effectif Calculé</th><th className="p-2 text-right">Écart</th></tr>
               </thead>
               <tbody>
                 {centres.map((c, i) => (
@@ -484,6 +657,6 @@ export default function VueDirection({ api }) {
 
         <DirectionPostesModal open={detailModalOpen} onClose={() => setDetailModalOpen(false)} centre={selectedCentre} postes={centrePostes} />
       </main>
-    </div>
+    </div >
   );
 }

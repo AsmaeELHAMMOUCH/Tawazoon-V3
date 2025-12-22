@@ -116,11 +116,11 @@ export default function DirectionPostesModal({ open, onClose, centre, postes = [
                     <table className="w-full text-left border-collapse">
                         <thead className="bg-slate-50 text-[10px] uppercase text-slate-500 font-bold sticky top-0 z-10">
                             <tr>
-                                <th className="px-4 py-2 border-b border-slate-200">Poste</th>
-                                <th className="px-4 py-2 border-b border-slate-200 text-right">Actuel</th>
-                                <th className="px-4 py-2 border-b border-slate-200 text-right">Cible</th>
+                                <th className="px-4 py-2 border-b border-slate-200">Poste RH</th>
+                                <th className="px-4 py-2 border-b border-slate-200 text-right">Effectif Actuel</th>
+                                <th className="px-4 py-2 border-b border-slate-200 text-right">Effectif Calculé</th>
                                 <th className="px-4 py-2 border-b border-slate-200 text-right">Écart</th>
-                                <th className="px-4 py-2 border-b border-slate-200 text-center">Action Suggérée</th>
+                                <th className="px-4 py-2 border-b border-slate-200 text-center">Recommandation</th>
                             </tr>
                         </thead>
                         <tbody className="text-[11px] text-slate-700 divide-y divide-slate-50">
