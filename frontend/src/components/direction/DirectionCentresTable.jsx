@@ -1,12 +1,12 @@
 import React, { useState, useMemo } from "react";
-import { Search, ChevronLeft, ChevronRight, ArrowUpDown, Eye } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, ArrowUpDown, Eye, AlertTriangle, CheckCircle2, TrendingUp, TrendingDown, UserPlus, Search as SearchIcon } from "lucide-react";
 import { fmt } from "../../utils/formatters";
 
 export default function DirectionCentresTable({ centres = [], loading, onOpenDetail }) {
     const [search, setSearch] = useState("");
     const [page, setPage] = useState(1);
-    const pageSize = 10;
-    const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+    const pageSize = 20;
+    const [sortConfig, setSortConfig] = useState({ key: 'ecart', direction: 'desc' });
 
     // 1. Filter
     const filtered = useMemo(() => {
@@ -18,23 +18,31 @@ export default function DirectionCentresTable({ centres = [], loading, onOpenDet
         );
     }, [centres, search]);
 
-    // 2. Sort
+    // 2. Prepare Data
+    const enriched = useMemo(() => {
+        return filtered.map(c => {
+            const actuel = c.fte_actuel || 0;
+            const cible = c.etp_calcule || 0;
+            const ratioLoad = actuel > 0 ? (cible / actuel) * 100 : (cible > 0 ? 999 : 0);
+            return { ...c, ratioLoad };
+        });
+    }, [filtered]);
+
+    // 3. Sort
     const sorted = useMemo(() => {
-        if (!sortConfig.key) return filtered;
-        return [...filtered].sort((a, b) => {
+        if (!sortConfig.key) return enriched;
+        return [...enriched].sort((a, b) => {
             let av = a[sortConfig.key];
             let bv = b[sortConfig.key];
-            // Handle numeric / nulls
             if (av == null) av = -Infinity;
             if (bv == null) bv = -Infinity;
-
             if (av < bv) return sortConfig.direction === 'asc' ? -1 : 1;
             if (av > bv) return sortConfig.direction === 'asc' ? 1 : -1;
             return 0;
         });
-    }, [filtered, sortConfig]);
+    }, [enriched, sortConfig]);
 
-    // 3. Paginate
+    // 4. Paginate
     const totalPages = Math.ceil(sorted.length / pageSize);
     const paginated = sorted.slice((page - 1) * pageSize, page * pageSize);
 
@@ -53,16 +61,18 @@ export default function DirectionCentresTable({ centres = [], loading, onOpenDet
     );
 
     return (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden flex flex-col h-full">
             {/* Toolbar */}
-            <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between gap-4">
-                <h3 className="text-sm font-bold text-slate-800">Détail par Centre</h3>
-                <div className="relative">
-                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+            <div className="px-3 py-2 border-b border-slate-100 flex items-center justify-between bg-white">
+                <div className="flex items-center gap-2">
+                    <h3 className="text-[11px] font-bold text-slate-800 uppercase tracking-wide">Performance des Centres</h3>
+                </div>
+                <div className="relative group">
+                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#005EA8] transition-colors" size={12} />
                     <input
                         type="text"
-                        placeholder="Rechercher un centre..."
-                        className="pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg w-64 focus:ring-1 focus:ring-[#005EA8] outline-none"
+                        placeholder="Filtrer..."
+                        className="pl-7 pr-2 py-1 text-[10px] border border-slate-200 rounded-lg w-32 focus:w-48 focus:ring-1 focus:ring-[#005EA8] focus:border-[#005EA8] outline-none bg-slate-50 focus:bg-white transition-all placeholder:text-slate-400 text-slate-700 font-medium"
                         value={search}
                         onChange={e => { setSearch(e.target.value); setPage(1); }}
                     />
@@ -70,80 +80,148 @@ export default function DirectionCentresTable({ centres = [], loading, onOpenDet
             </div>
 
             {/* Table */}
-            <div className="overflow-x-auto min-h-[300px]">
+            <div className="overflow-x-auto flex-1 bg-white">
                 <table className="w-full text-left border-collapse">
-                    <thead className="bg-slate-50/80 text-[10px] uppercase text-slate-500 font-bold tracking-wide">
+                    <thead className="bg-white text-[10px] uppercase text-slate-400 font-bold tracking-widest sticky top-0 z-10 border-b border-slate-100">
                         <tr>
-                            <th className="px-4 py-2 cursor-pointer hover:bg-slate-100" onClick={() => handleSort('label')}>
-                                <div className="flex items-center">Centre <SortIcon col="label" /></div>
+                            <th className="px-4 py-3 cursor-pointer hover:text-[#005EA8] transition-colors text-left" onClick={() => handleSort('label')}>
+                                <div className="flex items-center gap-1">Centre <SortIcon col="label" /></div>
                             </th>
-                            <th className="px-4 py-2 cursor-pointer hover:bg-slate-100 text-center" onClick={() => handleSort('type')}>
-                                <div className="flex items-center justify-center">Catégorie <SortIcon col="type" /></div>
+                            <th className="px-4 py-3 cursor-pointer hover:text-[#005EA8] transition-colors text-left w-32" onClick={() => handleSort('ratioLoad')}>
+                                <div className="flex items-center gap-1">Charge <SortIcon col="ratioLoad" /></div>
                             </th>
-                            <th className="px-4 py-2 cursor-pointer hover:bg-slate-100 text-right" onClick={() => handleSort('fte_actuel')}>
-                                <div className="flex items-center justify-end">ETP Actuel <SortIcon col="fte_actuel" /></div>
+                            <th className="px-4 py-3 text-right text-slate-400 font-semibold cursor-pointer hover:text-[#005EA8]" onClick={() => handleSort('fte_actuel')}>
+                                <div className="flex items-center justify-end gap-1">Actuel <SortIcon col="fte_actuel" /></div>
                             </th>
-                            <th className="px-4 py-2 cursor-pointer hover:bg-slate-100 text-right" onClick={() => handleSort('etp_calcule')}>
-                                <div className="flex items-center justify-end">ETP Calculé <SortIcon col="etp_calcule" /></div>
+                            <th className="px-4 py-3 text-right text-slate-400 font-semibold cursor-pointer hover:text-[#005EA8]" onClick={() => handleSort('etp_calcule')}>
+                                <div className="flex items-center justify-end gap-1">Cible <SortIcon col="etp_calcule" /></div>
                             </th>
-                            <th className="px-4 py-2 cursor-pointer hover:bg-slate-100 text-right" onClick={() => handleSort('ecart')}>
-                                <div className="flex items-center justify-end">Écart <SortIcon col="ecart" /></div>
+                            <th className="px-4 py-3 cursor-pointer hover:text-[#005EA8] transition-colors text-right" onClick={() => handleSort('ecart')}>
+                                <div className="flex items-center justify-end gap-1">Écart <SortIcon col="ecart" /></div>
                             </th>
-                            <th className="px-4 py-2 text-center w-12">Action</th>
+                            <th className="px-4 py-3 text-center">
+                                Recommandation
+                            </th>
+                            <th className="px-2 py-3 w-8"></th>
                         </tr>
                     </thead>
-                    <tbody className="text-[11px] text-slate-700 divide-y divide-slate-50">
+                    <tbody className="text-[11px] text-slate-600 divide-y divide-slate-50 leading-relaxed">
                         {loading ? (
                             Array.from({ length: 5 }).map((_, i) => (
                                 <tr key={i} className="animate-pulse">
-                                    <td className="px-4 py-3"><div className="h-3 bg-slate-100 rounded w-32"></div></td>
-                                    <td className="px-4 py-3"><div className="h-3 bg-slate-100 rounded w-16 mx-auto"></div></td>
-                                    <td className="px-4 py-3"><div className="h-3 bg-slate-100 rounded w-12 ml-auto"></div></td>
-                                    <td className="px-4 py-3"><div className="h-3 bg-slate-100 rounded w-12 ml-auto"></div></td>
-                                    <td className="px-4 py-3"><div className="h-3 bg-slate-100 rounded w-12 ml-auto"></div></td>
-                                    <td className="px-4 py-3"></td>
+                                    <td className="px-4 py-3"><div className="h-4 bg-slate-50 rounded w-24"></div></td>
+                                    <td className="px-4 py-3"><div className="h-4 bg-slate-50 rounded w-20"></div></td>
+                                    <td className="px-4 py-3"><div className="h-4 bg-slate-50 rounded w-8 ml-auto"></div></td>
+                                    <td className="px-4 py-3"><div className="h-4 bg-slate-50 rounded w-8 ml-auto"></div></td>
+                                    <td className="px-4 py-3"><div className="h-4 bg-slate-50 rounded w-8 ml-auto"></div></td>
+                                    <td className="px-4 py-3"><div className="h-4 bg-slate-50 rounded w-16 mx-auto"></div></td>
+                                    <td className="px-2 py-3"></td>
                                 </tr>
                             ))
                         ) : paginated.length === 0 ? (
                             <tr>
-                                <td colspan="6" className="px-4 py-8 text-center text-slate-400 italic">
-                                    Aucun centre trouvé.
+                                <td colSpan="7" className="px-4 py-12 text-center text-slate-400 font-light">
+                                    Aucun résultat correspondant
                                 </td>
                             </tr>
                         ) : (
-                            paginated.map((row) => (
-                                <tr key={row.id} className="hover:bg-slate-50 transition-colors group">
-                                    <td className="px-4 py-2.5 font-medium text-slate-800">{row.label}</td>
-                                    <td className="px-4 py-2.5 text-center">
-                                        <span className="bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded text-[9px] font-semibold border border-slate-200">
-                                            {row.type || "AUTRE"}
-                                        </span>
-                                    </td>
-                                    <td className="px-4 py-2.5 text-right font-mono">{fmt(row.fte_actuel)}</td>
-                                    <td className="px-4 py-2.5 text-right font-mono">{fmt(row.etp_calcule)}</td>
-                                    <td className={`px-4 py-2.5 text-right font-mono font-bold ${row.ecart > 0 ? "text-rose-600" : row.ecart < 0 ? "text-emerald-600" : "text-slate-400"}`}>
-                                        {row.ecart > 0 ? "+" : ""}{fmt(row.ecart)}
-                                    </td>
-                                    <td className="px-4 py-2.5 text-center">
-                                        <button
-                                            onClick={() => onOpenDetail(row)}
-                                            className="p-1 rounded hover:bg-[#005EA8]/10 text-slate-400 hover:text-[#005EA8] transition-colors"
-                                            title="Voir détails"
-                                        >
-                                            <Eye size={14} />
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))
+                            paginated.map((row) => {
+                                const actuel = row.fte_actuel || 0;
+                                const cible = row.etp_calcule || 0;
+                                const ecart = row.ecart || 0;
+                                const ratioLoad = row.ratioLoad || 0;
+
+                                let decision = {
+                                    label: 'Maintenir',
+                                    icon: CheckCircle2,
+                                    color: 'bg-emerald-50/50 text-emerald-600 border-emerald-100',
+                                    barColor: 'bg-emerald-400'
+                                };
+
+                                if (ratioLoad > 110) {
+                                    decision = {
+                                        label: 'Recruter',
+                                        icon: UserPlus,
+                                        color: 'bg-rose-50/50 text-rose-600 border-rose-100',
+                                        barColor: 'bg-rose-500'
+                                    };
+                                } else if (ratioLoad > 102) {
+                                    decision = {
+                                        label: 'Surveiller',
+                                        icon: AlertTriangle,
+                                        color: 'bg-amber-50/50 text-amber-600 border-amber-100',
+                                        barColor: 'bg-amber-400'
+                                    };
+                                } else if (ratioLoad < 85) {
+                                    decision = {
+                                        label: 'Optimiser',
+                                        icon: TrendingUp,
+                                        color: 'bg-indigo-50/50 text-indigo-600 border-indigo-100',
+                                        barColor: 'bg-indigo-500'
+                                    };
+                                }
+
+                                const ecartColor = ecart > 0 ? "text-rose-600 font-bold" : ecart < 0 ? "text-indigo-600 font-bold" : "text-slate-400";
+                                const Icon = decision.icon;
+
+                                return (
+                                    <tr key={row.id} className="hover:bg-slate-50/80 transition-all group border-l-2 border-l-transparent hover:border-l-[#005EA8]">
+                                        <td className="px-4 py-3 font-medium text-slate-700 truncate max-w-[160px]" title={row.label}>
+                                            {row.label}
+                                        </td>
+
+                                        {/* Minimalist Charge Bar */}
+                                        <td className="px-4 py-3">
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                                    <div
+                                                        className={`h-full rounded-full ${decision.barColor} transition-all duration-500`}
+                                                        style={{ width: `${Math.min(ratioLoad, 100)}%` }}
+                                                    />
+                                                </div>
+                                                <span className="text-[10px] font-mono text-slate-400 w-8 text-right">
+                                                    {Math.round(ratioLoad)}%
+                                                </span>
+                                            </div>
+                                        </td>
+
+                                        <td className="px-4 py-3 text-right font-mono text-slate-500">{fmt(actuel)}</td>
+                                        <td className="px-4 py-3 text-right font-mono text-slate-800 font-semibold">{fmt(cible)}</td>
+
+                                        <td className="px-4 py-3 text-right">
+                                            <span className={`font-mono text-[10px] ${ecartColor}`}>
+                                                {ecart > 0 ? "+" : ""}{fmt(ecart)}
+                                            </span>
+                                        </td>
+
+                                        <td className="px-4 py-3 text-center">
+                                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-semibold tracking-wide border ${decision.color}`}>
+                                                <Icon size={10} strokeWidth={2.5} />
+                                                <span className="uppercase">{decision.label}</span>
+                                            </span>
+                                        </td>
+
+                                        <td className="px-2 py-3 text-center">
+                                            <button
+                                                onClick={() => onOpenDetail(row)}
+                                                className="p-1.5 rounded-full text-slate-300 hover:text-[#005EA8] hover:bg-blue-50 transition-all opacity-0 group-hover:opacity-100"
+                                                title="Voir détails"
+                                            >
+                                                <Eye size={14} />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                )
+                            })
                         )}
                     </tbody>
                 </table>
             </div>
 
-            {/* Pagination */}
-            <div className="border-t border-slate-100 px-4 py-2 bg-slate-50/50 flex items-center justify-between">
-                <span className="text-[10px] text-slate-500">
-                    Affichage {Math.min((page - 1) * pageSize + 1, sorted.length)} - {Math.min(page * pageSize, sorted.length)} sur {sorted.length}
+            {/* Pagination Compact */}
+            <div className="border-t border-slate-200 px-3 py-2 bg-slate-50 flex items-center justify-between">
+                <span className="text-[10px] text-slate-500 font-medium">
+                    {sorted.length > 0 ? `${Math.min((page - 1) * pageSize + 1, sorted.length)} - ${Math.min(page * pageSize, sorted.length)} sur ${sorted.length}` : '0'}
                 </span>
                 <div className="flex items-center gap-1">
                     <button
@@ -153,7 +231,9 @@ export default function DirectionCentresTable({ centres = [], loading, onOpenDet
                     >
                         <ChevronLeft size={14} />
                     </button>
-                    <span className="text-[10px] font-semibold text-slate-700 w-4 text-center">{page}</span>
+                    <div className="bg-white border border-slate-200 px-2 py-0.5 rounded text-[10px] font-bold text-slate-700 min-w-[24px] text-center shadow-sm">
+                        {page}
+                    </div>
                     <button
                         disabled={page >= totalPages}
                         onClick={() => setPage(p => p + 1)}

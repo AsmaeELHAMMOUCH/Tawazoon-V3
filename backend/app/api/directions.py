@@ -1,4 +1,4 @@
-﻿from typing import List
+from typing import List
 from fastapi import APIRouter, Depends
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -9,6 +9,7 @@ from app.schemas.direction_sim import DirectionSimRequest, DirectionSimResponse
 from app.services.direction_service import process_direction_simulation
 import traceback
 from fastapi import HTTPException
+
 router = APIRouter(tags=["directions"])
 
 @router.post("/simulation/direction", response_model=DirectionSimResponse)

@@ -1,78 +1,50 @@
-import React, { useState, useEffect } from "react";
-import { Package, Mail, Archive, LayoutGrid, Settings2, Info, Download, UploadCloud, AlertTriangle, FileCheck } from "lucide-react";
+import React, { useState, useRef, useMemo } from "react";
+import {
+    Archive, Download, UploadCloud,
+    AlertTriangle, FileCheck, X, CheckCircle2, Play, FileSpreadsheet
+} from "lucide-react";
 import * as XLSX from "xlsx";
-import { n, numOrNull } from "../../utils/formatters";
+import { fmt } from "../../utils/formatters";
 
-// --- Styled Components ---
-const SectionTitle = ({ icon: Icon, label, color = "text-[#005EA8]" }) => (
-    <div className="flex items-center gap-2 mb-2">
-        <Icon className={`w-3.5 h-3.5 ${color}`} />
-        <span className={`text-[11px] font-bold uppercase tracking-wider ${color}`}>{label}</span>
-    </div>
-);
+// --- Components Helpers ---
 
-const VolumeInput = ({ value, onChange, disabled }) => (
-    <input
-        type="number"
-        min="0"
-        className={`
-        w-full h-7 text-[11px] text-center border rounded focus:ring-1 focus:ring-[#005EA8] focus:border-[#005EA8] outline-none transition-colors
-        ${disabled ? 'bg-slate-50 text-slate-400 border-slate-100' : 'bg-white border-slate-300 text-slate-700'}
-      `}
-        value={value === 0 ? "" : value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="-"
-        disabled={disabled}
-    />
-);
+const StepIndicator = ({ step, current }) => {
+    const isCompleted = step < current;
+    const isCurrent = step === current;
 
-export default function DirectionVolumesCard({
-    onSimulate,
-    loading,
-    lastImportStatus
-}) {
-    // We keep local state for "Global" volumes if user wants to use manual input instead of file drop
-    // But for Direction view, it's mostly about importing an aggregation or setting global params.
-    // As per requirements: "Import Excel + template".
+    return (
+        <div className={`flex items-center gap-1.5 ${isCurrent ? "text-[#005EA8]" : isCompleted ? "text-emerald-600" : "text-slate-400"}`}>
+            <div className={`
+                w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold border
+                ${isCurrent ? "border-[#005EA8] bg-blue-50" : isCompleted ? "border-emerald-600 bg-emerald-50" : "border-slate-300 bg-white"}
+            `}>
+                {isCompleted ? <CheckCircle2 size={10} /> : step}
+            </div>
+        </div>
+    );
+};
 
-    // We will mimic the existing "ParametresVolume" structure but simplified/compact
-    // Actually, in Direction Mode, usually we import a file that contains volumes for ALL centres.
-    // The previous code had a file input. We should restore that feature properly.
+const ImportModal = ({ isOpen, onClose, onValidate }) => {
+    const [step, setStep] = useState(1);
+    const [fileData, setFileData] = useState([]);
+    const [fileName, setFileName] = useState("");
+    const [errors, setErrors] = useState([]);
+    const fileInputRef = useRef(null);
 
-    const [importMsg, setImportMsg] = useState(null);
-    const fileInputRef = React.useRef(null);
-
-    const handleDownloadTemplate = () => {
-        const headers = [
-            "Nom du Centre",
-            "Sacs / an",
-            "Colis / an",
-            "Courrier Ordinaire / an",
-            "Courrier Recommandé / an",
-            "E-Barkia / an",
-            "LRH / an",
-            "Amana / an"
-        ];
-        const sample = [{
-            "Nom du Centre": "Centre Principal",
-            "Sacs / an": 1000,
-            "Colis / an": 500,
-            "Courrier Ordinaire / an": 50000,
-            "Courrier Recommandé / an": 2000,
-            "E-Barkia / an": 100,
-            "LRH / an": 50,
-            "Amana / an": 300
-        }];
-        const ws = XLSX.utils.json_to_sheet(sample, { header: headers });
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Modèle Volumes");
-        XLSX.writeFile(wb, "modele_import_volumes.xlsx");
-    };
+    React.useEffect(() => {
+        if (isOpen) {
+            setStep(1);
+            setFileData([]);
+            setErrors([]);
+            setFileName("");
+        }
+    }, [isOpen]);
 
     const handleFileUpload = (e) => {
         const file = e.target.files[0];
         if (!file) return;
 
+        setFileName(file.name);
         const reader = new FileReader();
         reader.onload = (evt) => {
             try {
@@ -82,77 +54,177 @@ export default function DirectionVolumesCard({
                 const ws = wb.Sheets[wsname];
                 const data = XLSX.utils.sheet_to_json(ws);
 
-                // Validate columns
-                const required = ["Nom du Centre", "Sacs / an"];
+                const required = ["Nom du Centre"];
                 const first = data[0] || {};
                 const missing = required.filter(c => !(c in first));
 
-                if (missing.length > 0 && data.length > 0) {
-                    setImportMsg({ type: 'error', text: `Colonnes manquantes: ${missing.join(', ')}` });
-                    return;
+                if (missing.length > 0) {
+                    setErrors([`Colonnes manquantes : ${missing.join(', ')}`]);
+                } else if (data.length === 0) {
+                    setErrors(["Le fichier semble vide."]);
+                } else {
+                    setErrors([]);
+                    setFileData(data);
+                    setStep(2);
                 }
-
-                // Pass data up
-                onSimulate(data);
-                setImportMsg({ type: 'success', text: `${data.length} lignes chargées avec succès.` });
             } catch (err) {
-                console.error(err);
-                setImportMsg({ type: 'error', text: "Erreur lecture fichier." });
+                setErrors(["Erreur de lecture du fichier Excel."]);
             }
         };
         reader.readAsBinaryString(file);
     };
 
+    const handleConfirm = () => {
+        onValidate(fileData);
+        onClose();
+    };
+
+    if (!isOpen) return null;
+
     return (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="bg-slate-50/50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <div className="bg-blue-50 text-[#005EA8] p-1.5 rounded">
-                        <Archive size={16} />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200">
+                {/* Header */}
+                <div className="px-3 py-2 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                    <h3 className="text-xs font-bold text-slate-800 flex items-center gap-2">
+                        <UploadCloud size={14} className="text-[#005EA8]" />
+                        Assistant Importation
+                    </h3>
+                    <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
+                        <X size={16} />
+                    </button>
+                </div>
+
+                {/* Steps */}
+                <div className="px-3 py-2 bg-white border-b border-slate-100 flex justify-center gap-6">
+                    <div className="flex items-center gap-1.5">
+                        <StepIndicator step={1} current={step} />
+                        <span className={`text-[9px] font-semibold uppercase ${step >= 1 ? "text-slate-700" : "text-slate-400"}`}>Fichier</span>
                     </div>
-                    <div>
-                        <h3 className="text-sm font-bold text-slate-800">Paramètres & Volumes</h3>
-                        <p className="text-[10px] text-slate-500">Importez les données volumétriques pour la simulation</p>
+                    <div className="w-6 h-px bg-slate-200 self-center"></div>
+                    <div className="flex items-center gap-1.5">
+                        <StepIndicator step={2} current={step} />
+                        <span className={`text-[9px] font-semibold uppercase ${step >= 2 ? "text-slate-700" : "text-slate-400"}`}>Validation</span>
                     </div>
                 </div>
-                <div className="flex gap-2">
-                    <button
-                        onClick={handleDownloadTemplate}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-[#005EA8] bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
-                    >
-                        <Download size={14} />
-                        Modèle
-                    </button>
-                    <button
-                        onClick={() => fileInputRef.current?.click()}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-white bg-[#005EA8] hover:bg-[#0063A6] rounded-lg transition-colors shadow-sm"
-                    >
-                        <UploadCloud size={14} />
-                        Importer Masse
-                    </button>
-                    <input type="file" ref={fileInputRef} className="hidden" accept=".xlsx,.xls,.osd" onChange={handleFileUpload} />
-                </div>
-            </div>
 
-            <div className="p-4">
-                {/* Feedback Message */}
-                {(importMsg || lastImportStatus) && (
-                    <div className={`text-[11px] px-3 py-2 rounded border mb-4 flex items-center gap-2 ${(importMsg?.type === 'error') ? 'bg-red-50 text-red-700 border-red-200' : 'bg-green-50 text-green-700 border-green-200'
-                        }`}>
-                        {importMsg?.type === 'error' ? <AlertTriangle size={14} /> : <FileCheck size={14} />}
-                        {importMsg?.text || lastImportStatus}
-                    </div>
-                )}
+                {/* Body */}
+                <div className="p-4 flex flex-col items-center justify-center min-h-[160px]">
+                    {step === 1 && (
+                        <div
+                            className="w-full border-2 border-dashed border-slate-200 rounded-lg p-6 flex flex-col items-center justify-center hover:border-[#005EA8]/50 hover:bg-slate-50 transition-all cursor-pointer group"
+                            onClick={() => fileInputRef.current?.click()}
+                        >
+                            <div className="bg-blue-50 text-[#005EA8] p-2 rounded-full mb-2 group-hover:scale-110 transition-transform">
+                                <FileSpreadsheet size={20} />
+                            </div>
+                            <p className="text-xs font-medium text-slate-700 mb-0.5">Cliquez pour choisir un fichier</p>
+                            <p className="text-[9px] text-slate-400">Excel (.xlsx) uniquement</p>
+                            <input ref={fileInputRef} type="file" className="hidden" accept=".xlsx,.xls" onChange={handleFileUpload} />
 
-                {/* Manual Inputs / Ratios Row */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {/* Just visual indicators or simple manual inputs if needed in future */}
-                    <div className="col-span-3 text-[11px] text-slate-500 flex items-center gap-2 bg-slate-50 p-2 rounded">
-                        <Info size={14} />
-                        L'import Excel doit contenir une colonne <strong>"Nom du Centre"</strong> correspondant exactement aux libellés des centres.
-                    </div>
+                            {errors.length > 0 && (
+                                <div className="mt-3 bg-red-50 text-red-600 px-2 py-1.5 rounded text-[10px] flex items-center gap-1.5 w-full">
+                                    <AlertTriangle size={12} />
+                                    <span>{errors[0]}</span>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {step === 2 && (
+                        <div className="w-full space-y-3">
+                            <div className="bg-emerald-50 border border-emerald-100 rounded-md p-2 flex items-start gap-2">
+                                <CheckCircle2 size={16} className="text-emerald-600 mt-0.5" />
+                                <div>
+                                    <p className="text-[11px] font-bold text-emerald-800">Prêt à importer</p>
+                                    <p className="text-[10px] text-emerald-700">
+                                        <strong>{fileData.length}</strong> lignes détectées.
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex justify-between gap-2 mt-4">
+                                <button
+                                    onClick={() => setStep(1)}
+                                    className="px-3 py-1.5 text-[10px] font-medium text-slate-500 hover:bg-slate-50 rounded border border-slate-200 transition-colors"
+                                >
+                                    Retour
+                                </button>
+                                <button
+                                    onClick={handleConfirm}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[#005EA8] hover:bg-[#004e8a] text-white text-[10px] font-bold rounded shadow-sm transition-transform active:scale-95"
+                                >
+                                    <Play size={10} fill="currentColor" />
+                                    Importer
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
+    );
+};
+
+export default function DirectionVolumesCard({
+    onSimulate,
+    loading,
+    lastImportStatus
+}) {
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [importMsg, setImportMsg] = useState(lastImportStatus ? { type: 'success', text: lastImportStatus } : null);
+
+    const handleDownloadTemplate = () => {
+        const headers = ["Nom du Centre", "Sacs / an", "Colis / an", "Courrier Ordinaire / an", "Courrier Recommandé / an", "E-Barkia / an", "LRH / an", "Amana / an"];
+        const sample = [{ "Nom du Centre": "Centre Principal", "Sacs / an": 1000, "Colis / an": 500 }];
+        const ws = XLSX.utils.json_to_sheet(sample, { header: headers });
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Modèle");
+        XLSX.writeFile(wb, "modele_volumes.xlsx");
+    };
+
+    const handleValidateImport = (data) => {
+        onSimulate(data);
+        setImportMsg({ type: 'success', text: `${data.length} volumes mis à jour` });
+    };
+
+    return (
+        <React.Fragment>
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-3 relative overflow-hidden group">
+                <div className="flex items-center justify-between gap-2 relative z-10">
+                    <div className="flex items-center gap-2">
+                        <div className="bg-blue-50 p-1.5 rounded-lg border border-blue-100 shadow-sm shrink-0">
+                            <Archive size={14} className="text-[#005EA8]" />
+                        </div>
+                        <div className="hidden 2xl:block">
+                            <h4 className="text-[11px] font-bold text-slate-800 uppercase tracking-wide leading-none mb-0.5">Import</h4>
+                            <p className="text-[9px] text-slate-400 font-medium">Volumes</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button onClick={handleDownloadTemplate} className="p-1.5 rounded-md border border-slate-200 bg-slate-50 hover:bg-white hover:border-[#005EA8] hover:text-[#005EA8] text-slate-500 transition-all" title="Télécharger Modèle Excel">
+                            <FileSpreadsheet size={14} />
+                        </button>
+                        <button onClick={() => setIsModalOpen(true)} disabled={loading} className="flex items-center gap-1.5 px-3 py-1.5 bg-[#005EA8] hover:bg-[#004e8a] text-white rounded-md shadow-sm hover:shadow transition-all active:scale-95 text-[10px] font-bold">
+                            {loading ? <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <UploadCloud size={12} />}
+                            <span className="hidden xl:inline">Importer</span>
+                        </button>
+                    </div>
+                </div>
+                {importMsg && (
+                    <div className="absolute inset-0 bg-white/95 backdrop-blur-[1px] flex items-center justify-center z-20 animate-in fade-in duration-300" onClick={() => setImportMsg(null)}>
+                        <div className={`text-[9px] font-bold flex items-center gap-1 cursor-pointer ${importMsg.type === 'error' ? 'text-red-600' : 'text-emerald-600'}`}>
+                            {importMsg.type === 'error' ? <AlertTriangle size={10} /> : <CheckCircle2 size={10} />}
+                            {importMsg.text}
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            <ImportModal
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                onValidate={handleValidateImport}
+            />
+        </React.Fragment>
     );
 }
