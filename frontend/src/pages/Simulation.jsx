@@ -40,6 +40,7 @@ import HeaderSimulation from "@/layout/HeaderSimulation";
 import VueIntervenant from "@/components/views/VueIntervenant";
 import VueCentre from "@/components/views/VueCentre";
 import VueDirectionSim from "@/components/views/VueDirection";
+import VueNationale from "@/components/views/VueNationale";
 import VueSiege from "@/components/views/VueSiege";
 export function PageDirection() {
   return <VueDirectionSim api={api} />;
@@ -987,428 +988,7 @@ const addCanvasAsPages = (pdf, canvas, marginMm = 10) => {
   }
 };
 
-/* ---------------- COMPOSANTS DE VUE ---------------- */
-const VueNationale = ({
-  sacs,
-  setSacs,
-  colis,
-  setColis,
-  courrier,
-  setCourrier,
-  productivite,
-  setProductivite,
-  heuresNet,
-  setHeuresNet,
-}) => {
-  // --- Données DR nationales (mock cohérent avec ton ETP actuel national)
-  const baseDirections = [
-    {
-      code: "CASA_SETTAT",
-      nom: "DR Casa - Settat",
-      centres: 40,
-      etpActuel: 766,
-      etpRecommande: 800,
-      lat: 33.5731,
-      lng: -7.5898,
-    },
-    {
-      code: "FES_MEKNES_OUJDA",
-      nom: "DR Fès - Meknès - Oujda",
-      centres: 35,
-      etpActuel: 424,
-      etpRecommande: 450,
-      lat: 34.0181,
-      lng: -5.0078,
-    },
-    {
-      code: "MARRAKECH_AGADIR",
-      nom: "DR Marrakech - Agadir",
-      centres: 30,
-      etpActuel: 408,
-      etpRecommande: 430,
-      lat: 31.6295,
-      lng: -7.9811,
-    },
-    {
-      code: "RABAT_TANGER",
-      nom: "DR Rabat - Tanger",
-      centres: 32,
-      etpActuel: 575,
-      etpRecommande: 600,
-      lat: 34.0209,
-      lng: -6.8416,
-    },
-    {
-      code: "LAAYOUNE_DAKHLA",
-      nom: "DR Laâyoune - Dakhla",
-      centres: 10,
-      etpActuel: 71,
-      etpRecommande: 80,
-      lat: 27.1567,
-      lng: -13.2021,
-    },
-    {
-      code: "SIEGE",
-      nom: "Siège",
-      centres: 1,
-      etpActuel: 105,
-      etpRecommande: 110,
-      lat: 34.0209,
-      lng: -6.8416,
-    },
-  ];
 
-  // On dérive les champs calculés (ETP calculé, taux d’occupation)
-  const regionsData = baseDirections.map((d) => {
-    const taux =
-      d.etpRecommande > 0
-        ? Math.round((d.etpActuel / d.etpRecommande) * 100)
-        : 0;
-    return {
-      ...d,
-      etpCalcule: d.etpRecommande, // pour le mock, on aligne sur recommandé
-      tauxOccupation: taux,
-    };
-  });
-
-  const kpisNationaux = {
-    etpActuelTotal: regionsData.reduce((s, r) => s + r.etpActuel, 0),
-    etpRecommandeTotal: regionsData.reduce((s, r) => s + r.etpRecommande, 0),
-    surplusDeficit: regionsData.reduce(
-      (s, r) => s + (r.etpRecommande - r.etpActuel),
-      0
-    ),
-    tauxProductiviteMoyen: 88,
-    volumes: { sacs: 20000, colis: 12000, courrier: 80000 },
-  };
-
-  const getColor = (d) =>
-    d > 95
-      ? "#7f1d1d"
-      : d > 90
-        ? "#b91c1c"
-        : d > 85
-          ? "#dc2626"
-          : d > 80
-            ? "#ef4444"
-            : d > 75
-              ? "#f97316"
-              : d > 70
-                ? "#facc15"
-                : "#22c55e";
-
-  const barOptions = {
-    title: {
-      text: "Comparaison ETP Actuel vs Recommandé (par DR)",
-      left: "center",
-    },
-    tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
-    legend: { data: ["ETP Actuel", "ETP Recommandé"], top: 20 },
-    grid: { left: "3%", right: "4%", bottom: "12%", containLabel: true },
-    xAxis: {
-      type: "category",
-      data: regionsData.map((r) => r.nom),
-
-      // ✅ IMPORTANT : on force l’affichage de TOUS les labels
-      axisLabel: {
-        interval: 0,                        // ← n’en saute aucun
-        rotate: 15,                         // ← tourne un peu les textes
-        formatter: (v) => shortLabel(v, 24) // ← coupe si trop long
-      },
-    },
-    yAxis: { type: "value" },
-    series: [
-      {
-        name: "ETP Actuel",
-        type: "bar",
-        data: regionsData.map((r) => r.etpActuel),
-        itemStyle: { color: "#005EA8" },
-      },
-      {
-        name: "ETP Recommandé",
-        type: "bar",
-        data: regionsData.map((r) => r.etpRecommande),
-        itemStyle: { color: "#00A0E0" },
-      },
-    ],
-  };
-
-
-  const lineOptions = {
-    title: {
-      text: "Taux d'Occupation par Direction Régionale (%)",
-      left: "center",
-    },
-    tooltip: { trigger: "axis" },
-    xAxis: {
-      type: "category",
-      data: regionsData.map((r) => r.nom),
-      boundaryGap: false,
-      axisLabel: {
-        interval: 0,
-        rotate: 15,
-        formatter: (v) => shortLabel(v, 26),
-      },
-    },
-    yAxis: { type: "value", min: 0, max: 110 },
-    series: [
-      {
-        name: "Taux d'Occupation",
-        type: "line",
-        data: regionsData.map((r) => r.tauxOccupation),
-
-        // ✅ un point visible pour CHAQUE DR
-        symbol: "circle",
-        symbolSize: 8,
-        showAllSymbol: true,
-
-        itemStyle: { color: "#00A0E0" },
-        areaStyle: { color: "rgba(0,160,224,0.2)" },
-        smooth: true,
-      },
-    ],
-  };
-
-
-  const pieOptions = {
-    title: {
-      text: "Répartition des Effectifs par Direction Régionale",
-      left: "center",
-    },
-    tooltip: { trigger: "item" },
-    legend: { orient: "vertical", left: "left" },
-    series: [
-      {
-        name: "Effectifs",
-        type: "pie",
-        radius: "50%",
-        data: regionsData.map((r) => ({ value: r.etpActuel, name: r.nom })),
-        itemStyle: {
-          color: (p) => {
-            const colors = [
-              "#005EA8",
-              "#00A0E0",
-              "#4682B4",
-              "#5F9EA0",
-              "#B0C4DE",
-              "#87CEEB",
-            ];
-            return colors[p.dataIndex % colors.length];
-          },
-        },
-      },
-    ],
-  };
-
-  return (
-    <div className="space-y-6">
-      <Card
-        title="Paramètres de simulation"
-        actions={
-          <button onClick={() => { }} className="btn-cta">
-            <Play className="w-3.5 h-3.5" />
-            Lancer Simulation
-          </button>
-        }
-      >
-        <div className="grid gap-4 place-items-center grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
-          <Field label="Sacs / Jour" icon={Archive}>
-            <Input
-              type="number"
-              value={sacs}
-              onChange={(e) => setSacs(Number(e.target.value || 0))}
-            />
-          </Field>
-          <Field label="Colis / Jour" icon={Package}>
-            <Input
-              type="number"
-              value={colis}
-              onChange={(e) => setColis(Number(e.target.value || 0))}
-            />
-          </Field>
-          <Field label="Courrier / Jour" icon={Mail}>
-            <Input
-              type="number"
-              value={courrier}
-              onChange={(e) => setCourrier(Number(e.target.value || 0))}
-            />
-          </Field>
-          <Field label="Productivité (%)" icon={Gauge}>
-            <Input
-              type="number"
-              value={productivite}
-              onChange={(e) => setProductivite(Number(e.target.value || 0))}
-            />
-          </Field>
-          <Field label="Heures net / Jour" icon={Clock}>
-            <Input
-              type="text"
-              value={Number(heuresNet).toFixed(2).replace(".", ",")}
-              readOnly
-              disabled
-              title="Calculé automatiquement d'après la productivité"
-            />
-          </Field>
-        </div>
-      </Card>
-
-      <h2 className="text-2xl font-bold text-slate-800">
-        Vue Globale Nationale
-      </h2>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <KpiStat
-          title="Total ETP National"
-          value={kpisNationaux.etpActuelTotal}
-          subtitle={
-            <span className="text-slate-600">
-              Recommandé&nbsp;:{" "}
-              <span className="text-sky-600 font-semibold">{"2150"}</span>
-            </span>
-          }
-          delta={`${kpisNationaux.surplusDeficit >= 0 ? "" : ""
-            }${''} `}
-          positive={kpisNationaux.surplusDeficit >= 0}
-          icon={User}
-        />
-        <KpiGauge
-          title="Taux de Productivité (moyen)"
-          percent={kpisNationaux.tauxProductiviteMoyen}
-          icon={Gauge}
-        />
-        <KpiSpark
-          title="Volumes (Sacs / jour)"
-          value={kpisNationaux.volumes.sacs}
-          data={[18000, 19000, 20000, 19800, 20200, 20000]}
-          icon={Archive}
-        />
-      </div>
-
-      <Card title="Récapitulatif par Direction Régionale">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-100">
-              <tr>
-                <th className="px-4 py-2 text-left">Direction</th>
-                <th className="px-4 py-2 text-right">Centres</th>
-                <th className="px-4 py-2 text-right">ETP Actuel</th>
-                <th className="px-4 py-2 text-right">ETP Calculé</th>
-                <th className="px-4 py-2 text-right">ETP Recommandé</th>
-                <th className="px-4 py-2 text-right">Écart</th>
-                <th className="px-4 py-2 text-right">Taux Occupation</th>
-              </tr>
-            </thead>
-            <tbody>
-              {regionsData.map((r, i) => (
-                <tr
-                  key={r.code}
-                  className={i % 2 === 0 ? "bg-white" : "bg-slate-50"}
-                >
-                  <td className="px-4 py-2 font-medium">{r.nom}</td>
-                  <td className="px-4 py-2 text-right">{r.centres}</td>
-                  <td className="px-4 py-2 text-right">{r.etpActuel}</td>
-                  <td className="px-4 py-2 text-right">{r.etpCalcule}</td>
-                  <td className="px-4 py-2 text-right">{r.etpRecommande}</td>
-                  <td className="px-4 py-2 text-right">
-                    <span
-                      className={
-                        r.etpRecommande - r.etpActuel >= 0
-                          ? "text-green-600"
-                          : "text-red-600"
-                      }
-                    >
-                      {r.etpRecommande - r.etpActuel}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2 text-right">{r.tauxOccupation}%</td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot className="bg-slate-100 font-medium">
-              <tr>
-                <td className="px-4 py-2 text-right" colSpan={2}>
-                  Total
-                </td>
-                <td className="px-4 py-2 text-right">
-                  {kpisNationaux.etpActuelTotal}
-                </td>
-                <td className="px-4 py-2 text-right">-</td>
-                <td className="px-4 py-2 text-right">
-                  {kpisNationaux.etpRecommandeTotal}
-                </td>
-                <td className="px-4 py-2 text-right">
-                  {kpisNationaux.surplusDeficit}
-                </td>
-                <td className="px-4 py-2 text-right">-</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      </Card>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card title="Comparaison ETP Actuel vs Recommandé">
-          <div className="h-80">
-            <ReactECharts
-              option={barOptions}
-              style={{ height: "100%", width: "100%" }}
-            />
-          </div>
-        </Card>
-        <Card title="Taux d'Occupation par Direction Régionale">
-          <div className="h-80">
-            <ReactECharts
-              option={lineOptions}
-              style={{ height: "100%", width: "100%" }}
-            />
-          </div>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card title="Distribution des Effectifs sur la carte">
-          <div className="h-80">
-            <MapContainer
-              center={[31.7917, -7.0926]}
-              zoom={6}
-              style={{ height: "100%", width: "100%" }}
-            >
-              <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-              {regionsData.map((r) => (
-                <CircleMarker
-                  key={r.code}
-                  center={[r.lat, r.lng]}
-                  radius={Math.sqrt(r.etpActuel) * 0.3}
-                  pathOptions={{
-                    color: getColor(r.tauxOccupation),
-                    fillOpacity: 0.7,
-                  }}
-                >
-                  <Popup>
-                    <div>
-                      <p className="font-bold">{r.nom}</p>
-                      <p>ETP Actuel: {r.etpActuel}</p>
-                      <p>ETP Recommandé: {r.etpRecommande}</p>
-                      <p>Taux d'occupation: {r.tauxOccupation}%</p>
-                    </div>
-                  </Popup>
-                </CircleMarker>
-              ))}
-            </MapContainer>
-          </div>
-        </Card>
-        <Card title="Répartition des Effectifs par DR">
-          <div className="h-80">
-            <ReactECharts
-              option={pieOptions}
-              style={{ height: "100%", width: "100%" }}
-            />
-          </div>
-        </Card>
-      </div>
-    </div>
-  );
-};
 
 const ComparatifRegional = () => {
   // On réutilise la même logique DR pour garder la cohérence
@@ -1760,6 +1340,33 @@ export default function SimulationEffectifs() {
   const [categoriesList, setCategoriesList] = useState([]);
   const [centreCategorie, setCentreCategorie] = useState("");
 
+  // --- Données DR nationales (mock pour Vue Nationale) ---
+  const baseDirections = useMemo(() => [
+    { code: "CASA_SETTAT", nom: "DR Casa - Settat", centres: 40, etpActuel: 766, etpRecommande: 800, lat: 33.5731, lng: -7.5898 },
+    { code: "FES_MEKNES_OUJDA", nom: "DR Fès - Meknès - Oujda", centres: 35, etpActuel: 424, etpRecommande: 450, lat: 34.0181, lng: -5.0078 },
+    { code: "MARRAKECH_AGADIR", nom: "DR Marrakech - Agadir", centres: 30, etpActuel: 408, etpRecommande: 430, lat: 31.6295, lng: -7.9811 },
+    { code: "RABAT_TANGER", nom: "DR Rabat - Tanger", centres: 32, etpActuel: 575, etpRecommande: 600, lat: 34.0209, lng: -6.8416 },
+    { code: "LAAYOUNE_DAKHLA", nom: "DR Laâyoune - Dakhla", centres: 10, etpActuel: 71, etpRecommande: 80, lat: 27.1567, lng: -13.2021 },
+    { code: "SIEGE", nom: "Siège", centres: 1, etpActuel: 105, etpRecommande: 110, lat: 34.0209, lng: -6.8416 },
+  ], []);
+
+  const regionsData = useMemo(() => baseDirections.map((d) => {
+    const taux = d.etpRecommande > 0 ? Math.round((d.etpActuel / d.etpRecommande) * 100) : 0;
+    return { ...d, tauxOccupation: taux, etpCalcule: d.etpRecommande };
+  }), [baseDirections]);
+
+  const kpisNationaux = useMemo(() => ({
+    etpActuelTotal: regionsData.reduce((s, r) => s + r.etpActuel, 0),
+    etpRecommandeTotal: regionsData.reduce((s, r) => s + r.etpRecommande, 0),
+    surplusDeficit: regionsData.reduce((s, r) => s + (r.etpRecommande - r.etpActuel), 0),
+    tauxProductiviteMoyen: productivite || 98,
+    fte_calcule: regionsData.reduce((s, r) => s + r.etpRecommande, 0),
+    volumes: { sacs, colis, courrier },
+  }), [regionsData, productivite, sacs, colis, courrier]);
+
+  const getColor = (d) =>
+    d > 95 ? "#7f1d1d" : d > 90 ? "#b91c1c" : d > 85 ? "#dc2626" : d > 80 ? "#ef4444" : d > 75 ? "#f97316" : d > 70 ? "#facc15" : "#22c55e";
+
   // Data
   const [referentiel, setReferentiel] = useState([]);
   const [resultats, setResultats] = useState([]);
@@ -1999,7 +1606,7 @@ export default function SimulationEffectifs() {
               ? Number(poste)
               : null;
           const data = await api.taches({ centreId: centre, posteId });
-          console.log("Données des tâches :", data);
+
           if (!cancelled && Array.isArray(data)) {
             setReferentiel(
               data.map((r) => {
@@ -2047,33 +1654,23 @@ export default function SimulationEffectifs() {
 
     const overrideVolumes = overrides.volumes || {};
 
-    console.log(
-      "DEBUG colisAmanaParSac state =",
-      colisAmanaParSac,
-      "override =",
-      overrides.colis_amana_par_sac,
-      "override.volumes =",
-      overrideVolumes.colis_amana_par_sac
-    );
+
 
     const heures_net_calculees =
       heuresNet && !Number.isNaN(Number(heuresNet))
         ? Number(heuresNet)
         : (8 * productivite) / 100;
 
-    const courrier_total =
+    // Correction : ne pas additionner les volumes annuels (amana, lrh...) aux volumes journaliers (colis, courrier)
+    const courrier_journalier =
       overrideVolumes.courrier !== undefined
         ? Number(overrideVolumes.courrier || 0)
-        : Number(courrier ?? 0) +
-        Number(ebarkia ?? 0) +
-        Number(lrh ?? 0) +
-        Number(courrierOrdinaire ?? 0) +
-        Number(courrierRecommande ?? 0);
+        : Number(courrier ?? 0);
 
-    const colis_total =
+    const colis_journalier =
       overrideVolumes.colis !== undefined
         ? Number(overrideVolumes.colis || 0)
-        : Number(colis ?? 0) + Number(amana ?? 0);
+        : Number(colis ?? 0);
 
     const pid =
       poste && poste !== ALL_ID && !Number.isNaN(Number(poste))
@@ -2114,8 +1711,8 @@ export default function SimulationEffectifs() {
         sacs: Number(
           overrideVolumes.sacs !== undefined ? overrideVolumes.sacs || 0 : sacs ?? 0
         ),
-        colis: Number(colis_total),
-        courrier: Number(courrier_total),
+        colis: Number(colis_journalier),
+        courrier: Number(courrier_journalier),
         scelle: Number(
           overrideVolumes.scelle !== undefined
             ? overrideVolumes.scelle || 0
@@ -2125,13 +1722,20 @@ export default function SimulationEffectifs() {
         courriers_par_sac: Number(courriersParSacFinal),
         colis_par_collecte: colisCollecteVal || 1,
       },
+      volumes_annuels: {
+        courrier_ordinaire: Number(courrierOrdinaire ?? 0),
+        courrier_recommande: Number(courrierRecommande ?? 0),
+        ebarkia: Number(ebarkia ?? 0),
+        lrh: Number(lrh ?? 0),
+        amana: Number(amana ?? 0),
+      },
     };
 
-    console.log("[DEBUG front payload]", JSON.stringify(payload, null, 2));
+
 
     try {
       const res = await api.simulate(payload);
-      console.log("Résultat de la simulation :", res);
+
 
       const details_taches = Array.isArray(res?.details_taches)
         ? res.details_taches
@@ -2186,22 +1790,9 @@ export default function SimulationEffectifs() {
       <div className="w-full px-4 pt-4 pb-6 space-y-2 -mt-1">
         {activeFlux === "national" && (
           <VueNationale
-            sacs={sacs}
-            setSacs={setSacs}
-            colis={colis}
-            setColis={setColis}
-            colisParCollecte={colisParCollecte}
-            setColisParCollecte={setColisParCollecte}
-            colisAmanaParSac={colisAmanaParSac}
-            setColisAmanaParSac={setColisAmanaParSac}
-            courriersParSac={courriersParSac}
-            setCourriersParSac={setCourriersParSac}
-            courrier={courrier}
-            setCourrier={setCourrier}
-            productivite={productivite}
-            setProductivite={setProductivite}
-            heuresNet={heuresNet}
-            setHeuresNet={setHeuresNet}
+            kpisNationaux={kpisNationaux}
+            regionsData={regionsData}
+            getColor={getColor}
           />
         )}
 

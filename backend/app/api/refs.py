@@ -216,6 +216,7 @@ def list_centres(
           c.label,
           c.region_id,
           c.categorie_id,
+          c.id_categorisation AS id_categorisation,
           COALESCE(p.nb_postes, 0)      AS postes,
           COALESCE(p.type_agg, '')      AS type,
           COALESCE(f.fte_actuel, 0)     AS fte_actuel
@@ -292,6 +293,15 @@ def list_categories(db: Session = Depends(get_db)):
     rows = db.execute(text("""
         SELECT id, label
         FROM dbo.categories
+        ORDER BY label
+    """)).mappings().all()
+    return [dict(r) for r in rows]
+
+@router.get("/categorisations", response_model=List[CategorieOut])
+def list_categorisations(db: Session = Depends(get_db)):
+    rows = db.execute(text("""
+        SELECT id_categorisation as id, label
+        FROM dbo.Categorisation
         ORDER BY label
     """)).mappings().all()
     return [dict(r) for r in rows]

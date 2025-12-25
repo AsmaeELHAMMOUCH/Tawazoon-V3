@@ -2,11 +2,12 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import {
-  GlobeAltIcon,
-  MapPinIcon,
-  BuildingOfficeIcon,
-  BriefcaseIcon,
-} from "@heroicons/react/24/outline";
+  Globe,
+  MapPin,
+  Building2,
+  Building,
+  User,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const fluxOptions = [
@@ -14,31 +15,31 @@ const fluxOptions = [
     id: "poste",
     label: "Intervenant",
     labelMobile: "Interv.",
-    icon: BriefcaseIcon,
+    icon: User,
   },
   {
     id: "centre",
     label: "Centre",
     labelMobile: "Centre",
-    icon: BuildingOfficeIcon,
+    icon: Building,
   },
   {
     id: "direction",
     label: "Direction",
     labelMobile: "Dir.",
-    icon: BuildingOfficeIcon,
+    icon: Building2,
   },
   {
     id: "siege",
     label: "Niveau Siège",
     labelMobile: "Siège",
-    icon: MapPinIcon,
+    icon: MapPin,
   },
   {
     id: "national",
     label: "Niveau National",
     labelMobile: "National",
-    icon: GlobeAltIcon,
+    icon: Globe,
   },
 ];
 
@@ -47,10 +48,10 @@ export default function FluxNavbar({ activeFlux, onFluxChange }) {
 
   return (
     <div className="w-full">
-      <div className="bg-white rounded-md p-1 shadow-sm mb-2 border border-slate-200">
+      <div className="bg-white/80 backdrop-blur-sm rounded-lg p-1 shadow-[0_1px_4px_rgba(0,0,0,0.03)] mb-1 border border-slate-200">
         <div
           className="
-            flex bg-slate-50 p-1 rounded-md gap-1
+            flex bg-slate-50/50 p-0.5 rounded-md gap-0.5
             overflow-x-auto md:overflow-visible
             scrollbar-hide
           "
@@ -63,7 +64,7 @@ export default function FluxNavbar({ activeFlux, onFluxChange }) {
               <motion.button
                 key={flux.id}
                 whileHover={{ scale: 1.01 }}
-                whileTap={{ scale: 0.985 }}
+                whileTap={{ scale: 0.99 }}
                 onClick={() => onFluxChange(flux.id)}
                 onMouseEnter={() => setHovered(flux.id)}
                 onMouseLeave={() => setHovered(null)}
@@ -71,9 +72,9 @@ export default function FluxNavbar({ activeFlux, onFluxChange }) {
                   "relative flex items-center justify-center",
                   "rounded-md px-3 py-1.5",
                   "flex-shrink-0 flex-1",
-                  "text-xs md:text-sm font-medium",
+                  "text-[11px] md:text-xs font-semibold uppercase tracking-wide",
                   "transition-all duration-200",
-                  "min-h-[32px] min-w-[80px]"
+                  "min-h-[28px] min-w-[80px]"
                 )}
               >
                 {isActive && (
@@ -84,30 +85,32 @@ export default function FluxNavbar({ activeFlux, onFluxChange }) {
                       bg-[#005EA8]
                       shadow-sm
                     "
-                    transition={{ type: "spring", damping: 20, stiffness: 300 }}
+                    transition={{ type: "spring", damping: 25, stiffness: 400 }}
                   />
                 )}
 
                 {!isActive && hovered === flux.id && (
                   <motion.div
-                    className="absolute inset-0 rounded-md bg-slate-200/60"
+                    className="absolute inset-0 rounded-md bg-slate-200/50"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    transition={{ duration: 0.15 }}
+                    transition={{ duration: 0.1 }}
                   />
                 )}
 
-                <div className="relative z-10 flex items-center gap-2">
+                <div className="relative z-10 flex items-center gap-1.5">
                   <Icon
+                    size={14}
+                    strokeWidth={isActive ? 2.5 : 2}
                     className={cn(
-                      "h-4 w-4 transition-colors duration-200",
+                      "transition-colors duration-200",
                       isActive ? "text-white" : "text-slate-500"
                     )}
                   />
                   <span
                     className={cn(
                       "transition-colors duration-200 whitespace-nowrap",
-                      isActive ? "text-white" : "text-slate-700"
+                      isActive ? "text-white" : "text-slate-600"
                     )}
                   >
                     <span className="md:hidden">{flux.labelMobile}</span>

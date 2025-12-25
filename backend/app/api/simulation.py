@@ -92,7 +92,8 @@ def simulate_effectifs(request: SimulationRequest, db: Session = Depends(get_db)
         taches = [dict(r) for r in rows] if rows else []
 
         # 2) regroupement courrier (LOGIC SHARED)
-        taches_finales = regroup_tasks_for_scenarios(taches)
+        # taches_finales = regroup_tasks_for_scenarios(taches)
+        taches_finales = taches
 
         # 3) volumes
         va_dict = as_snake_annual(getattr(request, "volumes_annuels", None))
@@ -106,9 +107,9 @@ def simulate_effectifs(request: SimulationRequest, db: Session = Depends(get_db)
         def _ratio(key, fallback):
             val = raw_vols.get(key, None)
             try:
-                return float(val) if val not in (None, "") else float(fallback)
+                return float(val) if val not in (None, "") else (float(fallback) if fallback is not None else None)
             except (TypeError, ValueError):
-                return float(fallback)
+                return float(fallback) if fallback is not None else None
 
         # Overwrite ratios explicitly if passed in raw request (because annual_to_daily_post sets defaults)
         if _ratio("colis_amana_par_sac", None) is not None:
@@ -119,7 +120,10 @@ def simulate_effectifs(request: SimulationRequest, db: Session = Depends(get_db)
 
 
         # DEBUG : vérifier les ratios reçus (Vue Intervenant)
-        print("DEBUG simulate volumes_journaliers =", volumes_journaliers)
+        print("==================== REQUEST RECEIVED /simulate ====================", flush=True)
+        print(f"DEBUG simulate volumes_journaliers = {volumes_journaliers}", flush=True)
+        print(f"DEBUG simulate volumes_annuels (va_dict) = {va_dict}", flush=True)
+        print(f"DEBUG simulate nb taches finales = {len(taches_finales)}", flush=True)
 
         # 4) calcul
         resultat = calculer_simulation(
@@ -216,7 +220,8 @@ def simulate_vue_centre_optimisee(
         taches = [dict(r) for r in rows] if rows else []
 
         # 2) regroupement courrier (SHARED)
-        taches_finales = regroup_tasks_for_scenarios(taches)
+        # tache_finales = regroup_tasks_for_scenarios(taches)
+        taches_finales = taches
 
         # 3) volumes
         va_dict = as_snake_annual(getattr(request, "volumes_annuels", None))
@@ -254,6 +259,9 @@ def simulate_vue_centre_optimisee(
         heures_net = sim_result.heures_net_jour or 8.0
 
         # 5) payload postes
+        print(f"DEBUG: Found {len(postes_meta)} postes for centre {request.centre_id}")
+        print(f"DEBUG: Found {len(taches_finales)} taches")
+
         postes_payload = []
         total_heures_round = 0.0
 
@@ -286,6 +294,8 @@ def simulate_vue_centre_optimisee(
                     "intitule_rh": meta.get("intitule_rh") or "",
                 }
             )
+        
+        print(f"DEBUG: Returning {len(postes_payload)} items in 'postes'")
 
         total_heures = round(sim_result.total_heures or total_heures_round, 2)
         total_etp_calcule = round(sim_result.fte_calcule or 0.0, 2)
@@ -471,4 +481,3 @@ def get_vue_intervenant_details(
     except Exception as e:
         print(f"❌ Erreur vue-intervenant-details: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-

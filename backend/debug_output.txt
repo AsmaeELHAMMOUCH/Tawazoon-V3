@@ -1,0 +1,9 @@
+--- START DEBUG REPRO ---
+Testing with volumes_flux: [{'flux_id': 1, 'sens_id': 10, 'segment_id': 100, 'volume': 120}]
+
+--- RESULTAT SUCCESS ---
+Total Heures: 7.0
+FTE Calcule: 0.88
+Details Taches:
+ - Réception courrier: 120.0 un search_volume -> 3.0h
+ - Tri Colis: 120.0 un search_volume -> 4.0h

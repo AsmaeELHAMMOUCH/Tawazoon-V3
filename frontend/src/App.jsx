@@ -49,6 +49,7 @@ import Dashboard from "./pages/Dashboard";
 import GraphPage from "./pages/GraphPage";
 import Login from "./Login";
 import SimulationMenu from "./pages/SimulationMenu";
+import VueCategorie from "./pages/VueCategorie";
 
 // 🔹 IMPORTE TA PAGE MENU PARAMÉTRÉE
 import MenuAnalyseEffectifs from "./pages/SimulationMenu";
@@ -94,7 +95,7 @@ function SidebarWithNav(props) {
     try {
       localStorage.removeItem("auth_token");
       sessionStorage.removeItem("auth_token");
-    } catch {}
+    } catch { }
     navigate("/login", { replace: true });
   };
 
@@ -124,7 +125,7 @@ export default function App() {
           onClick={() => {
             try {
               localStorage.setItem("auth_token", "debug-token");
-            } catch {}
+            } catch { }
             window.location.href = "/choix-activite";
           }}
           style={{ position: "fixed", right: 12, bottom: 12, zIndex: 9999 }}
@@ -173,6 +174,7 @@ export default function App() {
           {/* ====== MENU PARAMÉTRÉ PAR SECTION ====== */}
           {/* /app/vue-globale/menu | /app/actuel/menu | /app/recommande/menu */}
           <Route path=":section/menu" element={<MenuAnalyseEffectifs />} />
+          <Route path=":section/categorisation" element={<VueCategorie />} />
 
           {/* ====== VUE GLOBALE – CIBLES ====== */}
           <Route path="vue-globale/tableau" element={<Dashboard />} />

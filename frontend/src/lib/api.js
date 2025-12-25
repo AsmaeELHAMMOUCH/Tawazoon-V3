@@ -103,11 +103,19 @@ function normalizeCentres(payload) {
     Array.isArray(payload?.centres) ? payload.centres :
     Array.isArray(payload?.items) ? payload.items :
     [];
+
+  // DEBUG SPECIFIC FOR VALFLEURI
+  const valfleuri = list.find(x => x.label && x.label.includes("VALFLEURI"));
+  if (valfleuri) {
+     console.log("DEBUG API VALFLEURI RAW:", valfleuri);
+  }
+
   return list.map((c, i) => ({
     id: c.id ?? c.centre_id ?? c.code ?? i,
     label: c.label ?? c.name ?? c.nom ?? c.nom_centre ?? String(c.id ?? c.centre_id ?? c.code ?? i),
     region_id: c.region_id ?? null,
     categorie_id: c.categorie_id ?? null,
+    id_categorisation: c.id_categorisation ?? c.categorie_id ?? null,
   }));
 }
 
@@ -166,6 +174,17 @@ export const api = {
     const data = await http(`/categories/${query}`);
     const out = normalizeCategories(data);
     console.debug("categories(api): raw=", data, " normalized=", out);
+    return out;
+  },
+
+  /**
+   * Récupère les catégorisations (Classe A, B, etc.)
+   */
+  categorisations: async () => {
+    const data = await http(`/categorisations`);
+    // Réutilise normalizeCategories car structure id/label identique
+    const out = normalizeCategories(data);
+    console.debug("categorisations(api): raw=", data, " normalized=", out);
     return out;
   },
 

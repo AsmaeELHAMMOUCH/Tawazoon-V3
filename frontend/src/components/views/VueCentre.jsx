@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import VolumeParamsCard from "../intervenant/VolumeParamsCard";
 import ProductivityParamsCard from "../intervenant/ProductivityParamsCard";
+import { api } from "../../lib/api";
 
 /* ===================== Helpers ===================== */
 const sanitize = (val) =>
@@ -564,6 +565,14 @@ export default function VueCentre({
   const [colisParCollecteLocal, setColisParCollecteLocal] = useState(
     Number(colisParCollecte ?? 1) || 1
   );
+
+  // 🏷️ Catégories (pour affichage dynamique)
+  const [categorisationsList, setCategorisationsList] = useState([]);
+
+  useEffect(() => {
+    // Charge les catégorisations (Classe A, B...) au montage pour le lookup
+    api.categorisations().then(setCategorisationsList).catch(err => console.error("Err categorisations:", err));
+  }, []);
 
   // 👁️ affichage détails tables
   const [showMODDetails, setShowMODDetails] = useState(false);
@@ -1625,11 +1634,81 @@ export default function VueCentre({
                 ) : (
                   <Eye className="w-3 h-3 text-slate-500" />
                 )}
-                <span>Détails Positions MOI - Effectif actuel</span>
+                <span>MOI / Autres</span>
               </button>
             </div>
           }
         >
+          {/* 🏷️ CATEGORISATION SIMULEE */}
+          {(() => {
+            // 🧠 Calcul Simulation Catégorie (Logique identique à VueCategorie)
+            const totalVolume = (Number(cOrd) || 0) + (Number(cReco) || 0) + (Number(colis) || 0) + (Number(amana) || 0) + (Number(eBarkia) || 0) + (Number(lrh) || 0);
+            const etpSimule = kpi.etpArr || 0;
+
+            let simCat = "Classe D (Relais)";
+            let simColor = "slate";
+            //Régles metier categorisation
+            if (totalVolume > 80000 || etpSimule > 12) { simCat = "Classe A"; simColor = "purple"; }
+            else if (totalVolume > 50000 || etpSimule > 6) { simCat = "Classe B"; simColor = "blue"; }
+            else if (totalVolume > 25000) { simCat = "Classe C"; simColor = "cyan"; }
+            ////////////////////////////////////////////
+            // 🔍 Lookup Catégorie Actuelle via ID
+            const centreIdNum = Number(centre);
+            const currentCentreObj = (centres || []).find(c => c.id === centreIdNum);
+
+            const realCatLabel = categorisationsList.find(cat => cat.id == currentCentreObj?.id_categorisation)?.label;
+
+            const debugInfo = `(ID:${currentCentreObj?.id_categorisation})`;
+            const currentCat = realCatLabel ? `${realCatLabel} ${debugInfo}` : `SANS ${debugInfo}`;
+
+            return (
+              <div className="mb-4 flex flex-col md:flex-row items-center gap-4 bg-white/60 rounded-xl p-3 border border-indigo-100 shadow-sm">
+                <div className="flex items-center gap-2 text-slate-600">
+                  <Tag className="w-4 h-4 text-indigo-400" />
+                  <span className="text-xs font-bold uppercase tracking-wide">Catégorisation :</span>
+                </div>
+
+                <div className="flex items-center gap-3 flex-1 w-full justify-center md:justify-start">
+                  {/* Avant */}
+                  <div className="flex flex-col items-center">
+                    <span className="text-[9px] uppercase text-slate-400 font-bold mb-0.5">Actuelle</span>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                      {currentCat}
+                    </span>
+                  </div>
+
+                  <div className="text-slate-300">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+                  </div>
+
+                  {/* Après */}
+                  <div className="flex flex-col items-center">
+                    <span className="text-[9px] uppercase text-slate-400 font-bold mb-0.5">Simulée</span>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold border ${simColor === 'purple' ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                      simColor === 'blue' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                        simColor === 'cyan' ? 'bg-cyan-50 text-cyan-700 border-cyan-200' :
+                          'bg-slate-50 text-slate-600 border-slate-200'
+                      }`}>
+                      {simCat}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Métriques Clés */}
+                <div className="flex items-center gap-3 text-[10px] text-slate-500 border-l border-slate-200 pl-4">
+                  <div>
+                    <span className="block font-bold text-slate-700">{formatInt(totalVolume)}</span>
+                    <span>Volume Est.</span>
+                  </div>
+                  <div>
+                    <span className="block font-bold text-slate-700">{formatNumber(etpSimule)}</span>
+                    <span>ETP Est.</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* 👉 La grille qui contient les 4 cartes KPI */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* 1️⃣ Effectif actuel */}
@@ -1709,30 +1788,35 @@ export default function VueCentre({
             />
           </div>
         </Card>
-      )}
+      )
+      }
 
       {/* Tables MOD / MOI */}
-      {showMODDetails && (
-        <Card title="Positions MOD - Effectif actuel vs Effectif calculé">
-          <Table
-            rows={rowsMOD}
-            showCalc
-            totals={rowsMOD.length ? totalsMOD : null}
-          />
-        </Card>
-      )}
+      {
+        showMODDetails && (
+          <Card title="Positions MOD - Effectif actuel vs Effectif calculé">
+            <Table
+              rows={rowsMOD}
+              showCalc
+              totals={rowsMOD.length ? totalsMOD : null}
+            />
+          </Card>
+        )
+      }
 
-      {showMOIDetails && (
-        <Card title="Positions MOI - Effectif actuel">
-          <Table
-            rows={rowsMOI}
-            totals={rowsMOI.length ? totalsMOI : null}
-            hasAPS={false}
-            showCalc={false}
-            showHours={false}
-          />
-        </Card>
-      )}
-    </div>
+      {
+        showMOIDetails && (
+          <Card title="Positions MOI - Effectif actuel">
+            <Table
+              rows={rowsMOI}
+              totals={rowsMOI.length ? totalsMOI : null}
+              hasAPS={false}
+              showCalc={false}
+              showHours={false}
+            />
+          </Card>
+        )
+      }
+    </div >
   );
 }

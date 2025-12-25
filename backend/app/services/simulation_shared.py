@@ -33,17 +33,21 @@ def as_snake_annual(va: Optional[Any]) -> Dict[str, float]:
     return annual if found_any else {}
 
 
-def annual_to_daily_post(vols: Dict[str, float]) -> Dict[str, float]:
+def annual_to_daily_post(vols: Dict[str, float], is_annual: bool = True) -> Dict[str, float]:
     """
-    Reçoit des volumes ANNUELS (sacs/colis/scellé) et les convertit en /jour (divisé par 264).
-    Applique aussi les ratios par défaut si absents.
+    Reçoit des volumes (sacs/colis/scellé).
+    Si is_annual=True, divise par 264 (annuel vers journalier).
+    Sinon, considère que les valeurs sont déjà journalières.
+    Applique toujours les ratios par défaut si absents.
     """
     v = {**vols}
 
     def div_if_present(key: str):
         val = float(v.get(key, 0) or 0)
-        # La logique 'reférence' divise par 264 (considérant l'input comme annuel)
-        v[key] = val / JOURS_OUVRES_AN
+        if is_annual:
+            v[key] = val / JOURS_OUVRES_AN
+        else:
+            v[key] = val
 
     div_if_present("sacs")
     div_if_present("colis")
@@ -109,7 +113,13 @@ def regroup_tasks_for_scenarios(taches: List[Dict]) -> List[Dict]:
     for tache in taches:
         unite = (tache.get("unite_mesure") or "").strip().lower()
         if unite == "courriers":
-            taches_courrier.append(tache)
+            # 🔹 Exclure les tâches AMANA du regroupement "courriers"
+            # Elles doivent rester indépendantes pour le calcul "volume AMANA"
+            nom_curr = (tache.get("nom_tache") or "").lower()
+            if "amana" in nom_curr:
+                taches_autres.append(tache)
+            else:
+                taches_courrier.append(tache)
         else:
             taches_autres.append(tache)
 

@@ -10,6 +10,7 @@ import {
   Clock,
   Table as TableIcon,
   BarChart3,
+  Sliders,
 } from "lucide-react";
 
 import { EmptyStateFirstRun } from "../states/EmptyStateFirstRun";
@@ -335,7 +336,8 @@ export default function VueIntervenant({
       courriers_par_sac: parseNonNeg(courriersParSac) ?? 4500,
       colis_par_collecte: ratioCollecte,
       part_particuliers: partParticuliers,
-      // tu peux ajouter ici idleMinutes / complexité si tu veux les envoyer au backend
+      taux_complexite: Number(tauxComplexite || 0),
+      nature_geo: Number(natureGeo || 0),
     });
   };
 
@@ -347,7 +349,16 @@ export default function VueIntervenant({
       >
         {/* Paramètres principaux + productivité */}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 items-start">
-          <Card title="Paramètres principaux">
+          <Card
+            title={
+              <div className="flex items-center gap-2">
+                <Sliders className="w-4 h-4 text-slate-700" />
+                <span className="font-semibold text-slate-900 text-sm">
+                  Paramètres principaux
+                </span>
+              </div>
+            }
+          >
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2 p-2">
               <Field label="Région" icon={MapPin}>
                 <Select
@@ -382,7 +393,7 @@ export default function VueIntervenant({
                 </Select>
               </Field>
 
-              <Field label="Catégorie" icon={Tag}>
+              <Field label="Typologie" icon={Tag}>
                 <Input
                   className="h-8 text-[12px] bg-slate-100 cursor-not-allowed text-slate-700 w-full"
                   value={centreCategorie || "?"}
@@ -446,7 +457,7 @@ export default function VueIntervenant({
                   value={Number(heuresBrutes || 0)
                     .toFixed(2)
                     .replace(".", ",")}
-                  className="h-8 text-[12px] bg-slate-50 border-slate-200 text-center cursor-not-allowed w-full"
+                  className="h-8 text-[12px] bg-slate-100 border-slate-200 text-center cursor-not-allowed w-full"
                   title="Calculé automatiquement à partir de la productivité (sans temps mort)"
                 />
               </Field>

@@ -17,6 +17,7 @@ import {
   BarChart3,
   PiggyBank,
   ArrowLeftRight,
+  Tag,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import tawazoonLogo from "@/assets/LOGO_Tawazoon_RH.png";
@@ -55,6 +56,7 @@ export default function Sidebar({
     { label: "Référentiel", icon: BookText, key: "referentiel" },
     { label: "Schéma", icon: Workflow, key: "schema" },
     { label: "Chronogramme", icon: TimerReset, key: "chronogramme" },
+    { label: "Catégorisation", icon: Tag, key: "categorisation" },
   ];
 
   const simulationItems = [

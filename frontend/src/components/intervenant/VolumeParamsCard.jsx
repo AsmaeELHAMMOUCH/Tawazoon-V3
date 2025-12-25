@@ -89,15 +89,13 @@ export default function VolumeParamsCard({
   onSimuler,
 }) {
   // ✅ style commun
-  const baseInputClass = "text-[12px] text-center";
+  const baseInputClass = "text-xs text-center !p-1 leading-none h-8";
 
   // 👉 largeur UNIQUE pour tous les champs des 3 tableaux
   const CELL_WIDTH_PX = 100;
   const tableInputStyle = { height: "32px", width: `${CELL_WIDTH_PX}px` };
 
-  // Paramètres de circulation / distribution (bloc du bas)
-  const [tauxComplexite, setTauxComplexite] = useState("1.2");
-  const [natureGeo, setNatureGeo] = useState("1.5");
+
 
   // Paramètres “unités” (au-dessus des tableaux)
   const [nbrCoSac, setNbrCoSac] = useState("");
@@ -213,10 +211,49 @@ export default function VolumeParamsCard({
       colis_amana_par_sac: Number(colisAmanaParSac || 0),
       courriers_par_sac: Number(courriersParSac || 0),
       colis_par_collecte: Number(colisParCollecte || 1),
-      taux_complexite: Number(tauxComplexite || 0),
-      nature_geo: Number(natureGeo || 0),
+
       heures_net: hn,
+      volumes_flux: buildVolumesFlux(),
     });
+  };
+
+  const buildVolumesFlux = () => {
+    const list = [];
+    const segmentsMap = {
+      part: "PARTICULIER",
+      pro: "PROFESSIONNEL",
+      dist: "DISTRIBUTION",
+      axes: "AXES",
+      global: "GLOBAL"
+    };
+
+    fluxRows.forEach(row => {
+      const fluxCode = row.key.toUpperCase();
+
+      // Arrivée
+      const arr = arriveeState[row.key] || {};
+      Object.keys(arr).forEach(field => {
+        const val = Number(arr[field] || 0);
+        if (val > 0 && segmentsMap[field]) {
+          list.push({ flux: fluxCode, sens: "ARRIVEE", segment: segmentsMap[field], volume: val });
+        }
+      });
+
+      // Départ
+      const dep = departState[row.key] || {};
+      Object.keys(dep).forEach(field => {
+        const val = Number(dep[field] || 0);
+        if (val > 0 && segmentsMap[field]) {
+          list.push({ flux: fluxCode, sens: "DEPART", segment: segmentsMap[field], volume: val });
+        }
+      });
+
+      // Dépôt / Récup
+      const dr = depotRecupState[row.key] || {};
+      if (Number(dr.depot || 0) > 0) list.push({ flux: fluxCode, sens: "DEPOT", segment: "GLOBAL", volume: Number(dr.depot) });
+      if (Number(dr.recup || 0) > 0) list.push({ flux: fluxCode, sens: "RECUPERATION", segment: "GLOBAL", volume: Number(dr.recup) });
+    });
+    return list;
   };
 
   /* ========= Input avec séparateur d'espaces pour milliers ========= */
@@ -255,8 +292,8 @@ export default function VolumeParamsCard({
         cleaned === ""
           ? undefined
           : parseNonNeg
-          ? parseNonNeg(cleaned)
-          : Number(cleaned);
+            ? parseNonNeg(cleaned)
+            : Number(cleaned);
 
       onChange && onChange(num);
       setLocal(num === undefined ? "" : formatThousands(num));
@@ -280,25 +317,26 @@ export default function VolumeParamsCard({
   return (
     <Card
       title={
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex flex-col">
-            <span className="font-semibold text-slate-900 text-[13px]">
-              Paramètres de volume
-            </span>
-          </div>
+        <div className="flex items-center gap-2">
+          <Package className="w-4 h-4 text-slate-700" />
+          <span className="font-semibold text-slate-900 text-sm">
+            Paramètres de volume
+          </span>
         </div>
       }
+      bodyClassName="!p-0"
     >
-      <div className="space-y-3">
+      <div className="space-y-2 p-2">
         {/* 🟦 Bloc Unités + Paramètres avancés */}
-        <div className="border border-slate-200 rounded-lg p-2 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06)] space-y-3">
+        <div className="border border-slate-200 rounded-md p-1.5 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.05)] space-y-2">
           {/* Unités */}
-          <div className="grid gap-2 grid-cols-1 md:grid-cols-3">
+          <div className="flex flex-wrap justify-center gap-8">
             {/* Nbre Colis / sac = Colis AMANA / sac */}
             <Field
+              className="!w-auto"
               label={
-                <span className="text-[9px] font-semibold text-slate-700">
-                  Nbre Colis / sac (AMANA)
+                <span className="text-[11px] font-semibold text-slate-700 whitespace-nowrap">
+                  Nb Colis/sac (AMANA)
                 </span>
               }
               icon={Package}
@@ -312,16 +350,17 @@ export default function VolumeParamsCard({
                     e.target.value === "" ? 0 : Number(e.target.value)
                   )
                 }
-                className={baseInputClass + "w-[110px] md:w-[130px]"}
+                className={baseInputClass + " w-[70px]"}
                 style={{ height: "32px" }}
               />
             </Field>
 
             {/* Nbre CO / sac */}
             <Field
+              className="!w-auto"
               label={
-                <span className="text-[9px] font-semibold text-slate-700">
-                  Nbre CO / sac
+                <span className="text-[11px] font-semibold text-slate-700 whitespace-nowrap">
+                  Nb CO / sac
                 </span>
               }
               icon={Mail}
@@ -337,16 +376,17 @@ export default function VolumeParamsCard({
                   const cr = parseNonNeg(nbrCrSac) ?? 0;
                   setCourriersParSac(co + cr);
                 }}
-                className={baseInputClass + "w-[110px] md:w-[130px]"}
+                className={baseInputClass + " w-[70px]"}
                 style={{ height: "32px" }}
               />
             </Field>
 
             {/* Nbre CR / sac */}
             <Field
+              className="!w-auto"
               label={
-                <span className="text-[9px] font-semibold text-slate-700">
-                  Nbre CR / sac
+                <span className="text-[11px] font-semibold text-slate-700 whitespace-nowrap">
+                  Nb CR / sac
                 </span>
               }
               icon={Mail}
@@ -362,7 +402,7 @@ export default function VolumeParamsCard({
                   const cr = parseNonNeg(val) ?? 0;
                   setCourriersParSac(co + cr);
                 }}
-                className={baseInputClass + "w-[110px] md:w-[130px]"}
+                className={baseInputClass + " w-[70px]"}
                 style={{ height: "32px" }}
               />
             </Field>
@@ -370,24 +410,24 @@ export default function VolumeParamsCard({
         </div>
 
         {/* 2️⃣ Les 3 tableaux : Arrivée / Dépôt–Récupération / Départ */}
-        <div className="flex gap-3 overflow-x-auto">
+        <div className="flex gap-2 overflow-x-auto pb-1 justify-center">
           {/* ───── Arrivée ───── */}
           <div className="border border-slate-200 rounded-md bg-white shadow-sm">
-            <div className="bg-sky-50 text-[11px] font-semibold py-1 border-b border-slate-200 flex items-center justify-center gap-1.5">
-              <ArrowDownRight className="w-3.5 h-3.5 text-sky-600" />
+            <div className="bg-sky-50 text-[10px] font-semibold py-0.5 border-b border-slate-200 flex items-center justify-center gap-1">
+              <ArrowDownRight className="w-3 h-3 text-sky-600" />
               <span className="uppercase tracking-wide text-sky-800">
                 Arrivée
               </span>
             </div>
-            <table className="min-w-[420px] text-[11px]">
+            <table className="text-xs">
               <thead>
                 <tr className="bg-sky-50/70 border-b border-slate-200">
-                  <th className="px-2 py-1 text-left w-28">Flux</th>
-                  <th className="px-1 py-1 text-center">Global</th>
-                  <th className="px-1 py-1 text-center">Particulier</th>
-                  <th className="px-1 py-1 text-center">Pro - B2B</th>
-                  <th className="px-1 py-1 text-center">Distribution</th>
-                  <th className="px-1 py-1 text-center">Axes</th>
+                  <th className="px-1 py-0.5 text-left w-20">Flux</th>
+                  <th className="px-0.5 py-0.5 text-center">Global</th>
+                  <th className="px-0.5 py-0.5 text-center">Particulier</th>
+                  <th className="px-0.5 py-0.5 text-center">Pro</th>
+                  <th className="px-0.5 py-0.5 text-center">Distrib.</th>
+                  <th className="px-0.5 py-0.5 text-center">Axes</th>
                 </tr>
               </thead>
               <tbody>
@@ -407,15 +447,15 @@ export default function VolumeParamsCard({
                         " hover:bg-sky-50 transition-colors"
                       }
                     >
-                      <td className="px-2 py-1 font-semibold text-[11px] text-slate-700">
-                        <div className="flex items-center gap-1.5">
-                          <Icon className="w-3.5 h-3.5 text-slate-500" />
+                      <td className="px-1 py-0.5 font-semibold text-xs text-slate-700">
+                        <div className="flex items-center gap-1">
+                          <Icon className="w-3 h-3 text-slate-500" />
                           <span>{row.label}</span>
                         </div>
                       </td>
 
                       {/* Global Arrivée */}
-                      <td className="px-1 py-0.5">
+                      <td className="px-0.5 py-0.5">
                         <ThousandInput
                           disabled={disabled}
                           value={globalVal}
@@ -426,7 +466,7 @@ export default function VolumeParamsCard({
                       </td>
 
                       {/* Particulier */}
-                      <td className="px-1 py-0.5">
+                      <td className="px-0.5 py-0.5">
                         <ThousandInput
                           disabled={disabled}
                           value={st.part}
@@ -437,7 +477,7 @@ export default function VolumeParamsCard({
                       </td>
 
                       {/* Pro - B2B */}
-                      <td className="px-1 py-0.5">
+                      <td className="px-0.5 py-0.5">
                         <ThousandInput
                           disabled={disabled}
                           value={st.pro}
@@ -448,7 +488,7 @@ export default function VolumeParamsCard({
                       </td>
 
                       {/* Distribution */}
-                      <td className="px-1 py-0.5">
+                      <td className="px-0.5 py-0.5">
                         <ThousandInput
                           disabled={disabled}
                           value={st.dist}
@@ -459,7 +499,7 @@ export default function VolumeParamsCard({
                       </td>
 
                       {/* Axes */}
-                      <td className="px-1 py-0.5">
+                      <td className="px-0.5 py-0.5">
                         <ThousandInput
                           disabled={disabled}
                           value={st.axes}
@@ -477,17 +517,17 @@ export default function VolumeParamsCard({
 
           {/* ───── Dépôt / Récupération ───── */}
           <div className="border border-slate-200 rounded-md bg-white shadow-sm self-start">
-            <div className="bg-sky-50 text-[11px] font-semibold py-1 border-b border-slate-200 flex items-center justify-center gap-1.5">
-              <ArrowLeftRight className="w-3.5 h-3.5 text-sky-600" />
+            <div className="bg-sky-50 text-[10px] font-semibold py-0.5 border-b border-slate-200 flex items-center justify-center gap-1">
+              <ArrowLeftRight className="w-3 h-3 text-sky-600" />
               <span className="uppercase tracking-wide text-sky-800">
-                Dépôt / Récupération
+                Dep/Recup
               </span>
             </div>
-            <table className="min-w-[240px] text-[11px]">
+            <table className="text-xs">
               <thead>
                 <tr className="bg-sky-50/70 border-b border-slate-200">
-                  <th className="px-1 py-1 text-center">Dépôt</th>
-                  <th className="px-1 py-1 text-center">Récupération</th>
+                  <th className="px-0.5 py-0.5 text-center">Dépôt</th>
+                  <th className="px-0.5 py-0.5 text-center">Récup.</th>
                 </tr>
               </thead>
               <tbody>
@@ -509,7 +549,7 @@ export default function VolumeParamsCard({
                           " hover:bg-sky-50 transition-colors"
                         }
                       >
-                        <td className="px-1 py-0.5">
+                        <td className="px-0.5 py-0.5">
                           <ThousandInput
                             disabled={disabled}
                             value={st.depot}
@@ -520,7 +560,7 @@ export default function VolumeParamsCard({
                             style={tableInputStyle}
                           />
                         </td>
-                        <td className="px-1 py-0.5">
+                        <td className="px-0.5 py-0.5">
                           <ThousandInput
                             disabled={disabled}
                             value={st.recup}
@@ -540,20 +580,20 @@ export default function VolumeParamsCard({
 
           {/* ───── Départ ───── */}
           <div className="border border-slate-200 rounded-md bg-white shadow-sm">
-            <div className="bg-sky-50 text-[11px] font-semibold py-1 border-b border-slate-200 flex items-center justify-center gap-1.5">
-              <ArrowUpRight className="w-3.5 h-3.5 text-sky-600" />
+            <div className="bg-sky-50 text-[10px] font-semibold py-0.5 border-b border-slate-200 flex items-center justify-center gap-1">
+              <ArrowUpRight className="w-3 h-3 text-sky-600" />
               <span className="uppercase tracking-wide text-sky-800">
                 Départ
               </span>
             </div>
-            <table className="min-w-[420px] text-[11px]">
+            <table className="text-xs">
               <thead>
                 <tr className="bg-sky-50/70 border-b border-slate-200">
-                  <th className="px-1 py-1 text-center">Global</th>
-                  <th className="px-1 py-1 text-center">Particulier</th>
-                  <th className="px-1 py-1 text-center">Pro - B2B</th>
-                  <th className="px-1 py-1 text-center">Distribution</th>
-                  <th className="px-1 py-1 text-center">Axes</th>
+                  <th className="px-0.5 py-0.5 text-center">Global</th>
+                  <th className="px-0.5 py-0.5 text-center">Part.</th>
+                  <th className="px-0.5 py-0.5 text-center">Pro</th>
+                  <th className="px-0.5 py-0.5 text-center">Distrib.</th>
+                  <th className="px-0.5 py-0.5 text-center">Axes</th>
                 </tr>
               </thead>
               <tbody>
@@ -571,7 +611,7 @@ export default function VolumeParamsCard({
                       }
                     >
                       {/* Global Départ */}
-                      <td className="px-1 py-0.5">
+                      <td className="px-0.5 py-0.5">
                         <ThousandInput
                           disabled={disabled}
                           value={st.global}
@@ -582,7 +622,7 @@ export default function VolumeParamsCard({
                       </td>
 
                       {/* Particulier */}
-                      <td className="px-1 py-0.5">
+                      <td className="px-0.5 py-0.5">
                         <ThousandInput
                           disabled={disabled}
                           value={st.part}
@@ -593,7 +633,7 @@ export default function VolumeParamsCard({
                       </td>
 
                       {/* Pro - B2B */}
-                      <td className="px-1 py-0.5">
+                      <td className="px-0.5 py-0.5">
                         <ThousandInput
                           disabled={disabled}
                           value={st.pro}
@@ -604,7 +644,7 @@ export default function VolumeParamsCard({
                       </td>
 
                       {/* Distribution */}
-                      <td className="px-1 py-0.5">
+                      <td className="px-0.5 py-0.5">
                         <ThousandInput
                           disabled={disabled}
                           value={st.dist}
@@ -615,7 +655,7 @@ export default function VolumeParamsCard({
                       </td>
 
                       {/* Axes */}
-                      <td className="px-1 py-0.5">
+                      <td className="px-0.5 py-0.5">
                         <ThousandInput
                           disabled={disabled}
                           value={st.axes}
@@ -634,29 +674,28 @@ export default function VolumeParamsCard({
 
         {/* 🔔 MESSAGE NON APPLICABLE */}
         {hasNonApplicable && (
-          <div className="mt-2 pt-1 border-t border-dashed border-slate-200 text-[10px] text-slate-500 italic">
+          <div className="mt-1 pt-1 border-t border-dashed border-slate-200 text-[9px] text-slate-500 italic">
             Certains champs sont{" "}
-            <span className="font-semibold">non applicables</span> pour la
-            Typologie{" "}
+            <span className="font-semibold">non applicables</span> pour{" "}
             <span className="font-semibold">
-              {centreCategorie || "inconnue"}
+              {centreCategorie || "?"}
             </span>{" "}
-            et sont donc désactivés.
+            et sont désactivés.
           </div>
         )}
 
         {/* Bouton en bas à droite */}
-        <div className="flex justify-end pr-2">
+        <div className="flex justify-end pr-1">
           <button
             disabled={!centre || loading.simulation}
             onClick={handleSimuler}
-            className="btn-cta h-8 px-3 flex items-center gap-2 text-[12px]"
+            className="btn-cta h-9 px-4 flex items-center gap-2 text-sm"
           >
-            <Package className="w-3.5 h-3.5" />
+            <Package className="w-4 h-4" />
             {loading.simulation ? "Calcul..." : "Lancer la Simulation"}
           </button>
         </div>
       </div>
-    </Card>
+    </Card >
   );
 }

@@ -17,6 +17,7 @@ class CentreOut(BaseModel):
     label: str
     region_id: int
     categorie_id: Optional[int] = None
+    id_categorisation: Optional[int] = None
 
 class PosteOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
