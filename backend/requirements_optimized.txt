@@ -1,0 +1,35 @@
+# FastAPI et serveur
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# Database
+sqlalchemy==2.0.23
+pyodbc==5.0.1
+
+# Configuration
+pydantic==2.5.0
+pydantic-settings==2.1.0
+python-dotenv==1.0.0
+
+# Utilities
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# ========================================
+# 🚀 NOUVELLES DÉPENDANCES - OPTIMISATIONS
+# ========================================
+
+# Cache Redis
+redis==5.0.1
+hiredis==2.3.2  # Parser C pour Redis (plus rapide)
+
+# Tâches asynchrones
+celery==5.3.4
+celery[redis]==5.3.4
+
+# Monitoring et Performance
+prometheus-client==0.19.0  # Métriques Prometheus (optionnel)
+
+# Compression
+python-multipart==0.0.6  # Déjà présent, mais nécessaire pour GZIP

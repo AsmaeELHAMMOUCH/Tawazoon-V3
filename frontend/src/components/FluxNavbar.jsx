@@ -25,8 +25,8 @@ const fluxOptions = [
   },
   {
     id: "direction",
-    label: "Direction",
-    labelMobile: "Dir.",
+    label: "Direction Régionale",
+    labelMobile: "Dir. Rég.",
     icon: Building2,
   },
   {
@@ -48,7 +48,7 @@ export default function FluxNavbar({ activeFlux, onFluxChange }) {
 
   return (
     <div className="w-full">
-      <div className="bg-white/80 backdrop-blur-sm rounded-lg p-1 shadow-[0_1px_4px_rgba(0,0,0,0.03)] mb-1 border border-slate-200">
+      <div className="bg-white/80 backdrop-blur-sm rounded-lg p-0.5 shadow-[0_1px_4px_rgba(0,0,0,0.03)] mb-0.5 border border-slate-200">
         <div
           className="
             flex bg-slate-50/50 p-0.5 rounded-md gap-0.5
@@ -122,6 +122,6 @@ export default function FluxNavbar({ activeFlux, onFluxChange }) {
           })}
         </div>
       </div>
-    </div>
+    </div >
   );
 }

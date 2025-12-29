@@ -3,15 +3,15 @@
 import { createElement, useState } from "react";
 import { Menu } from "lucide-react";
 import Header from "@/layout/Header";
+import AlertsDrawer from "@/components/alerts/AlertsDrawer";
 import { cn } from "@/lib/utils";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 
 export default function AppShell({ sidebar, children, sidebarProps = {} }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // Desktop Sidebar (CSS Grid managed)
   const SidebarComponent = sidebar;
 
   return (
@@ -23,8 +23,8 @@ export default function AppShell({ sidebar, children, sidebarProps = {} }) {
           {SidebarComponent && (
             <div className="h-full overflow-hidden">
               {createElement(SidebarComponent, {
-                collapsed: false, // Always expanded on mobile
-                onToggle: () => setMobileOpen(false), // Close on toggle
+                collapsed: false,
+                onToggle: () => setMobileOpen(false),
                 isMobile: true,
                 ...sidebarProps,
               })}
@@ -33,7 +33,7 @@ export default function AppShell({ sidebar, children, sidebarProps = {} }) {
         </SheetContent>
       </Sheet>
 
-      {/* === DESKTOP SIDEBAR (Sticky Aside) === */}
+      {/* === DESKTOP SIDEBAR === */}
       <aside
         className={cn(
           "hidden md:block sticky top-0 h-screen overflow-hidden border-r border-slate-200 bg-white z-40 transition-all duration-300 ease-in-out",
@@ -52,8 +52,7 @@ export default function AppShell({ sidebar, children, sidebarProps = {} }) {
       <div className="flex flex-col min-w-0 min-h-screen">
 
         {/* HEADER */}
-        <header className="sticky top-0 z-30 flex items-center h-14 bg-white/80 backdrop-blur-md border-b border-slate-200 px-4 shadow-sm w-full">
-          {/* Burger Menu (Mobile Only) */}
+        <header className="sticky top-0 z-30 flex items-center h-14 bg-blue-50/10 backdrop-blur-xl border-b border-blue-100/20 px-4 shadow-sm w-full">
           <div className="md:hidden mr-4">
             <Button
               variant="ghost"
@@ -71,10 +70,13 @@ export default function AppShell({ sidebar, children, sidebarProps = {} }) {
         </header>
 
         {/* CONTENT */}
-        <main className="flex-1 p-4 md:p-6 overflow-x-hidden w-full max-w-[1920px] mx-auto">
+        <main className="flex-1 p-1 md:p-2 overflow-x-hidden w-full max-w-[1920px] mx-auto">
           {children}
         </main>
       </div>
+
+      {/* ALERTS DRAWER (Fixed avec overlay et blur) */}
+      <AlertsDrawer />
     </div>
   );
 }

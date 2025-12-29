@@ -18,6 +18,7 @@ import {
   PiggyBank,
   ArrowLeftRight,
   Tag,
+  History,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import tawazoonLogo from "@/assets/LOGO_Tawazoon_RH.png";
@@ -56,15 +57,15 @@ export default function Sidebar({
     { label: "Référentiel", icon: BookText, key: "referentiel" },
     { label: "Schéma", icon: Workflow, key: "schema" },
     { label: "Chronogramme", icon: TimerReset, key: "chronogramme" },
-    { label: "Catégorisation", icon: Tag, key: "categorisation" },
+    { label: "Catégorisation Des Centres", icon: Tag, key: "categorisation" },
   ];
 
   const simulationItems = [
-    { label: "Par Intervenant", slug: "intervenant" },
-    { label: "Par Centre", slug: "centre" },
-    { label: "Par Direction", slug: "direction" },
-    { label: "Par Région", slug: "region" },
-    { label: "Nationale", slug: "national" },
+    { label: "Par Intervenant", slug: "", flux: "poste" },
+    { label: "Par Centre", slug: "centre", flux: "centre" },
+    { label: "Par Direction", slug: "direction", flux: "direction" },
+    { label: "Niveau Siège", slug: "region", flux: "siege" },
+    { label: "Nationale", slug: "national", flux: "national" },
   ];
 
   const vueGlobaleSub = [
@@ -83,6 +84,11 @@ export default function Sidebar({
       label: "Comparatif Positions",
       icon: ArrowLeftRight,
       path: "/app/vue-globale/comparatif",
+    },
+    {
+      label: "Historique Simulations",
+      icon: History,
+      path: "/app/simulations/history",
     },
   ];
 
@@ -172,7 +178,7 @@ export default function Sidebar({
     );
   };
 
-  const SimulationSubGroup = ({ basePath, openKey }) => (
+  const SimulationSubGroup = ({ basePath, openKey, mode }) => (
     <div className="mt-0.5">
       <button
         onClick={() => toggle(openKey)}
@@ -198,8 +204,12 @@ export default function Sidebar({
           <div className="absolute left-2 top-1.5 bottom-1.5 w-px bg-slate-200/80" />
           {simulationItems.map((item) => (
             <ItemButton
-              key={`${openKey}-${item.slug}`}
-              onClick={() => handleNav(`${basePath}/${item.slug}`)}
+              key={`${openKey}-${item.flux}`}
+              onClick={() => {
+                const path = item.slug ? `${basePath}/${item.slug}` : basePath;
+                navigate(path, { state: { flux: item.flux, mode: mode } });
+                if (isMobile && onToggle) onToggle();
+              }}
               className="relative pl-6 items-start leading-tight text-left"
             >
               <span className="pointer-events-none absolute left-2 top-1.5 w-3 h-3 border-l border-t border-slate-200/80 rounded-tl" />
@@ -236,7 +246,7 @@ export default function Sidebar({
           <img
             src={tawazoonLogo}
             alt="Logo"
-            className={cn("object-contain", collapsed ? "w-20 h-20" : "w-30 h-30")}
+            className={cn("object-contain", collapsed ? "w-20 h-20" : "w-40 h-40")}
           />
 
         </div>
@@ -272,8 +282,9 @@ export default function Sidebar({
               <div className="absolute left-2 top-1.5 bottom-1.5 w-px bg-slate-200/80" />
 
               <SimulationSubGroup
-                basePath="/app/actuel/simulation"
+                basePath="/app/simulation"
                 openKey="showSimActuel"
+                mode="actuel"
               />
 
               {commonElements.map(({ label, key }) => (
@@ -306,8 +317,9 @@ export default function Sidebar({
               <div className="absolute left-2 top-1.5 bottom-1.5 w-px bg-slate-200/80" />
 
               <SimulationSubGroup
-                basePath="/app/recommande/simulation"
+                basePath="/app/simulation"
                 openKey="showSimRecommande"
+                mode="recommande"
               />
 
               {commonElements.map(({ label, key }) => (

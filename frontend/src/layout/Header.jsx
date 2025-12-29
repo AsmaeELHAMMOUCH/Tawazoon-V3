@@ -4,13 +4,25 @@ import { Bell, ChevronDown, LogOut, User } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import clsx from "clsx";
 import tawazoonLogo from "@/assets/LOGO_Tawazoon_RH.png";
+import { useAlerts, ALERT_TYPES } from "@/hooks/useAlerts";
+import { useAlertsDrawer } from "@/contexts/AlertsDrawerContext";
 
 export default function Header({
   className = "",
-  showBurger = false, // Not used anymore but kept for prop compat
+  showBurger = false,
   onBurgerClick = () => { },
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const { unreadCount, maxSeverity } = useAlerts();
+  const { toggleDrawer } = useAlertsDrawer();
+
+  // Couleur du badge selon la gravité
+  const getBadgeColor = () => {
+    if (maxSeverity === ALERT_TYPES.CRITICAL) return "bg-red-600";
+    if (maxSeverity === ALERT_TYPES.WARNING) return "bg-orange-500";
+    if (maxSeverity === ALERT_TYPES.INFO) return "bg-blue-500";
+    return "bg-slate-400";
+  };
 
   return (
     <div
@@ -21,10 +33,6 @@ export default function Header({
     >
       {/* GAUCHE: Placeholder ou Titre page (Mobile title) */}
       <div className="flex items-center gap-2">
-        {/* Logo visible only on mobile/tablet if sidebar closed? 
-             Actually AppShell handles the sidebar toggle. 
-             Here we just show the logo or breadcrumb. 
-         */}
         <span className="md:hidden font-bold text-slate-700 text-lg tracking-tight">
           TAWAZOON RH
         </span>
@@ -37,8 +45,21 @@ export default function Header({
 
       {/* DROITE : Actions */}
       <div className="flex items-center gap-2 md:gap-4">
-        <button className="relative p-2 rounded-full hover:bg-slate-100 transition text-slate-600">
+        {/* Notifications / Alertes */}
+        <button
+          onClick={toggleDrawer}
+          className="relative p-2 rounded-full hover:bg-slate-100 transition text-slate-600"
+        >
           <Bell className="w-5 h-5" />
+          {unreadCount > 0 && (
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              className={`absolute -top-1 -right-1 ${getBadgeColor()} text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 shadow-lg`}
+            >
+              {unreadCount > 99 ? "99+" : unreadCount}
+            </motion.div>
+          )}
         </button>
 
         {/* Profil */}

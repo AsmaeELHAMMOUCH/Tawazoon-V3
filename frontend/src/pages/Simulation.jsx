@@ -1298,6 +1298,18 @@ export default function SimulationEffectifs() {
     const fromState = (location.state || {}).flux;
     return fromState || fromQuery || "national";
   });
+
+  // Sync state from location updates (Sidebar navigation)
+  useEffect(() => {
+    const stateFlux = (location.state || {}).flux;
+    const stateMode = (location.state || {}).mode;
+    if (stateFlux) {
+      setActiveFlux(stateFlux);
+    }
+    if (stateMode) {
+      setMode(stateMode);
+    }
+  }, [location]);
   // Filters
   const [region, setRegion] = useState("");
   const [categorie, setCategorie] = useState("Activité Postale");
@@ -1800,7 +1812,7 @@ export default function SimulationEffectifs() {
 
         {activeFlux === "regional" && <ComparatifRegional />}
 
-        {activeFlux === "siege" && <VueSiege api={api} />}
+        {(activeFlux === "siege" || activeFlux === "Siège") && <VueSiege api={api} />}
 
         {activeFlux === "centre" && (
           <VueCentre

@@ -1,0 +1,109 @@
+/**
+ * Styles pour Tooltips Unifiés
+ * 
+ * Style mauve unique pour toute l'application
+ */
+
+/* Animation fadeIn pour tooltips */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.animate-fadeIn {
+    animation: fadeIn 0.15s ease-in-out;
+}
+
+/* Style de base pour tous les tooltips */
+.tooltip-purple {
+    background-color: #005EA8;
+    /* blue-tawazoon */
+    color: white;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.5rem;
+    font-size: 0.75rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    z-index: 9999;
+    pointer-events: none;
+    max-width: 20rem;
+    white-space: normal;
+}
+
+/* Suppression des tooltips natifs */
+[title] {
+    position: relative;
+}
+
+/* Override des tooltips de librairies tierces */
+.recharts-tooltip-wrapper,
+.recharts-default-tooltip {
+    background-color: #005EA8 !important;
+    border: none !important;
+    border-radius: 0.5rem !important;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+}
+
+.recharts-tooltip-label {
+    color: white !important;
+    font-weight: 600 !important;
+    margin-bottom: 0.25rem !important;
+}
+
+.recharts-tooltip-item {
+    color: white !important;
+    font-weight: 500 !important;
+}
+
+/* Tooltip pour les graphiques */
+.custom-tooltip {
+    background-color: #005EA8;
+    color: white;
+    padding: 0.75rem;
+    border-radius: 0.5rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    font-size: 0.75rem;
+}
+
+.custom-tooltip .label {
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+}
+
+.custom-tooltip .value {
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+/* Icône d'aide avec tooltip */
+.help-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1rem;
+    height: 1rem;
+    color: #005EA8;
+    cursor: help;
+    transition: color 0.15s ease;
+}
+
+.help-icon:hover {
+    color: #005191;
+    /* blue-dark */
+}
+
+/* Suppression des tooltips doublés */
+.no-native-tooltip {
+    pointer-events: none;
+}
+
+.no-native-tooltip::before,
+.no-native-tooltip::after {
+    display: none !important;
+}

@@ -1,6 +1,7 @@
 ﻿/* VueIntervenant.jsx - normalisation /jour + productivité + formatage */
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { useDebouncedValue } from "../../hooks/useDebounce";
 import {
   MapPin,
   Building,
@@ -11,6 +12,11 @@ import {
   Table as TableIcon,
   BarChart3,
   Sliders,
+  Package,
+  Mail,
+  CheckCircle2,
+  ArrowRight,
+  HelpCircle,
 } from "lucide-react";
 
 import { EmptyStateFirstRun } from "../states/EmptyStateFirstRun";
@@ -19,6 +25,12 @@ import { EmptyStateDirty } from "../states/EmptyStateDirty";
 import GraphReferentiel from "@/components/charts/GraphReferentiel";
 import GraphResultats from "@/components/charts/GraphResultats";
 import VolumeParamsCard from "../intervenant/VolumeParamsCard";
+import VirtualizedResultsTable from "../VirtualizedResultsTable";
+import ResultHeroCardCompact from "../results/ResultHeroCardCompact";
+import EnterpriseTable from "../tables/EnterpriseTable";
+import Tooltip from "../ui/Tooltip";
+import "../tables/EnterpriseTable.css";
+import "../../styles/tooltips.css";
 
 export default function VueIntervenant({
   regions = [],
@@ -72,6 +84,8 @@ export default function VueIntervenant({
 
   const [colisAmanaParSac, setColisAmanaParSac] = useState(5);
   const [courriersParSac, setCourriersParSac] = useState(4500);
+  const [nbrCoSac, setNbrCoSac] = useState(0);
+  const [nbrCrSac, setNbrCrSac] = useState(0);
 
   const [partParticuliers, setPartParticuliers] = useState(75);
   const partProfessionnels = 100 - partParticuliers;
@@ -80,6 +94,25 @@ export default function VueIntervenant({
   const [tauxComplexite, setTauxComplexite] = useState(0);
   const [natureGeo, setNatureGeo] = useState(0);
   const [heuresBrutes, setHeuresBrutes] = useState(8.0); // avant temps mort
+
+  // 🎨 UX : État pour afficher/masquer les détails
+  const [showDetails, setShowDetails] = useState(true);
+
+  // ✅ OPTIMISATION : Debounce des valeurs pour éviter les recalculs excessifs
+  const debouncedColis = useDebouncedValue(colis, 300);
+  const debouncedCourrierOrdinaire = useDebouncedValue(courrierOrdinaire, 300);
+  const debouncedCourrierRecommande = useDebouncedValue(courrierRecommande, 300);
+  const debouncedEbarkia = useDebouncedValue(ebarkia, 300);
+  const debouncedLrh = useDebouncedValue(lrh, 300);
+  const debouncedAmana = useDebouncedValue(amana, 300);
+  const debouncedProductivite = useDebouncedValue(productivite, 500);
+  const debouncedIdleMinutes = useDebouncedValue(idleMinutes, 500);
+
+  // 🔍 LOG TEMPORAIRE : Pour voir le debounce en action
+  React.useEffect(() => {
+    console.log('✅ OPTIMISATION ACTIVE : Valeur immédiate (colis):', colis);
+    console.log('⏱️ DEBOUNCE : Valeur debouncée (300ms après):', debouncedColis);
+  }, [debouncedColis, colis]);
 
   const sanitize = (val) =>
     String(val ?? "")
@@ -121,8 +154,9 @@ export default function VueIntervenant({
   };
 
   // 🔹 Productivité + temps mort → heures nettes
+  // ✅ OPTIMISATION : Utilise les valeurs debouncées pour éviter les recalculs excessifs
   useEffect(() => {
-    const productiviteNum = Number(productivite ?? 100);
+    const productiviteNum = Number(debouncedProductivite ?? 100);
     const heuresBase = 8.0;
 
     const heuresCalculees =
@@ -130,12 +164,12 @@ export default function VueIntervenant({
 
     const heuresApresIdle = Math.max(
       0,
-      heuresCalculees - Number(idleMinutes || 0) / 60
+      heuresCalculees - Number(debouncedIdleMinutes || 0) / 60
     );
 
     setHeuresBrutes(heuresCalculees);
     setHeuresNet(heuresApresIdle.toFixed(2));
-  }, [productivite, idleMinutes, setHeuresNet]);
+  }, [debouncedProductivite, debouncedIdleMinutes, setHeuresNet]);
 
   const posteValue = poste == null ? "" : String(poste);
 
@@ -157,17 +191,18 @@ export default function VueIntervenant({
   };
 
   const minutesAjustees = (min) => {
-    const p = Number(productivite ?? 100);
+    const p = Number(debouncedProductivite ?? 100);
     return p > 0 ? min / (p / 100) : min;
   };
 
-  const annualValues = {
-    courrierOrdinaire: parseNonNeg(courrierOrdinaire) ?? 0,
-    courrierRecommande: parseNonNeg(courrierRecommande) ?? 0,
-    ebarkia: parseNonNeg(ebarkia) ?? 0,
-    lrh: parseNonNeg(lrh) ?? 0,
-    amana: parseNonNeg(amana) ?? 0,
-  };
+  // ✅ OPTIMISATION : Memoization des valeurs annuelles
+  const annualValues = useMemo(() => ({
+    courrierOrdinaire: parseNonNeg(debouncedCourrierOrdinaire) ?? 0,
+    courrierRecommande: parseNonNeg(debouncedCourrierRecommande) ?? 0,
+    ebarkia: parseNonNeg(debouncedEbarkia) ?? 0,
+    lrh: parseNonNeg(debouncedLrh) ?? 0,
+    amana: parseNonNeg(debouncedAmana) ?? 0,
+  }), [debouncedCourrierOrdinaire, debouncedCourrierRecommande, debouncedEbarkia, debouncedLrh, debouncedAmana]);
 
   const annualIfAllowed = (key) => {
     const mode = getEffectiveFluxMode(centreCategorie, key);
@@ -218,7 +253,7 @@ export default function VueIntervenant({
     const isCollecteColis = nom.includes("collecte") && nom.includes("colis");
 
     if (isCollecteColis) {
-      const colisInput = parseNonNeg(colis) ?? 0;
+      const colisInput = parseNonNeg(debouncedColis) ?? 0;
       if (colisInput <= 0) return 0;
 
       const ratioCollecteBrut =
@@ -231,7 +266,7 @@ export default function VueIntervenant({
 
     if (uRaw.includes("colis") || uRaw === "amana") {
       if (dailyAmanaColis > 0) return dailyAmanaColis;
-      return parseNonNeg(colis) ?? 0;
+      return parseNonNeg(debouncedColis) ?? 0;
     }
 
     if (uRaw.includes("sac")) {
@@ -257,7 +292,7 @@ export default function VueIntervenant({
 
       if (dailyAmanaColis > 0) return dailyAmanaSacs;
 
-      const colisInput = parseNonNeg(colis) ?? 0;
+      const colisInput = parseNonNeg(debouncedColis) ?? 0;
       if (colisInput > 0) return colisInput / colisAmanaParSac;
 
       return 0;
@@ -285,50 +320,62 @@ export default function VueIntervenant({
     return 0;
   }
 
-  const mergedResults = (referentiel || []).map((row, i) => {
-    const taskName = String(row.t || "").trim();
-    const fromBack = resIndex.get(taskName.toLowerCase());
-    const moyenneMin = Number(row.m ?? 0);
+  // ✅ OPTIMISATION : Memoization des résultats fusionnés
+  const mergedResults = useMemo(() => {
+    return (referentiel || []).map((row, i) => {
+      const taskName = String(row.t || "").trim();
+      const fromBack = resIndex.get(taskName.toLowerCase());
+      const moyenneMin = Number(row.m ?? 0);
 
-    const nbJour =
-      fromBack?.nombre_unite ??
-      fromBack?.nombre_Unite ??
-      nombreUniteParUnite(row.u, taskName, row);
+      const nbJour =
+        fromBack?.nombre_unite ??
+        fromBack?.nombre_Unite ??
+        nombreUniteParUnite(row.u, taskName, row);
 
-    const heuresLoc = +(
-      Number(nbJour || 0) *
-      (minutesAjustees(moyenneMin) / 60)
-    ).toFixed(2);
+      const heuresLoc = +(
+        Number(nbJour || 0) *
+        (minutesAjustees(moyenneMin) / 60)
+      ).toFixed(2);
 
-    return {
-      seq: i + 1,
-      task: taskName || "N/A",
-      nombre_Unite: Number(nbJour || 0),
-      heures: heuresLoc,
-      _u: row.u,
-      _type_flux: row.type_flux,
-      _fromBack: fromBack,
-    };
-  });
+      return {
+        seq: i + 1,
+        task: taskName || "N/A",
+        nombre_Unite: Number(nbJour || 0),
+        heures: heuresLoc,
+        _u: row.u,
+        _type_flux: row.type_flux,
+        _fromBack: fromBack,
+      };
+    });
+  }, [referentiel, resIndex, annualValues, debouncedColis, debouncedProductivite, colisAmanaParSac, courriersParSac, colisParCollecte]);
 
-  const totalHeuresAffichees = mergedResults.reduce(
-    (acc, r) => acc + Number(r.heures || 0),
-    0
-  );
+  // ✅ OPTIMISATION : Memoization du total des heures
+  const totalHeuresAffichees = useMemo(() => {
+    return mergedResults.reduce(
+      (acc, r) => acc + Number(r.heures || 0),
+      0
+    );
+  }, [mergedResults]);
 
   const baseHeuresNet = Number(heuresNet || 0);
-  const fteCalcAffiche =
-    baseHeuresNet > 0 ? totalHeuresAffichees / baseHeuresNet : 0;
+
+  // ✅ OPTIMISATION : Memoization du calcul FTE
+  const fteCalcAffiche = useMemo(() => {
+    return baseHeuresNet > 0 ? totalHeuresAffichees / baseHeuresNet : 0;
+  }, [totalHeuresAffichees, baseHeuresNet]);
 
   const roundHalfUp = (n, decimals = 0) => {
     const f = 10 ** decimals;
     return Math.floor(n * f + 0.5) / f;
   };
 
-  const fteArrondiAffiche =
-    fteCalcAffiche <= 0.1 ? 0 : roundHalfUp(fteCalcAffiche, 0);
+  // ✅ OPTIMISATION : Memoization du FTE arrondi
+  const fteArrondiAffiche = useMemo(() => {
+    return fteCalcAffiche <= 0.1 ? 0 : roundHalfUp(fteCalcAffiche, 0);
+  }, [fteCalcAffiche]);
 
-  const handleSimuler = () => {
+  // ✅ OPTIMISATION : Memoization du handler de simulation
+  const handleSimuler = useCallback(() => {
     const ratioCollecte = Math.max(1, parseNonNeg(colisParCollecte) ?? 1);
 
     onSimuler({
@@ -339,100 +386,121 @@ export default function VueIntervenant({
       taux_complexite: Number(tauxComplexite || 0),
       nature_geo: Number(natureGeo || 0),
     });
-  };
+  }, [onSimuler, colisParCollecte, colisAmanaParSac, courriersParSac, partParticuliers, tauxComplexite, natureGeo]);
 
   return (
-    <div className="w-full">
-      <div
-        className="w-full space-y-3 text-[12px] leading-tight"
-        style={{ zoom: PAGE_SCALE }}
-      >
-        {/* Paramètres principaux + productivité */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 items-start">
-          <Card
-            title={
-              <div className="flex items-center gap-2">
-                <Sliders className="w-4 h-4 text-slate-700" />
-                <span className="font-semibold text-slate-900 text-sm">
-                  Paramètres principaux
-                </span>
-              </div>
-            }
-          >
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2 p-2">
-              <Field label="Région" icon={MapPin}>
-                <Select
-                  className="h-8 text-[12px] w-full"
-                  value={region ?? ""}
-                  onChange={(e) => setRegion(e.target.value)}
-                >
-                  <option value="">Sélectionner…</option>
-                  {regions.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.label}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-
-              <Field label="Centre" icon={Building}>
-                <Select
-                  className="h-8 text-[12px] w-full"
-                  value={centre ?? ""}
-                  onChange={(e) => setCentre(e.target.value)}
-                  disabled={!region}
-                >
-                  <option value="">
-                    {loading.centres ? "Chargement..." : "Sélectionner…"}
-                  </option>
-                  {centres.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.label ?? c.name}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-
-              <Field label="Typologie" icon={Tag}>
-                <Input
-                  className="h-8 text-[12px] bg-slate-100 cursor-not-allowed text-slate-700 w-full"
-                  value={centreCategorie || "?"}
-                  readOnly
-                />
-              </Field>
-
-              <Field label="Intervenant" icon={User}>
-                <Select
-                  className="h-8 text-[12px] w-full"
-                  value={posteValue}
-                  onChange={(e) => setPoste(e.target.value)}
-                  disabled={!centre || loading.postes}
-                >
-                  <option value="">Sélectionner…</option>
-                  {postesOptions.map((p) => (
-                    <option key={p.id} value={String(p.id)}>
-                      {p.label ?? p.name}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
+    <div className="w-full flex flex-col gap-3 pb-16" style={{ zoom: "90%" }}>
+      {/* 🔹 BARRES STICKY EN HAUT - Sélection + Productivité côte à côte */}
+      <div className="sticky top-[57px] z-20 grid grid-cols-1 xl:grid-cols-2 gap-2">
+        {/* Barre de sélection */}
+        <div className="bg-white/80 backdrop-blur-md border border-slate-200/60 shadow-sm rounded-lg px-3 py-2 flex flex-wrap items-center gap-3 transition-all duration-300">
+          <div className="flex items-center gap-1.5 min-w-[140px] flex-1">
+            <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
+              <MapPin className="w-3 h-3" />
             </div>
-          </Card>
+            <div className="flex flex-col w-full">
+              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                Région
+              </label>
+              <select
+                className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer w-full truncate text-left"
+                value={region ?? ""}
+                onChange={(e) => setRegion(e.target.value)}
+              >
+                <option value="">Sélectionner...</option>
+                {regions.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
 
-          <Card
-            title={
-              <div className="flex items-center gap-2">
-                <Gauge className="w-4 h-4 text-blue-600" />
-                <span className="font-semibold text-slate-900 text-sm">
-                  Paramètres de productivité
-                </span>
+          <div className="w-px h-6 bg-slate-200 hidden md:block" />
+
+          <div className="flex items-center gap-1.5 min-w-[140px] flex-1">
+            <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
+              <Building className="w-3 h-3" />
+            </div>
+            <div className="flex flex-col w-full">
+              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                Centre
+              </label>
+              <select
+                className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer w-full truncate disabled:opacity-50 text-left"
+                value={centre ?? ""}
+                onChange={(e) => setCentre(e.target.value)}
+                disabled={!region}
+              >
+                <option value="">
+                  {loading.centres ? "Chargement..." : "Sélectionner..."}
+                </option>
+                {centres.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.label ?? c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="w-px h-6 bg-slate-200 hidden md:block" />
+
+          <div className="flex items-center gap-1.5 min-w-[140px] flex-1">
+            <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
+              <User className="w-3 h-3" />
+            </div>
+            <div className="flex flex-col w-full">
+              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                Intervenant
+              </label>
+              <select
+                className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer w-full truncate disabled:opacity-50 text-left"
+                value={posteValue}
+                onChange={(e) => setPoste(e.target.value)}
+                disabled={!centre || loading.postes}
+              >
+                <option value="">Sélectionner...</option>
+                {postesOptions.map((p) => (
+                  <option key={p.id} value={String(p.id)}>
+                    {p.label ?? p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="w-px h-6 bg-slate-200 hidden md:block" />
+
+          <div className="flex items-center gap-1.5">
+            {centreCategorie ? (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                <Tag className="w-2.5 h-2.5" />
+                {centreCategorie}
+              </span>
+            ) : (
+              <span className="text-[10px] text-slate-400 italic px-2">
+                -- Typologie --
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Configuration & Performance */}
+        <div className="bg-white/80 backdrop-blur-md border border-slate-200/60 shadow-sm rounded-lg px-3 py-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Productivité */}
+            <div className="flex items-center gap-1.5 min-w-[100px] flex-1">
+              <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
+                <Gauge className="w-3 h-3" />
               </div>
-            }
-          >
-            <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-2 p-2">
-              <Field label="Productivité (%)" icon={Gauge}>
+              <div className="flex flex-col w-full">
+                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                  Productivité
+                </label>
                 <div className="relative">
-                  <Input
+                  <input
                     type="number"
                     min={0}
                     max={200}
@@ -441,81 +509,111 @@ export default function VueIntervenant({
                     onChange={(e) =>
                       setProductivite(parseNonNeg(e.target.value) ?? 100)
                     }
-                    className="h-8 text-[12px] pr-7 text-center w-full"
+                    className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full pr-6 text-center"
                   />
-                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-500 pointer-events-none">
+                  <span className="absolute right-0 top-0 text-[9px] text-slate-400 font-bold pointer-events-none">
                     %
                   </span>
                 </div>
-              </Field>
+              </div>
+            </div>
 
-              <Field label="Heures net / Jour" icon={Clock}>
-                <Input
-                  type="text"
-                  readOnly
-                  disabled
-                  value={Number(heuresBrutes || 0)
-                    .toFixed(2)
-                    .replace(".", ",")}
-                  className="h-8 text-[12px] bg-slate-100 border-slate-200 text-center cursor-not-allowed w-full"
-                  title="Calculé automatiquement à partir de la productivité (sans temps mort)"
-                />
-              </Field>
+            <div className="w-px h-6 bg-slate-200 hidden md:block" />
 
-              <Field label="Temps mort (min/Jour)" className="min-w-[90px]">
+            {/* Temps mort */}
+            <div className="flex items-center gap-1.5 min-w-[100px] flex-1">
+              <div className="w-6 h-6 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                <Clock className="w-3 h-3" />
+              </div>
+              <div className="flex flex-col w-full">
+                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                  Temps mort
+                </label>
                 <div className="relative">
-                  <Input
+                  <input
                     type="number"
                     min={0}
                     value={idleMinutes}
                     onChange={(e) =>
                       setIdleMinutes(Number(e.target.value || 0))
                     }
-                    className="!text-center pr-7 h-8 text-[12px] w-full"
+                    className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full pr-8 text-center"
                   />
-                  <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-[10px] text-slate-500">
+                  <span className="absolute right-0 top-0 text-[9px] text-slate-400 font-bold pointer-events-none">
                     min
                   </span>
                 </div>
-              </Field>
+              </div>
+            </div>
 
-              <Field label="H.nettes/Jour" className="min-w-[90px]">
-                <div className="relative">
-                  <Input
-                    type="number"
-                    value={Number(baseHeuresNet || 0).toFixed(2)}
-                    readOnly
-                    disabled
-                    className="!bg-sky-50 !text-sky-700 !border-sky-300 !text-center pr-6 h-8 text-[12px] w-full cursor-not-allowed"
-                  />
-                  <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-[10px] text-slate-500">
-                    h
-                  </span>
-                </div>
-              </Field>
+            <div className="w-px h-6 bg-slate-200 hidden md:block" />
 
-              <Field label="Complexité (circulation)" className="min-w-[90px]">
-                <Input
+            {/* Complexité Circulation */}
+            <div className="flex items-center gap-1.5 min-w-[90px] flex-1">
+              <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
+                <Sliders className="w-3 h-3" />
+              </div>
+              <div className="flex flex-col w-full">
+                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                  Compl. Circ.
+                </label>
+                <input
                   type="number"
                   value={tauxComplexite}
                   onChange={(e) =>
                     setTauxComplexite(Number(e.target.value || 0))
                   }
-                  className="!text-center h-8 text-[12px] w-full"
+                  className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full text-center"
                 />
-              </Field>
+              </div>
+            </div>
 
-              <Field label="Complexité géographique" className="min-w-[90px]">
-                <Input
+            <div className="w-px h-6 bg-slate-200 hidden md:block" />
+
+            {/* Complexité Géo */}
+            <div className="flex items-center gap-1.5 min-w-[90px] flex-1">
+              <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
+                <MapPin className="w-3 h-3" />
+              </div>
+              <div className="flex flex-col w-full">
+                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                  Compl. Géo
+                </label>
+                <input
                   type="number"
                   value={natureGeo}
                   onChange={(e) => setNatureGeo(Number(e.target.value || 0))}
-                  className="!text-center h-8 text-[12px] w-full"
+                  className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full text-center"
                 />
-              </Field>
+              </div>
             </div>
-          </Card>
+
+            <div className="w-px h-6 bg-slate-200 hidden md:block" />
+
+            {/* Capacité Nette - Résultat */}
+            <div className="flex items-center gap-1.5">
+              <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
+                <Clock className="w-3 h-3" />
+              </div>
+              <div className="flex flex-col">
+                <label className="text-[9px] font-bold text-[#005EA8] uppercase tracking-wider">
+                  Capacité Nette
+                </label>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-lg font-extrabold text-slate-800 tracking-tight">
+                    {Number(baseHeuresNet || 0).toFixed(2)}
+                  </span>
+                  <span className="text-[9px] font-semibold text-slate-500">h/j</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
+      </div>
+
+      <div className="w-full space-y-3">
+
+
 
         {/* Paramètres de volume */}
         <VolumeParamsCard
@@ -539,6 +637,10 @@ export default function VueIntervenant({
           setColisAmanaParSac={setColisAmanaParSac}
           courriersParSac={courriersParSac}
           setCourriersParSac={setCourriersParSac}
+          nbrCoSac={nbrCoSac}
+          setNbrCoSac={setNbrCoSac}
+          nbrCrSac={nbrCrSac}
+          setNbrCrSac={setNbrCrSac}
           colisParCollecte={colisParCollecte}
           setColisParCollecte={setColisParCollecte}
           parseNonNeg={parseNonNeg}
@@ -549,268 +651,246 @@ export default function VueIntervenant({
           partParticuliers={partParticuliers}
           setPartParticuliers={setPartParticuliers}
           partProfessionnels={partProfessionnels}
-          getEffectiveFluxMode={getEffectiveFluxMode}  // ✅ IMPORTANT
+          getEffectiveFluxMode={getEffectiveFluxMode}
           onSimuler={handleSimuler}
+          simDirty={simDirty}
         />
 
-        {/* Référentiel & résultats */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 min-h-0">
-          {/* Référentiel */}
-          <Card
-            title="Référentiel des Tâches (Intervenant)"
-            actions={
-              <div className="toggle-group text-[11px]">
-                <button
-                  className={`toggle-btn ${refDisplay === "tableau" ? "active" : ""
-                    }`}
-                  onClick={() => setRefDisplay("tableau")}
-                >
-                  <TableIcon className="w-3.5 h-3.5" /> Tableau
-                </button>
-                <button
-                  className={`toggle-btn ${refDisplay === "graphe" ? "active" : ""
-                    }`}
-                  onClick={() => setRefDisplay("graphe")}
-                >
-                  <BarChart3 className="w-3.5 h-3.5" /> Graphe
-                </button>
-              </div>
-            }
-          >
+        {/* Référentiel & résultats - Masquable */}
+        {showDetails && (
+          <div className="grid grid-cols-1 xl:grid-cols-[1fr_auto_1fr] gap-4 min-h-0 items-start">
+            {/* Référentiel */}
             {refDisplay === "tableau" ? (
-              <div className="rounded-lg border border-slate-200 overflow-hidden">
-                <div className="max-h-[50vh] overflow-y-auto overflow-x-auto">
-                  <table className="w-full text-[12px]">
-                    <thead className="bg-slate-100 text-slate-700 sticky top-0 z-10">
-                      <tr>
-                        <th className="text-left px-2 py-1.5 text-[11px] font-semibold">
-                          Seq
-                        </th>
-                        <th className="text-left px-2 py-1.5 text-[11px] font-semibold">
-                          Tâche
-                        </th>
-                        {hasPhase && (
-                          <th className="text-left px-2 py-1.5 text-[11px] font-semibold">
-                            Phase
-                          </th>
-                        )}
-                        <th className="text-left px-2 py-1.5 text-[11px] font-semibold">
-                          Unité
-                        </th>
-                        <th className="text-center px-2 py-1.5 text-[11px] font-semibold">
-                          Moy. (min)
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {loading?.referentiel ? (
-                        <tr>
-                          <td
-                            colSpan={hasPhase ? 5 : 4}
-                            className="px-2 py-1.5 text-left text-slate-500"
-                          >
-                            Chargement…
-                          </td>
-                        </tr>
-                      ) : (referentiel?.length ?? 0) === 0 ? (
-                        <tr className="bg-white">
-                          <td
-                            colSpan={hasPhase ? 5 : 4}
-                            className="px-2 py-1.5 text-left text-slate-500"
-                          >
-                            Aucune donnée.
-                          </td>
-                        </tr>
-                      ) : (
-                        referentiel.map((r, i) => (
-                          <tr
-                            key={i}
-                            className={i % 2 === 0 ? "bg-white" : "bg-slate-50"}
-                          >
-                            <td className="px-2 py-1.5">{i + 1}</td>
-                            <td className="px-2 py-1.5">{r.t}</td>
-                            {hasPhase && (
-                              <td className="px-2 py-1.5">
-                                {r.ph &&
-                                  String(r.ph).trim().toLowerCase() !== "n/a"
-                                  ? r.ph
-                                  : ""}
-                              </td>
-                            )}
-                            <td className="px-2 py-1.5">{r.u}</td>
-                            <td className="px-2 py-1.5 text-center">
-                              {Number(r.m ?? 0).toFixed(2)}
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ) : (
-              <div className="p-2">
-                <GraphReferentiel
-                  referentiel={referentiel}
-                  loading={loading?.referentiel}
-                  hasPhase={hasPhase}
-                />
-              </div>
-            )}
-          </Card>
-
-          {/* Résultats */}
-          <Card
-            title={
-              <span className="inline-flex items-center gap-2">
-                Résultats de Simulation
-              </span>
-            }
-            bodyClassName="p-0"
-            actions={
-              <Segmented
-                value={display}
-                onChange={setDisplay}
-                items={[
-                  { value: "tableau", label: "Tableau", icon: TableIcon },
-                  { value: "graphe", label: "Graphe", icon: BarChart3 },
+              <EnterpriseTable
+                title="Référentiel Temps"
+                subtitle="Base de calcul"
+                tooltip="Temps moyen nécessaire pour traiter une unité (colis, sac…)"
+                icon={Clock}
+                columns={[
+                  { key: 'seq', label: 'Seq', align: 'left', width: '50px' },
+                  { key: 't', label: 'Tâche', align: 'left', ellipsis: true },
+                  ...(hasPhase ? [{ key: 'ph', label: 'Phase', align: 'left', width: '100px', ellipsis: true }] : []),
+                  { key: 'u', label: 'Unité', align: 'left', width: '140px', ellipsis: true },
+                  { key: 'm', label: 'Moy. (min)', align: 'right', width: '80px', render: (val) => Number(val || 0).toFixed(2) }
                 ]}
+                data={referentiel.map((r, i) => ({
+                  seq: i + 1,
+                  t: r.t,
+                  ph: r.ph && String(r.ph).trim().toLowerCase() !== "n/a" ? r.ph : "",
+                  u: r.u,
+                  m: r.m
+                }))}
+                currentView="table"
+                onViewChange={(view) => setRefDisplay(view === 'table' ? 'tableau' : 'graphe')}
+                showViewToggle={true}
+                height={380}
               />
-            }
-          >
+            ) : (
+              <Card
+                title={<span className="text-[11px] font-semibold">Référentiel Temps</span>}
+                actions={
+                  <div className="flex rounded border border-slate-300 overflow-hidden">
+                    <button
+                      className={`px-2 py-1 text-[10px] font-medium transition-colors flex items-center gap-1 ${refDisplay === "tableau" ? "bg-[#005EA8] text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+                      onClick={() => setRefDisplay("tableau")}
+                    >
+                      <TableIcon className="w-3 h-3" /> Tableau
+                    </button>
+                    <button
+                      className={`px-2 py-1 text-[10px] font-medium transition-colors flex items-center gap-1 border-l border-slate-300 ${refDisplay === "graphe" ? "bg-[#005EA8] text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+                      onClick={() => setRefDisplay("graphe")}
+                    >
+                      <BarChart3 className="w-3 h-3" /> Graphe
+                    </button>
+                  </div>
+                }
+                bodyClassName="!p-1"
+              >
+                <div className="p-1.5 h-[380px]">
+                  <GraphReferentiel
+                    referentiel={referentiel}
+                    loading={loading?.referentiel}
+                    hasPhase={hasPhase}
+                  />
+                </div>
+              </Card>
+            )}
+
+            {/* Flèche de séparation - Visible uniquement sur grand écran */}
+            <div className="hidden xl:flex flex-col items-center justify-center py-12">
+              <ArrowRight className="w-6 h-6 text-[#005EA8]" />
+              <span className="text-[10px] font-medium text-[#005EA8] mt-2">
+                Calcul
+              </span>
+            </div>
+
+            {/* Résultats */}
             {display === "tableau" ? (
               loading?.simulation ? (
-                <div className="px-2 py-1.5 text-slate-500">
-                  Calcul en cours…
-                </div>
-              ) : !hasSimulated ? (
-                <EmptyStateFirstRun
-                  onSimuler={handleSimuler}
-                  disabled={!centre}
-                />
-              ) : simDirty ? (
-                <EmptyStateDirty onSimuler={handleSimuler} disabled={!centre} />
-              ) : (mergedResults?.length ?? 0) === 0 ? (
-                <div className="px-2 py-1.5 text-slate-500">
-                  Aucune donnée.
-                </div>
-              ) : (
-                <div className="h-[420px] flex flex-col">
-                  <div className="flex-1 overflow-x-auto overflow-y-auto">
-                    <table className="w-full text-[12px]">
-                      <thead className="bg-slate-100 text-slate-700 sticky top-0 z-10">
-                        <tr>
-                          <th className="text-left px-2 py-1.5 text-[11px] font-semibold">
-                            Seq
-                          </th>
-                          <th className="text-left px-2 py-1.5 text-[11px] font-semibold">
-                            Tâche
-                          </th>
-                          <th className="text-center px-2 py-1.5 text-[11px] font-semibold">
-                            Unit. (/jour)
-                          </th>
-                          <th className="text-center px-2 py-1.5 text-[11px] font-semibold">
-                            Heures
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {mergedResults.map((r, i) => (
-                          <tr
-                            key={i}
-                            className={i % 2 === 0 ? "bg-white" : "bg-slate-50"}
-                          >
-                            <td className="px-2 py-1.5">{i + 1}</td>
-                            <td className="px-2 py-1.5">{r.task}</td>
-                            <td className="px-2 py-1.5 text-center">
-                              {formatUnit(r.nombre_Unite)}
-                            </td>
-                            <td className="px-2 py-1.5 text-center">
-                              {Number(r.heures ?? 0).toFixed(2)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-
-                      <tfoot className="bg-blue-50 font-medium text-slate-800 text-[12px]">
-                        <tr>
-                          <td
-                            colSpan={4}
-                            className="px-2 py-1.5 text-left font-bold"
-                          >
-                            <span className="text-slate-700">
-                              Total heures nécessaires :{" "}
-                            </span>
-                            <span className="text-[#005EA8]">
-                              {totalHeuresAffichees.toFixed(2)} h
-                            </span>
-                          </td>
-                        </tr>
-                        <tr>
-                          <td
-                            colSpan={4}
-                            className="px-2 py-1.5 text-left font-bold"
-                          >
-                            <span className="text-slate-700">
-                              Effectif nécessaire (base{" "}
-                              {baseHeuresNet.toFixed(2)} h/j) :{" "}
-                            </span>
-                            <span className="text-[#005EA8]">
-                              {fteCalcAffiche.toFixed(2)} ETP
-                            </span>
-                          </td>
-                        </tr>
-                        <tr>
-                          <td
-                            colSpan={4}
-                            className="px-2 py-1.5 text-left font-bold"
-                          >
-                            <span className="text-slate-700">
-                              Effectif arrondi :{" "}
-                            </span>
-                            <span className="text-[#005EA8]">
-                              {fteArrondiAffiche} ETP
-                            </span>
-                          </td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                </div>
-              )
-            ) : (
-              <div className="p-2 h-[600px]">
-                {loading?.simulation ? (
-                  <div className="px-2 py-1.5 text-slate-500">
+                <Card
+                  title={<span className="text-[11px] font-semibold">Résultats de Simulation</span>}
+                  bodyClassName="!p-1"
+                >
+                  <div className="px-2 py-1 text-slate-500 text-[10px]">
                     Calcul en cours…
                   </div>
-                ) : !hasSimulated ? (
+                </Card>
+              ) : !hasSimulated ? (
+                <Card
+                  title={<span className="text-[11px] font-semibold">Résultats de Simulation</span>}
+                  bodyClassName="!p-1"
+                >
                   <EmptyStateFirstRun
                     onSimuler={handleSimuler}
                     disabled={!centre}
                   />
-                ) : simDirty ? (
-                  <EmptyStateDirty
-                    onSimuler={handleSimuler}
-                    disabled={!centre}
-                  />
-                ) : (
-                  <GraphResultats
-                    resultats={mergedResults}
-                    totaux={
-                      totaux ?? {
-                        total_heures: totalHeuresAffichees,
-                        heures_net: heuresNet,
+                </Card>
+              ) : simDirty ? (
+                <Card
+                  title={<span className="text-[11px] font-semibold">Résultats de Simulation</span>}
+                  bodyClassName="!p-1"
+                >
+                  <EmptyStateDirty onSimuler={handleSimuler} disabled={!centre} />
+                </Card>
+              ) : (mergedResults?.length ?? 0) === 0 ? (
+                <Card
+                  title={<span className="text-[11px] font-semibold">Résultats de Simulation</span>}
+                  bodyClassName="!p-1"
+                >
+                  <div className="px-2 py-1 text-slate-500 text-[10px]">
+                    Aucune donnée.
+                  </div>
+                </Card>
+              ) : (
+                <EnterpriseTable
+                  title="Résultats de Simulation"
+                  subtitle="Données calculées"
+                  tooltip="Volumes × temps → heures nécessaires"
+                  icon={CheckCircle2}
+                  columns={[
+                    { key: 'seq', label: 'Seq', align: 'left', width: '50px' },
+                    { key: 'task', label: 'Tâche', align: 'left', ellipsis: true },
+                    { key: 'nombre_Unite', label: 'Unit. (/jour)', align: 'right', width: '100px', render: (val) => formatUnit(val) },
+                    { key: 'heures', label: 'Heures', align: 'right', width: '80px', bold: true, render: (val) => Number(val || 0).toFixed(2) }
+                  ]}
+                  data={mergedResults}
+                  footer={null}
+                  height={380}
+                  currentView="table"
+                  onViewChange={(view) => setDisplay(view === 'table' ? 'tableau' : 'graphe')}
+                  showViewToggle={true}
+                />
+              )
+            ) : (
+              <Card
+                title={<span className="text-[11px] font-semibold">Résultats de Simulation</span>}
+                actions={
+                  <div className="flex rounded border border-slate-300 overflow-hidden">
+                    <button
+                      className={`px-2 py-1 text-[10px] font-medium transition-colors flex items-center gap-1 ${display === "tableau" ? "bg-[#005EA8] text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+                      onClick={() => setDisplay("tableau")}
+                    >
+                      <TableIcon className="w-3 h-3" /> Tableau
+                    </button>
+                    <button
+                      className={`px-2 py-1 text-[10px] font-medium transition-colors flex items-center gap-1 border-l border-slate-300 ${display === "graphe" ? "bg-[#005EA8] text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+                      onClick={() => setDisplay("graphe")}
+                    >
+                      <BarChart3 className="w-3 h-3" /> Graphe
+                    </button>
+                  </div>
+                }
+                bodyClassName="!p-1"
+              >
+                <div className="p-1.5 h-[380px]">
+                  {loading?.simulation ? (
+                    <div className="px-2 py-1 text-slate-500 text-[10px]">
+                      Calcul en cours…
+                    </div>
+                  ) : !hasSimulated ? (
+                    <EmptyStateFirstRun
+                      onSimuler={handleSimuler}
+                      disabled={!centre}
+                    />
+                  ) : simDirty ? (
+                    <EmptyStateDirty
+                      onSimuler={handleSimuler}
+                      disabled={!centre}
+                    />
+                  ) : (
+                    <GraphResultats
+                      resultats={mergedResults}
+                      totaux={
+                        totaux ?? {
+                          total_heures: totalHeuresAffichees,
+                          heures_net: heuresNet,
+                        }
                       }
-                    }
-                    loading={loading?.simulation}
-                  />
-                )}
-              </div>
+                      loading={loading?.simulation}
+                    />
+                  )}
+                </div>
+              </Card>
             )}
-          </Card>
-        </div>
+          </div>
+        )}
+
+        {/* Zone de Synthèse des Résultats */}
+        {showDetails && (
+          <div className="bg-gradient-to-r from-blue-50/50 to-blue-50 border border-blue-100 rounded-lg p-2 mt-2 animate-fadeIn">
+            <div className="flex items-center gap-2 mb-2">
+              <Gauge className="w-4 h-4 text-[#005EA8]" />
+              <h3 className="text-sm font-semibold text-[#005EA8]">
+                Synthèse des Résultats
+              </h3>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+              {/* Total Heures */}
+              <div className="text-center bg-white rounded-lg p-2 border border-blue-50 shadow-sm relative group hover:border-blue-300 transition-colors">
+                <Tooltip content="Somme des heures nécessaires pour toutes les tâches">
+                  <div className="flex flex-col items-center gap-0.5 cursor-help w-full">
+                    <div className="text-lg font-bold text-slate-800">
+                      {totalHeuresAffichees.toFixed(2)}
+                    </div>
+                    <div className="text-[10px] text-slate-500 flex items-center gap-1 font-medium bg-slate-50 px-1.5 rounded-full">
+                      heures/jour
+                    </div>
+                  </div>
+                </Tooltip>
+              </div>
+
+              {/* ETP Calculé */}
+              <div className="text-center bg-white rounded-lg p-2 border border-blue-50 shadow-sm relative group hover:border-blue-300 transition-colors">
+                <Tooltip content={`Basé sur ${baseHeuresNet.toFixed(2)} h/jour de travail effectif`}>
+                  <div className="flex flex-col items-center gap-0.5 cursor-help w-full">
+                    <div className="text-lg font-bold text-slate-800">
+                      {fteCalcAffiche.toFixed(2)}
+                    </div>
+                    <div className="text-[10px] text-slate-500 flex items-center gap-1 font-medium bg-slate-50 px-1.5 rounded-full">
+                      ETP calculé
+                    </div>
+                  </div>
+                </Tooltip>
+              </div>
+
+              {/* ETP Arrondi */}
+              <div className="text-center bg-white rounded-lg p-2 border border-blue-50 shadow-sm relative group hover:border-blue-300 transition-colors">
+                <Tooltip content="Nombre de personnes à recruter (arrondi au supérieur)">
+                  <div className="flex flex-col items-center gap-0.5 cursor-help w-full">
+                    <div className="text-xl font-bold text-[#005EA8]">
+                      {fteArrondiAffiche}
+                    </div>
+                    <div className="text-[10px] text-slate-500 flex items-center gap-1 font-medium bg-slate-50 px-1.5 rounded-full">
+                      ETP arrondi
+                    </div>
+                  </div>
+                </Tooltip>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
-    </div>
+    </div >
   );
 }

@@ -1,6 +1,7 @@
 // VueCentre.jsx
 "use client";
 import React, { useEffect, useMemo, useState, useCallback } from "react";
+import { useLocation } from "react-router-dom";
 import {
   MapPin,
   Building,
@@ -18,9 +19,12 @@ import {
   TrendingDown,
   Eye,
   EyeOff,
+  Sliders,
 } from "lucide-react";
 import VolumeParamsCard from "../intervenant/VolumeParamsCard";
 import ProductivityParamsCard from "../intervenant/ProductivityParamsCard";
+import ScoringSection from "./ScoringSection";
+import CentreScoringDetailsDrawer from "@/components/scoring/CentreScoringDetailsDrawer";
 import { api } from "../../lib/api";
 
 /* ===================== Helpers ===================== */
@@ -91,10 +95,10 @@ const UI = COMPACT
     fieldWidth: "w-full",
     fieldLabel: "text-[9px]",
     fieldIcon: 14,
-    inputText: "text-[10px]",
+    inputText: "text-xs",
     inputPad: "px-2 py-1.5",
     inputH: "h-8",
-    selectText: "text-[10px]",
+    selectText: "text-xs",
     selectPad: "px-2 py-1.5",
     selectH: "h-8",
   }
@@ -274,7 +278,7 @@ const injectGuichetierEquivalents = (rows) => {
 const Card = ({ title, subtitle, headerRight, className = "", children }) => (
   <div
     className={`bg-white/70 backdrop-blur-xl rounded-2xl border border-white/50 
-    shadow-[0_10px_40px_-10px_rgba(2,6,23,0.18)] ${UI.cardPad} mb-4 ${className}`}
+    shadow-[0_10px_40px_-10px_rgba(2,6,23,0.18)] ${UI.cardPad} mb-2 ${className}`}
   >
     {(title || headerRight) && (
       <div className="mb-1.5 flex items-center justify-between gap-2">
@@ -328,7 +332,7 @@ const Input = ({
     min={min}
     max={max}
     className={`mt-0.5 block w-full rounded-lg border border-white/40 bg-white/60 
-    backdrop-blur-sm shadow-sm focus:border-cyan-500 focus:ring-cyan-500 
+    backdrop-blur-sm shadow-sm focus:border-[#005EA8] focus:ring-[#005EA8] 
     ${UI.inputText} ${UI.inputPad} ${UI.inputH} ${className}`}
     {...props}
   />
@@ -339,7 +343,7 @@ const Select = ({ value, onChange, children, className = "" }) => (
     value={value}
     onChange={onChange}
     className={`mt-0.5 block w-full rounded-lg border border-white/40 bg-white/60
-    backdrop-blur-sm shadow-sm focus:border-cyan-500 focus:ring-cyan-500
+    backdrop-blur-sm shadow-sm focus:border-[#005EA8] focus:ring-[#005EA8]
     ${UI.selectText} ${UI.selectPad} ${UI.selectH} ${className}`}
   >
     {children}
@@ -355,7 +359,7 @@ const KPICardGlass = ({
   extraValue,
   total,
   icon: Icon,
-  tone = "cyan",
+  tone = "blue",
   emphasize = false,
   leftLabel = "MOD",
   rightLabel = "MOI",
@@ -366,11 +370,11 @@ const KPICardGlass = ({
   onToggle,
 }) => {
   const T = {
-    cyan: {
-      ring: "ring-cyan-300/60",
-      halo: "from-cyan-400/25",
-      text: "text-cyan-600",
-      dot: "bg-cyan-500",
+    blue: {
+      ring: "ring-blue-300/60",
+      halo: "from-blue-400/25",
+      text: "text-[#005EA8]",
+      dot: "bg-[#005EA8]",
     },
     amber: {
       ring: "ring-amber-300/60",
@@ -494,7 +498,7 @@ const EffectifFooter = ({
 
     {/* 2️⃣ Ligne MOD + MOI */}
     <div className="flex items-center justify-center gap-2">
-      <span className="px-1.5 py-0.5 rounded-full bg-sky-50 text-sky-700">
+      <span className="px-1.5 py-0.5 rounded-full bg-blue-50 text-[#005EA8]">
         MOD : {modValue}
       </span>
       <span className="px-1.5 py-0.5 rounded-full bg-fuchsia-50 text-fuchsia-700">
@@ -549,6 +553,10 @@ export default function VueCentre({
   setColisParCollecte = () => { },
   apiBaseUrl = "http://localhost:8000/api",
 }) {
+  // 🔄 Lecture des données de replay depuis location.state
+  const location = useLocation();
+  const replayData = location.state?.replayData;
+
   const [resultats, setResultats] = useState(null);
   const [loadingSimu, setLoadingSimu] = useState(false);
   const [error, setError] = useState("");
@@ -573,6 +581,42 @@ export default function VueCentre({
     // Charge les catégorisations (Classe A, B...) au montage pour le lookup
     api.categorisations().then(setCategorisationsList).catch(err => console.error("Err categorisations:", err));
   }, []);
+
+  // 🔄 Pré-remplir les champs avec les données de replay
+  useEffect(() => {
+    if (replayData) {
+      console.log("📥 Données de replay détectées:", replayData);
+
+      // Pré-remplir le centre
+      if (replayData.centre_id && setCentre) {
+        setCentre(replayData.centre_id);
+      }
+
+      // Pré-remplir la productivité
+      if (replayData.productivite && setProductivite) {
+        setProductivite(replayData.productivite);
+      }
+
+      // Pré-remplir les volumes
+      if (replayData.volumes) {
+        const volumes = replayData.volumes;
+        if (volumes.CO && setCOrd) setCOrd(volumes.CO);
+        if (volumes.CR && setCReco) setCReco(volumes.CR);
+        if (volumes.SACS && setSacs) setSacs(volumes.SACS);
+        if (volumes.COLIS && setColis) setColis(volumes.COLIS);
+        if (volumes.AMANA && setAmana) setAmana(volumes.AMANA);
+        if (volumes.EBARKIA && setEBarkia) setEBarkia(volumes.EBARKIA);
+        if (volumes.LRH && setLrh) setLrh(volumes.LRH);
+      }
+
+      // Log du commentaire pour debug
+      if (replayData.commentaire) {
+        console.log("📝 Commentaire de replay:", replayData.commentaire);
+      }
+
+      console.log("✅ Champs pré-remplis avec succès");
+    }
+  }, [replayData]);
 
   // 👁️ affichage détails tables
   const [showMODDetails, setShowMODDetails] = useState(false);
@@ -753,38 +797,27 @@ export default function VueCentre({
         const body = {
           centre_id: Number(centreId),
           productivite: Number(productivite || 100),
-          heures_net: heuresNetEff,
-          taux_complexite:
-            volParams?.taux_complexite ?? (tauxComplexite || null),
-          nature_geo: volParams?.nature_geo ?? (natureGeo || null),
-
+          commentaire: "Simulation lancée depuis Vue Centre", // Peut être ajouté à l'UI plus tard
           volumes: {
-            sacs: Number(sacs || 0),
-            colis: colisTotal,
-            colis_amana_par_sac: Number(colisAmanaParSacEff),
-            courriers_par_sac: Number(courriersParSacEff),
-            colis_par_collecte: Number(colisParCollecteEff),
+            "CO": allowedAnnual("co", annualParsed.cOrd),
+            "CR": allowedAnnual("cr", annualParsed.cReco),
+            "EBARKIA": allowedAnnual("eb", annualParsed.eBarkia),
+            "LRH": allowedAnnual("lrh", annualParsed.lrh),
+            "AMANA": allowedAnnual("amana", annualParsed.amana),
+            "SACS": Number(sacs || 0),
+            "COLIS": Number(colis || 0), // Note: Verify if this should be 'colis' or totals
           },
-
-          volumes_annuels: {
-            courrier_ordinaire: allowedAnnual("co", annualParsed.cOrd),
-            courrier_recommande: allowedAnnual("cr", annualParsed.cReco),
-            ebarkia: allowedAnnual("eb", annualParsed.eBarkia),
-            lrh: allowedAnnual("lrh", annualParsed.lrh),
-            amana: allowedAnnual("amana", annualParsed.amana),
-          },
+          unites: {
+            "CO": "an", "CR": "an", "EBARKIA": "an", "LRH": "an", "AMANA": "an",
+            "SACS": "jour", "COLIS": "jour"
+          }
         };
 
-        const res = await fetch(`${apiBaseUrl}/vue-centre-optimisee`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        if (!res.ok) {
-          const txt = await res.text();
-          throw new Error(`HTTP ${res.status}: ${txt}`);
-        }
-        const data = await res.json();
+        // Use the persistence-enabled API method
+        const data = await api.runSimulationPersistence(body);
+
+        // Previous logic expects 'data' to have 'details_taches' etc.
+        // We ensure backend returns full data.
 
         const detailsLog = data.details_taches || [];
         if (Array.isArray(detailsLog) && detailsLog.length > 0) {
@@ -792,8 +825,7 @@ export default function VueCentre({
           detailsLog.forEach((d, idx) => {
             console.log(
               `#${idx + 1} | ${d.task || d.tache_label || "N/A"} | unit=${d.unit || d.unite || "N/A"
-              } | vol_jour=${d.nombre_unite ?? d.volume_jour ?? "?"} | heures=${d.heures ?? "?"
-              }`
+              } | vol_jour=${d.nombre_unite ?? d.volume_jour ?? "?"} | heures=${d.heures ?? "?"}`
             );
           });
           console.groupEnd();
@@ -1290,7 +1322,7 @@ export default function VueCentre({
                         <span
                           className={`inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[9px] font-semibold ${(equivalent.type_poste || "").toUpperCase() ===
                             "MOD"
-                            ? "bg-sky-100 text-sky-800"
+                            ? "bg-blue-100 text-[#005EA8]"
                             : "bg-fuchsia-100 text-fuchsia-800"
                             }`}
                         >
@@ -1311,15 +1343,15 @@ export default function VueCentre({
                       {/* Effectif calculé */}
                       {showCalc && (
                         <>
-                          <td className="px-2 py-1.5 text-right font-mono tabular-nums text-sky-700">
+                          <td className="px-2 py-1.5 text-right font-mono tabular-nums text-[#005EA8]">
                             {eqIndex === 0 ? displayDec(calcStat) : 0}
                           </td>
                           {hasAPS && (
-                            <td className="px-2 py-1.5 text-right font-mono tabular-nums text-sky-700">
+                            <td className="px-2 py-1.5 text-right font-mono tabular-nums text-[#005EA8]">
                               {eqIndex === 0 ? displayDec(calcAPS) : 0}
                             </td>
                           )}
-                          <td className="px-2 py-1.5 text-right font-mono tabular-nums text-sky-700">
+                          <td className="px-2 py-1.5 text-right font-mono tabular-nums text-[#005EA8]">
                             {eqIndex === 0 ? displayArrondi(arrondi) : 0}
                           </td>
 
@@ -1427,15 +1459,27 @@ export default function VueCentre({
 
   /* ===================== Rendu ===================== */
   return (
-    <div className="space-y-4" style={{ zoom: PAGE_SCALE }}>
+    <div className="space-y-1" style={{ zoom: "90%" }}>
       {/* 1️⃣ Bandeau paramètres principaux + productivité */}
-      <div className="grid gap-4 grid-cols-1 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1.8fr)]">
-        <Card title="Objet de Simulation">
-          <div className="grid gap-3 grid-cols-1 md:grid-cols-3 mt-7">
-            <Field label="Région" icon={MapPin}>
-              <Select
+      {/* 🔹 BARRES STICKY EN HAUT - Sélection + Productivité côte à côte */}
+      <div className="sticky top-[57px] z-20 grid grid-cols-1 xl:grid-cols-2 gap-2">
+
+        {/* Barre de sélection */}
+        <div className="bg-white/80 backdrop-blur-md border border-slate-200/60 shadow-sm rounded-lg px-3 py-2 flex flex-wrap items-center gap-3 transition-all duration-300">
+
+          {/* Région */}
+          <div className="flex items-center gap-1.5 min-w-[140px] flex-1">
+            <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
+              <MapPin className="w-3 h-3" />
+            </div>
+            <div className="flex flex-col w-full">
+              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                Région
+              </label>
+              <select
                 value={region || ""}
                 onChange={(e) => setRegion(e.target.value || "")}
+                className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer w-full truncate text-left"
               >
                 <option value="">Sélectionner...</option>
                 {(regions || []).map((r) => (
@@ -1443,14 +1487,26 @@ export default function VueCentre({
                     {r.label || r.name}
                   </option>
                 ))}
-              </Select>
-            </Field>
+              </select>
+            </div>
+          </div>
 
-            <Field label="Centre" icon={Building}>
-              <Select
+          <div className="w-px h-6 bg-slate-200 hidden md:block" />
+
+          {/* Centre */}
+          <div className="flex items-center gap-1.5 min-w-[140px] flex-1">
+            <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
+              <Building className="w-3 h-3" />
+            </div>
+            <div className="flex flex-col w-full">
+              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                Centre
+              </label>
+              <select
                 value={centre || ""}
                 onChange={(e) => setCentre(e.target.value || "")}
                 disabled={!region || loading.centres}
+                className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer w-full truncate text-left disabled:opacity-50"
               >
                 <option value="">Sélectionner...</option>
                 {(centres || []).map((c) => (
@@ -1458,107 +1514,142 @@ export default function VueCentre({
                     {c.label || c.name}
                   </option>
                 ))}
-              </Select>
-            </Field>
-
-            <Field label="Typographie" icon={Tag}>
-              <Input
-                type="text"
-                value={centreCategorie || ""}
-                readOnly
-                disabled
-                className="bg-slate-50"
-              />
-            </Field>
+              </select>
+            </div>
           </div>
-        </Card>
 
-        <Card title="Paramètres de productivité">
-          <div className="flex flex-wrap xl:flex-nowrap items-end gap-4 overflow-x-auto">
-            <Field
-              label="Productivité (%)"
-              icon={Gauge}
-              className="min-w-[90px]"
-            >
-              <div className="relative">
-                <Input
-                  type="number"
-                  min={1}
-                  max={200}
-                  value={productivite}
-                  onChange={(e) => setProductivite(Number(e.target.value || 0))}
-                  className="!text-center pr-6"
-                />
-                <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-[10px] text-slate-500">
-                  %
-                </span>
-              </div>
-            </Field>
+          <div className="w-px h-6 bg-slate-200 hidden md:block" />
 
-            <Field label="Heures/Jour" icon={Clock} className="min-w-[90px]">
-              <div className="relative">
-                <Input
-                  type="number"
-                  value={Number(heuresNet || 0).toFixed(2)}
-                  readOnly
-                  disabled
-                  className="!bg-sky-50 !text-sky-700 !border-sky-300 !text-center cursor-not-allowed pr-6"
-                />
-                <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-[10px] text-slate-500">
-                  h
-                </span>
-              </div>
-            </Field>
-
-            <Field label="Temps mort (min/Jour)" className="min-w-[90px]">
-              <div className="relative">
-                <Input
-                  type="number"
-                  min={0}
-                  value={idleMinutes}
-                  onChange={(e) => setIdleMinutes(Number(e.target.value || 0))}
-                  className="!text-center pr-7"
-                />
-                <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-[10px] text-slate-500">
-                  min
-                </span>
-              </div>
-            </Field>
-
-            <Field label="H.nettes/Jour" className="min-w-[90px]">
-              <div className="relative">
-                <Input
-                  type="number"
-                  value={Number(baseHeuresNet || 0).toFixed(2)}
-                  readOnly
-                  disabled
-                  className="!bg-sky-50 !text-sky-700 !border-sky-300 !text-center cursor-not-allowed pr-6"
-                />
-                <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-[10px] text-slate-500">
-                  h
-                </span>
-              </div>
-            </Field>
-
-            <Field label="complexité (circulation)" className="min-w-[90px]">
-              <Input
-                type="number"
-                value={tauxComplexite}
-                onChange={(e) => setTauxComplexite(Number(e.target.value || 0))}
-                className="!text-center"
-              />
-            </Field>
-
-            <Field label="complexité géographique" className="min-w-[90px]">
-              <Input
-                type="number"
-                value={natureGeo}
-                onChange={(e) => setNatureGeo(Number(e.target.value || 0))}
-                className="!text-center"
-              />
-            </Field>
+          {/* Typologie (Tag) */}
+          <div className="flex items-center gap-1.5">
+            {effectiveCentreCategorie ? (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                <Tag className="w-2.5 h-2.5" />
+                {effectiveCentreCategorie}
+              </span>
+            ) : (
+              <span className="text-[10px] text-slate-400 italic px-2">
+                -- Typologie --
+              </span>
+            )}
           </div>
-        </Card>
+
+        </div>
+
+        {/* Configuration & Performance */}
+        <div className="bg-white/80 backdrop-blur-md border border-slate-200/60 shadow-sm rounded-lg px-3 py-2">
+          <div className="flex flex-wrap items-center gap-2">
+
+            {/* Productivité */}
+            <div className="flex items-center gap-1.5 min-w-[100px] flex-1">
+              <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
+                <Gauge className="w-3 h-3" />
+              </div>
+              <div className="flex flex-col w-full">
+                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                  Productivité
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min={0}
+                    max={200}
+                    value={productivite}
+                    onChange={(e) => setProductivite(Number(e.target.value || 0))}
+                    className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full pr-6 text-center"
+                  />
+                  <span className="absolute right-0 top-0 text-[9px] text-slate-400 font-bold pointer-events-none">
+                    %
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="w-px h-6 bg-slate-200 hidden md:block" />
+
+            {/* Temps mort */}
+            <div className="flex items-center gap-1.5 min-w-[100px] flex-1">
+              <div className="w-6 h-6 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                <Clock className="w-3 h-3" />
+              </div>
+              <div className="flex flex-col w-full">
+                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                  Temps mort
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min={0}
+                    value={idleMinutes}
+                    onChange={(e) => setIdleMinutes(Number(e.target.value || 0))}
+                    className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full pr-8 text-center"
+                  />
+                  <span className="absolute right-0 top-0 text-[9px] text-slate-400 font-bold pointer-events-none">
+                    min
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="w-px h-6 bg-slate-200 hidden md:block" />
+
+            {/* Complexité Circulation */}
+            <div className="flex items-center gap-1.5 min-w-[90px] flex-1">
+              <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
+                <Sliders className="w-3 h-3" />
+              </div>
+              <div className="flex flex-col w-full">
+                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                  Compl. Circ.
+                </label>
+                <input
+                  type="number"
+                  value={tauxComplexite}
+                  onChange={(e) => setTauxComplexite(Number(e.target.value || 0))}
+                  className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full text-center"
+                />
+              </div>
+            </div>
+
+            <div className="w-px h-6 bg-slate-200 hidden md:block" />
+
+            {/* Complexité Géo */}
+            <div className="flex items-center gap-1.5 min-w-[90px] flex-1">
+              <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
+                <MapPin className="w-3 h-3" />
+              </div>
+              <div className="flex flex-col w-full">
+                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                  Compl. Géo
+                </label>
+                <input
+                  type="number"
+                  value={natureGeo}
+                  onChange={(e) => setNatureGeo(Number(e.target.value || 0))}
+                  className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full text-center"
+                />
+              </div>
+            </div>
+
+            <div className="w-px h-6 bg-slate-200 hidden md:block" />
+
+            {/* Capacité Nette */}
+            <div className="flex items-center gap-1.5">
+              <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
+                <Clock className="w-3 h-3" />
+              </div>
+              <div className="flex flex-col">
+                <label className="text-[9px] font-bold text-[#005EA8] uppercase tracking-wider">
+                  Capacité Nette
+                </label>
+                <span className="text-xs font-bold text-[#005EA8]">
+                  {formatNumber(baseHeuresNet)} h
+                </span>
+              </div>
+            </div>
+
+          </div>
+        </div>
       </div>
 
       {/* 🔢 Paramètres de volume */}
@@ -1639,75 +1730,8 @@ export default function VueCentre({
             </div>
           }
         >
-          {/* 🏷️ CATEGORISATION SIMULEE */}
-          {(() => {
-            // 🧠 Calcul Simulation Catégorie (Logique identique à VueCategorie)
-            const totalVolume = (Number(cOrd) || 0) + (Number(cReco) || 0) + (Number(colis) || 0) + (Number(amana) || 0) + (Number(eBarkia) || 0) + (Number(lrh) || 0);
-            const etpSimule = kpi.etpArr || 0;
 
-            let simCat = "Classe D (Relais)";
-            let simColor = "slate";
-            //Régles metier categorisation
-            if (totalVolume > 80000 || etpSimule > 12) { simCat = "Classe A"; simColor = "purple"; }
-            else if (totalVolume > 50000 || etpSimule > 6) { simCat = "Classe B"; simColor = "blue"; }
-            else if (totalVolume > 25000) { simCat = "Classe C"; simColor = "cyan"; }
-            ////////////////////////////////////////////
-            // 🔍 Lookup Catégorie Actuelle via ID
-            const centreIdNum = Number(centre);
-            const currentCentreObj = (centres || []).find(c => c.id === centreIdNum);
 
-            const realCatLabel = categorisationsList.find(cat => cat.id == currentCentreObj?.id_categorisation)?.label;
-
-            const debugInfo = `(ID:${currentCentreObj?.id_categorisation})`;
-            const currentCat = realCatLabel ? `${realCatLabel} ${debugInfo}` : `SANS ${debugInfo}`;
-
-            return (
-              <div className="mb-4 flex flex-col md:flex-row items-center gap-4 bg-white/60 rounded-xl p-3 border border-indigo-100 shadow-sm">
-                <div className="flex items-center gap-2 text-slate-600">
-                  <Tag className="w-4 h-4 text-indigo-400" />
-                  <span className="text-xs font-bold uppercase tracking-wide">Catégorisation :</span>
-                </div>
-
-                <div className="flex items-center gap-3 flex-1 w-full justify-center md:justify-start">
-                  {/* Avant */}
-                  <div className="flex flex-col items-center">
-                    <span className="text-[9px] uppercase text-slate-400 font-bold mb-0.5">Actuelle</span>
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
-                      {currentCat}
-                    </span>
-                  </div>
-
-                  <div className="text-slate-300">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
-                  </div>
-
-                  {/* Après */}
-                  <div className="flex flex-col items-center">
-                    <span className="text-[9px] uppercase text-slate-400 font-bold mb-0.5">Simulée</span>
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold border ${simColor === 'purple' ? 'bg-purple-50 text-purple-700 border-purple-200' :
-                      simColor === 'blue' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                        simColor === 'cyan' ? 'bg-cyan-50 text-cyan-700 border-cyan-200' :
-                          'bg-slate-50 text-slate-600 border-slate-200'
-                      }`}>
-                      {simCat}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Métriques Clés */}
-                <div className="flex items-center gap-3 text-[10px] text-slate-500 border-l border-slate-200 pl-4">
-                  <div>
-                    <span className="block font-bold text-slate-700">{formatInt(totalVolume)}</span>
-                    <span>Volume Est.</span>
-                  </div>
-                  <div>
-                    <span className="block font-bold text-slate-700">{formatNumber(etpSimule)}</span>
-                    <span>ETP Est.</span>
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
 
           {/* 👉 La grille qui contient les 4 cartes KPI */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1734,7 +1758,7 @@ export default function VueCentre({
             <KPICardGlass
               label="Effectif Calculé"
               icon={Calculator}
-              tone="cyan"
+              tone="blue"
               emphasize
               total={formatSmallNumber(kpi.etpCalc, 2)}
               customFooter={
@@ -1790,6 +1814,41 @@ export default function VueCentre({
         </Card>
       )
       }
+
+      {/* 🏷️ SECTION SCORING & CATEGORISATION (Couche 2) */}
+      {resultats && (
+        <div className="mb-6 mt-4">
+          <ScoringSection
+            centreId={centre}
+            centreLabel={resultats.centre_label}
+            code={resultats.code}
+            regionId={resultats.region_id}
+            regionLabel={(() => {
+              const rId = resultats.region_id;
+              const r = (regions || []).find(x => x.id == rId);
+              return r?.label || r?.name || rId || "N/A";
+            })()}
+            typologie={(() => {
+              const cObj = (centres || []).find(c => c.id === Number(centre));
+              return cObj?.type_site || cObj?.typologie || "Standard";
+            })()}
+            volumes={{
+              courrier_ordinaire: Number(cOrd) || 0,
+              courrier_recommande: Number(cReco) || 0,
+              colis: Number(colis) || 0,
+              amana: Number(amana) || 0,
+              ebarkia: Number(eBarkia) || 0,
+              lrh: Number(lrh) || 0
+            }}
+            effectifGlobal={kpi.etpArr || 0}
+            currentCategoryLabel={(() => {
+              const centreIdNum = Number(centre);
+              const currentCentreObj = (centres || []).find(c => c.id === centreIdNum);
+              return categorisationsList.find(cat => cat.id == currentCentreObj?.id_categorisation)?.label || "SANS";
+            })()}
+          />
+        </div>
+      )}
 
       {/* Tables MOD / MOI */}
       {

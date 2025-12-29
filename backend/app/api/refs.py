@@ -196,14 +196,43 @@ def get_directions(db: Session = Depends(get_db)):
 @router.get("/regions", response_model=List[RegionOut])
 def list_regions(db: Session = Depends(get_db)):
     """
-    Retourne toutes les rÃ©gions (directions).
+    Retourne toutes les régions.
     """
-    rows = db.execute(text("""
-        SELECT id, label
-        FROM dbo.regions
-        ORDER BY label
-    """)).mappings().all()
-    return [dict(r) for r in rows]
+    try:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info("GET /api/regions called")
+        
+        rows = db.execute(text("""
+            SELECT id, label
+            FROM dbo.regions
+            ORDER BY label
+        """)).mappings().all()
+        
+        result = [dict(r) for r in rows]
+        logger.info(f"Successfully fetched {len(result)} regions")
+        return result
+        
+    except Exception as e:
+        import logging
+        import uuid
+        import traceback
+        logger = logging.getLogger(__name__)
+        trace_id = str(uuid.uuid4())
+        
+        logger.error(f"[{trace_id}] Failed to fetch regions: {repr(e)}")
+        traceback.print_exc()
+        
+        # Message structuré pour le frontend
+        error_detail = {
+            "error": "INTERNAL_SERVER_ERROR",
+            "message": "Impossible de charger les régions",
+            "endpoint": "/api/regions",
+            "trace_id": trace_id,
+            "hint": "Vérifiez la connexion à la base de données"
+        }
+        
+        raise HTTPException(status_code=500, detail=error_detail)
 
 @router.get("/centres")
 def list_centres(

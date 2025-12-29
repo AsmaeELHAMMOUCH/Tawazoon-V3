@@ -50,9 +50,11 @@ import GraphPage from "./pages/GraphPage";
 import Login from "./Login";
 import SimulationMenu from "./pages/SimulationMenu";
 import VueCategorie from "./pages/VueCategorie";
+import SimulationHistoryPage from "./pages/SimulationHistoryPage";
 
 // 🔹 IMPORTE TA PAGE MENU PARAMÉTRÉE
 import MenuAnalyseEffectifs from "./pages/SimulationMenu";
+import AlertsTestButton from "./components/alerts/AlertsTestButton";
 
 function NotFound() {
   return <div className="p-6">404 — Page introuvable</div>;
@@ -110,9 +112,13 @@ function SidebarWithNav(props) {
 
 function Layout() {
   return (
-    <AppShell sidebar={SidebarWithNav}>
-      <Outlet />
-    </AppShell>
+    <>
+      <AppShell sidebar={SidebarWithNav}>
+        <Outlet />
+      </AppShell>
+      {/* Bouton de test des alertes - À retirer en production */}
+      <AlertsTestButton />
+    </>
   );
 }
 
@@ -184,6 +190,7 @@ export default function App() {
             element={<ResultsGlobal />}
           />
           <Route path="vue-globale/comparatif" element={<ComparativeView />} />
+          <Route path="simulations/history" element={<SimulationHistoryPage />} />
 
           {/* ====== SIMULATION – MENUS ET VARIANTS ====== */}
           {/* Ton ancien menu spécifique si tu veux le garder */}

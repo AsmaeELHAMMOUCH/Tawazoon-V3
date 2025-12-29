@@ -1,0 +1,152 @@
+/**
+ * Styles pour les Tableaux Enterprise
+ * 
+ * Scrollbar fine, hover effects, et styles professionnels
+ */
+
+/* Scrollbar fine et discrète */
+.enterprise-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.enterprise-scrollbar::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 3px;
+}
+
+.enterprise-scrollbar::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+    transition: background 0.2s;
+}
+
+.enterprise-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+/* Firefox */
+.enterprise-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 #f1f5f9;
+}
+
+/* Table styles complémentaires */
+.enterprise-table {
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.enterprise-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: #f1f5f9;
+    border-bottom: 2px solid #cbd5e1;
+}
+
+.enterprise-table tbody tr {
+    transition: background-color 0.15s ease;
+}
+
+.enterprise-table tbody tr:hover {
+    background-color: rgba(99, 102, 241, 0.05) !important;
+}
+
+/* Totaux */
+.enterprise-table tfoot {
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+    background: #eff6ff;
+    border-top: 2px solid #93c5fd;
+}
+
+.enterprise-table tfoot td {
+    font-weight: 600;
+    color: #1e40af;
+}
+
+/* Colonnes numériques */
+.enterprise-table td.numeric {
+    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Ellipsis pour textes longs */
+.enterprise-table td.ellipsis {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Highlight pour valeurs importantes */
+.enterprise-table .highlight {
+    font-weight: 600;
+    color: #4f46e5;
+}
+
+/* Segmented control pour toggle Tableau/Graphe */
+.segmented-control {
+    display: inline-flex;
+    border-radius: 4px;
+    border: 1px solid #cbd5e1;
+    overflow: hidden;
+    background: white;
+}
+
+.segmented-control button {
+    padding: 4px 8px;
+    font-size: 10px;
+    font-weight: 500;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.segmented-control button:not(:last-child) {
+    border-right: 1px solid #cbd5e1;
+}
+
+.segmented-control button.active {
+    background: #4f46e5;
+    color: white;
+}
+
+.segmented-control button:not(.active):hover {
+    background: #f8fafc;
+}
+
+/* Animations subtiles */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-2px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.enterprise-table tbody tr {
+    animation: fadeIn 0.2s ease;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+    .enterprise-table {
+        font-size: 9px;
+    }
+
+    .enterprise-table thead th {
+        padding: 6px 8px;
+    }
+
+    .enterprise-table tbody td {
+        padding: 4px 8px;
+    }
+}

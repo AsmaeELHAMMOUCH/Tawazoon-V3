@@ -33,17 +33,6 @@ class Categorie(Base):
     centres = relationship("Centre", back_populates="categorie")
 
 
-class Categorisation(Base):
-    __tablename__ = "Categorisation"
-    __table_args__ = {"schema": "dbo"}
-
-    id_categorisation = Column(Integer, primary_key=True, index=True)
-    label = Column(String, nullable=False)
-    
-    # Relationship reverse
-    centres = relationship("Centre", back_populates="categorisation_nav")
-
-
 class Centre(Base):
     __tablename__ = "centres"
     __table_args__ = {"schema": "dbo"}
@@ -53,14 +42,9 @@ class Centre(Base):
 
     region_id = Column(Integer, ForeignKey("dbo.regions.id"), nullable=False)
     categorie_id = Column(Integer, ForeignKey("dbo.categories.id"), nullable=True)
-    direction_id = Column(Integer, ForeignKey("dbo.directions.id"), nullable=True)
 
     region = relationship("Region", back_populates="centres")
-    categorie = relationship("Categorie", back_populates="centres", foreign_keys=[categorie_id])
-    
-    # Second foreign key for the "Classe" categorization
-    id_categorisation = Column(Integer, ForeignKey("dbo.Categorisation.id_categorisation"), nullable=True)
-    categorisation_nav = relationship("Categorisation", back_populates="centres", foreign_keys=[id_categorisation])
+    categorie = relationship("Categorie", back_populates="centres")
 
     centre_postes = relationship("CentrePoste", back_populates="centre")
 

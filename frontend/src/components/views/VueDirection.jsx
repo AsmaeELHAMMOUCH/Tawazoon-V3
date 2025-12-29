@@ -368,7 +368,7 @@ Application Tawazoon RH`;
 
           {/* Logo / Brand */}
           {/* Left Side: Brand + Selector */}
-          <div className="flex items-center gap-8">
+          <div className="flex items-center gap-6">
             {/* Identity */}
             <div className="flex items-center gap-3">
               <div className="bg-[#005EA8] p-1.5 rounded-lg text-white shadow-sm">
@@ -382,11 +382,11 @@ Application Tawazoon RH`;
 
             {/* Selector (Left Aligned) */}
             <div className="hidden md:block">
-              <div className="flex items-center gap-3 px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg shadow-sm focus-within:ring-2 focus-within:ring-[#005EA8]/20 transition-all hover:bg-white cursor-pointer group">
+              <div className="flex items-center gap-3 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg shadow-sm focus-within:ring-2 focus-within:ring-[#005EA8]/20 transition-all hover:bg-white cursor-pointer group">
                 <Building2 size={18} className="text-[#005EA8] group-hover:scale-110 transition-transform shrink-0" />
-                <div className="w-px h-5 bg-slate-300 mx-1"></div>
+                <div className="w-px h-5 bg-slate-300 mx-0.5"></div>
                 <select
-                  className="text-sm font-bold text-slate-700 bg-transparent outline-none cursor-pointer min-w-[320px] max-w-[500px]"
+                  className="text-sm font-bold text-slate-700 bg-transparent outline-none cursor-pointer min-w-[180px] max-w-[300px]"
                   value={selectedDirection || ""}
                   onChange={(e) => handleSelectDirection(e.target.value)}
                   title="Choisir une direction"

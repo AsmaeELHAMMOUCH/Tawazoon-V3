@@ -94,7 +94,7 @@ export default function SmartInsightsPanel({ centres, kpis, onScenarioApply }) {
                 </div>
                 <div>
                     <h3 className="text-sm font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-indigo-200">
-                        Smart Insights IA
+                        Smart Insights
                     </h3>
                     <p className="text-[10px] text-indigo-300/70">Analyse temps réel</p>
                 </div>
