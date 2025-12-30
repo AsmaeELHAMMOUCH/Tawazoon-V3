@@ -178,6 +178,21 @@ def calculer_simulation(
     }
     ADMIN_FLUX = {"mag"}
 
+    # 🔍 DEBUG: Afficher un résumé des unités de mesure présentes
+    unites_count = {}
+    for t in taches:
+        unite_normalisee = normalize_unit(t.get("unite_mesure", ""))
+        unites_count[unite_normalisee] = unites_count.get(unite_normalisee, 0) + 1
+    
+    print(f"🔍 UNITÉS DE MESURE DÉTECTÉES:", flush=True)
+    for unite, count in sorted(unites_count.items()):
+        print(f"   - {unite}: {count} tâche(s)", flush=True)
+    print(f"🔍 VOLUMES REÇUS:", flush=True)
+    print(f"   - sacs (journalier): {float(getattr(volumes_obj, 'sacs', 0) or 0)}", flush=True)
+    print(f"   - colis (journalier): {float(getattr(volumes_obj, 'colis', 0) or 0)}", flush=True)
+    print(f"   - amana_colis_jour: {amana_colis_jour}", flush=True)
+    print(f"   - colis_amana_par_sac: {colis_amana_par_sac}", flush=True)
+
     for t in taches:
         nom = (t.get("nom_tache") or "N/A").strip()
         nom_lower = nom.lower()
@@ -204,6 +219,16 @@ def calculer_simulation(
 
         volume_jour = 0.0
 
+        # 🔍 DEBUG: Tracer le calcul pour chaque tâche
+        debug_info = {
+            "nom": nom,
+            "unite": unite_normalisee,
+            "type_flux": type_flux,
+            "is_courrier": is_courrier_task,
+            "has_amana": has_amana_tag,
+            "centre_poste_id": centre_poste_id,
+        }
+
         # 🔹 CAS SPÉCIAL : collecte colis
         is_collecte_colis = ("collecte" in nom_lower) and ("colis" in nom_lower)
 
@@ -217,8 +242,10 @@ def calculer_simulation(
 
                 # nombre de collectes / jour = total colis / colis_par_collecte
                 volume_jour = colis_input / colis_par_collecte
+                print(f"🔍 COLLECTE COLIS: {nom} → volume_jour={volume_jour:.4f} (colis_input={colis_input}, ratio={colis_par_collecte})", flush=True)
             else:
                 volume_jour = 0.0
+                print(f"⚠️  COLLECTE COLIS IGNORÉE: {nom} → colis_input=0", flush=True)
 
         # 1) COLIS
         elif unite_normalisee in ("colis", "colis_amana", "amana"):
@@ -227,39 +254,49 @@ def calculer_simulation(
             if base_colis_jour > 0:
                 # Colis classiques saisis en volume/jour
                 volume_jour = base_colis_jour
+                print(f"🔍 COLIS (classique): {nom} → volume_jour={volume_jour:.4f} (base_colis_jour={base_colis_jour})", flush=True)
             elif amana_colis_jour > 0:
                 # AMANA-only ou AMANA présent : on prend le volume AMANA/jour
                 volume_jour = amana_colis_jour
+                print(f"🔍 COLIS (AMANA): {nom} → volume_jour={volume_jour:.4f} (amana_colis_jour={amana_colis_jour})", flush=True)
             else:
                 volume_jour = 0.0
+                print(f"⚠️  COLIS IGNORÉ: {nom} → base_colis_jour=0, amana_colis_jour=0", flush=True)
 
         # 2) SACS (avec prise en compte AMANA + ratio)
         elif unite_normalisee in ("sac", "sacs"):
             base_sacs_jour = float(getattr(volumes_obj, "sacs", 0) or 0)
             base_colis_jour = float(getattr(volumes_obj, "colis", 0) or 0)
 
-            if has_amana_tag:
-                # 🔹 Tâche AMANA en "sacs" : on passe par les colis + ratio
-                source_colis = amana_colis_jour if amana_colis_jour > 0 else base_colis_jour
+            print(f"🔍 SAC DÉTECTÉ: {nom}", flush=True)
+            print(f"   → base_sacs_jour={base_sacs_jour}", flush=True)
+            print(f"   → base_colis_jour={base_colis_jour}", flush=True)
+            print(f"   → amana_colis_jour={amana_colis_jour}", flush=True)
+            print(f"   → has_amana_tag={has_amana_tag}", flush=True)
+            print(f"   → colis_amana_par_sac={colis_amana_par_sac}", flush=True)
 
-                if source_colis > 0:
-                    # 👉 ici ton "Colis AMANA par sac" joue directement
-                    volume_jour = source_colis / colis_amana_par_sac
-                elif base_sacs_jour > 0:
-                    # fallback si vraiment aucun colis dispo
-                    volume_jour = base_sacs_jour
-                else:
-                    volume_jour = 0.0
+            # 🔹 CORRECTION : Les tâches "sac" peuvent utiliser AMANA même sans tag explicite
+            # Car les sacs sont nécessaires pour traiter les colis AMANA !
+            
+            # Priorité 1 : Sacs saisis directement
+            if base_sacs_jour > 0:
+                volume_jour = base_sacs_jour
+                print(f"   ✅ SAC (direct): volume_jour={volume_jour:.4f} (base_sacs_jour={base_sacs_jour})", flush=True)
+            
+            # Priorité 2 : Conversion depuis colis classiques
+            elif base_colis_jour > 0:
+                volume_jour = base_colis_jour / colis_amana_par_sac
+                print(f"   ✅ SAC (conversion colis classiques): volume_jour={volume_jour:.4f} (base_colis={base_colis_jour} / ratio={colis_amana_par_sac})", flush=True)
+            
+            # Priorité 3 : Conversion depuis colis AMANA (NOUVEAU !)
+            elif amana_colis_jour > 0:
+                volume_jour = amana_colis_jour / colis_amana_par_sac
+                print(f"   ✅ SAC (conversion AMANA): volume_jour={volume_jour:.4f} (amana_colis={amana_colis_jour} / ratio={colis_amana_par_sac})", flush=True)
+            
+            # Sinon : 0
             else:
-                # 🔹 Tâche non AMANA : comportement générique
-                if base_sacs_jour > 0:
-                    # Sacs saisis directement en volume/jour
-                    volume_jour = base_sacs_jour
-                elif base_colis_jour > 0:
-                    # conversion colis → sacs avec le même ratio
-                    volume_jour = base_colis_jour / colis_amana_par_sac
-                else:
-                    volume_jour = 0.0
+                volume_jour = 0.0
+                print(f"   ⚠️  SAC IGNORÉ: Aucun volume disponible (sacs=0, colis=0, amana=0)", flush=True)
 
         # 3) COURRIERS
         elif unite_normalisee in ("courrier", "courriers", "courrier_recommande"):
@@ -267,6 +304,7 @@ def calculer_simulation(
             # MAG = admin => jamais calculé
             if type_flux in ADMIN_FLUX:
                 volume_jour = 0.0
+                print(f"⚠️  COURRIER ADMIN IGNORÉ: {nom} (type_flux={type_flux})", flush=True)
             else:
                 # AMANA-only : ignorer toutes les tâches courrier
                 if not amana_only:
@@ -280,14 +318,23 @@ def calculer_simulation(
                         volume_jour = lrh_jour
                     else:
                         volume_jour = courrier_total_jour
+                    
+                    if volume_jour > 0:
+                        print(f"🔍 COURRIER: {nom} → volume_jour={volume_jour:.4f} (type_flux={type_flux})", flush=True)
+                    else:
+                        print(f"⚠️  COURRIER IGNORÉ: {nom} → volume_jour=0 (type_flux={type_flux})", flush=True)
+                else:
+                    print(f"⚠️  COURRIER IGNORÉ (AMANA-only): {nom}", flush=True)
 
         # 4) MACHINE
         elif unite_normalisee == "machine":
             volume_jour = 0.0
+            print(f"⚠️  MACHINE IGNORÉE: {nom}", flush=True)
 
         # 5) UNITÉS INCONNUES / AUTRES
         else:
             volume_jour = 0.0
+            print(f"⚠️  UNITÉ INCONNUE: {nom} → unite={unite_normalisee}", flush=True)
 
         # Fallback final AMANA-only (sécurisé)
         # - jamais pour MAG/admin
@@ -302,8 +349,12 @@ def calculer_simulation(
                 and has_amana_tag
             ):
                 volume_jour = amana_colis_jour
+                print(f"🔍 FALLBACK AMANA: {nom} → volume_jour={volume_jour:.4f}", flush=True)
+
 
         if volume_jour <= 0:
+            # 🔍 DEBUG: Tracer les tâches ignorées
+            print(f"⚠️  TÂCHE IGNORÉE: {nom} | unité={unite_normalisee} | volume_jour={volume_jour:.4f} | centre_poste_id={centre_poste_id}", flush=True)
             continue
 
         minutes_cumulees = moyenne_min * volume_jour

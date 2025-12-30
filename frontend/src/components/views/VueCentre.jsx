@@ -208,71 +208,7 @@ const normalizePosteLabel = (lbl) => {
   return raw;
 };
 
-/* ===== Injection GUICHETIER + AGENT OPERATIONS ===== */
-const injectGuichetierEquivalents = (rows) => {
-  if (!Array.isArray(rows)) return rows;
 
-  return rows.flatMap((row) => {
-    const rawLabel = row.poste_label || "";
-    const normalizedLabel = normalizePosteLabel(rawLabel);
-    const labelPoste = normalizedLabel.toUpperCase();
-
-    const makeEmptyClone = (baseRow, equivalentLabel, posteLabel) => ({
-      ...baseRow,
-      poste_label: posteLabel,
-      equivalent: equivalentLabel,
-      effectif_actuel: 0,
-      etp_calcule: 0,
-      etp_arrondi: 0,
-      total_heures: 0,
-      ecart: 0,
-    });
-
-    if (labelPoste === "GUICHETIER") {
-      const posteLabel = "GUICHETIER";
-      return [
-        {
-          ...row,
-          poste_label: posteLabel,
-          equivalent: row.intitule_rh || "GUICHETIER COLIS LOGISTIQUE",
-          effectif_actuel: row.effectif_actuel ?? 0,
-        },
-        makeEmptyClone(row, "GUICHETIER COURRIER", posteLabel),
-      ];
-    }
-
-    if (labelPoste === "AGENT OPERATIONS") {
-      const posteLabel = "AGENT OPERATIONS";
-      return [
-        {
-          ...row,
-          poste_label: posteLabel,
-          equivalent: row.intitule_rh || "AGENT OPERATIONS COURRIER",
-          effectif_actuel: row.effectif_actuel ?? 0,
-        },
-        makeEmptyClone(row, "AGENT OPERATIONS COLIS", posteLabel),
-      ];
-    }
-
-    if (labelPoste === "CONTRÔLEUR") {
-      const posteLabel = "CONTRÔLEUR";
-      return [
-        {
-          ...row,
-          poste_label: posteLabel,
-          equivalent: "CONTRÔLEUR FRONT OFFICE",
-          effectif_actuel: row.effectif_actuel ?? 0,
-        },
-        makeEmptyClone(row, "CONTRÔLEUR BACK OFFICE", posteLabel),
-      ];
-    }
-
-    return {
-      ...row,
-      poste_label: normalizedLabel,
-    };
-  });
-};
 
 /* ===================== UI components ===================== */
 const Card = ({ title, subtitle, headerRight, className = "", children }) => (
@@ -794,27 +730,39 @@ export default function VueCentre({
           return mode === "input" ? Number(value || 0) : 0;
         };
 
-        const body = {
-          centre_id: Number(centreId),
-          productivite: Number(productivite || 100),
-          commentaire: "Simulation lancée depuis Vue Centre", // Peut être ajouté à l'UI plus tard
-          volumes: {
-            "CO": allowedAnnual("co", annualParsed.cOrd),
-            "CR": allowedAnnual("cr", annualParsed.cReco),
-            "EBARKIA": allowedAnnual("eb", annualParsed.eBarkia),
-            "LRH": allowedAnnual("lrh", annualParsed.lrh),
-            "AMANA": allowedAnnual("amana", annualParsed.amana),
-            "SACS": Number(sacs || 0),
-            "COLIS": Number(colis || 0), // Note: Verify if this should be 'colis' or totals
-          },
-          unites: {
-            "CO": "an", "CR": "an", "EBARKIA": "an", "LRH": "an", "AMANA": "an",
-            "SACS": "jour", "COLIS": "jour"
-          }
+        const volumesJournaliers = {
+          sacs: Number(sacs || 0),
+          colis: Number(colis || 0),
+          colis_amana_par_sac: Number(colisAmanaParSacEff),
+          courriers_par_sac: Number(courriersParSacEff),
+          colis_par_collecte: Number(colisParCollecteEff),
         };
 
-        // Use the persistence-enabled API method
-        const data = await api.runSimulationPersistence(body);
+        const volumesAnnuels = {
+          courrier_ordinaire: allowedAnnual("co", annualParsed.cOrd),
+          courrier_recommande: allowedAnnual("cr", annualParsed.cReco),
+          ebarkia: allowedAnnual("eb", annualParsed.eBarkia),
+          lrh: allowedAnnual("lrh", annualParsed.lrh),
+          amana: allowedAnnual("amana", annualParsed.amana),
+        };
+
+        const payload = {
+          centre_id: Number(centreId),
+          productivite: Number(productivite || 100),
+          heures_net: Number(heuresNetEff),
+          // idle_minutes non géré explicitement ici mais pourrait l'être
+          volumes: volumesJournaliers,
+          volumes_annuels: volumesAnnuels,
+        };
+
+        // Use the correct API for accumulated Centre View
+        const data = await api.vueCentreOptimisee(payload);
+
+        // 🔍 DEBUG: Voir ce que renvoie l'API
+        console.log("🔍 DEBUG - Réponse API simulate():", data);
+        console.log("🔍 total_etp_calcule:", data.total_etp_calcule);
+        console.log("🔍 fte_calcule:", data.fte_calcule);
+        console.log("🔍 total_heures:", data.total_heures);
 
         // Previous logic expects 'data' to have 'details_taches' etc.
         // We ensure backend returns full data.
@@ -1117,8 +1065,7 @@ export default function VueCentre({
     }, []);
 
     // ✅ 2) On continue le flux normal avec les lignes normalisées
-    const expandedRows = injectGuichetierEquivalents(normalizedRows);
-    const groupedRows = groupPostsByMainPost(expandedRows);
+    const groupedRows = groupPostsByMainPost(normalizedRows);
 
     const displayInt = (v) => {
       const n = Number(v ?? 0);

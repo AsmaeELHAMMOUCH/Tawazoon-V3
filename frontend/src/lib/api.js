@@ -314,22 +314,40 @@ export const api = {
       throw new Error("centre_id est requis pour la simulation");
     }
 
+    // Correction : Mappage des volumes (VueCentre envoie un format mixte)
+    const vol = payload.volumes || {};
+    
+    // 1. Volumes Journaliers (SACS, COLIS)
+    const volumesJournaliers = {
+      sacs: Number(vol.sacs ?? vol.SACS ?? 0),
+      colis: Number(vol.colis ?? vol.COLIS ?? 0),
+      courriers_par_sac: vol.courriers_par_sac ? Number(vol.courriers_par_sac) : undefined,
+      colis_amana_par_sac: vol.colis_amana_par_sac ? Number(vol.colis_amana_par_sac) : undefined,
+      colis_par_collecte: vol.colis_par_collecte ? Number(vol.colis_par_collecte) : undefined
+    };
+
+    // 2. Volumes Annuels (AMANA, CO, CR, etc.)
+    const volumesAnnuels = {
+      courrier_ordinaire: Number(vol.CO ?? vol.courrier_ordinaire ?? 0),
+      courrier_recommande: Number(vol.CR ?? vol.courrier_recommande ?? 0),
+      ebarkia: Number(vol.EBARKIA ?? vol.ebarkia ?? 0),
+      lrh: Number(vol.LRH ?? vol.lrh ?? 0),
+      amana: Number(vol.AMANA ?? vol.amana ?? 0)
+    };
+
     const body = {
       centre_id: Number(payload.centre_id),
       poste_id: payload.poste_id ? Number(payload.poste_id) : null,
       productivite: Number(payload.productivite ?? 85),
       heures_net: payload.heures_net ? Number(payload.heures_net) : null,
-      volumes: {
-        sacs: Number(payload.volumes?.sacs ?? 0),
-        colis: Number(payload.volumes?.colis ?? 0),
-        courrier: Number(payload.volumes?.courrier ?? 0),
-        scelle: Number(payload.volumes?.scelle ?? 0),
-      },
+      idle_minutes: payload.idle_minutes ? Number(payload.idle_minutes) : 0,
+      volumes: volumesJournaliers,
+      volumes_annuels: volumesAnnuels
     };
 
-    console.debug("simulate(api): payload=", body);
+    console.debug("simulate(api): payload sent to backend=", body);
     const data = await http("/simulate", { method: "POST", body, signal });
-    console.debug("simulate(api): response=", data);
+    console.debug("simulate(api): response from backend=", data);
     return data;
   },
 
@@ -448,6 +466,43 @@ export const api = {
 
   vueIntervenantDetails: async (centreId) => {
     return await http(`/vue-intervenant-details?centre_id=${encodeURIComponent(centreId)}`);
+  },
+
+  /**
+   * Historique des simulations
+   */
+  getSimulationHistory: async ({ centre_id, user_id, limit, offset } = {}) => {
+    const params = new URLSearchParams();
+    if (centre_id) params.append("centre_id", centre_id);
+    if (user_id) params.append("user_id", user_id);
+    if (limit) params.append("limit", limit);
+    if (offset) params.append("offset", offset);
+
+    const query = params.toString() ? `?${params.toString()}` : "";
+    return await http(`/history${query}`);
+  },
+
+  getSimulationReplay: async (simulationId) => {
+    return await http(`/replay/${simulationId}`);
+  },
+  
+  exportHistoryExcel: async ({ centre_id } = {}) => {
+    const params = new URLSearchParams();
+    if (centre_id) params.append("centre_id", centre_id);
+    
+    // On veut le blob, pas JSON
+    const t = getToken();
+    const headers = {};
+    if (t) headers.Authorization = `Bearer ${t}`;
+    
+    const query = params.toString() ? `?${params.toString()}` : "";
+    const res = await fetch(`${API_BASE}/export/history/excel${query}`, {
+        method: "GET",
+        headers
+    });
+    
+    if (!res.ok) throw new Error("Erreur export Excel");
+    return await res.blob();
   },
 
   /**

@@ -12,6 +12,7 @@ from app.api.choixActivite import router as activite_router
 from app.api.directions import router as directions_router
 from app.api.simuler_centre_par_type import router as simuler_centre_par_type_router
 from app.api.scoring import router as scoring_router
+from app.api.export import router as export_router # 🆕 Ajoût
 
 from app.core.db import engine, Base
 from app.models import db_models, scoring_models
@@ -50,6 +51,7 @@ app.include_router(refs_router, prefix="/api")
 # 👇 Router "simulation" : /simulate, /vue-centre-optimisee, /vue-centre-sans-regroupement, etc.
 app.include_router(simulation_router, prefix="/api")    
 app.include_router(scoring_router, prefix="/api")
+app.include_router(export_router, prefix="/api") # ✅ Ajoût correct ici
 #app.include_router(views_router, prefix="/api")
 #app.include_router(simuler_centre_par_type_router, prefix="/api")
 

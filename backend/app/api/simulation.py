@@ -1,6 +1,5 @@
 #app/api/simulation.py
 from typing import Dict, Any, Optional
-from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -121,7 +120,11 @@ def simulate_effectifs(request: SimulationRequest, db: Session = Depends(get_db)
 
 
         # DEBUG : vérifier les ratios reçus (Vue Intervenant)
-        print("==================== REQUEST RECEIVED /simulate ====================", flush=True)
+        print("==================== REQUEST RECEIVED /simulate (VUE INTERVENANT) ====================", flush=True)
+        print(f"DEBUG simulate centre_id = {request.centre_id}", flush=True)
+        print(f"DEBUG simulate poste_id = {request.poste_id}", flush=True)
+        print(f"DEBUG simulate productivite = {request.productivite}", flush=True)
+        print(f"DEBUG simulate heures_net = {request.heures_net}", flush=True)
         print(f"DEBUG simulate volumes_journaliers = {volumes_journaliers}", flush=True)
         print(f"DEBUG simulate volumes_annuels (va_dict) = {va_dict}", flush=True)
         print(f"DEBUG simulate nb taches finales = {len(taches_finales)}", flush=True)
@@ -135,6 +138,66 @@ def simulate_effectifs(request: SimulationRequest, db: Session = Depends(get_db)
             volumes_annuels=va_dict,
             volumes_mensuels=None,
         )
+        
+        # 🆕 5) SAUVEGARDE AUTOMATIQUE DE LA SIMULATION
+        try:
+            from app.services.simulation_run import (
+                insert_simulation_run,
+                bulk_insert_volumes,
+                upsert_simulation_result
+            )
+            
+            # Préparer les volumes pour la sauvegarde
+            volumes_to_save = {}
+            unites_to_save = {}
+            
+            # Volumes journaliers
+            if request.volumes:
+                vol_dict = request.volumes.dict() if hasattr(request.volumes, 'dict') else dict(request.volumes)
+                for key, val in vol_dict.items():
+                    if val is not None and val != 0:
+                        volumes_to_save[key.upper()] = float(val)
+                        unites_to_save[key.upper()] = "jour"
+            
+            # Volumes annuels
+            if va_dict:
+                for key, val in va_dict.items():
+                    if val is not None and val != 0:
+                        volumes_to_save[key.upper()] = float(val)
+                        unites_to_save[key.upper()] = "an"
+            
+            # 1. Créer l'enregistrement de simulation
+            sim_id = insert_simulation_run(
+                db=db,
+                centre_id=request.centre_id,
+                productivite=request.productivite,
+                commentaire=getattr(request, 'commentaire', None),
+                user_id=getattr(request, 'user_id', None)
+            )
+            
+            # 2. Sauvegarder les volumes
+            if volumes_to_save:
+                bulk_insert_volumes(db, sim_id, volumes_to_save, unites_to_save)
+            
+            # 3. Sauvegarder les résultats
+            upsert_simulation_result(
+                db=db,
+                simulation_id=sim_id,
+                heures=resultat.total_heures or 0.0,
+                etp_calc=resultat.fte_calcule or 0.0,
+                etp_arr=resultat.fte_arrondi or 0
+            )
+            
+            db.commit()
+            print(f"✅ Simulation #{sim_id} sauvegardée avec succès", flush=True)
+            
+        except Exception as e:
+            print(f"⚠️  Erreur sauvegarde simulation: {e}", flush=True)
+            import traceback
+            print(traceback.format_exc(), flush=True)
+            # Ne pas bloquer la simulation si la sauvegarde échoue
+            db.rollback()
+        
         return resultat
 
     except Exception as e:
@@ -158,13 +221,14 @@ def simulate_vue_centre_optimisee(
 
         # 0) infos centre
         sql_centre = """
-            SELECT c.label, c.region_id
+            SELECT c.label
             FROM dbo.centres c
             WHERE c.id = :centre_id
         """
-        row_centre = db.execute(text(sql_centre), {"centre_id": request.centre_id}).mappings().first()
-        centre_label = row_centre["label"] if row_centre else f"Centre {request.centre_id}"
-        centre_region_id = row_centre["region_id"] if row_centre else None
+        centre_label = (
+            db.execute(text(sql_centre), {"centre_id": request.centre_id}).scalar()
+            or f"Centre {request.centre_id}"
+        )
 
         # 0bis) meta postes
         sql_postes = """
@@ -228,6 +292,7 @@ def simulate_vue_centre_optimisee(
         volumes_journaliers = request.volumes.dict() if request.volumes else {}
         volumes_journaliers = annual_to_daily_post(volumes_journaliers)
 
+
         # 🔹 préserver les ratios transmis (pas de conversion /jour)
         raw_req = request.dict(exclude_none=False)
         raw_vols = raw_req.get("volumes", {}) if isinstance(raw_req, dict) else {}
@@ -243,6 +308,15 @@ def simulate_vue_centre_optimisee(
         # Ratios specific overrides if needed (usually handled by annual_to_daily_post but safety here)
         volumes_journaliers["colis_par_collecte"] = _ratio("colis_par_collecte", 1.0)
 
+        # DEBUG : vérifier les ratios reçus (Vue Centre)
+        print("==================== REQUEST RECEIVED /vue-centre-optimisee ====================", flush=True)
+        print(f"DEBUG vue-centre centre_id = {request.centre_id}", flush=True)
+        print(f"DEBUG vue-centre productivite = {request.productivite}", flush=True)
+        print(f"DEBUG vue-centre heures_net = {request.heures_net}", flush=True)
+        print(f"DEBUG vue-centre idle_minutes = {getattr(request, 'idle_minutes', 0.0)}", flush=True)
+        print(f"DEBUG vue-centre volumes_journaliers = {volumes_journaliers}", flush=True)
+        print(f"DEBUG vue-centre volumes_annuels (va_dict) = {va_dict}", flush=True)
+        print(f"DEBUG vue-centre nb taches finales = {len(taches_finales)}", flush=True)
 
         # 4) calcul
         sim_result: SimulationResponse = calculer_simulation(
@@ -295,23 +369,75 @@ def simulate_vue_centre_optimisee(
                 }
             )
         
-        
         print(f"DEBUG: Returning {len(postes_payload)} items in 'postes'")
 
         total_heures = round(sim_result.total_heures or total_heures_round, 2)
-        
-        # Calculer l'ETP total en sommant tous les postes (MOD + MOI)
-        total_etp_calcule_from_postes = sum(p["etp_calcule"] for p in postes_payload)
-        total_etp_calcule = round(total_etp_calcule_from_postes, 2)
-        
+        total_etp_calcule = round(sim_result.fte_calcule or 0.0, 2)
         total_etp_arrondi = sim_result.fte_arrondi or 0
         total_ecart = total_etp_arrondi - total_effectif_actuel
+
+        # 🆕 6) SAUVEGARDE AUTOMATIQUE DE LA SIMULATION
+        try:
+            from app.services.simulation_run import (
+                insert_simulation_run,
+                bulk_insert_volumes,
+                upsert_simulation_result
+            )
+            
+            # Préparer les volumes pour la sauvegarde
+            volumes_to_save = {}
+            unites_to_save = {}
+            
+            # Volumes journaliers
+            if request.volumes:
+                vol_dict = request.volumes.dict() if hasattr(request.volumes, 'dict') else dict(request.volumes)
+                for key, val in vol_dict.items():
+                    if val is not None and val != 0:
+                        volumes_to_save[key.upper()] = float(val)
+                        unites_to_save[key.upper()] = "jour"
+            
+            # Volumes annuels
+            if va_dict:
+                for key, val in va_dict.items():
+                    if val is not None and val != 0:
+                        volumes_to_save[key.upper()] = float(val)
+                        unites_to_save[key.upper()] = "an"
+            
+            # 1. Créer l'enregistrement de simulation
+            sim_id = insert_simulation_run(
+                db=db,
+                centre_id=request.centre_id,
+                productivite=request.productivite,
+                commentaire=getattr(request, 'commentaire', None),
+                user_id=getattr(request, 'user_id', None)
+            )
+            
+            # 2. Sauvegarder les volumes
+            if volumes_to_save:
+                bulk_insert_volumes(db, sim_id, volumes_to_save, unites_to_save)
+            
+            # 3. Sauvegarder les résultats
+            upsert_simulation_result(
+                db=db,
+                simulation_id=sim_id,
+                heures=total_heures,
+                etp_calc=total_etp_calcule,
+                etp_arr=total_etp_arrondi
+            )
+            
+            db.commit()
+            print(f"✅ Simulation Vue Centre #{sim_id} sauvegardée avec succès", flush=True)
+            
+        except Exception as e:
+            print(f"⚠️  Erreur sauvegarde simulation Vue Centre: {e}", flush=True)
+            import traceback
+            print(traceback.format_exc(), flush=True)
+            # Ne pas bloquer la simulation si la sauvegarde échoue
+            db.rollback()
 
         return {
             "centre_id": request.centre_id,
             "centre_label": centre_label,
-            "code": centre_code,
-            "region_id": centre_region_id,
             "heures_net": round(heures_net, 2),
             "total_heures": total_heures,
             "total_effectif_actuel": total_effectif_actuel,
@@ -489,140 +615,11 @@ def get_vue_intervenant_details(
         print(f"❌ Erreur vue-intervenant-details: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 # -------------------------------------------------------------------
-# /simulation/centre/run : Persisted Run
+# Historique des Simulations
 # -------------------------------------------------------------------
-from app.services.simulation_run import (
-    SimulationRunInput, 
-    SimulationRunOutput,
-    insert_simulation_run,
-    bulk_insert_volumes,
-    upsert_simulation_result
-)
-
-@router.post("/centre/run")
-def run_and_persist_simulation(payload: SimulationRunInput, db: Session = Depends(get_db)) -> Dict[str, Any]:
-    """
-    Runs a simulation for a centre, PERSISTS inputs and results, and returns the FULL detailed response.
-    Transactional.
-    """
-    # 1. Start Transaction
-    print(f"🚀 [API] POST /api/centre/run called. Payload: {payload}")
-    
-    try:
-        # A. Insert Run Header
-        sim_id = insert_simulation_run(
-            db, 
-            centre_id=payload.centre_id, 
-            productivite=payload.productivite, 
-            commentaire=payload.commentaire, 
-            user_id=payload.user_id
-        )
-        print(f"✅ [API] Run Inserted. ID: {sim_id}")
-        
-        # B. Bulk Insert Volumes
-        bulk_insert_volumes(db, sim_id, payload.volumes, payload.unites)
-        print(f"✅ [API] Volumes Inserted: {len(payload.volumes)}")
-        
-        # C. Call Simulation Logic (Vue Centre Optimisee) to get full details
-        # We must map 'payload' (SimulationRunInput) to 'request' (SimulationRequest)
-        
-        # Mapping volumes (Input is flat dict with code keys, Request expects annuals + daily)
-        # We need to reverse-map the input keys effectively.
-        
-        key_map = {
-            "CO": "courrier_ordinaire",
-            "CR": "courrier_recommande",
-            "EBARKIA": "ebarkia",
-            "LRH": "lrh",
-            "COLIS": "colis",
-            "AMANA": "amana",
-            "SACS": "sacs"
-        }
-        
-        normalized_volumes = {}
-        for k, v in payload.volumes.items():
-            mapped_key = key_map.get(k.upper(), k.lower())
-            normalized_volumes[mapped_key] = v
-
-        # Construct VolumesAnnuels and VolumesInput
-        # Assumption: If unit is 'an', it goes to annuels. If 'jour', to daily.
-        # Fallback: Put everything in annuals if ambiguous, except known dailies.
-        
-        vol_annuels_args = {}
-        vol_daily_args = {}
-        
-        for k, v in payload.volumes.items():
-            unit = payload.unites.get(k, "an").lower()
-            mapped = key_map.get(k.upper(), k.lower())
-            val = float(v)
-            
-            if "jour" in unit or k.upper() in ["SACS", "COLIS"]: 
-                # SACS/COLIS are usually daily inputs in VueCentre
-                if k.upper() == "COLIS": vol_daily_args["colis"] = val
-                elif k.upper() == "SACS": vol_daily_args["sacs"] = val
-                else: vol_daily_args[mapped] = val
-            else:
-                vol_annuels_args[mapped] = val
-                
-        # Handle volumes_annuels object
-        volumes_annuels_obj = VolumesAnnuels(**{k: v for k, v in vol_annuels_args.items() if k in VolumesAnnuels.__fields__})
-        
-        # Handle daily volumes object
-        # Note: SimulationRequest.volumes is VolumesInput
-        volumes_input_obj = VolumesInput(**{k: v for k, v in vol_daily_args.items() if k in VolumesInput.__fields__})
-        
-        # Missing fields default to 0
-        
-        req = SimulationRequest(
-            centre_id=payload.centre_id,
-            productivite=payload.productivite,
-            heures_net=8.0, # Default or passed? payload doesn't have it. Assume 8.
-            volumes=volumes_input_obj,
-            volumes_annuels=volumes_annuels_obj,
-            idle_minutes=0.0
-        )
-        
-        # Call the existing logic
-        result_full = simulate_vue_centre_optimisee(req, db)
-        
-        # D. Upsert Result (using calculated KPIs)
-        etp_rounded = result_full.get("total_etp_arrondi", 0)
-        etp_calc = result_full.get("total_etp_calcule", 0.0)
-        heures = result_full.get("total_heures", 0.0)
-        
-        upsert_simulation_result(db, sim_id, heures, etp_calc, etp_rounded)
-        
-        # E. Commit
-        db.commit()
-        
-        # F. Return full result with ID
-        result_full["simulation_id"] = sim_id
-        result_full["created_at"] = datetime.now().isoformat()
-        
-        return result_full
-
-    except Exception as e:
-        db.rollback()
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Transaction Failed: {e}")
-
-from app.services.simulation_run import get_simulation_run
-
-@router.get("/simulation/run/{simulation_id}")
-def read_simulation_run(simulation_id: int, db: Session = Depends(get_db)):
-    """
-    Get full details of a persisted simulation run.
-    """
-    data = get_simulation_run(db, simulation_id)
-    if not data:
-        raise HTTPException(status_code=404, detail="Simulation Run not found")
-    return data
-
-@router.get("/simulation/history")
-def get_history(
+@router.get("/history")
+def history_endpoint(
     centre_id: Optional[int] = None,
     user_id: Optional[int] = None,
     limit: int = 50,
@@ -630,35 +627,28 @@ def get_history(
     db: Session = Depends(get_db)
 ):
     """
-    Récupère l'historique des simulations avec pagination et filtres.
+    Récupère l'historique des simulations.
     """
     from app.services.simulation_run import get_simulation_history
     
-    history = get_simulation_history(
-        db=db,
-        centre_id=centre_id,
-        user_id=user_id,
-        limit=limit,
+    simulations = get_simulation_history(
+        db, 
+        centre_id=centre_id, 
+        user_id=user_id, 
+        limit=limit, 
         offset=offset
     )
-    
-    return {
-        "simulations": history,
-        "count": len(history),
-        "limit": limit,
-        "offset": offset
-    }
+    return {"simulations": simulations}
 
-@router.get("/simulation/{simulation_id}/replay")
-def get_replay_data(simulation_id: int, db: Session = Depends(get_db)):
+@router.get("/replay/{simulation_id}")
+def replay_endpoint(simulation_id: int, db: Session = Depends(get_db)):
     """
-    Récupère les données d'une simulation pour la rejouer.
+    Récupère les données complètes pour rejouer une simulation.
     """
     from app.services.simulation_run import get_simulation_for_replay
     
     data = get_simulation_for_replay(db, simulation_id)
     if not data:
-        raise HTTPException(status_code=404, detail="Simulation not found")
+        raise HTTPException(status_code=404, detail="Simulation non trouvée")
     
     return data
-

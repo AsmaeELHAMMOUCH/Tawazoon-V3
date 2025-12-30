@@ -67,10 +67,8 @@ export default function VueCategorie() {
                 // but I am replacing the block, so I must re-include it. 
 
                 // Option 2: Client Side Fallback
-                const [centres, cats] = await Promise.all([
-                    api.centres(),
-                    api.categorisations().catch(() => [])
-                ]);
+                const centres = await api.centres();
+                const cats = []; // Catégorisations non disponibles
 
                 const results = centres.map(c => {
                     // Normalize data
