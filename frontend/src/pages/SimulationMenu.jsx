@@ -132,6 +132,7 @@ export default function MenuAnalyseEffectifs() {
       return;
     }
 
+
     navigate(`/app/${sectionKey}/${item.key}`);
   };
 
@@ -331,7 +332,7 @@ export default function MenuAnalyseEffectifs() {
                   Simulations
                 </div>
                 <motion.div
-                  className="grid gap-3 sm:gap-4 grid-cols-1 xs:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
+                  className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
                   initial="hidden"
                   animate="visible"
                   variants={{
@@ -367,7 +368,7 @@ export default function MenuAnalyseEffectifs() {
                   Documents de process
                 </div>
                 <motion.div
-                  className="grid gap-3 sm:gap-4 grid-cols-1 xs:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
+                  className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
                   initial="hidden"
                   animate="visible"
                   variants={{

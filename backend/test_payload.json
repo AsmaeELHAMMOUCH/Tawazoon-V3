@@ -1,0 +1,46 @@
+{
+  "flux_arrivee": {
+    "amana": {
+      "GLOBAL": 10000,
+      "PART": 5000,
+      "PRO": 3000,
+      "DIST": 2000,
+      "AXES": 0
+    },
+    "co": {
+      "GLOBAL": 50000,
+      "PART": 20000,
+      "PRO": 15000,
+      "DIST": 10000,
+      "AXES": 5000
+    },
+    "cr": {
+      "GLOBAL": 30000,
+      "PART": 15000,
+      "PRO": 10000,
+      "DIST": 5000,
+      "AXES": 0
+    }
+  },
+  "guichet": {
+    "DEPOT": 1000,
+    "RECUP": 800
+  },
+  "flux_depart": {
+    "amana": {
+      "GLOBAL": 8000,
+      "PART": 4000,
+      "PRO": 2500,
+      "DIST": 1500,
+      "AXES": 0
+    },
+    "co": {
+      "GLOBAL": 45000,
+      "PART": 18000,
+      "PRO": 12000,
+      "DIST": 8000,
+      "AXES": 4000
+    }
+  },
+  "nb_jours_ouvres_an": 264
+}

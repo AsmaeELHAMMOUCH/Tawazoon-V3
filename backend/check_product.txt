@@ -1,0 +1,11 @@
+ID: 12677
+Nom: 'ecriture n° dépêches (Caisson CR MED)'
+Produit RAW: 'CR MED'
+Produit UPPER: 'CR MED'
+Unité: 'Caisson'
+Base: '60'
+Famille: 'Départ Camion Principal'
+
+=== TESTS DE MATCHING ===
+Match CR DEPART: True
+Match CO DEPART: False

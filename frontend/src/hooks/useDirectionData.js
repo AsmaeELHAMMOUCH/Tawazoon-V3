@@ -123,7 +123,8 @@ export function useDirectionData(api) {
                          etp_actuel: simResult.etp_actuel, // Update actual from simulation source if desired
                          ecart: simResult.ecart,
                          categorie: simResult.categorie, // Useful info
-                         heures: simResult.heures_calc
+                         heures: simResult.heures_calc,
+                         details_postes: simResult.details_postes
                      };
                  }
                  return centre;

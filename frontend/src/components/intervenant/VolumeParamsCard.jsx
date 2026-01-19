@@ -11,7 +11,11 @@ import {
   Gauge,
   MapPin,
   Lock,
+  FileUp,
+  Download,
 } from "lucide-react";
+import ExcelJS from "exceljs";
+import { saveAs } from "file-saver";
 
 // 5 lignes : Amana, CO, CR, E-Barkia, LRH
 const fluxRows = [
@@ -95,6 +99,24 @@ export default function VolumeParamsCard({
 
   // état simulation
   simDirty,
+
+  // 🆕 ED Props
+  edPercent,
+  setEdPercent,
+
+  // 🆕 Synchro Grille Flux
+  volumesFluxGrid,
+  setVolumesFluxGrid,
+
+  // 🆕 Axes
+  pctAxesArrivee,
+  setPctAxesArrivee,
+  pctAxesDepart,
+  setPctAxesDepart,
+
+  // 🆕 Collecte
+  pctCollecte,
+  setPctCollecte,
 }) {
   // ✅ style commun PROFESSIONAL DASHBOARD
   const baseInputClass =
@@ -106,28 +128,48 @@ export default function VolumeParamsCard({
 
   // Arrivée (hors Global)
   const [arriveeState, setArriveeState] = useState(() =>
-    Object.fromEntries(
-      fluxRows.map((r) => [r.key, { part: "", pro: "", dist: "", axes: "" }])
-    )
+    volumesFluxGrid?.arrivee && Object.keys(volumesFluxGrid.arrivee).length > 0
+      ? volumesFluxGrid.arrivee
+      : Object.fromEntries(
+        fluxRows.map((r) => [r.key, { part: "", pro: "", dist: "", axes: "" }])
+      )
   );
 
   // Départ
   const [departState, setDepartState] = useState(() =>
-    Object.fromEntries(
-      fluxRows.map((r) => [
-        r.key,
-        { global: "", part: "", pro: "", dist: "", axes: "" },
-      ])
-    )
+    volumesFluxGrid?.depart && Object.keys(volumesFluxGrid.depart).length > 0
+      ? volumesFluxGrid.depart
+      : Object.fromEntries(
+        fluxRows.map((r) => [
+          r.key,
+          { global: "", part: "", pro: "", dist: "", axes: "" },
+        ])
+      )
   );
 
   // Dépôt / Récupération
   const [depotRecupState, setDepotRecupState] = useState(() =>
-    Object.fromEntries(fluxRows.map((r) => [r.key, { depot: "", recup: "" }]))
+    volumesFluxGrid?.depotRecup && Object.keys(volumesFluxGrid.depotRecup).length > 0
+      ? volumesFluxGrid.depotRecup
+      : Object.fromEntries(fluxRows.map((r) => [r.key, { depot: "", recup: "" }]))
   );
 
   // 🔢 Heures nettes (premier output)
   const [heuresNet, setHeuresNet] = useState(null);
+
+  // 🆕 CR par caisson (pour règle CR Arrivé)
+  const [crParCaisson, setCrParCaisson] = useState(500);
+
+  // 🔄 Synchro ascendante : dès qu'un state local change, on met à jour la grille globale persistée
+  useEffect(() => {
+    if (setVolumesFluxGrid) {
+      setVolumesFluxGrid({
+        arrivee: arriveeState,
+        depart: departState,
+        depotRecup: depotRecupState,
+      });
+    }
+  }, [arriveeState, departState, depotRecupState, setVolumesFluxGrid]);
 
   const updateArrivee = (fluxKey, field, value) => {
     setArriveeState((prev) => ({
@@ -200,10 +242,11 @@ export default function VolumeParamsCard({
   );
 
   // 🔢 Calcul heures nettes
+  // ⚠️ IMPORTANT: 'heures' reçu en props est déjà baseHeuresNet (heures - idle time)
+  // Ne PAS soustraire à nouveau tempsMortMinutes pour éviter une double application
   const computeHeuresNet = () => {
     const h = typeof heures === "number" ? heures : 0;
-    const tm = typeof tempsMortMinutes === "number" ? tempsMortMinutes : 0;
-    return (h * 60 - tm) / 60;
+    return h; // Retourne directement les heures nettes déjà calculées
   };
 
   // buildVolumesFlux helper for onSimuler
@@ -222,6 +265,14 @@ export default function VolumeParamsCard({
 
       // Arrivée
       const arr = arriveeState[row.key] || {};
+
+      // 1. Ajouter GLOBAL Arrivée (stocké séparément)
+      const globalArrVal = Number(getGlobalArrivee(row.key) || 0);
+      if (globalArrVal > 0) {
+        list.push({ flux: fluxCode, sens: "ARRIVEE", segment: "GLOBAL", volume: globalArrVal });
+      }
+
+      // 2. Ajouter les segments détaillés (Part, Pro, Dist, Axes)
       Object.keys(arr).forEach(field => {
         const val = Number(arr[field] || 0);
         if (val > 0 && segmentsMap[field]) {
@@ -243,8 +294,23 @@ export default function VolumeParamsCard({
       if (Number(dr.depot || 0) > 0) list.push({ flux: fluxCode, sens: "DEPOT", segment: "GLOBAL", volume: Number(dr.depot) });
       if (Number(dr.recup || 0) > 0) list.push({ flux: fluxCode, sens: "RECUPERATION", segment: "GLOBAL", volume: Number(dr.recup) });
     });
+    console.log("🚀 [VolumeParamsCard] Payload volumes_flux construit:", list);
     return list;
   };
+
+  // 🔢 Calcul des totaux pour ED%
+  const totalAmanaArrivee = Number(amana || 0);
+  const totalAmanaDepart = Number(departState.amana?.global || 0);
+  const totalColisLegacy = Number(colis || 0);
+  // On considère que le total colis pour le calcul des sacs est la somme de tout ce qui est déclaré "colis/amana"
+  const colisTotal = totalAmanaArrivee + totalAmanaDepart + totalColisLegacy;
+
+  const edVal = Number(edPercent ?? 0);
+  const pourcSac = Math.max(0, 100 - edVal);
+  const colisEnSac = colisTotal * (pourcSac / 100);
+  const ratioSac = Number(colisAmanaParSac || 1);
+  // Arrondi supérieur par défaut pour les sacs
+  const nbSacsCalculated = Math.ceil(colisEnSac / (ratioSac > 0 ? ratioSac : 1));
 
   const handleSimuler = () => {
     const hn = computeHeuresNet();
@@ -253,10 +319,16 @@ export default function VolumeParamsCard({
     onSimuler({
       colis_amana_par_sac: Number(colisAmanaParSac || 0),
       courriers_par_sac: Number(courriersParSac || 0),
+      courriers_co_par_sac: Number(nbrCoSac || 0), // 🆕 Envoi spécifique CO
+      courriers_cr_par_sac: Number(nbrCrSac || 0), // 🆕 Envoi spécifique CR
       colis_par_collecte: Number(colisParCollecte || 1),
+      cr_par_caisson: Number(crParCaisson || 500), // 🆕 CR par caisson
 
       heures_net: hn,
       volumes_flux: buildVolumesFlux(), // Use the helper
+
+      // 🆕 Injection du nombre de sacs calculé (remplace le calcul backend)
+      sacs: nbSacsCalculated,
     });
   };
 
@@ -318,8 +390,237 @@ export default function VolumeParamsCard({
     );
   }
 
+  // 🆕 Règle métier : Tous les centres ont la main
+  const paramsDisabled = false;
+
   return (
     <div className="space-y-3">
+      {/* 📥 Barre d'outils Import / Export */}
+      <div className="flex justify-end gap-2 mb-2">
+        <button
+          onClick={async () => {
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet("Volumes");
+
+            // --- Définition des colonnes ---
+            // A=Flux, B=GlobalArr, C=PartArr, D=ProArr, E=DistArr, F=AxesArr, G=(vide), H=Depot, I=Recu, J=(vide), K=GlobalDep, L=PartDep, M=ProDep, N=DistDep, O=AxesDep
+
+            // Ligne 1 : En-têtes Mergés
+            worksheet.mergeCells('B1:F1'); // Flux Arrivée
+            worksheet.getCell('B1').value = 'Flux Arrivée';
+            worksheet.getCell('B1').alignment = { horizontal: 'center', vertical: 'middle' };
+            worksheet.getCell('B1').font = { bold: true };
+
+            worksheet.mergeCells('H1:I1'); // Guichet
+            worksheet.getCell('H1').value = 'Guichet';
+            worksheet.getCell('H1').alignment = { horizontal: 'center', vertical: 'middle' };
+            worksheet.getCell('H1').font = { bold: true };
+
+            worksheet.mergeCells('K1:O1'); // Flux Départ
+            worksheet.getCell('K1').value = 'Flux Départ';
+            worksheet.getCell('K1').alignment = { horizontal: 'center', vertical: 'middle' };
+            worksheet.getCell('K1').font = { bold: true };
+
+            // Ligne 2 : Sous-titres
+            const headerRow = worksheet.getRow(2);
+            headerRow.values = [
+              "Flux", // A
+              "Global", "Part.", "PRO", "Distr.", "Axes", // B-F (Arrivée)
+              "", // G
+              "Dépôt", "Reçu", // H-I (Guichet)
+              "", // J
+              "Global", "Part.", "PRO", "Distr.", "Axes" // K-O (Départ)
+            ];
+            headerRow.font = { bold: true };
+            headerRow.alignment = { horizontal: 'center' };
+
+            // Données (Lignes 3+)
+            const fluxList = ["Amana", "CO", "CR", "E-Barkia", "LRH"];
+            // Mapping des clés pour récupérer les valeurs actuelles
+            const fluxKeys = { "Amana": "amana", "CO": "co", "CR": "cr", "E-Barkia": "eb", "LRH": "lrh" };
+
+            fluxList.forEach(fluxLabel => {
+              const key = fluxKeys[fluxLabel];
+              // Récupérer valeurs actuelles (si dispos)
+              const arr = arriveeState[key] || {};
+              const dep = departState[key] || {};
+              const gui = depotRecupState[key] || {};
+
+              // Récupération Global Arrivée
+              let arrGlobal = 0;
+              switch (key) {
+                case "co": arrGlobal = courrierOrdinaire; break;
+                case "cr": arrGlobal = courrierRecommande; break;
+                case "amana": arrGlobal = amana; break;
+                case "eb": arrGlobal = ebarkia; break;
+                case "lrh": arrGlobal = lrh; break;
+              }
+
+              worksheet.addRow([
+                fluxLabel,         // A
+                arrGlobal || "",   // B
+                arr.part || "",    // C
+                arr.pro || "",     // D
+                arr.dist || "",    // E
+                arr.axes || "",    // F
+                "",                // G
+                gui.depot || "",   // H
+                gui.recup || "",   // I
+                "",                // J
+                dep.global || "",  // K
+                dep.part || "",    // L
+                dep.pro || "",     // M
+                dep.dist || "",    // N
+                dep.axes || ""     // O
+              ]);
+            });
+
+            // Styling borders
+            worksheet.eachRow((row, rowNumber) => {
+              if (rowNumber >= 1) {
+                row.eachCell((cell) => {
+                  cell.border = {
+                    top: { style: 'thin' },
+                    left: { style: 'thin' },
+                    bottom: { style: 'thin' },
+                    right: { style: 'thin' }
+                  };
+                });
+              }
+            });
+
+            // Largeurs colonnes
+            worksheet.getColumn(1).width = 15;
+            [2, 3, 4, 5, 6, 8, 9, 11, 12, 13, 14, 15].forEach(i => worksheet.getColumn(i).width = 12);
+
+            const buffer = await workbook.xlsx.writeBuffer();
+            saveAs(new Blob([buffer]), "Modele_Volumes_Grid.xlsx");
+          }}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded hover:bg-slate-50 hover:text-slate-800 transition-colors text-xs font-medium shadow-sm"
+        >
+          <Download className="w-3.5 h-3.5" />
+          Modèle Excel
+        </button>
+
+        <label className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded hover:bg-emerald-100 transition-colors text-xs font-semibold shadow-sm cursor-pointer">
+          <FileUp className="w-3.5 h-3.5" />
+          Importer Volumes
+          <input
+            type="file"
+            accept=".xlsx, .xls"
+            className="hidden"
+            onChange={async (e) => {
+              const file = e.target.files[0];
+              if (!file) return;
+
+              try {
+                const arrayBuffer = await file.arrayBuffer();
+                const workbook = new ExcelJS.Workbook();
+                await workbook.xlsx.load(arrayBuffer);
+                const worksheet = workbook.getWorksheet(1);
+
+                if (!worksheet) {
+                  alert("Fichier vide ou illisible.");
+                  return;
+                }
+
+                // COPIE PROFONDE pour éviter les mutations de références
+                const newArrivee = JSON.parse(JSON.stringify(arriveeState));
+                const newDepart = JSON.parse(JSON.stringify(departState));
+                const newDepotRecup = JSON.parse(JSON.stringify(depotRecupState));
+
+                let linesRead = 0;
+
+                const fluxMap = {
+                  "AMANA": "amana",
+                  "CO": "co",
+                  "CR": "cr",
+                  "E-BARKIA": "eb",
+                  "LRH": "lrh"
+                };
+
+                worksheet.eachRow((row, rowNumber) => {
+                  if (rowNumber < 3) return;
+
+                  const rawFlux = row.getCell(1).value;
+                  const fluxLabel = rawFlux ? String(rawFlux).trim().toUpperCase() : "";
+                  const key = fluxMap[fluxLabel];
+
+                  if (key) {
+                    linesRead++;
+
+                    // Helper Conversion ULTIME
+                    const getVal = (colIndex) => {
+                      const cell = row.getCell(colIndex);
+                      let v = cell.value;
+
+                      // 1. Gérer formules (objet { result, formula })
+                      if (v && typeof v === 'object') {
+                        if (v.result !== undefined && v.result !== null) {
+                          v = v.result;
+                        } else if (v.sharedFormula) {
+                          v = 0;
+                        }
+                      }
+
+                      // 2. Nettoyage agressif
+                      if (typeof v === 'string') {
+                        v = v.replace(/,/g, '.');
+                        // Supprime TOUT ce qui n'est pas Chiffre, Point ou Moins
+                        v = v.replace(/[^0-9.-]/g, "");
+                      }
+
+                      // 3. Conversion
+                      if (v === "" || v === null || v === undefined) return "";
+                      const n = parseFloat(v);
+                      return !isNaN(n) ? n : "";
+                    };
+
+                    // Arrivée Global -> Props
+                    const arrGlobal = getVal(2);
+                    if (arrGlobal !== "" && typeof setGlobalArrivee === 'function') {
+                      setGlobalArrivee(key, arrGlobal);
+                    }
+
+                    // Arrivée Détail -> State
+                    if (!newArrivee[key]) newArrivee[key] = {};
+                    const arrPart = getVal(3); if (arrPart !== "") newArrivee[key].part = arrPart;
+                    const arrPro = getVal(4); if (arrPro !== "") newArrivee[key].pro = arrPro;
+                    const arrDist = getVal(5); if (arrDist !== "") newArrivee[key].dist = arrDist;
+                    const arrAxes = getVal(6); if (arrAxes !== "") newArrivee[key].axes = arrAxes;
+
+                    // Guichet
+                    if (!newDepotRecup[key]) newDepotRecup[key] = {};
+                    const guiDepot = getVal(8); if (guiDepot !== "") newDepotRecup[key].depot = guiDepot;
+                    const guiRecu = getVal(9); if (guiRecu !== "") newDepotRecup[key].recup = guiRecu;
+
+                    // Départ
+                    if (!newDepart[key]) newDepart[key] = {};
+                    const depGlobal = getVal(11); if (depGlobal !== "") newDepart[key].global = depGlobal;
+                    const depPart = getVal(12); if (depPart !== "") newDepart[key].part = depPart;
+                    const depPro = getVal(13); if (depPro !== "") newDepart[key].pro = depPro;
+                    const depDist = getVal(14); if (depDist !== "") newDepart[key].dist = depDist;
+                    const depAxes = getVal(15); if (depAxes !== "") newDepart[key].axes = depAxes;
+                  }
+                });
+
+                // Batch updates
+                setArriveeState(newArrivee);
+                setDepartState(newDepart);
+                setDepotRecupState(newDepotRecup);
+
+                alert(`${linesRead} lignes de flux traitées.\nLes valeurs devraient s'afficher dans la grille.`);
+                e.target.value = '';
+
+              } catch (err) {
+                console.error("Erreur import Excel:", err);
+                alert("Erreur technique lors de l'import.");
+              }
+            }}
+          />
+        </label>
+      </div>
+
       {/* 2️⃣ Les 3 tableaux : Arrivée / Dépôt–Récupération / Départ */}
       <div className="bg-white/80 backdrop-blur-md border border-slate-200/60 shadow-sm rounded-lg p-2">
         <div className="flex flex-col xl:flex-row gap-2 justify-center items-start">
@@ -395,7 +696,7 @@ export default function VolumeParamsCard({
               <thead>
                 <tr className="border-b border-slate-100 text-slate-400 font-medium tracking-wide">
                   <th className="px-1 py-1 text-center font-normal uppercase text-[9px]">Dépôt</th>
-                  <th className="px-1 py-1 text-center font-normal uppercase text-[9px]">Récup.</th>
+                  <th className="px-1 py-1 text-center font-normal uppercase text-[9px]">Reçu</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
@@ -473,12 +774,14 @@ export default function VolumeParamsCard({
         )}
       </div>
 
+
+
       {/* 🟦 Paramètres Unités + État + Bouton - STICKY EN BAS */}
       <div className="sticky bottom-0 z-30 bg-white/95 backdrop-blur-md border border-slate-200/60 shadow-lg rounded-lg px-3 py-2 mt-3">
         <div className="flex flex-wrap items-center gap-3">
           {/* Nb Colis/sac (AMANA) */}
           <div className="flex items-center gap-1.5 min-w-[140px] flex-1">
-            <div className="w-6 h-6 rounded-full bg-orange-50 text-orange-600 flex items-center justify-center shrink-0">
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${paramsDisabled ? "bg-slate-100 text-slate-400" : "bg-orange-50 text-orange-600"}`}>
               <Package className="w-3 h-3" />
             </div>
             <div className="flex flex-col w-full">
@@ -488,14 +791,132 @@ export default function VolumeParamsCard({
               <input
                 type="number"
                 min={1}
+                disabled={paramsDisabled}
                 value={colisAmanaParSac}
                 onChange={(e) =>
                   setColisAmanaParSac(
                     e.target.value === "" ? 0 : Number(e.target.value)
                   )
                 }
-                className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full text-center"
+                className={`text-xs font-semibold focus:outline-none w-full text-center ${paramsDisabled ? "bg-transparent text-slate-400 cursor-not-allowed" : "bg-transparent text-slate-800"}`}
               />
+            </div>
+          </div>
+
+          <div className="w-px h-6 bg-slate-200 hidden md:block" />
+
+          {/* 🆕 % En dehors (ED) */}
+          <div className="flex items-center gap-1.5 min-w-[120px] flex-1">
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${paramsDisabled ? "bg-slate-100 text-slate-400" : "bg-red-50 text-red-600"}`} title="Pourcentage de colis traités hors sacs.">
+              <Archive className="w-3 h-3" />
+            </div>
+            <div className="flex flex-col w-full">
+              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                % En dehors (ED)
+              </label>
+              <div className="flex items-center">
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  disabled={paramsDisabled}
+                  value={edPercent}
+                  onChange={(e) => {
+                    const v = Math.min(100, Math.max(0, Number(e.target.value)));
+                    setEdPercent && setEdPercent(v);
+                  }}
+                  className={`text-xs font-semibold focus:outline-none w-full text-center ${paramsDisabled ? "bg-transparent text-slate-400 cursor-not-allowed" : "bg-transparent text-slate-800"}`}
+                />
+                <span className="text-[10px] text-slate-400 font-bold">%</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="w-px h-6 bg-slate-200 hidden md:block" />
+
+          {/* 🆕 % Axes Arrivée */}
+          <div className="flex items-center gap-1.5 min-w-[120px] flex-1">
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${paramsDisabled ? "bg-slate-100 text-slate-400" : "bg-indigo-50 text-indigo-600"}`}>
+              <ArrowDownRight className="w-3 h-3" />
+            </div>
+            <div className="flex flex-col w-full">
+              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                % Axes Arrivée
+              </label>
+              <div className="flex items-center">
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  disabled={paramsDisabled}
+                  value={pctAxesArrivee}
+                  onChange={(e) => {
+                    const v = e.target.value === "" ? 0 : Math.min(100, Math.max(0, Number(e.target.value)));
+                    setPctAxesArrivee && setPctAxesArrivee(v);
+                  }}
+                  className={`text-xs font-semibold focus:outline-none w-full text-center ${paramsDisabled ? "bg-transparent text-slate-400 cursor-not-allowed" : "bg-transparent text-slate-800"}`}
+                />
+                <span className="text-[10px] text-slate-400 font-bold">%</span>
+              </div>
+            </div>
+          </div>
+
+
+          <div className="w-px h-6 bg-slate-200 hidden md:block" />
+
+          {/* 🆕 % Axes Départ */}
+          <div className="flex items-center gap-1.5 min-w-[120px] flex-1">
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${paramsDisabled ? "bg-slate-100 text-slate-400" : "bg-purple-50 text-purple-600"}`}>
+              <ArrowUpRight className="w-3 h-3" />
+            </div>
+            <div className="flex flex-col w-full">
+              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                % Axes Départ
+              </label>
+              <div className="flex items-center">
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  disabled={paramsDisabled}
+                  value={pctAxesDepart}
+                  onChange={(e) => {
+                    const v = e.target.value === "" ? 0 : Math.min(100, Math.max(0, Number(e.target.value)));
+                    setPctAxesDepart && setPctAxesDepart(v);
+                  }}
+                  className={`text-xs font-semibold focus:outline-none w-full text-center ${paramsDisabled ? "bg-transparent text-slate-400 cursor-not-allowed" : "bg-transparent text-slate-800"}`}
+                />
+                <span className="text-[10px] text-slate-400 font-bold">%</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="w-px h-6 bg-slate-200 hidden md:block" />
+
+          {/* 🆕 % Collecte */}
+          <div className="flex items-center gap-1.5 min-w-[120px] flex-1">
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${paramsDisabled ? "bg-slate-100 text-slate-400" : "bg-green-50 text-green-600"}`}>
+              <Package className="w-3 h-3" />
+            </div>
+            <div className="flex flex-col w-full">
+              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                % Collecte
+              </label>
+              <div className="flex items-center">
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  disabled={paramsDisabled}
+                  value={pctCollecte}
+                  onChange={(e) => {
+                    const v = e.target.value === "" ? 0 : Math.min(100, Math.max(0, Number(e.target.value)));
+                    setPctCollecte && setPctCollecte(v);
+                  }}
+                  className={`text-xs font-semibold focus:outline-none w-full text-center ${paramsDisabled ? "bg-transparent text-slate-400 cursor-not-allowed" : "bg-transparent text-slate-800"}`}
+                />
+                <span className="text-[10px] text-slate-400 font-bold">%</span>
+              </div>
             </div>
           </div>
 
@@ -503,7 +924,7 @@ export default function VolumeParamsCard({
 
           {/* Nb CO/sac */}
           <div className="flex items-center gap-1.5 min-w-[120px] flex-1">
-            <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${paramsDisabled ? "bg-slate-100 text-slate-400" : "bg-blue-50 text-[#005EA8]"}`}>
               <Mail className="w-3 h-3" />
             </div>
             <div className="flex flex-col w-full">
@@ -513,6 +934,7 @@ export default function VolumeParamsCard({
               <input
                 type="number"
                 min={0}
+                disabled={paramsDisabled}
                 value={nbrCoSac}
                 onChange={(e) => {
                   const val = e.target.value;
@@ -521,7 +943,7 @@ export default function VolumeParamsCard({
                   const cr = parseNonNeg(nbrCrSac) ?? 0;
                   setCourriersParSac(co + cr);
                 }}
-                className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full text-center"
+                className={`text-xs font-semibold focus:outline-none w-full text-center ${paramsDisabled ? "bg-transparent text-slate-400 cursor-not-allowed" : "bg-transparent text-slate-800"}`}
               />
             </div>
           </div>
@@ -530,7 +952,7 @@ export default function VolumeParamsCard({
 
           {/* Nb CR/sac */}
           <div className="flex items-center gap-1.5 min-w-[120px] flex-1">
-            <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${paramsDisabled ? "bg-slate-100 text-slate-400" : "bg-blue-50 text-[#005EA8]"}`}>
               <Mail className="w-3 h-3" />
             </div>
             <div className="flex flex-col w-full">
@@ -540,6 +962,7 @@ export default function VolumeParamsCard({
               <input
                 type="number"
                 min={0}
+                disabled={paramsDisabled}
                 value={nbrCrSac}
                 onChange={(e) => {
                   const val = e.target.value;
@@ -548,7 +971,33 @@ export default function VolumeParamsCard({
                   const cr = parseNonNeg(val) ?? 0;
                   setCourriersParSac(co + cr);
                 }}
-                className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full text-center"
+                className={`text-xs font-semibold focus:outline-none w-full text-center ${paramsDisabled ? "bg-transparent text-slate-400 cursor-not-allowed" : "bg-transparent text-slate-800"}`}
+              />
+            </div>
+          </div>
+
+          <div className="w-px h-6 bg-slate-200 hidden md:block" />
+
+          {/* 🆕 CR par caisson */}
+          <div className="flex items-center gap-1.5 min-w-[140px] flex-1">
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${paramsDisabled ? "bg-slate-100 text-slate-400" : "bg-purple-50 text-purple-600"}`}>
+              <Archive className="w-3 h-3" />
+            </div>
+            <div className="flex flex-col w-full">
+              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                CR/caisson
+              </label>
+              <input
+                type="number"
+                min={1}
+                disabled={paramsDisabled}
+                value={crParCaisson}
+                onChange={(e) =>
+                  setCrParCaisson(
+                    e.target.value === "" ? 500 : Number(e.target.value)
+                  )
+                }
+                className={`text-xs font-semibold focus:outline-none w-full text-center ${paramsDisabled ? "bg-transparent text-slate-400 cursor-not-allowed" : "bg-transparent text-slate-800"}`}
               />
             </div>
           </div>
@@ -570,7 +1019,7 @@ export default function VolumeParamsCard({
           {/* Bouton Lancer Simulation */}
           <div className="flex items-center">
             <button
-              onClick={onSimuler}
+              onClick={handleSimuler}
               disabled={!centre || loading?.simulation}
               className={`px-4 py-1.5 rounded-full font-bold text-xs transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:pointer-events-none
                 ${!centre ? "bg-slate-300 text-slate-500 cursor-not-allowed" : "bg-gradient-to-r from-[#005EA8] to-blue-600 text-white hover:scale-105 active:scale-95 shadow-md hover:shadow-lg"}
@@ -581,6 +1030,21 @@ export default function VolumeParamsCard({
             </button>
           </div>
         </div>
+
+        {/* 🆕 Résumé Calcul Sacs (Read-only) - MASQUÉ */}
+        {false && (
+          <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-600">
+            <div className="flex items-center gap-3">
+              {Math.round(colisEnSac) > 0 && (
+                <>
+                  <span className="font-semibold text-slate-500 uppercase tracking-wider">Impact ED% :</span>
+                  <span>Colis en sac ({pourcSac}%) : <strong className="text-slate-800">{formatThousands(Math.round(colisEnSac))}</strong></span>
+                </>
+              )}
+            </div>
+            {ratioSac <= 0 && <span className="text-red-500 font-bold flex items-center gap-1"><Lock className="w-3 h-3" /> Config invalide (NB/SAC ≤ 0)</span>}
+          </div>
+        )}
       </div>
     </div>
   );

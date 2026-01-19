@@ -12,8 +12,9 @@ from app.schemas.models import (
     VolumesInput,
     VolumesAnnuels,
 )
-from app.services.simulation import calculer_simulation
+from app.services.simulation import calculer_simulation, calculer_simulation_sql
 from app.services.utils import round_half_up
+from app.models.db_models import VolumeSimulation
 
 router = APIRouter(tags=["simulation"])
 
@@ -54,6 +55,11 @@ from app.services.simulation_shared import (
     regroup_tasks_for_scenarios,
     creer_tache_regroupee
 )
+from app.services.simulation_run import (
+    insert_simulation_run,
+    bulk_insert_volumes,
+    upsert_simulation_result
+)
 
 # -------------------------------------------------------------------
 # /simulate : Vue Intervenant
@@ -61,6 +67,64 @@ from app.services.simulation_shared import (
 @router.post("/simulate", response_model=SimulationResponse)
 def simulate_effectifs(request: SimulationRequest, db: Session = Depends(get_db)):
     try:
+        # 🆕 CHECK FOR NEW DETAILED SIMULATION MODE
+        if request.volumes_details and len(request.volumes_details) > 0:
+            print("==================== REQUEST RECEIVED /simulate (DETAILED SQL MODE) ====================", flush=True)
+            
+            # 1. Create Simulation Run
+            sim_id = insert_simulation_run(
+                db=db,
+                centre_id=request.centre_id,
+                productivite=request.productivite,
+                commentaire=getattr(request, 'commentaire', None),
+                user_id=getattr(request, 'user_id', None)
+            )
+            print(f"✅ Created Simulation Run #{sim_id}", flush=True)
+            
+            # 2. Insert Volumes into VolumeSimulation
+            try:
+                # We can use bulk_save_objects for speed or simple add_all
+                vol_objects = [
+                    VolumeSimulation(
+                        simulation_id=sim_id,
+                        centre_poste_id=v.centre_poste_id,
+                        flux_id=v.flux_id,
+                        sens_id=v.sens_id,
+                        segment_id=v.segment_id,
+                        volume=v.volume
+                    )
+                    for v in request.volumes_details
+                ]
+                db.bulk_save_objects(vol_objects)
+                db.commit()
+            except Exception as e:
+                db.rollback()
+                raise HTTPException(status_code=500, detail=f"Failed to insert volume details: {e}")
+            
+            # 3. Calculate using SQL
+            resultat = calculer_simulation_sql(
+                db=db, 
+                simulation_id=sim_id, 
+                heures_net_jour=request.heures_net or 8.0,
+                productivite=request.productivite
+            )
+            
+            # 4. Save Result Stats
+            upsert_simulation_result(
+                db=db,
+                simulation_id=sim_id,
+                heures=resultat.total_heures or 0.0,
+                etp_calc=resultat.fte_calcule or 0.0,
+                etp_arr=resultat.fte_arrondi or 0
+            )
+            db.commit()
+            
+            return resultat
+
+        # -----------------------------------------------------------
+        # LEGACY / FALLBACK LOGIC
+        # -----------------------------------------------------------
+
         # 1) tâches
         sql = """
     SELECT 
@@ -69,11 +133,14 @@ def simulate_effectifs(request: SimulationRequest, db: Session = Depends(get_db)
         t.phase, 
         t.unite_mesure, 
         t.moyenne_min, 
+        t.famille_uo, -- ✅ Ajouté pour règle complexité
         t.centre_poste_id,
 
-        cp.poste_id
+        cp.poste_id,
+        p.label as poste_label -- ✅ Ajouté pour règle complexité
     FROM dbo.taches t
     INNER JOIN dbo.centre_postes cp ON cp.id = t.centre_poste_id
+    LEFT JOIN dbo.postes p ON p.id = cp.poste_id
     WHERE 1=1
 """
         params: Dict[str, Any] = {}
@@ -82,7 +149,9 @@ def simulate_effectifs(request: SimulationRequest, db: Session = Depends(get_db)
             sql += " AND cp.centre_id = :centre_id"
             params["centre_id"] = request.centre_id
 
-        if request.poste_id:
+        # ✅ Ne filtrer par poste_id que s'il est fourni (pas null)
+        # Cela permet de gérer le cas __ALL__ où poste_id est null
+        if request.poste_id is not None:
             sql += " AND cp.poste_id = :poste_id"
             params["poste_id"] = request.poste_id
 
@@ -120,15 +189,19 @@ def simulate_effectifs(request: SimulationRequest, db: Session = Depends(get_db)
 
 
         # DEBUG : vérifier les ratios reçus (Vue Intervenant)
-        print("==================== REQUEST RECEIVED /simulate (VUE INTERVENANT) ====================", flush=True)
-        print(f"DEBUG simulate centre_id = {request.centre_id}", flush=True)
-        print(f"DEBUG simulate poste_id = {request.poste_id}", flush=True)
-        print(f"DEBUG simulate productivite = {request.productivite}", flush=True)
-        print(f"DEBUG simulate heures_net = {request.heures_net}", flush=True)
-        print(f"DEBUG simulate volumes_journaliers = {volumes_journaliers}", flush=True)
-        print(f"DEBUG simulate volumes_annuels (va_dict) = {va_dict}", flush=True)
-        print(f"DEBUG simulate nb taches finales = {len(taches_finales)}", flush=True)
+        print("\n" + "="*80, flush=True)
+        print("🎯 [BACKEND - STEP 1] API /simulate - Requête reçue (VUE INTERVENANT)", flush=True)
+        print("="*80, flush=True)
+        print(f"   Centre ID: {request.centre_id}", flush=True)
+        print(f"   Poste ID: {request.poste_id}", flush=True)
+        print(f"   Productivité: {request.productivite}%", flush=True)
+        print(f"   Heures nettes: {request.heures_net}h", flush=True)
+        print(f"   Volumes journaliers: {volumes_journaliers}", flush=True)
+        print(f"   Volumes annuels: {va_dict}", flush=True)
+        print(f"   Nombre de tâches: {len(taches_finales)}", flush=True)
+        print("="*80 + "\n", flush=True)
 
+        print(f"🔄 [BACKEND - STEP 2] Appel du moteur de calcul...", flush=True)
         # 4) calcul
         resultat = calculer_simulation(
             taches=taches_finales,
@@ -138,6 +211,12 @@ def simulate_effectifs(request: SimulationRequest, db: Session = Depends(get_db)
             volumes_annuels=va_dict,
             volumes_mensuels=None,
         )
+        
+        print(f"\n✅ [BACKEND - STEP 3] Calcul terminé:", flush=True)
+        print(f"   ETP: {resultat.fte_arrondi}", flush=True)
+        print(f"   Heures totales: {resultat.total_heures}h", flush=True)
+        print(f"   Nombre de tâches détaillées: {len(resultat.details_taches or [])}", flush=True)
+        print("="*80 + "\n", flush=True)
         
         # 🆕 5) SAUVEGARDE AUTOMATIQUE DE LA SIMULATION
         try:
@@ -225,6 +304,7 @@ def simulate_vue_centre_optimisee(
             FROM dbo.centres c
             WHERE c.id = :centre_id
         """
+        print("🔍 [DEBUG] REQUETE SQL MISE A JOUR (FAMILLE + POSTE) CHARGÉE", flush=True)
         centre_label = (
             db.execute(text(sql_centre), {"centre_id": request.centre_id}).scalar()
             or f"Centre {request.centre_id}"
@@ -270,11 +350,14 @@ def simulate_vue_centre_optimisee(
         t.phase, 
         t.unite_mesure, 
         t.moyenne_min, 
+        t.famille_uo, -- ✅ INDISPENSABLE pour la règle (condition famille_uo='Distribution locale')
         t.centre_poste_id,
 
-        cp.poste_id
+        cp.poste_id,
+        p.label as poste_label -- ✅ Ajout du label du poste pour la règle complexité
     FROM dbo.taches t
     INNER JOIN dbo.centre_postes cp ON cp.id = t.centre_poste_id
+    LEFT JOIN dbo.postes p ON p.id = cp.poste_id
     WHERE cp.centre_id = :centre_id
     ORDER BY t.nom_tache
 """
@@ -652,3 +735,19 @@ def replay_endpoint(simulation_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Simulation non trouvée")
     
     return data
+
+from app.services.national_v2_service import process_national_simulation
+from app.schemas.direction_sim import NationalSimRequest, NationalSimResponse
+
+@router.post("/national", response_model=NationalSimResponse)
+def national_simulation(
+    request: NationalSimRequest, db: Session = Depends(get_db)
+):
+    try:
+        print("🔹 [NATIONAL] Starting National Simulation...", flush=True)
+        return process_national_simulation(db, request)
+    except Exception as e:
+        import traceback
+        print(f"❌ ERREUR national_simulation: {e}", flush=True)
+        print(traceback.format_exc(), flush=True)
+        raise HTTPException(status_code=500, detail=str(e))

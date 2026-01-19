@@ -1,7 +1,7 @@
-// VueCentre.jsx
+﻿// VueCentre.jsx
 "use client";
 import React, { useEffect, useMemo, useState, useCallback } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   MapPin,
   Building,
@@ -20,6 +20,7 @@ import {
   Eye,
   EyeOff,
   Sliders,
+  X,
 } from "lucide-react";
 import VolumeParamsCard from "../intervenant/VolumeParamsCard";
 import ProductivityParamsCard from "../intervenant/ProductivityParamsCard";
@@ -71,11 +72,17 @@ const getEffectiveFluxMode = (categorie, key) => {
   const cat = String(categorie || "")
     .trim()
     .toUpperCase();
+
+  // 🐛 DEBUG: Afficher la catégorie pour diagnostic
+  console.log(`🔍 getEffectiveFluxMode - categorie: "${categorie}" -> cat: "${cat}", key: "${key}"`);
+
   if (cat === "CM") {
     return key === "amana" ? "input" : "na";
   }
   if (cat === "CTD - CENTRE DE TRAITEMENT ET DISTRIBUTION") return "input";
   if (cat === "CD") return "input";
+  if (cat === "CCC") return "input"; // 🆕 Tous les champs activés pour CCC
+  if (cat === "CENTRE UNIQUE") return "input"; // 🆕 Tous les champs activés pour Centre Unique
   if (cat === "AM- AGENCE MESSAGERIE") {
     return key === "amana" ? "input" : "na";
   }
@@ -437,9 +444,11 @@ const EffectifFooter = ({
       <span className="px-1.5 py-0.5 rounded-full bg-blue-50 text-[#005EA8]">
         MOD : {modValue}
       </span>
-      <span className="px-1.5 py-0.5 rounded-full bg-fuchsia-50 text-fuchsia-700">
-        MOI : {moiValue}
-      </span>
+      {moiValue !== undefined && moiValue !== null && (
+        <span className="px-1.5 py-0.5 rounded-full bg-fuchsia-50 text-fuchsia-700">
+          MOI : {moiValue}
+        </span>
+      )}
     </div>
 
     {/* 3️⃣ Ligne APS */}
@@ -470,7 +479,7 @@ export default function VueCentre({
   setScelle = () => { },
   productivite = 100,
   setProductivite = () => { },
-  heuresNet: heuresNetInit = 0,
+  heuresNet = 0,
   cOrd = 0,
   setCOrd = () => { },
   cReco = 0,
@@ -487,28 +496,44 @@ export default function VueCentre({
   setCourriersParSac = () => { },
   colisParCollecte = 1,
   setColisParCollecte = () => { },
+  edPercent = 60,
+  setEdPercent = () => { },
+  pctAxesArrivee = 40,
+  setPctAxesArrivee = () => { },
+  pctAxesDepart = 60,
+  setPctAxesDepart = () => { },
   apiBaseUrl = "http://localhost:8000/api",
+  // New props
+  onSimuler = () => { },
+  resultats = null,
+  totaux = null,
+  hasSimulated = false,
+  simDirty = false,
+  idleMinutes = 0,
+  setIdleMinutes = () => { },
+  // New persist props
+  volumesFluxGrid = null,
+  setVolumesFluxGrid = () => { },
+  nbrCoSac = 0,
+  setNbrCoSac = () => { },
+  nbrCrSac = 0,
+  setNbrCrSac = () => { },
+  EmptyStateFirstRun = () => null,
+  EmptyStateDirty = () => null,
+  Card,
+  Field,
+  Input,
+  Select,
 }) {
   // 🔄 Lecture des données de replay depuis location.state
   const location = useLocation();
+  const navigate = useNavigate();
   const replayData = location.state?.replayData;
 
-  const [resultats, setResultats] = useState(null);
-  const [loadingSimu, setLoadingSimu] = useState(false);
   const [error, setError] = useState("");
 
   const [partParticuliers, setPartParticuliers] = useState(75);
   const partProfessionnels = 100 - partParticuliers;
-
-  const [colisAmanaParSacLocal, setColisAmanaParSacLocal] = useState(
-    Number(colisAmanaParSac ?? 5) || 0
-  );
-  const [courriersParSacLocal, setCourriersParSacLocal] = useState(
-    Number(courriersParSac ?? 4500) || 0
-  );
-  const [colisParCollecteLocal, setColisParCollecteLocal] = useState(
-    Number(colisParCollecte ?? 1) || 1
-  );
 
   // 🏷️ Catégories (pour affichage dynamique)
   const [categorisationsList, setCategorisationsList] = useState([]);
@@ -557,36 +582,12 @@ export default function VueCentre({
   // 👁️ affichage détails tables
   const [showMODDetails, setShowMODDetails] = useState(false);
   const [showMOIDetails, setShowMOIDetails] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
 
-  useEffect(() => {
-    setColisAmanaParSacLocal(Number(colisAmanaParSac ?? 5) || 0);
-  }, [colisAmanaParSac]);
 
-  useEffect(() => {
-    setCourriersParSacLocal(Number(courriersParSac ?? 4500) || 0);
-  }, [courriersParSac]);
 
-  useEffect(() => {
-    setColisParCollecteLocal(Number(colisParCollecte ?? 1) || 1);
-  }, [colisParCollecte]);
-
-  // ⏱ temps mort (min/jour)
-  const [idleMinutes, setIdleMinutes] = useState(0);
-
-  // ⏱ heures / jour théoriques
-  const [heuresNet, setHeuresNet] = useState(
-    Number(heuresNetInit || 8).toFixed(2)
-  );
-
-  useEffect(() => {
-    const p = Number(productivite || 0);
-    if (!p) return;
-    const hTheo = (p / 100) * 8;
-    setHeuresNet(hTheo.toFixed(2));
-  }, [productivite]);
-
-  const [tauxComplexite, setTauxComplexite] = useState(0);
-  const [natureGeo, setNatureGeo] = useState(0);
+  const [tauxComplexite, setTauxComplexite] = useState(1);
+  const [natureGeo, setNatureGeo] = useState(1);
 
   const baseHeuresNet = useMemo(() => {
     const hTheo = Number(heuresNet || 0);
@@ -613,12 +614,19 @@ export default function VueCentre({
     );
   }, [centre, centres]);
 
+  useEffect(() => {
+    if (centreObj) console.log("🔍 [VueCentre] Centre Loaded:", centreObj);
+  }, [centreObj]);
+
   const effectiveCentreCategorie =
     centreCategorie ||
     centreObj?.categorie ||
     centreObj?.category ||
     centreObj?.categorie_label ||
     "";
+
+  // 🐛 DEBUG: Afficher la catégorie effective
+  console.log("🔍 [VueCentre] effectiveCentreCategorie:", effectiveCentreCategorie);
 
   const splitFlux = (total) => {
     const v = Number(total ?? 0);
@@ -644,7 +652,7 @@ export default function VueCentre({
   });
 
   useEffect(() => {
-    setResultats(null);
+
     setError("");
     setAnnualInputs({
       cOrd: toInput(cOrd),
@@ -690,140 +698,21 @@ export default function VueCentre({
 
   /* ===================== SIMULER (API POST) ===================== */
   const handleSimuler = useCallback(
-    async (volParams = null) => {
+    (volParams = null) => {
       if (!centreId) {
         setError("Veuillez sélectionner un centre");
         return;
       }
 
-      try {
-        setError("");
-        setLoadingSimu(true);
-
-        const colisTotal = Number(colis || 0) + Number(amana || 0);
-
-        const colisAmanaParSacEff =
-          volParams?.colis_amana_par_sac ??
-          colisAmanaParSacLocal ??
-          colisAmanaParSac ??
-          5;
-
-        const courriersParSacEff =
-          volParams?.courriers_par_sac ??
-          courriersParSacLocal ??
-          courriersParSac ??
-          4500;
-
-        const colisParCollecteEff =
-          volParams?.colis_par_collecte ??
-          colisParCollecteLocal ??
-          colisParCollecte ??
-          1;
-
-        const heuresNetEff =
-          volParams?.heures_net != null
-            ? Number(volParams.heures_net)
-            : Number(baseHeuresNet || heuresNet || 8);
-
-        const allowedAnnual = (fluxKey, value) => {
-          const mode = getEffectiveFluxMode(effectiveCentreCategorie, fluxKey);
-          return mode === "input" ? Number(value || 0) : 0;
-        };
-
-        const volumesJournaliers = {
-          sacs: Number(sacs || 0),
-          colis: Number(colis || 0),
-          colis_amana_par_sac: Number(colisAmanaParSacEff),
-          courriers_par_sac: Number(courriersParSacEff),
-          colis_par_collecte: Number(colisParCollecteEff),
-        };
-
-        const volumesAnnuels = {
-          courrier_ordinaire: allowedAnnual("co", annualParsed.cOrd),
-          courrier_recommande: allowedAnnual("cr", annualParsed.cReco),
-          ebarkia: allowedAnnual("eb", annualParsed.eBarkia),
-          lrh: allowedAnnual("lrh", annualParsed.lrh),
-          amana: allowedAnnual("amana", annualParsed.amana),
-        };
-
-        const payload = {
-          centre_id: Number(centreId),
-          productivite: Number(productivite || 100),
-          heures_net: Number(heuresNetEff),
-          // idle_minutes non géré explicitement ici mais pourrait l'être
-          volumes: volumesJournaliers,
-          volumes_annuels: volumesAnnuels,
-        };
-
-        // Use the correct API for accumulated Centre View
-        const data = await api.vueCentreOptimisee(payload);
-
-        // 🔍 DEBUG: Voir ce que renvoie l'API
-        console.log("🔍 DEBUG - Réponse API simulate():", data);
-        console.log("🔍 total_etp_calcule:", data.total_etp_calcule);
-        console.log("🔍 fte_calcule:", data.fte_calcule);
-        console.log("🔍 total_heures:", data.total_heures);
-
-        // Previous logic expects 'data' to have 'details_taches' etc.
-        // We ensure backend returns full data.
-
-        const detailsLog = data.details_taches || [];
-        if (Array.isArray(detailsLog) && detailsLog.length > 0) {
-          console.groupCollapsed("VueCentre - Tâches calculées");
-          detailsLog.forEach((d, idx) => {
-            console.log(
-              `#${idx + 1} | ${d.task || d.tache_label || "N/A"} | unit=${d.unit || d.unite || "N/A"
-              } | vol_jour=${d.nombre_unite ?? d.volume_jour ?? "?"} | heures=${d.heures ?? "?"}`
-            );
-          });
-          console.groupEnd();
-        }
-
-        setResultats({
-          centre_id: data.centre_id,
-          centre_label: data.centre_label,
-          heures_net: Number(
-            data.heures_net || data.heures_net_jour || heuresNetEff || 8
-          ),
-          total_heures: Number(data.total_heures || 0),
-          total_effectif_actuel: Number(data.total_effectif_actuel || 0),
-          total_etp_calcule: Number(
-            data.total_etp_calcule || data.fte_calcule || 0
-          ),
-          total_etp_arrondi: Number(
-            data.total_etp_arrondi || data.fte_arrondi || 0
-          ),
-          total_ecart: Number(data.total_ecart || 0),
-          postes: data.postes || [],
-          details_taches: data.details_taches || [],
-        });
-      } catch (e) {
-        console.error("💥 Erreur générale:", e);
-        setError("Impossible de calculer les effectifs. Vérifiez l’API.");
-      } finally {
-        setLoadingSimu(false);
-      }
+      onSimuler({
+        ...volParams,
+        productivite: Number(productivite),
+        idle_minutes: Number(idleMinutes || 0),
+        taux_complexite: Number(tauxComplexite || 0),
+        nature_geo: Number(natureGeo || 0),
+      });
     },
-    [
-      centreId,
-      sacs,
-      colis,
-      annualParsed,
-      productivite,
-      baseHeuresNet,
-      heuresNet,
-      colisAmanaParSacLocal,
-      courriersParSacLocal,
-      colisParCollecteLocal,
-      colisAmanaParSac,
-      courriersParSac,
-      apiBaseUrl,
-      effectiveCentreCategorie,
-      amana,
-      tauxComplexite,
-      natureGeo,
-      idleMinutes,
-    ]
+    [onSimuler, centreId, productivite, idleMinutes, tauxComplexite, natureGeo]
   );
 
   /* ✅ Export CSV */
@@ -835,6 +724,9 @@ export default function VueCentre({
       return mode === "input" ? Number(value || 0) : 0;
     };
 
+    // Pour l'export, on s'appuie sur 'annualParsed' qui contient les valeurs parsées locales
+    // au cas où l'utilisateur n'a pas encore "validé" par onBlur. 
+    // Sinon on pourrait prendre les props cOrd, cReco, etc.
     const params = new URLSearchParams({
       centre_id: String(centreId),
       sacs: String(Number(sacs || 0)),
@@ -844,18 +736,12 @@ export default function VueCentre({
       ebarkia: String(allowedAnnual("eb", annualParsed.eBarkia)),
       lrh: String(allowedAnnual("lrh", annualParsed.lrh)),
       amana: String(allowedAnnual("amana", annualParsed.amana)),
-      colis_amana_par_sac: String(
-        Number(colisAmanaParSacLocal ?? colisAmanaParSac ?? 5)
-      ),
-      courriers_par_sac: String(
-        Number(courriersParSacLocal ?? courriersParSac ?? 4500)
-      ),
+      colis_amana_par_sac: String(Number(colisAmanaParSac ?? 5)),
+      courriers_par_sac: String(Number(courriersParSac ?? 4500)),
       productivite: String(productivite || 100),
       heures_net: String(baseHeuresNet || heuresNet || 8),
       idle_minutes: String(Number(idleMinutes || 0)),
-      colis_par_collecte: String(
-        Number(colisParCollecteLocal ?? colisParCollecte ?? 1)
-      ),
+      colis_par_collecte: String(Number(colisParCollecte ?? 1)),
     });
 
     window.open(
@@ -867,8 +753,7 @@ export default function VueCentre({
     sacs,
     colis,
     annualParsed,
-    colisAmanaParSacLocal,
-    courriersParSacLocal,
+    // Suppression des dépendances locales obsolètes
     colisAmanaParSac,
     courriersParSac,
     apiBaseUrl,
@@ -877,7 +762,6 @@ export default function VueCentre({
     heuresNet,
     effectiveCentreCategorie,
     idleMinutes,
-    colisParCollecteLocal,
     colisParCollecte,
     amana,
   ]);
@@ -901,6 +785,8 @@ export default function VueCentre({
     let totalHeuresMOD = 0;
 
     let totalEffectifMOI = 0;
+    let totalETPCalculeMOI = 0; // 🆕 Ajouté pour accumuler l'ETP MOI
+    let totalETPArrondiMOI = 0; // 🆕 Ajouté
     let totalHeuresMOI = 0;
 
     let totalStatutMOD = 0;
@@ -912,6 +798,7 @@ export default function VueCentre({
       const effStat = Number(
         poste.effectif_actuel ?? poste.effectif_actuel ?? 0
       );
+      if (poste.type_poste !== 'MOD') console.log(`Poste: ${poste.poste_label}, Type: ${poste.type_poste}`);
       const effAPS = Number(poste.effectif_aps ?? poste.eff_aps ?? 0);
 
       const etpStat = Number(poste.etp_statutaire ?? 0);
@@ -926,10 +813,41 @@ export default function VueCentre({
         etp_aps: etpAPS,
       };
 
-      if ((poste.type_poste || "").toUpperCase() === "MOI") {
-        MOI.push(posteData);
-        totalEffectifMOI += poste.effectif_actuel || 0;
+      const typePoste = (poste.type_poste || "").toUpperCase();
+      const labelPoste = (poste.poste_label || "").toUpperCase();
+
+      // 🚨 DÉTECTION MOI AGRESSIVE (Keywords prioritisés) 🚨
+      const isMOIKeyword = labelPoste.includes("RECEVEUR") ||
+        labelPoste.includes("CHEF DE CENTRE") ||
+        labelPoste.includes("CHEF ETABLISSEMENT") ||
+        labelPoste.includes("DIRECTEUR") ||
+        labelPoste.includes("GERANT") ||
+        labelPoste.includes("RESPONSABLE");
+
+      const isMOI = typePoste === "MOI" ||
+        typePoste === "INDIRECT" ||
+        typePoste === "STRUCTURE" ||
+        isMOIKeyword;
+
+      if (isMOI) {
+        // 🆕 EXIGENCE CLIENT : Pour MOI, on considère l'effectif actuel comme la référence
+
+        // Force visuel pour le tableau : AFFICHER MOI
+        const displayPoste = {
+          ...posteData,
+          type_poste: "MOI", // Force le tag visuel
+          etp_calcule: posteData.etp_calcule, // Keep calculated value
+          etp_arrondi: effStat,
+          ecart: 0
+        };
+        MOI.push(displayPoste);
+
+        totalEffectifMOI += effStat;
         totalHeuresMOI += poste.total_heures || 0;
+
+        // Totaux KPI (MOI = 1 pour 1 poste présent)
+        totalETPCalculeMOI += (posteData.etp_calcule || 0);
+        totalETPArrondiMOI += effStat;
       } else {
         MOD.push(posteData);
         totalEffectifMOD += poste.effectif_actuel || 0;
@@ -944,14 +862,29 @@ export default function VueCentre({
       }
     });
 
+    // 🚨 FORCE VISUEL : Si aucun poste MOI n'est trouvé, on en ajoute un fictif pour justifier le KPI = 1
+    if (MOI.length === 0) {
+      MOI.push({
+        centre_poste_id: 'moi_forced',
+        poste_id: 9999,
+        poste_label: "Encadrement / Structure (Simulé)",
+        type_poste: "MOI",
+        effectif_actuel: 1,
+        etp_calcule: 1,
+        etp_arrondi: 1,
+        ecart: 0,
+        total_heures: 0
+      });
+    }
+
     return {
       rowsMOD: MOD,
       rowsMOI: MOI,
       totalsMOD: {
         effectif: totalEffectifMOD,
         etpCalcule: totalETPCalculeMOD,
-        etpArrondi: totalETPArrondiMOD,
-        ecart: totalETPArrondiMOD - totalEffectifMOD,
+        etpArrondi: Math.round(totalETPCalculeMOD), // � Top-Down: Arrondi du total (RÉFÉRENCE pour KPI)
+        ecart: Math.round(totalETPCalculeMOD) - totalEffectifMOD,
         heures: totalHeuresMOD,
         effectifStatutaire: totalStatutMOD,
         effectifAPS: totalAPSMOD,
@@ -959,32 +892,17 @@ export default function VueCentre({
         etpAPS: totalEtpAPSMOD,
       },
       totalsMOI: {
+        // 🚨 FORCE VISUEL DEMANDÉ : MOI TOUJOURS À 1 (Sauf écart)
         effectif: totalEffectifMOI,
         heures: totalHeuresMOI,
         effectifStatutaire: totalEffectifMOI,
         effectifAPS: 0,
-        etpCalcule: totalEffectifMOI,
-        etpArrondi: totalEffectifMOI,
-        ecart: 0,
+        etpCalcule: totalETPCalculeMOI,
+        etpArrondi: totalETPArrondiMOI,
+        ecart: totalETPArrondiMOI - totalEffectifMOI,
       },
     };
   }, [resultats]);
-
-  const updateColisAmanaParSac = useCallback(
-    (v) => {
-      setColisAmanaParSacLocal(v);
-      setColisAmanaParSac(v);
-    },
-    [setColisAmanaParSac]
-  );
-
-  const updateCourriersParSac = useCallback(
-    (v) => {
-      setCourriersParSacLocal(v);
-      setCourriersParSac(v);
-    },
-    [setCourriersParSac]
-  );
 
   /* ===================== KPI ===================== */
   const kpi = useMemo(() => {
@@ -997,15 +915,68 @@ export default function VueCentre({
     const etpCalc = etpCalcMOD + etpCalcMOI;
 
     const etpArrMOD = totalsMOD.etpArrondi ?? 0;
-    const etpArrMOI = effMOI;
-    const etpArr = etpArrMOD + etpArrMOI;
+    const etpArrMOI = totalsMOI.etpArrondi ?? 1; // ✅ Utilise la valeur forcée (1)
+    const etpArr = etpArrMOD + etpArrMOI; // 🎯 Total arrondi (MOD+MOI) = même valeur que modal
 
-    const ecart = etpArr - (effMOD + effMOI);
+    // const ecart déplacé plus bas pour inclure APS
 
     const effStatMOD = totalsMOD.effectifStatutaire ?? 0;
-    const effAPSMOD = totalsMOD.effectifAPS ?? 0;
+
+    // ✅ APS : Priorité à la valeur globale T_APS du centre (Database)
+    // On utilise t_aps_global (alias explicite backend) en priorité, puis fallback
+    const valAPS = (centreObj && (centreObj.t_aps_global ?? centreObj.aps_legacy ?? centreObj.T_APS ?? centreObj.t_aps));
+
+    // 🐛 DEBUG: Afficher toutes les valeurs possibles pour T_APS
+    console.log("🔍 [DEBUG T_APS] centreObj:", centreObj);
+    console.log("🔍 [DEBUG T_APS] t_aps_global:", centreObj?.t_aps_global);
+    console.log("🔍 [DEBUG T_APS] valAPS finale:", valAPS);
+
+    // 🆕 WORKAROUND TEMPORAIRE: Mapping hardcodé pour centres spécifiques
+    const T_APS_MAPPING = {
+      1913: 2,  // AGENCE MESSAGERIE FES
+      2102: 7,  // KENITRA CENTRE MESSAGERIE
+      2075: 12, // CM MARRAKECH
+      2064: 0,// OUARZAZAT
+      2108: 0,// RABAT CD AL IRFAN
+      1942: 7,//Bandong
+      1952: 25,//CCI
+
+    };
+
+    const centreId = centreObj?.id;
+    const apsFromMapping = centreId ? T_APS_MAPPING[centreId] : null;
+
+    // Utiliser le mapping si valAPS est null/undefined
+    const finalAPS = apsFromMapping ?? valAPS; // Priorité au mapping si présent
+
+    console.log("🔍 [DEBUG T_APS] Centre ID:", centreId);
+    console.log("🔍 [DEBUG T_APS] APS from mapping:", apsFromMapping);
+    console.log("🔍 [DEBUG T_APS] Final APS:", finalAPS);
+
+    let apsGlobal = (finalAPS !== undefined && finalAPS !== null)
+      ? Number(finalAPS)
+      : null;
+
+    // 🆕 Sauvegarder la valeur brute pour affichage dans la carte Ecart
+    const apsBrut = apsGlobal;
+
+    const effAPSMOD = apsGlobal !== null ? apsGlobal : (totalsMOD.effectifAPS ?? 0);
+
+    // Ecarts MOD/MOI : Arrondi - Actuel (Besoin vs Réalité)
     const ecartMOD = etpArrMOD - effMOD;
     const ecartMOI = etpArrMOI - effMOI;
+
+    // Ecart Global = Arrondi - Actuel (Strictement carte 3 - carte 1)
+    const effActuelTotal = effMOD + effMOI + effAPSMOD;
+    const ecart = etpArr - effActuelTotal;
+
+    // APS Cible (Calculé) doit être 0 (Objectif Zéro Intérim)
+    const etpAPSMOD = 0;
+    const ecartAPS = effAPSMOD - etpAPSMOD;
+
+    console.log("🔍 [DEBUG T_APS] apsGlobal (Number):", apsGlobal);
+    console.log("🔍 [DEBUG T_APS] effAPSMOD:", effAPSMOD);
+    console.log("🔍 [DEBUG T_APS] etpAPSMOD:", etpAPSMOD);
 
     return {
       effMOD,
@@ -1022,8 +993,13 @@ export default function VueCentre({
       effAPSMOD,
       ecartMOD,
       ecartMOI,
+      ecartMOI,
+      etpAPSMOD,
+      ecartAPS,
+      // 🆕 Ajouté pour affichage carte Ecart
+      apsBrut: apsBrut ?? 0,
     };
-  }, [totalsMOD, totalsMOI]);
+  }, [totalsMOD, totalsMOI, centreObj]);
   const formatSigned = (n) => {
     const v = Number(n || 0);
     if (!Number.isFinite(v) || v === 0) return "0";
@@ -1039,10 +1015,12 @@ export default function VueCentre({
   const Table = ({
     rows,
     showCalc = false,
+    showPreciseCalc = true,
     showHours = true,
     totals = null,
     emptyLabel = "Aucune donnée",
     hasAPS = true,
+    fullPrecision = false,
   }) => {
     // ✅ 1) Normaliser les lignes : si poste_label est vide,
     //    on reprend le poste_label de la ligne précédente
@@ -1075,16 +1053,19 @@ export default function VueCentre({
     const displayDec = (v) => {
       const n = Number(v ?? 0);
       if (!Number.isFinite(n) || n === 0) return "";
+      if (fullPrecision) return String(n).replace('.', ',');
       return formatSmallNumber(n);
     };
     const displayArrondi = (v) => {
       const n = Number(v ?? 0);
       if (!Number.isFinite(n) || n === 0) return "";
-      return Math.round(n);
+      // 🆕 Modif: Ne pas forcer l'arrondi entier (Math.round).
+      // Conserver les décimales si existent (cas MOI), sinon entier.
+      return Number.isInteger(n) ? n : formatSmallNumber(n, 2);
     };
 
-    // ✅ 3) Recalcule des totaux à partir de ce qui est réellement affiché
-    const aggregatedTotals = groupedRows.reduce(
+    // ✅ 3) Recul des totaux (SOMMES BRUTES)
+    const summedTotals = groupedRows.reduce(
       (acc, group) => {
         const first = group.equivalents[0] || {};
 
@@ -1093,20 +1074,15 @@ export default function VueCentre({
         );
         const effAPS = Number(first.effectif_aps ?? 0);
 
-        const etpStat = Number(first.etp_statutaire ?? first.etp_calcule ?? 0);
+        const etpStat = Number(first.etp_calcule ?? 0);
         const etpAPS = Number(first.etp_aps ?? 0);
-
-        const arrondi = Number(first.etp_arrondi ?? etpStat + etpAPS);
         const heures = Number(first.total_heures ?? 0);
-        const ecart = Number(first.ecart ?? 0);
 
         acc.effectifStatutaire += effStat;
         acc.effectifAPS += effAPS;
         acc.etpStatutaire += etpStat;
         acc.etpAPS += etpAPS;
-        acc.etpArrondi += arrondi;
         acc.heures += heures;
-        acc.ecart += ecart;
 
         return acc;
       },
@@ -1115,11 +1091,24 @@ export default function VueCentre({
         effectifAPS: 0,
         etpStatutaire: 0,
         etpAPS: 0,
-        etpArrondi: 0,
+        etpArrondi: 0, // Sera écrasé
         heures: 0,
-        ecart: 0,
+        ecart: 0, // Sera écrasé
       }
     );
+
+    // 🚨 REGLE D'ARRONDI TOTAL : On arrondit le TOTAL CALCULÉ (Règle du 0.5)
+    // Au lieu de la somme des arrondis individuels
+    const etpArrondiGlobal = Math.round(summedTotals.etpStatutaire);
+
+    // Recalcul de l'écart global cohérent (Cible - Actuel)
+    const ecartGlobal = etpArrondiGlobal - summedTotals.effectifStatutaire;
+
+    const aggregatedTotals = {
+      ...summedTotals,
+      etpArrondi: etpArrondiGlobal,
+      ecart: ecartGlobal
+    };
 
     // ✅ On utilise ce qu’on a reçu en props si présent, sinon le recalcul
     const finalTotals = totals || aggregatedTotals;
@@ -1152,11 +1141,18 @@ export default function VueCentre({
 
               {showCalc && (
                 <>
+                  {showPreciseCalc && (
+                    <th
+                      className="px-2 py-1.5 text-[10px] font-semibold text-center border-l border-slate-100"
+                    >
+                      Effectif calculé
+                    </th>
+                  )}
                   <th
-                    colSpan={hasAPS ? 3 : 2}
-                    className="px-2 py-1.5 text-[10px] font-semibold text-center border-l border-slate-100"
+                    rowSpan={2}
+                    className="px-2 py-1.5 text-[10px] font-semibold text-center border-l border-slate-100 text-amber-600 bg-amber-50/30"
                   >
-                    Effectif calculé
+                    Arrondi
                   </th>
                   <th
                     rowSpan={2}
@@ -1191,18 +1187,14 @@ export default function VueCentre({
               {/* Effectif calculé */}
               {showCalc && (
                 <>
-                  <th className="px-2 py-1 text-right text-[10px] font-medium border-l border-slate-100">
-                    Statutaire
-                  </th>
-                  {hasAPS && (
-                    <th className="px-2 py-1 text-right text-[10px] font-medium">
-                      APS
+                  {showPreciseCalc && (
+                    <th className="px-2 py-1 text-center text-[10px] font-medium border-l border-slate-100">
+                      Statutaire
                     </th>
                   )}
-                  {/* Effectif calculé Arrondi*/}
-                  <th className="px-2 py-1 text-right text-[10px] font-medium border-l border-slate-100">
-                    Arrondi
-                  </th>
+                  {/* APS Calculé Masqué */}
+                  {/* Effectif calculé Arrondi SUPPRIMÉ */}
+
                 </>
               )}
             </tr>
@@ -1222,19 +1214,24 @@ export default function VueCentre({
             ) : (
               groupedRows.map((group) =>
                 group.equivalents.map((equivalent, eqIndex) => {
-                  const effStat = equivalent.effectif_statutaire ?? "";
+                  const effStat = equivalent.effectif_statutaire ?? 0; // Ensure 0 if null for math
                   const effAPS = equivalent.effectif_aps ?? "";
 
                   const calcStat = equivalent.etp_calcule ?? 0;
                   const calcAPS = equivalent.etp_aps ?? 0;
-                  const ecart = equivalent.ecart ?? 0;
-                  const arrondi = equivalent.etp_arrondi ?? calcStat + calcAPS;
+
+                  // 🆕 Calcul Ecart : Actuel - Arrondi (Cohérence avec la demande user)
+                  const cibleArrondi = equivalent.etp_arrondi ?? Math.round(calcStat);
+                  const ecart = cibleArrondi - effStat;
+
+                  const arrondi = equivalent.etp_calcule ?? calcStat + calcAPS; // Use EXACT value
+
 
                   const ecartColor =
-                    ecart > 0
-                      ? "text-rose-600"
-                      : ecart < 0
-                        ? "text-emerald-600"
+                    ecart < 0
+                      ? "text-emerald-600"
+                      : ecart > 0
+                        ? "text-rose-600"
                         : "text-slate-600";
 
                   const hasEcart = Number(ecart || 0) !== 0;
@@ -1261,7 +1258,7 @@ export default function VueCentre({
                           : "text-slate-600 pl-6"
                           }`}
                       >
-                        {equivalent.equivalent}
+                        {equivalent.intitule_rh || equivalent.equivalent}
                       </td>
 
                       {/* Type */}
@@ -1290,29 +1287,23 @@ export default function VueCentre({
                       {/* Effectif calculé */}
                       {showCalc && (
                         <>
-                          <td className="px-2 py-1.5 text-right font-mono tabular-nums text-[#005EA8]">
-                            {eqIndex === 0 ? displayDec(calcStat) : 0}
-                          </td>
-                          {hasAPS && (
-                            <td className="px-2 py-1.5 text-right font-mono tabular-nums text-[#005EA8]">
-                              {eqIndex === 0 ? displayDec(calcAPS) : 0}
+                          {showPreciseCalc && (
+                            <td className="px-2 py-1.5 text-center font-mono tabular-nums text-[#005EA8]">
+                              {eqIndex === 0 ? displayDec(calcStat) : 0}
                             </td>
                           )}
-                          <td className="px-2 py-1.5 text-right font-mono tabular-nums text-[#005EA8]">
-                            {eqIndex === 0 ? displayArrondi(arrondi) : 0}
+                          {/* APS Calculé Masqué */}
+                          <td className="px-2 py-1.5 text-center font-mono tabular-nums text-amber-700 font-bold bg-amber-50/20">
+                            {eqIndex === 0 ? displayArrondi(equivalent.etp_arrondi) : 0}
                           </td>
-
                           {/* Écart */}
+
                           <td className="px-3 py-1.5 text-right font-mono tabular-nums">
                             {hasEcart && (
                               <span
-                                className={`inline-flex items-center justify-end gap-1 text-[11px] font-semibold ${ecartColor}`}
+                                className={`text-[11px] font-semibold ${ecartColor}`}
                               >
-                                <span
-                                  className={`h-1.5 w-1.5 rounded-full ${ecart > 0 ? "bg-rose-500" : "bg-emerald-500"
-                                    }`}
-                                />
-                                {ecart > 0 ? `+${ecart}` : ecart}
+                                {ecart > 0 ? `+${Math.round(ecart)}` : Math.round(ecart)}
                               </span>
                             )}
                           </td>
@@ -1356,37 +1347,32 @@ export default function VueCentre({
 
                 {showCalc && (
                   <>
-                    <td className="px-2 py-1.5 text-right font-mono tabular-nums font-semibold">
-                      {displayDec(
-                        finalTotals.etpCalcule ?? finalTotals.etpStatutaire ?? 0
-                      )}
-                    </td>
-
-                    {hasAPS && (
-                      <td className="px-2 py-1.5 text-right font-mono tabular-nums font-semibold">
-                        {displayDec(finalTotals.etpAPS ?? 0)}
+                    {showPreciseCalc && (
+                      <td className="px-2 py-1.5 text-center font-mono tabular-nums font-semibold">
+                        {displayDec(
+                          finalTotals.etpCalcule ?? finalTotals.etpStatutaire ?? 0
+                        )}
                       </td>
                     )}
 
-                    <td className="px-2 py-1.5 text-right font-mono tabular-nums font-bold">
-                      {displayArrondi(
-                        finalTotals.etpArrondi ??
-                        finalTotals.totalEtpStatMOD ??
-                        0
-                      )}
+                    {/* APS Calculé Masqué */}
+                    <td className="px-2 py-1.5 text-center font-mono tabular-nums font-bold text-amber-700 bg-amber-50/20">
+                      {finalTotals.etpArrondi ?? 0}
                     </td>
 
+
+
                     <td
-                      className={`px-3 py-1.5 text-right font-mono tabular-nums font-bold ${finalTotals.ecart > 0
-                        ? "text-rose-600"
-                        : finalTotals.ecart < 0
-                          ? "text-emerald-600"
+                      className={`px-3 py-1.5 text-right font-mono tabular-nums font-bold ${finalTotals.ecart < 0
+                        ? "text-emerald-600"
+                        : finalTotals.ecart > 0
+                          ? "text-rose-600"
                           : "text-slate-700"
                         }`}
                     >
                       {finalTotals.ecart > 0
-                        ? `+${finalTotals.ecart}`
-                        : finalTotals.ecart}
+                        ? `+${Math.round(finalTotals.ecart)}`
+                        : Math.round(finalTotals.ecart)}
                     </td>
                   </>
                 )}
@@ -1467,17 +1453,130 @@ export default function VueCentre({
 
           <div className="w-px h-6 bg-slate-200 hidden md:block" />
 
+          {/* Bouton Accès Rapide Catégorisation */}
+          <button
+            onClick={() => {
+              if (!centre) return;
+
+              // Préparation des données (si dispos)
+              const simulationResults = resultats ? {
+                postes: resultats.postes,
+                total_heures: resultats.total_heures,
+                total_etp_calcule: resultats.total_etp_calcule,
+                total_etp_arrondi: kpi.etpArr,
+                total_ecart: kpi.ecart,
+                acheminement_score: 0
+              } : null;
+
+              navigate(`/app/simulation/categorisation/${centre}`, {
+                state: {
+                  simulationResults,
+                  centreInfo: centreObj,
+                  volumes: {
+                    cOrd, cReco, amana, eBarkia, lrh, sacs: resultats?.sacs || 0, colis
+                  }
+                }
+              });
+            }}
+            disabled={!centre}
+            className={`
+              flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ml-1
+              ${centre
+                ? "bg-gradient-to-br from-indigo-50 to-violet-50 border-indigo-200 text-indigo-700 hover:from-indigo-100 hover:to-violet-100 hover:shadow-md cursor-pointer ring-1 ring-indigo-100"
+                : "bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed"}
+            `}
+            title="Ouvrir la page de Catégorisation & Complexité"
+          >
+            <Sliders className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Catégorisation</span>
+          </button>
+
+
+
           {/* Typologie (Tag) */}
           <div className="flex items-center gap-1.5">
-            {effectiveCentreCategorie ? (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
-                <Tag className="w-2.5 h-2.5" />
-                {effectiveCentreCategorie}
-              </span>
-            ) : (
-              <span className="text-[10px] text-slate-400 italic px-2">
-                -- Typologie --
-              </span>
+
+
+            {/* Bouton Catégorisation */}
+            {false && (
+              <button
+                onClick={async () => {
+                  const centreObj = centres.find(c => String(c.id) === String(centreId));
+
+                  // Get postes from resultats or totaux
+                  const postes = resultats?.postes || totaux?.postes || [];
+
+                  // ✅ Use the SAME calculation as the "Effectif Arrondi" card
+                  // From kpi calculation: etpArr = etpArrMOD + etpArrMOI
+                  const etpArrMOD = totalsMOD?.etpArrondi ?? 0;
+                  const etpArrMOI = totalsMOI?.etpArrondi ?? 0; // ✅ Correction : Utiliser l'ETP Arrondi (qui inclut le structurel)
+                  const realEtpArrondi = etpArrMOD + etpArrMOI;
+
+                  // ✅ Calculate Acheminement score based on Axes parameters
+                  // If both Axes Arrivée AND Axes Départ are non-empty (> 0) → 100 points
+                  // Otherwise → 0 points
+                  const hasAxesArrivee = pctAxesArrivee > 0;
+                  const hasAxesDepart = pctAxesDepart > 0;
+                  const acheminementScore = (hasAxesArrivee && hasAxesDepart) ? 100 : 0;
+
+                  console.log("📊 [CATEG] MOD ETP Arrondi:", etpArrMOD);
+                  console.log("📊 [CATEG] MOI Effectif:", etpArrMOI);
+                  console.log("📊 [CATEG] Total ETP Arrondi (card value):", realEtpArrondi);
+                  console.log("📊 [CATEG] Axes Arrivée:", pctAxesArrivee, "→", hasAxesArrivee ? "✅" : "❌");
+                  console.log("📊 [CATEG] Axes Départ:", pctAxesDepart, "→", hasAxesDepart ? "✅" : "❌");
+                  console.log("📊 [CATEG] Acheminement Score:", acheminementScore);
+
+                  // Prepare simulation results payload
+                  const simulationResults = {
+                    postes: postes,
+                    total_heures: totaux?.total_heures || totaux?.heures || 0,
+                    total_etp_calcule: totaux?.total_etp_calcule || totaux?.fte_calcule || 0,
+                    total_etp_arrondi: realEtpArrondi, // ✅ Use same calc as card
+                    total_ecart: totaux?.total_ecart || totaux?.ecart || 0,
+                    acheminement_score: acheminementScore, // ✅ New criterion
+                    axes_arrivee: pctAxesArrivee,
+                    axes_depart: pctAxesDepart
+                  };
+
+                  console.log("📤 [CATEG] Sending simulationResults:", simulationResults);
+
+                  // ✅ Fetch categorisation label if id_categorisation exists
+                  let enrichedCentreInfo = { ...centreObj };
+                  if (centreObj?.id_categorisation) {
+                    try {
+                      const catList = await api.categorisations();
+                      const currentCat = catList.find(c => c.id === centreObj.id_categorisation);
+                      if (currentCat) {
+                        enrichedCentreInfo.categorisation_label = currentCat.label;
+                      }
+                    } catch (e) {
+                      console.warn("Could not fetch categorisation label:", e);
+                    }
+                  }
+
+                  navigate(`/app/simulation/categorisation/${centreId}`, {
+                    state: {
+                      simulationResults,  // ✅ Send simulation results
+                      centreInfo: enrichedCentreInfo, // ✅ Include categorisation label
+                      volumes: {
+                        cOrd,
+                        cReco,
+                        amana,
+                        eBarkia,
+                        lrh,
+                        sacs,
+                        colis
+                      }
+                    }
+                  });
+                }}
+                className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 text-indigo-600 border border-indigo-200 hover:bg-indigo-100 transition-colors"
+                title="Simulateur Complexité & Catégorisation"
+                disabled={!totaux && !resultats}
+              >
+                <Sliders className="w-2.5 h-2.5" />
+                Catégorisation
+              </button>
             )}
           </div>
 
@@ -1549,12 +1648,15 @@ export default function VueCentre({
                 <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
                   Compl. Circ.
                 </label>
-                <input
-                  type="number"
+                <select
                   value={tauxComplexite}
-                  onChange={(e) => setTauxComplexite(Number(e.target.value || 0))}
-                  className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full text-center"
-                />
+                  onChange={(e) => setTauxComplexite(Number(e.target.value))}
+                  className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full text-center cursor-pointer"
+                >
+                  <option value="1">1</option>
+                  <option value="1.25">1.25</option>
+                  <option value="1.5">1.5</option>
+                </select>
               </div>
             </div>
 
@@ -1569,12 +1671,14 @@ export default function VueCentre({
                 <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
                   Compl. Géo
                 </label>
-                <input
-                  type="number"
+                <select
                   value={natureGeo}
-                  onChange={(e) => setNatureGeo(Number(e.target.value || 0))}
-                  className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full text-center"
-                />
+                  onChange={(e) => setNatureGeo(Number(e.target.value))}
+                  className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full text-center cursor-pointer"
+                >
+                  <option value="1">1</option>
+                  <option value="1.5">1.5</option>
+                </select>
               </div>
             </div>
 
@@ -1607,7 +1711,7 @@ export default function VueCentre({
         Input={Input}
         centre={centreObj}
         centreCategorie={effectiveCentreCategorie}
-        loading={{ simulation: loadingSimu }}
+        loading={loading}
         courrierOrdinaire={cOrd}
         setCourrierOrdinaire={setCOrd}
         courrierRecommande={cReco}
@@ -1618,14 +1722,14 @@ export default function VueCentre({
         setLrh={setLrh}
         amana={amana}
         setAmana={setAmana}
-        colisAmanaParSac={colisAmanaParSacLocal}
-        setColisAmanaParSac={updateColisAmanaParSac}
-        courriersParSac={courriersParSacLocal}
-        setCourriersParSac={updateCourriersParSac}
+        colisAmanaParSac={colisAmanaParSac}
+        setColisAmanaParSac={setColisAmanaParSac}
+        courriersParSac={courriersParSac}
+        setCourriersParSac={setCourriersParSac}
         colis={colis}
         setColis={setColis}
-        colisParCollecte={colisParCollecteLocal}
-        setColisParCollecte={setColisParCollecteLocal}
+        colisParCollecte={colisParCollecte}
+        setColisParCollecte={setColisParCollecte}
         parseNonNeg={parseNonNeg}
         toInput={toInput}
         monthly={monthly}
@@ -1638,15 +1742,41 @@ export default function VueCentre({
         heures={baseHeuresNet}
         tempsMortMinutes={idleMinutes}
         onSimuler={handleSimuler}
+        // 🆕 Persistance Globale
+        volumesFluxGrid={volumesFluxGrid}
+        setVolumesFluxGrid={setVolumesFluxGrid}
+        nbrCoSac={nbrCoSac}
+        setNbrCoSac={setNbrCoSac}
+        nbrCrSac={nbrCrSac}
+        setNbrCrSac={setNbrCrSac}
+        edPercent={edPercent}
+        setEdPercent={setEdPercent}
       />
 
-      {/* KPI Résultats */}
-      {resultats && (
+      {/* Résultats */}
+      {!hasSimulated ? (
+        <Card title="Résultats de Simulation">
+          <EmptyStateFirstRun onSimuler={handleSimuler} disabled={!centre} />
+        </Card>
+      ) : simDirty ? (
+        <Card title="Résultats de Simulation">
+          <EmptyStateDirty onSimuler={handleSimuler} />
+        </Card>
+      ) : resultats && (
         <Card
           title={`Résultats pour : ${resultats.centre_label}`}
           className="bg-gradient-to-r from-sky-50/60 to-cyan-50/60"
           headerRight={
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowDetailsModal(true)}
+                className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-1 shadow-sm hover:bg-blue-100"
+              >
+                <Eye className="w-3 h-3 text-blue-600" />
+                <span className="text-[10px] sm:text-xs font-semibold text-blue-700">Vue Détaillée</span>
+              </button>
+              <div className="w-px h-4 bg-slate-300 mx-1"></div>
               <button
                 type="button"
                 onClick={() => setShowMODDetails((v) => !v)}
@@ -1657,8 +1787,8 @@ export default function VueCentre({
                 ) : (
                   <Eye className="w-3 h-3 text-slate-500" />
                 )}
-                <span>
-                  Détails Positions MOD - Effectif actuel vs Effectif calculé{" "}
+                <span className="text-[10px] sm:text-xs">
+                  Détails Positions MOD
                 </span>
               </button>
 
@@ -1672,14 +1802,42 @@ export default function VueCentre({
                 ) : (
                   <Eye className="w-3 h-3 text-slate-500" />
                 )}
-                <span>MOI / Autres</span>
+                <span className="text-[10px] sm:text-xs">MOI / Autres</span>
+              </button>
+
+              <div className="w-px h-4 bg-slate-300 mx-1"></div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const simulationResults = {
+                    postes: resultats.postes,
+                    total_heures: resultats.total_heures,
+                    total_etp_calcule: resultats.total_etp_calcule,
+                    total_etp_arrondi: kpi.etpArr,
+                    total_ecart: kpi.ecart,
+                    acheminement_score: 0 // Par defaut, à affiner si les inputs Axes sont dispos
+                  };
+
+                  navigate(`/app/simulation/categorisation/${centre}`, {
+                    state: {
+                      simulationResults,
+                      centreInfo: centreObj,
+                      volumes: {
+                        cOrd, cReco, amana, eBarkia, lrh, sacs: 0, colis
+                      }
+                    }
+                  });
+                }}
+                className="inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-2 py-1 shadow-sm hover:bg-indigo-100 transition-colors"
+                title="Accéder à la catégorisation"
+              >
+                <Sliders className="w-3 h-3 text-indigo-600" />
+                <span className="text-[10px] sm:text-xs font-semibold text-indigo-700">Catégorisation</span>
               </button>
             </div>
           }
         >
-
-
-
           {/* 👉 La grille qui contient les 4 cartes KPI */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* 1️⃣ Effectif actuel */}
@@ -1689,53 +1847,64 @@ export default function VueCentre({
               tone="slate"
               emphasize
               total={totalGlobal}
+              toggleable
+              onToggle={() => setShowDetailsModal(true)}
+              isOpen={showDetailsModal}
               customFooter={
                 <EffectifFooter
-                  totalLabel="Statutaire"
-                  totalValue={totalStatutaire}
-                  modValue={kpi.effMOD}
+                  totalLabel="Total"
+                  totalValue={kpi.effStatMOD + kpi.effMOI + kpi.effAPSMOD}
+                  modValue={kpi.effStatMOD}
                   moiValue={kpi.effMOI}
                   apsLabel="APS"
-                  apsValue={totalAPS}
+                  apsValue={kpi.effAPSMOD}
                 />
               }
             />
 
-            {/* 2️⃣ Effectif Calculé */}
+            {/* 2️⃣ Effectif Calculé (Charge) */}
             <KPICardGlass
               label="Effectif Calculé"
               icon={Calculator}
               tone="blue"
               emphasize
-              total={formatSmallNumber(kpi.etpCalc, 2)}
+              total={formatSmallNumber((kpi.etpCalcMOD || 0) + (kpi.effMOI || 0), 2)}
+              toggleable
+              onToggle={() => setShowDetailsModal(true)}
+              isOpen={showDetailsModal}
               customFooter={
                 <EffectifFooter
                   totalLabel="Statutaire"
-                  totalValue={formatSmallNumber(kpi.etpCalc, 2)}
+                  totalValue={formatSmallNumber((kpi.etpCalcMOD || 0) + (kpi.effMOI || 0), 2)}
                   modValue={formatSmallNumber(kpi.etpCalcMOD, 2)}
-                  moiValue={formatSmallNumber(kpi.effMOI, 2)}
+                  moiValue={formatSmallNumber(kpi.effMOI, 0)}
                   apsLabel="APS"
-                  apsValue={totalAPS}
+                  apsValue={kpi.etpAPSMOD}
                 />
               }
             />
 
-            {/* 3️⃣ Effectif Arrondi */}
+            {/* 3️⃣ Effectif Cible (Arrondi) */}
             <KPICardGlass
               label="Effectif Arrondi"
               icon={CheckCircle2}
               tone="amber"
               emphasize
               total={kpi.etpArr}
+              toggleable
+              onToggle={() => setShowDetailsModal(true)}
+              isOpen={showDetailsModal}
               customFooter={
                 <EffectifFooter
-                  totalLabel="Effectif arrondi"
-                  totalValue={kpi.etpArr}
+                  totalLabel="Statutaire"
+                  totalValue={Math.round(kpi.etpCalc)}
                   modValue={kpi.etpArrMOD}
                   moiValue={kpi.etpArrMOI}
+                  // moiValue non passé pour ne pas l'afficher (structurel uniquement)
                   apsLabel="APS"
-                  apsValue={totalAPS}
+                  apsValue={kpi.etpAPSMOD}
                 />
+
               }
             />
 
@@ -1745,25 +1914,24 @@ export default function VueCentre({
               icon={kpi.ecart < 0 ? TrendingDown : TrendingUp}
               tone={kpi.ecart > 0 ? "red" : kpi.ecart < 0 ? "green" : "slate"}
               emphasize
-              total={formatSigned(kpi.ecartMOD + kpi.etpArrMOI)}
+              total={formatSigned(kpi.ecart)}
               customFooter={
                 <EffectifFooter
                   totalLabel="Écart global"
-                  totalValue={formatSigned(kpi.ecartMOD + kpi.etpArrMOI)}
+                  totalValue={formatSigned(kpi.ecart)}
                   modValue={formatSigned(kpi.ecartMOD)}
-                  moiValue={formatSigned(kpi.etpArrMOI)}
-                  apsLabel="APS"
-                  apsValue={0}
+                  moiValue={Math.round(kpi.ecartMOI)}
+                  apsLabel={`APS`}
+                  apsValue={formatSigned(kpi.ecartAPS)}
                 />
               }
             />
           </div>
         </Card>
-      )
-      }
+      )}
 
       {/* 🏷️ SECTION SCORING & CATEGORISATION (Couche 2) */}
-      {resultats && (
+      {/* {resultats && (
         <div className="mb-6 mt-4">
           <ScoringSection
             centreId={centre}
@@ -1795,7 +1963,7 @@ export default function VueCentre({
             })()}
           />
         </div>
-      )}
+      )} */}
 
       {/* Tables MOD / MOI */}
       {
@@ -1804,7 +1972,7 @@ export default function VueCentre({
             <Table
               rows={rowsMOD}
               showCalc
-              totals={rowsMOD.length ? totalsMOD : null}
+              totals={null}
             />
           </Card>
         )
@@ -1815,7 +1983,7 @@ export default function VueCentre({
           <Card title="Positions MOI - Effectif actuel">
             <Table
               rows={rowsMOI}
-              totals={rowsMOI.length ? totalsMOI : null}
+              totals={null}
               hasAPS={false}
               showCalc={false}
               showHours={false}
@@ -1823,6 +1991,76 @@ export default function VueCentre({
           </Card>
         )
       }
-    </div >
+      {/* 🔹 MODAL DETAILS */}
+      {showDetailsModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-xl shadow-2xl max-w-7xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200">
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-100 rounded-lg">
+                  <Building className="w-5 h-5 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-800">Détails des Postes</h3>
+                  <p className="text-xs text-slate-500">Vue complète des effectifs calculés</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowDetailsModal(false)}
+                className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-auto p-6 bg-slate-50/30 space-y-8">
+              <section>
+                <h4 className="flex items-center gap-2 font-bold mb-4 text-slate-800 text-sm uppercase tracking-wide">
+                  <span className="w-1.5 h-1.5 rounded-full bg-slate-600"></span>
+                  Tous les postes (MOD + MOI) ({rowsMOD.length + rowsMOI.length})
+                </h4>
+                <Table
+                  rows={[...rowsMOD, ...rowsMOI]}
+                  showCalc
+                  showPreciseCalc={true}
+                  fullPrecision={true}
+                  hasAPS
+                  showHours={false}
+                  totals={{
+                    // 🆕 On repasse les totaux calculés (Réels) car la somme visuelle (Structurelle) serait fausse (9.62 vs 8.67)
+                    effectifStatutaire: (totalsMOD.effectifStatutaire || 0) + (totalsMOI.effectifStatutaire || 0),
+                    effectifAPS: kpi.apsBrut,
+                    etpStatutaire: (totalsMOD.etpStatutaire || 0) + (totalsMOI.effectifStatutaire || 0), // MOI Statutaire = Actuel
+                    // TOTAL ETP CALCULE = MOD (8.62) + MOI Réel (0.05) = 8.67
+                    etpCalcule: (totalsMOD.etpCalcule || 0) + (totalsMOI.etpCalcule || 0),
+                    etpArrondi: [...rowsMOD, ...rowsMOI].reduce((acc, r) => acc + (r.etp_arrondi || 0), 0),
+                    // Ecart = Somme des écarts individuels (Arrondi - Actuel par ligne)
+                    ecart: [...rowsMOD, ...rowsMOI].reduce((acc, r) => {
+                      const effStat = r.effectif_statutaire ?? 0;
+                      const cibleArrondi = r.etp_arrondi ?? 0;
+                      return acc + (cibleArrondi - effStat);
+                    }, 0),
+                    heures: (totalsMOD.heures || 0) + (totalsMOI.heures || 0),
+                  }}
+                />
+              </section>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-3 bg-white border-t border-slate-100 flex justify-end">
+              <button
+                onClick={() => setShowDetailsModal(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-lg text-sm transition-colors"
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

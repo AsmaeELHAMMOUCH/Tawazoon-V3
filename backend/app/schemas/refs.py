@@ -36,6 +36,8 @@ class TacheOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     nom_tache: str
+    famille_uo: Optional[str] = None
+    etat: Optional[str] = None
     phase: Optional[str] = None
     unite_mesure: str
     moyenne_min: float

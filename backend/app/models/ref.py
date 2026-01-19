@@ -60,6 +60,8 @@ class Tache(Base):
     id = Column(Integer, primary_key=True, index=True)
     centre_poste_id = Column(Integer, ForeignKey("dbo.centre_postes.id"), nullable=False)
     nom_tache = Column(String, nullable=False)
+    famille_uo = Column(String, nullable=True)
+    etat = Column(String, nullable=True)
     phase = Column(String, nullable=True)
     unite_mesure = Column(String, nullable=False)
     min_min = Column(Integer, nullable=True)

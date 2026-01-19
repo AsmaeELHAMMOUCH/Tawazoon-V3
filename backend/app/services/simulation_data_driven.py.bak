@@ -1,0 +1,3311 @@
+from typing import List, Dict, Optional, Any, Callable
+from sqlalchemy.orm import Session
+from app.schemas.volumes_ui import VolumesUIInput, VolumeItem
+from app.schemas.models import SimulationResponse, TacheDetail, PosteResultat
+from app.models.db_models import Tache, CentrePoste, Centre
+from app.services.data_driven_engine import DataDrivenEngine
+from app.services.business_rules_2064 import get_business_rules_engine
+
+# Strategy Pattern Imports
+from app.services.strategies.base import VolumeContext
+from app.services.strategies.factory import StrategyFactory
+from app.services.volume_helpers import (
+    get_co_volume_generic,
+    get_co_volume_from_context,
+    get_co_depart_volume_from_context,
+    get_cr_volume_generic,
+    get_cr_volume_from_context,
+    get_cr_depart_volume_from_context
+)
+
+
+def calculer_volume_applique(tache: Any, context: VolumeContext) -> tuple:
+    # 1. Obtenir la stratégie via la Factory
+    strategy = StrategyFactory.get_strategy(context.centre_id, context.categorie_id)
+    
+    # 2. Exécuter le calcul via la stratégie
+    return strategy.calculate_volume(tache, context)
+
+
+
+
+
+def apply_ccc_rule(tache, ctx_volumes, capacite_nette_h: float, productivite: float, debug: bool = False):
+    """
+    Règle métier spécifique CCC :
+    
+    Condition :
+        - produit == "CO Arrivé"
+        - base_calcul == 100
+        - famille_uo == "Distribution Locale"
+    
+    Volume à utiliser :
+        - flux_arrivee["CO"]["DIST"] (journalier)
+    
+    Formule :
+        - charge_min = moyenne_min * volume_journalier
+        - charge_h = charge_min / 60
+        - fte = charge_h / (capacite_nette_h * productivite/100)
+        - si fte <= 0.1 alors fte = 0
+    
+    Returns:
+        (applicable: bool, fte: float, formule: str, volume_jour: float)
+    """
+    produit = (getattr(tache, 'produit', '') or '').strip()
+    base_calcul = getattr(tache, 'base_calcul', None)
+    famille_uo = (getattr(tache, 'famille_uo', '') or '').strip()
+    
+    # Vérifier la condition (comparaison insensible à la casse)
+    if produit != "CO Arrivé" or base_calcul != 100 or famille_uo.upper() != "DISTRIBUTION LOCALE" or famille_uo.upper() != "Arrivée Camion Principal":
+        return (False, 0.0, "", 0.0)
+    
+    # Récupérer le volume CO DIST (ou GLOBAL si DIST n'existe pas)
+    volume_annuel = get_co_volume_from_context(ctx_volumes, 'DISTRIBUTION')
+    if volume_annuel == 0:
+        volume_annuel = get_co_volume_from_context(ctx_volumes, 'GLOBAL')
+    
+    # Conversion annuel -> journalier
+    nb_jours = getattr(ctx_volumes, 'nb_jours_ouvres_an', 264) or 264
+    volume_jour = volume_annuel / nb_jours if nb_jours > 0 else 0
+    
+    # Calcul de la charge
+    moyenne_min = float(getattr(tache, 'moyenne_min', 0) or 0)
+    charge_min = moyenne_min * volume_jour
+    charge_h = charge_min / 60.0
+    
+    # Calcul ETP
+    capacite_effective = capacite_nette_h * (productivite / 100.0)
+    fte = charge_h / capacite_effective if capacite_effective > 0 else 0.0
+    
+    # Règle : si fte <= 0.1 alors fte = 0
+    if fte <= 0.1:
+        fte = 0.0
+    
+    # Formule de traçabilité
+    formule = f"CO_DIST_J={volume_jour:.0f} × {moyenne_min:.2f}min = {charge_min:.2f}min/j → {charge_h:.2f}h/j → ETP={fte:.3f}"
+    
+    if debug:
+        print(f"   🎯 RÈGLE CCC APPLIQUÉE:")
+        print(f"      - Produit: {produit}")
+        print(f"      - Base calcul: {base_calcul}")
+        print(f"      - Famille UO: {famille_uo}")
+        print(f"      - Volume journalier (CO DIST): {volume_jour:.2f}")
+        print(f"      - Moyenne min: {moyenne_min:.2f}")
+        print(f"      - Charge min/j: {charge_min:.2f}")
+        print(f"      - Charge h/j: {charge_h:.2f}")
+        print(f"      - ETP calculé: {fte:.3f}")
+        print(f"      - Formule: {formule}")
+    
+    return (True, fte, formule, volume_jour)
+
+
+def apply_ccc_rule_sac(tache, ctx_volumes, capacite_nette_h: float, productivite: float, debug: bool = False):
+    """
+    Règle métier CCC #2 : CO Arrivé en Sac
+    
+    Condition :
+        - produit == "CO Arrivé"
+        - unite_mesure == "Sac"
+        - base_calcul == 100
+    
+    Conversion :
+        - VOLUME_SAC = VOLUME_CO_ARRIVÉ / COURRIER_PAR_SAC
+    
+    Formule :
+        - Temps_min = VOLUME_SAC × Temps_chrono_min
+        - charge_h = Temps_min / 60
+        - fte = charge_h / (capacite_nette_h * productivite/100)
+        - si fte <= 0.1 alors fte = 0
+    
+    Returns:
+        (applicable: bool, fte: float, formule: str, volume_sac: float)
+    """
+    produit = (getattr(tache, 'produit', '') or '').strip()
+    unite_mesure = (getattr(tache, 'unite_mesure', '') or '').strip()
+    base_calcul = getattr(tache, 'base_calcul', None)
+    
+    # Vérifier la condition
+    if produit != "CO Arrivé" or unite_mesure != "Sac" or base_calcul != 100:
+        return (False, 0.0, "", 0.0)
+    
+    # Récupérer le volume CO GLOBAL
+    volume_co_annuel = get_co_volume_from_context(ctx_volumes, 'GLOBAL')
+    
+    # Conversion annuel -> journalier
+    nb_jours = getattr(ctx_volumes, 'nb_jours_ouvres_an', 264) or 264
+    volume_co_jour = volume_co_annuel / nb_jours if nb_jours > 0 else 0
+    
+    # Récupérer le paramètre COURRIER_PAR_SAC
+    courrier_par_sac = float(getattr(ctx_volumes, 'courriers_par_sac', 4500) or 4500)
+    
+    # Conversion courrier -> sac
+    volume_sac = volume_co_jour / courrier_par_sac if courrier_par_sac > 0 else 0
+    
+    # Calcul de la charge
+    temps_chrono_min = float(getattr(tache, 'moyenne_min', 0) or 0)
+    temps_calcule_min = volume_sac * temps_chrono_min
+    charge_h = temps_calcule_min / 60.0
+    
+    # Calcul ETP
+    capacite_effective = capacite_nette_h * (productivite / 100.0)
+    fte = charge_h / capacite_effective if capacite_effective > 0 else 0.0
+    
+    # Règle : si fte <= 0.1 alors fte = 0
+    if fte <= 0.1:
+        fte = 0.0
+    
+    # Formule de traçabilité
+    formule = f"CO_J={volume_co_jour:.0f} ÷ {courrier_par_sac:.0f}/sac = {volume_sac:.2f} sacs × {temps_chrono_min:.2f}min = {temps_calcule_min:.2f}min/j → {charge_h:.2f}h/j → ETP={fte:.3f}"
+    
+    if debug:
+        print(f"   🎯 RÈGLE CCC SAC APPLIQUÉE:")
+        print(f"      - Produit: {produit}")
+        print(f"      - Unité mesure: {unite_mesure}")
+        print(f"      - Base calcul: {base_calcul}")
+        print(f"      - Volume CO journalier: {volume_co_jour:.2f}")
+        print(f"      - Courrier par sac: {courrier_par_sac:.0f}")
+        print(f"      - Volume sac: {volume_sac:.2f}")
+        print(f"      - Temps chrono min: {temps_chrono_min:.2f}")
+        print(f"      - Temps calculé min/j: {temps_calcule_min:.2f}")
+        print(f"      - Charge h/j: {charge_h:.2f}")
+        print(f"      - ETP calculé: {fte:.3f}")
+        print(f"      - Formule: {formule}")
+    
+    return (True, fte, formule, volume_sac)
+
+
+def apply_ccc_rule_dist_local(tache, ctx_volumes, capacite_nette_h: float, productivite: float, debug: bool = False):
+    """
+    Règle métier CCC #3 : CO Arrivé Distribution Locale avec base_calcul = 40
+    
+    Condition :
+        - produit == "CO Arrivé"
+        - famille_uo == "Distribution Locale"
+        - base_calcul == 40
+        - AXES exclus (Distribution Locale uniquement)
+    
+    Formule :
+        - Temps_min = VOLUME_CO_ARRIVÉ × %LOCAL × 40% × Temps_chrono_min
+        - charge_h = Temps_min / 60
+        - fte = charge_h / (capacite_nette_h * productivite/100)
+        - si fte <= 0.1 alors fte = 0
+    
+    Returns:
+        (applicable: bool, fte: float, formule: str, volume_effectif: float)
+    """
+    produit = (getattr(tache, 'produit', '') or '').strip()
+    famille_uo = (getattr(tache, 'famille_uo', '') or '').strip()
+    base_calcul = getattr(tache, 'base_calcul', None)
+    
+    # Vérifier la condition
+    if produit != "CO Arrivé" or famille_uo.upper() != "DISTRIBUTION LOCALE" or base_calcul != 40:
+        return (False, 0.0, "", 0.0)
+    
+    # Récupérer le volume CO GLOBAL
+    volume_co_annuel = get_co_volume_from_context(ctx_volumes, 'GLOBAL')
+    
+    # Conversion annuel -> journalier
+    nb_jours = getattr(ctx_volumes, 'nb_jours_ouvres_an', 264) or 264
+    volume_co_jour = volume_co_annuel / nb_jours if nb_jours > 0 else 0
+    
+    # Récupérer le % LOCAL (part de distribution locale)
+    # On suppose que c'est un paramètre dans ctx_volumes, sinon on utilise une valeur par défaut
+    pct_local = float(getattr(ctx_volumes, 'pct_local', 100.0) or 100.0)
+    
+    # Appliquer %LOCAL
+    volume_local = volume_co_jour * (pct_local / 100.0)
+    
+    # Appliquer base_calcul = 40%
+    volume_effectif = volume_local * 0.40
+    
+    # Calcul de la charge
+    temps_chrono_min = float(getattr(tache, 'moyenne_min', 0) or 0)
+    temps_calcule_min = volume_effectif * temps_chrono_min
+    charge_h = temps_calcule_min / 60.0
+    
+    # Calcul ETP
+    capacite_effective = capacite_nette_h * (productivite / 100.0)
+    fte = charge_h / capacite_effective if capacite_effective > 0 else 0.0
+    
+    # Règle : si fte <= 0.1 alors fte = 0
+    if fte <= 0.1:
+        fte = 0.0
+    
+    # Formule de traçabilité
+    formule = f"CO_J={volume_co_jour:.0f} × {pct_local:.0f}%LOCAL = {volume_local:.0f} × 40% = {volume_effectif:.0f} × {temps_chrono_min:.2f}min = {temps_calcule_min:.2f}min/j → {charge_h:.2f}h/j → ETP={fte:.3f}"
+    
+    if debug:
+        print(f"   🎯 RÈGLE CCC DIST LOCAL 40% APPLIQUÉE:")
+        print(f"      - Produit: {produit}")
+        print(f"      - Famille UO: {famille_uo}")
+        print(f"      - Base calcul: {base_calcul}")
+        print(f"      - Volume CO journalier: {volume_co_jour:.2f}")
+        print(f"      - % LOCAL: {pct_local:.0f}%")
+        print(f"      - Volume local: {volume_local:.2f}")
+        print(f"      - Volume effectif (40%): {volume_effectif:.2f}")
+        print(f"      - Temps chrono min: {temps_chrono_min:.2f}")
+        print(f"      - Temps calculé min/j: {temps_calcule_min:.2f}")
+        print(f"      - Charge h/j: {charge_h:.2f}")
+        print(f"      - ETP calculé: {fte:.3f}")
+        print(f"      - Formule: {formule}")
+    
+    return (True, fte, formule, volume_effectif)
+
+
+def apply_ccc_rule_arrivee_camion(tache, ctx_volumes, capacite_nette_h: float, productivite: float, debug: bool = False):
+    """
+    Règle métier CCC #4 : Arrivée Camion Principal avec base_calcul = 40
+    
+    Condition :
+        - famille_uo == "Arrivée Camion Principal"
+        - produit == "CO Arrivé"
+        - base_calcul == 40
+        - IMPORTANT : Volume TOTAL (LOCAL + AXES, pas de split)
+    
+    Formule Courrier :
+        - Temps_min = volume_total × 40% × Temps_chrono_min
+    
+    Formule Sac (si unite_mesure == "Sac") :
+        - Temps_min = (volume_total × 40% / COURRIER_PAR_SAC) × Temps_chrono_min
+    
+    Puis :
+        - charge_h = Temps_min / 60
+        - fte = charge_h / (capacite_nette_h * productivite/100)
+        - si fte <= 0.1 alors fte = 0
+    
+    Returns:
+        (applicable: bool, fte: float, formule: str, volume_effectif: float)
+    """
+    famille_uo = (getattr(tache, 'famille_uo', '') or '').strip()
+    produit = (getattr(tache, 'produit', '') or '').strip()
+    base_calcul = getattr(tache, 'base_calcul', None)
+    unite_mesure = (getattr(tache, 'unite_mesure', '') or '').strip()
+    
+    # Vérifier la condition (comparaison insensible à la casse)
+    if famille_uo.upper() != "ARRIVÉE CAMION PRINCIPAL" or produit != "CO Arrivé" or base_calcul != 40:
+        return (False, 0.0, "", 0.0)
+    
+    # Récupérer le volume CO GLOBAL
+    volume_co_annuel = get_co_volume_from_context(ctx_volumes, 'GLOBAL')
+    
+    # Conversion annuel -> journalier
+    nb_jours = getattr(ctx_volumes, 'nb_jours_ouvres_an', 264) or 264
+    volume_total = volume_co_annuel / nb_jours if nb_jours > 0 else 0
+    
+    # Appliquer base_calcul = 40%
+    volume_effectif = volume_total * 0.40
+    
+    # Calcul de la charge selon l'unité de mesure
+    temps_chrono_min = float(getattr(tache, 'moyenne_min', 0) or 0)
+    
+    if unite_mesure == "Sac":
+        # Formule SAC : (volume × 40% / COURRIER_PAR_SAC) × temps_chrono
+        courrier_par_sac = float(getattr(ctx_volumes, 'courriers_par_sac', 4500) or 4500)
+        volume_sac = volume_effectif / courrier_par_sac if courrier_par_sac > 0 else 0
+        temps_calcule_min = volume_sac * temps_chrono_min
+        formule_detail = f"{volume_total:.0f} [Total] × 40% = {volume_effectif:.0f} ÷ {courrier_par_sac:.0f}/sac = {volume_sac:.2f} sacs × {temps_chrono_min:.2f}min"
+    else:
+        # Formule COURRIER : volume × 40% × temps_chrono
+        temps_calcule_min = volume_effectif * temps_chrono_min
+        formule_detail = f"{volume_total:.0f} [Total] × 40% = {volume_effectif:.0f} × {temps_chrono_min:.2f}min"
+    
+    charge_h = temps_calcule_min / 60.0
+    
+    # Calcul ETP
+    capacite_effective = capacite_nette_h * (productivite / 100.0)
+    fte = charge_h / capacite_effective if capacite_effective > 0 else 0.0
+    
+    # Règle : si fte <= 0.1 alors fte = 0
+    if fte <= 0.1:
+        fte = 0.0
+    
+    # Formule de traçabilité
+    formule = f"{formule_detail} = {temps_calcule_min:.2f}min/j → {charge_h:.2f}h/j → ETP={fte:.3f}"
+    
+    if debug:
+        print(f"   🎯 RÈGLE CCC ARRIVÉE CAMION 40% APPLIQUÉE:")
+        print(f"      - Famille UO: {famille_uo}")
+        print(f"      - Base calcul: {base_calcul}")
+        print(f"      - Unité mesure: {unite_mesure}")
+        print(f"      - Volume CO total journalier: {volume_total:.2f}")
+        print(f"      - Volume effectif (40%): {volume_effectif:.2f}")
+        print(f"      - Temps chrono min: {temps_chrono_min:.2f}")
+        print(f"      - Temps calculé min/j: {temps_calcule_min:.2f}")
+        print(f"      - Charge h/j: {charge_h:.2f}")
+        print(f"      - ETP calculé: {fte:.3f}")
+        print(f"      - Formule: {formule}")
+    
+    return (True, fte, formule, volume_effectif)
+
+
+def apply_ccc_rule_depart_axes(tache, ctx_volumes, capacite_nette_h: float, productivite: float, debug: bool = False):
+    """
+    Règle métier CCC #5 : Départ Axes avec base_calcul = 100
+    
+    Condition :
+        - famille_uo == "Départ Axes"
+        - produit == "CO Arrivé"
+        - base_calcul == 100
+    
+    Volume :
+        - volume_total = VOLUME_CO_ARRIVÉ (journalier)
+        - volume_utilisé = volume_total × (1 - pct_axes/100)
+    
+    Formule Courrier :
+        - Temps_min = volume_utilisé × Temps_chrono_min
+    
+    Formule Sac (si unite_mesure == "Sac") :
+        - Temps_min = (volume_utilisé / COURRIER_PAR_SAC) × Temps_chrono_min
+    
+    Puis :
+        - charge_h = Temps_min / 60
+        - fte = charge_h / (capacite_nette_h * productivite/100)
+        - si fte <= 0.1 alors fte = 0
+    
+    Returns:
+        (applicable: bool, fte: float, formule: str, volume_utilise: float)
+    """
+    famille_uo = (getattr(tache, 'famille_uo', '') or '').strip()
+    produit = (getattr(tache, 'produit', '') or '').strip()
+    base_calcul = getattr(tache, 'base_calcul', None)
+    unite_mesure = (getattr(tache, 'unite_mesure', '') or '').strip()
+    
+    # Vérifier la condition (comparaison insensible à la casse)
+    if famille_uo.upper() != "DÉPART AXES" or produit != "CO Arrivé" or base_calcul != 100:
+        return (False, 0.0, "", 0.0)
+    
+    # Récupérer le volume CO GLOBAL
+    volume_co_annuel = get_co_volume_from_context(ctx_volumes, 'GLOBAL')
+    
+    # Conversion annuel -> journalier
+    nb_jours = getattr(ctx_volumes, 'nb_jours_ouvres_an', 264) or 264
+    volume_total = volume_co_annuel / nb_jours if nb_jours > 0 else 0
+    
+    # Récupérer le % AXES
+    pct_axes = float(getattr(ctx_volumes, 'pct_axes_depart', 0.0) or 0.0)
+    
+    # Appliquer % AXES (Départ Axes prend la partie AXES)
+    volume_utilise = volume_total * (pct_axes / 100.0)
+    
+    # Calcul de la charge selon l'unité de mesure
+    temps_chrono_min = float(getattr(tache, 'moyenne_min', 0) or 0)
+    
+    if unite_mesure == "Sac":
+        # Formule SAC : (volume_utilisé / COURRIER_PAR_SAC) × temps_chrono
+        courrier_par_sac = float(getattr(ctx_volumes, 'courriers_par_sac', 4500) or 4500)
+        volume_sac = volume_utilise / courrier_par_sac if courrier_par_sac > 0 else 0
+        temps_calcule_min = volume_sac * temps_chrono_min
+        formule_detail = f"{volume_total:.0f} × {pct_axes:.0f}% = {volume_utilise:.1f} ÷ {courrier_par_sac:.0f}/sac = {volume_sac:.2f} sacs × {temps_chrono_min:.2f}min"
+    else:
+        # Formule COURRIER : volume_utilisé × temps_chrono
+        temps_calcule_min = volume_utilise * temps_chrono_min
+        formule_detail = f"{volume_total:.0f} × {pct_axes:.0f}% = {volume_utilise:.1f} × {temps_chrono_min:.2f}min"
+    
+    charge_h = temps_calcule_min / 60.0
+    
+    # Calcul ETP
+    capacite_effective = capacite_nette_h * (productivite / 100.0)
+    fte = charge_h / capacite_effective if capacite_effective > 0 else 0.0
+    
+    # Règle : si fte <= 0.1 alors fte = 0
+    if fte <= 0.1:
+        fte = 0.0
+    
+    # Formule de traçabilité
+    formule = f"{formule_detail} = {temps_calcule_min:.2f}min/j → {charge_h:.2f}h/j → ETP={fte:.3f}"
+    
+    if debug:
+        print(f"   🎯 RÈGLE CCC DÉPART AXES APPLIQUÉE:")
+        print(f"      - Famille UO: {famille_uo}")
+        print(f"      - Produit: {produit}")
+        print(f"      - Base calcul: {base_calcul}")
+        print(f"      - Unité mesure: {unite_mesure}")
+        print(f"      - Volume CO total journalier: {volume_total:.2f}")
+        print(f"      - % AXES: {pct_axes:.0f}%")
+        print(f"      - Volume utilisé (1-AXES): {volume_utilise:.2f}")
+        print(f"      - Temps chrono min: {temps_chrono_min:.2f}")
+        print(f"      - Temps calculé min/j: {temps_calcule_min:.2f}")
+        print(f"      - Charge h/j: {charge_h:.2f}")
+        print(f"      - ETP calculé: {fte:.3f}")
+        print(f"      - Formule: {formule}")
+    
+    return (True, fte, formule, volume_utilise)
+
+
+def apply_ccc_rule_dist_local_courrier(tache, ctx_volumes, capacite_nette_h: float, productivite: float, debug: bool = False):
+    """
+    Règle métier CCC #6 : Distribution Locale / Courrier / Base 40 (hors AXES)
+    
+    Condition :
+        - unite_mesure == "Courrier"
+        - famille_uo == "Distribution Locale"
+        - produit == "CO Arrivé"
+        - base_calcul == 40
+    
+    Volume :
+        - volume_local = VOLUME_CO_ARRIVÉ × (1 - pct_axes/100)
+    
+    Formule :
+        - Temps_min = volume_local × 40% × Temps_chrono_min
+        - charge_h = Temps_min / 60
+        - fte = charge_h / (capacite_nette_h * productivite/100)
+        - si fte <= 0.1 alors fte = 0
+    
+    Returns:
+        (applicable: bool, fte: float, formule: str, volume_local: float)
+    """
+    unite_mesure = (getattr(tache, 'unite_mesure', '') or '').strip()
+    famille_uo = (getattr(tache, 'famille_uo', '') or '').strip()
+    produit = (getattr(tache, 'produit', '') or '').strip()
+    base_calcul = getattr(tache, 'base_calcul', None)
+    
+    # Vérifier la condition (comparaison insensible à la casse)
+    if unite_mesure != "Courrier" or famille_uo.upper() != "DISTRIBUTION LOCALE" or produit != "CO Arrivé" or base_calcul != 40:
+        return (False, 0.0, "", 0.0)
+    
+    # Récupérer le volume CO GLOBAL
+    volume_co_annuel = get_co_volume_from_context(ctx_volumes, 'GLOBAL')
+    
+    # Conversion annuel -> journalier
+    nb_jours = getattr(ctx_volumes, 'nb_jours_ouvres_an', 264) or 264
+    volume_total = volume_co_annuel / nb_jours if nb_jours > 0 else 0
+    
+    # Récupérer le % AXES (pour l'exclure)
+    pct_axes = float(getattr(ctx_volumes, 'pct_axes_arrivee', 0.0) or 0.0)
+    
+    # Calculer volume hors-axes (local uniquement)
+    volume_local = volume_total * (1 - pct_axes / 100.0)
+    
+    # Appliquer base_calcul = 40%
+    volume_effectif = volume_local * 0.40
+    
+    # Calcul de la charge
+    temps_chrono_min = float(getattr(tache, 'moyenne_min', 0) or 0)
+    temps_calcule_min = volume_effectif * temps_chrono_min
+    charge_h = temps_calcule_min / 60.0
+    
+    # Calcul ETP
+    capacite_effective = capacite_nette_h * (productivite / 100.0)
+    fte = charge_h / capacite_effective if capacite_effective > 0 else 0.0
+    
+    # Règle : si fte <= 0.1 alors fte = 0
+    if fte <= 0.1:
+        fte = 0.0
+    
+    # Formule de traçabilité
+    formule = f"{volume_total:.0f} × (1-{pct_axes:.0f}%) × 40% × {temps_chrono_min:.2f}min = {temps_calcule_min:.2f}min/j → {charge_h:.2f}h/j → ETP={fte:.3f}"
+    
+    if debug:
+        print(f"   🎯 RÈGLE CCC DIST LOCAL COURRIER 40% APPLIQUÉE:")
+        print(f"      - Unité mesure: {unite_mesure}")
+        print(f"      - Famille UO: {famille_uo}")
+        print(f"      - Base calcul: {base_calcul}")
+        print(f"      - Volume CO total journalier: {volume_total:.2f}")
+        print(f"      - % AXES: {pct_axes:.0f}%")
+        print(f"      - Volume local (1-AXES): {volume_local:.2f}")
+        print(f"      - Volume effectif (40%): {volume_effectif:.2f}")
+        print(f"      - Temps chrono min: {temps_chrono_min:.2f}")
+        print(f"      - Temps calculé min/j: {temps_calcule_min:.2f}")
+        print(f"      - Charge h/j: {charge_h:.2f}")
+        print(f"      - ETP calculé: {fte:.3f}")
+        print(f"      - Formule: {formule}")
+    
+    return (True, fte, formule, volume_local)
+
+
+def apply_ccc_rule_dist_local_sac(tache, ctx_volumes, capacite_nette_h: float, productivite: float, debug: bool = False):
+    """
+    Règle métier CCC #7 : Distribution Locale / Sac / Base 60 (hors AXES)
+    
+    Condition :
+        - unite_mesure == "Sac"
+        - famille_uo == "Distribution Locale"
+        - produit == "CO Arrivé"
+        - base_calcul == 60
+    
+    Volume :
+        - volume_local = VOLUME_CO_ARRIVÉ × (1 - pct_axes/100)
+        - volume_sac = volume_local / COURRIER_PAR_SAC
+    
+    Formule :
+        - Temps_min = volume_sac × 60% × Temps_chrono_min
+        - charge_h = Temps_min / 60
+        - fte = charge_h / (capacite_nette_h * productivite/100)
+        - si fte <= 0.1 alors fte = 0
+    
+    Contraintes :
+        - AXES totalement exclus
+        - Appliquer (1 - %AXES) avant base_calcul
+        - Appliquer conversion SAC avant base_calcul
+    
+    Returns:
+        (applicable: bool, fte: float, formule: str, volume_sac: float)
+    """
+    unite_mesure = (getattr(tache, 'unite_mesure', '') or '').strip()
+    famille_uo = (getattr(tache, 'famille_uo', '') or '').strip()
+    produit = (getattr(tache, 'produit', '') or '').strip()
+    base_calcul = getattr(tache, 'base_calcul', None)
+    
+    # Vérifier la condition (comparaison insensible à la casse)
+    if unite_mesure != "Sac" or famille_uo.upper() != "DISTRIBUTION LOCALE" or produit != "CO Arrivé" or base_calcul != 60:
+        return (False, 0.0, "", 0.0)
+    
+    # Récupérer le volume CO GLOBAL
+    volume_co_annuel = get_co_volume_from_context(ctx_volumes, 'GLOBAL')
+    
+    # Conversion annuel -> journalier
+    nb_jours = getattr(ctx_volumes, 'nb_jours_ouvres_an', 264) or 264
+    volume_total = volume_co_annuel / nb_jours if nb_jours > 0 else 0
+    
+    # Récupérer le % AXES (pour l'exclure)
+    pct_axes = float(getattr(ctx_volumes, 'pct_axes_arrivee', 0.0) or 0.0)
+    
+    # Calculer volume hors-axes (local uniquement)
+    volume_local = volume_total * (1 - pct_axes / 100.0)
+    
+    # Récupérer COURRIER_PAR_SAC
+    courrier_par_sac = float(getattr(ctx_volumes, 'courriers_par_sac', 4500) or 4500)
+    
+    # Conversion courrier -> sac
+    volume_sac = volume_local / courrier_par_sac if courrier_par_sac > 0 else 0
+    
+    # Appliquer base_calcul = 60%
+    volume_effectif = volume_sac * 0.60
+    
+    # Calcul de la charge
+    temps_chrono_min = float(getattr(tache, 'moyenne_min', 0) or 0)
+    temps_calcule_min = volume_effectif * temps_chrono_min
+    charge_h = temps_calcule_min / 60.0
+    
+    # Calcul ETP
+    capacite_effective = capacite_nette_h * (productivite / 100.0)
+    fte = charge_h / capacite_effective if capacite_effective > 0 else 0.0
+    
+    # Règle : si fte <= 0.1 alors fte = 0
+    if fte <= 0.1:
+        fte = 0.0
+    
+    # Formule de traçabilité
+    formule = f"{volume_total:.0f} × (1-{pct_axes:.0f}%) ÷ {courrier_par_sac:.0f}/sac × 60% × {temps_chrono_min:.2f}min = {temps_calcule_min:.2f}min/j → {charge_h:.2f}h/j → ETP={fte:.3f}"
+    
+    if debug:
+        print(f"   🎯 RÈGLE CCC DIST LOCAL SAC 60% APPLIQUÉE:")
+        print(f"      - Unité mesure: {unite_mesure}")
+        print(f"      - Famille UO: {famille_uo}")
+        print(f"      - Base calcul: {base_calcul}")
+        print(f"      - Volume CO total journalier: {volume_total:.2f}")
+        print(f"      - % AXES: {pct_axes:.0f}%")
+        print(f"      - Volume local (1-AXES): {volume_local:.2f}")
+        print(f"      - Courrier par sac: {courrier_par_sac:.0f}")
+        print(f"      - Volume sac: {volume_sac:.2f}")
+        print(f"      - Volume effectif (60%): {volume_effectif:.2f}")
+        print(f"      - Temps chrono min: {temps_chrono_min:.2f}")
+        print(f"      - Temps calculé min/j: {temps_calcule_min:.2f}")
+        print(f"      - Charge h/j: {charge_h:.2f}")
+        print(f"      - ETP calculé: {fte:.3f}")
+        print(f"      - Formule: {formule}")
+    
+    return (True, fte, formule, volume_sac)
+
+
+
+
+# ============================================================================
+# RÈGLES CCC POUR CO MED (Courrier Médical - Départ)
+# Identiques aux règles CO Arrivé mais avec DEPART au lieu de ARRIVEE
+# ============================================================================
+
+def apply_ccc_rule_med_dist(tache, ctx_volumes, capacite_nette_h: float, productivite: float, debug: bool = False):
+    """Règle CCC MED #1 : CO MED Distribution Locale (base_calcul=100)"""
+    produit = (getattr(tache, 'produit', '') or '').strip()
+    base_calcul = getattr(tache, 'base_calcul', None)
+    famille_uo = (getattr(tache, 'famille_uo', '') or '').strip()
+    
+    if produit != "CO MED" or base_calcul != 100 or famille_uo.upper() != "DISTRIBUTION LOCALE":
+        return (False, 0.0, "", 0.0)
+    
+    volume_annuel = get_co_volume_generic(ctx_volumes, 'DEPART', 'DISTRIBUTION')
+    if volume_annuel == 0:
+        volume_annuel = get_co_volume_generic(ctx_volumes, 'DEPART', 'GLOBAL')
+    
+    nb_jours = getattr(ctx_volumes, 'nb_jours_ouvres_an', 264) or 264
+    volume_jour = volume_annuel / nb_jours if nb_jours > 0 else 0
+    
+    moyenne_min = float(getattr(tache, 'moyenne_min', 0) or 0)
+    charge_min = moyenne_min * volume_jour
+    charge_h = charge_min / 60.0
+    
+    capacite_effective = capacite_nette_h * (productivite / 100.0)
+    fte = charge_h / capacite_effective if capacite_effective > 0 else 0.0
+    
+    if fte <= 0.1:
+        fte = 0.0
+    
+    formule = f"CO_MED_DEPART_J={volume_jour:.0f} × {moyenne_min:.2f}min = {charge_min:.2f}min/j → {charge_h:.2f}h/j → ETP={fte:.3f}"
+    
+    if debug:
+        print(f"   🎯 RÈGLE CCC MED #1 APPLIQUÉE:")
+        print(f"      - Produit: {produit}")
+        print(f"      - Volume MED Départ journalier: {volume_jour:.2f}")
+        print(f"      - Formule: {formule}")
+    
+    return (True, fte, formule, volume_jour)
+
+
+def apply_ccc_rule_med_sac(tache, ctx_volumes, capacite_nette_h: float, productivite: float, debug: bool = False):
+    """Règle CCC MED #2 : CO MED Sac (base_calcul=100)"""
+    produit = (getattr(tache, 'produit', '') or '').strip()
+    unite_mesure = (getattr(tache, 'unite_mesure', '') or '').strip()
+    base_calcul = getattr(tache, 'base_calcul', None)
+    
+    if produit != "CO MED" or unite_mesure != "Sac" or base_calcul != 100:
+        return (False, 0.0, "", 0.0)
+    
+    volume_co_annuel = get_co_volume_generic(ctx_volumes, 'DEPART', 'GLOBAL')
+    nb_jours = getattr(ctx_volumes, 'nb_jours_ouvres_an', 264) or 264
+    volume_co_jour = volume_co_annuel / nb_jours if nb_jours > 0 else 0
+    
+    courrier_par_sac = float(getattr(ctx_volumes, 'courriers_par_sac', 4500) or 4500)
+    volume_sac = volume_co_jour / courrier_par_sac if courrier_par_sac > 0 else 0
+    
+    temps_chrono_min = float(getattr(tache, 'moyenne_min', 0) or 0)
+    temps_calcule_min = volume_sac * temps_chrono_min
+    charge_h = temps_calcule_min / 60.0
+    
+    capacite_effective = capacite_nette_h * (productivite / 100.0)
+    fte = charge_h / capacite_effective if capacite_effective > 0 else 0.0
+    
+    if fte <= 0.1:
+        fte = 0.0
+    
+    formule = f"CO_MED_J={volume_co_jour:.0f} ÷ {courrier_par_sac:.0f}/sac = {volume_sac:.2f} sacs × {temps_chrono_min:.2f}min = {temps_calcule_min:.2f}min/j → {charge_h:.2f}h/j → ETP={fte:.3f}"
+    
+    return (True, fte, formule, volume_sac)
+
+
+def apply_ccc_rule_med_dist_local(tache, ctx_volumes, capacite_nette_h: float, productivite: float, debug: bool = False):
+    """Règle CCC MED #3 : CO MED Distribution Locale 40%"""
+    produit = (getattr(tache, 'produit', '') or '').strip()
+    famille_uo = (getattr(tache, 'famille_uo', '') or '').strip()
+    base_calcul = getattr(tache, 'base_calcul', None)
+    
+    if produit != "CO MED" or famille_uo.upper() != "DISTRIBUTION LOCALE" or base_calcul != 40:
+        return (False, 0.0, "", 0.0)
+    
+    volume_co_annuel = get_co_volume_generic(ctx_volumes, 'DEPART', 'GLOBAL')
+    nb_jours = getattr(ctx_volumes, 'nb_jours_ouvres_an', 264) or 264
+    volume_total = volume_co_annuel / nb_jours if nb_jours > 0 else 0
+    
+    pct_local = float(getattr(ctx_volumes, 'pct_local', 100.0) or 100.0)
+    volume_local = volume_total * (pct_local / 100.0)
+    volume_effectif = volume_local * 0.40
+    
+    temps_chrono_min = float(getattr(tache, 'moyenne_min', 0) or 0)
+    temps_calcule_min = volume_effectif * temps_chrono_min
+    charge_h = temps_calcule_min / 60.0
+    
+    capacite_effective = capacite_nette_h * (productivite / 100.0)
+    fte = charge_h / capacite_effective if capacite_effective > 0 else 0.0
+    
+    if fte <= 0.1:
+        fte = 0.0
+    
+    formule = f"CO_MED_J={volume_total:.0f} × {pct_local:.0f}%LOCAL = {volume_local:.0f} × 40% = {volume_effectif:.0f} × {temps_chrono_min:.2f}min = {temps_calcule_min:.2f}min/j → {charge_h:.2f}h/j → ETP={fte:.3f}"
+    
+    return (True, fte, formule, volume_effectif)
+
+
+def apply_ccc_rule_med_depart_camion(tache, ctx_volumes, capacite_nette_h: float, productivite: float, debug: bool = False):
+    """Règle CCC MED #4 : Départ Camion Principal 40%"""
+    famille_uo = (getattr(tache, 'famille_uo', '') or '').strip()
+    produit = (getattr(tache, 'produit', '') or '').strip()
+    base_calcul = getattr(tache, 'base_calcul', None)
+    unite_mesure = (getattr(tache, 'unite_mesure', '') or '').strip()
+    
+    if famille_uo.upper() != "DÉPART CAMION PRINCIPAL" or produit != "CO MED" or base_calcul != 40:
+        return (False, 0.0, "", 0.0)
+    
+    volume_co_annuel = get_co_volume_generic(ctx_volumes, 'DEPART', 'GLOBAL')
+    nb_jours = getattr(ctx_volumes, 'nb_jours_ouvres_an', 264) or 264
+    volume_total = volume_co_annuel / nb_jours if nb_jours > 0 else 0
+    
+    volume_effectif = volume_total * 0.40
+    temps_chrono_min = float(getattr(tache, 'moyenne_min', 0) or 0)
+    
+    if unite_mesure == "Sac":
+        courrier_par_sac = float(getattr(ctx_volumes, 'courriers_par_sac', 4500) or 4500)
+        volume_sac = volume_effectif / courrier_par_sac if courrier_par_sac > 0 else 0
+        temps_calcule_min = volume_sac * temps_chrono_min
+        formule_detail = f"{volume_total:.0f} [Total] × 40% = {volume_effectif:.0f} ÷ {courrier_par_sac:.0f}/sac = {volume_sac:.2f} sacs × {temps_chrono_min:.2f}min"
+    else:
+        temps_calcule_min = volume_effectif * temps_chrono_min
+        formule_detail = f"{volume_total:.0f} [Total] × 40% = {volume_effectif:.0f} × {temps_chrono_min:.2f}min"
+    
+    charge_h = temps_calcule_min / 60.0
+    capacite_effective = capacite_nette_h * (productivite / 100.0)
+    fte = charge_h / capacite_effective if capacite_effective > 0 else 0.0
+    
+    if fte <= 0.1:
+        fte = 0.0
+    
+    formule = f"{formule_detail} = {temps_calcule_min:.2f}min/j → {charge_h:.2f}h/j → ETP={fte:.3f}"
+    
+    return (True, fte, formule, volume_effectif)
+
+
+def apply_ccc_rule_med_tri_depart(tache, ctx_volumes, capacite_nette_h: float, productivite: float, debug: bool = False):
+    """Règle CCC MED #5 : Tri Départ (1 - %AXES)"""
+    famille_uo = (getattr(tache, 'famille_uo', '') or '').strip()
+    produit = (getattr(tache, 'produit', '') or '').strip()
+    base_calcul = getattr(tache, 'base_calcul', None)
+    unite_mesure = (getattr(tache, 'unite_mesure', '') or '').strip()
+    
+    if famille_uo.upper() != "TRI DÉPART" or produit != "CO MED" or base_calcul != 100:
+        return (False, 0.0, "", 0.0)
+    
+    volume_co_annuel = get_co_volume_generic(ctx_volumes, 'DEPART', 'GLOBAL')
+    nb_jours = getattr(ctx_volumes, 'nb_jours_ouvres_an', 264) or 264
+    volume_total = volume_co_annuel / nb_jours if nb_jours > 0 else 0
+    
+    pct_axes = float(getattr(ctx_volumes, 'pct_axes_depart', 0.0) or 0.0)
+    volume_utilise = volume_total * (1 - pct_axes / 100.0)
+    
+    temps_chrono_min = float(getattr(tache, 'moyenne_min', 0) or 0)
+    
+    if unite_mesure == "Sac":
+        courrier_par_sac = float(getattr(ctx_volumes, 'courriers_par_sac', 4500) or 4500)
+        volume_sac = volume_utilise / courrier_par_sac if courrier_par_sac > 0 else 0
+        temps_calcule_min = volume_sac * temps_chrono_min
+        formule_detail = f"{volume_total:.0f} × (1-{pct_axes:.0f}%) = {volume_utilise:.1f} ÷ {courrier_par_sac:.0f}/sac = {volume_sac:.2f} sacs × {temps_chrono_min:.2f}min"
+    else:
+        temps_calcule_min = volume_utilise * temps_chrono_min
+        formule_detail = f"{volume_total:.0f} × (1-{pct_axes:.0f}%) = {volume_utilise:.1f} × {temps_chrono_min:.2f}min"
+    
+    charge_h = temps_calcule_min / 60.0
+    capacite_effective = capacite_nette_h * (productivite / 100.0)
+    fte = charge_h / capacite_effective if capacite_effective > 0 else 0.0
+    
+    if fte <= 0.1:
+        fte = 0.0
+    
+    formule = f"{formule_detail} = {temps_calcule_min:.2f}min/j → {charge_h:.2f}h/j → ETP={fte:.3f}"
+    
+    return (True, fte, formule, volume_utilise)
+
+
+def apply_ccc_rule_med_dist_courrier(tache, ctx_volumes, capacite_nette_h: float, productivite: float, debug: bool = False):
+    """Règle CCC MED #6 : Distribution Locale Courrier 40% (hors AXES)"""
+    unite_mesure = (getattr(tache, 'produit', '') or '').strip()
+    famille_uo = (getattr(tache, 'famille_uo', '') or '').strip()
+    produit = (getattr(tache, 'produit', '') or '').strip()
+    base_calcul = getattr(tache, 'base_calcul', None)
+    
+    if unite_mesure != "Courrier" or famille_uo.upper() != "DISTRIBUTION LOCALE" or produit != "CO MED" or base_calcul != 40:
+        return (False, 0.0, "", 0.0)
+    
+    volume_co_annuel = get_co_volume_generic(ctx_volumes, 'DEPART', 'GLOBAL')
+    nb_jours = getattr(ctx_volumes, 'nb_jours_ouvres_an', 264) or 264
+    volume_total = volume_co_annuel / nb_jours if nb_jours > 0 else 0
+    
+    pct_axes = float(getattr(ctx_volumes, 'pct_axes_depart', 0.0) or 0.0)
+    volume_local = volume_total * (1 - pct_axes / 100.0)
+    volume_effectif = volume_local * 0.40
+    
+    temps_chrono_min = float(getattr(tache, 'moyenne_min', 0) or 0)
+    temps_calcule_min = volume_effectif * temps_chrono_min
+    charge_h = temps_calcule_min / 60.0
+    
+    capacite_effective = capacite_nette_h * (productivite / 100.0)
+    fte = charge_h / capacite_effective if capacite_effective > 0 else 0.0
+    
+    if fte <= 0.1:
+        fte = 0.0
+    
+    formule = f"CO_MED_J={volume_total:.0f} × (1-{pct_axes:.0f}%) × 40% × {temps_chrono_min:.2f}min = {temps_calcule_min:.2f}min/j → {charge_h:.2f}h/j → ETP={fte:.3f}"
+    
+    return (True, fte, formule, volume_local)
+
+
+def apply_ccc_rule_med_dist_sac(tache, ctx_volumes, capacite_nette_h: float, productivite: float, debug: bool = False):
+    """Règle CCC MED #7 : Distribution Locale Sac 60% (hors AXES)"""
+    unite_mesure = (getattr(tache, 'unite_mesure', '') or '').strip()
+    famille_uo = (getattr(tache, 'famille_uo', '') or '').strip()
+    produit = (getattr(tache, 'produit', '') or '').strip()
+    base_calcul = getattr(tache, 'base_calcul', None)
+    
+    if unite_mesure != "Sac" or famille_uo.upper() != "DISTRIBUTION LOCALE" or produit != "CO MED" or base_calcul != 60:
+        return (False, 0.0, "", 0.0)
+    
+    volume_co_annuel = get_co_volume_generic(ctx_volumes, 'DEPART', 'GLOBAL')
+    nb_jours = getattr(ctx_volumes, 'nb_jours_ouvres_an', 264) or 264
+    volume_total = volume_co_annuel / nb_jours if nb_jours > 0 else 0
+    
+    pct_axes = float(getattr(ctx_volumes, 'pct_axes_depart', 0.0) or 0.0)
+    volume_local = volume_total * (1 - pct_axes / 100.0)
+    
+    courrier_par_sac = float(getattr(ctx_volumes, 'courriers_par_sac', 4500) or 4500)
+    volume_sac = volume_local / courrier_par_sac if courrier_par_sac > 0 else 0
+    volume_effectif = volume_sac * 0.60
+    
+    temps_chrono_min = float(getattr(tache, 'moyenne_min', 0) or 0)
+    temps_calcule_min = volume_effectif * temps_chrono_min
+    charge_h = temps_calcule_min / 60.0
+    
+    capacite_effective = capacite_nette_h * (productivite / 100.0)
+    fte = charge_h / capacite_effective if capacite_effective > 0 else 0.0
+    
+    if fte <= 0.1:
+        fte = 0.0
+    
+    formule = f"CO_MED_J={volume_total:.0f} × (1-{pct_axes:.0f}%) ÷ {courrier_par_sac:.0f}/sac × 60% × {temps_chrono_min:.2f}min = {temps_calcule_min:.2f}min/j → {charge_h:.2f}h/j → ETP={fte:.3f}"
+    
+    return (True, fte, formule, volume_sac)
+
+
+
+
+
+    """
+    Règle CCC CR #1 : CR Arrivé / Arrivée Camion Principal / Courrier / Base 40 / AXES
+    
+    Condition :
+        - produit == "CR Arrivé"
+        - famille_uo == "Arrivée Camion Principal"
+        - unite_mesure == "Courrier"
+        - base_calcul == 40
+    
+    Volume :
+        - volume_axes = VOLUME_CR_ARRIVÉ × (pct_axes/100)
+    
+    Formule :
+        - Temps_min = volume_axes × 40% × Temps_chrono_min
+        - charge_h = Temps_min / 60
+        - fte = charge_h / (capacite_nette_h * productivite/100)
+        - si fte <= 0.1 alors fte = 0
+    
+    Contraintes :
+        - AXES inclus (ne pas utiliser 1 - %AXES)
+        - Appliquer %AXES avant base_calcul
+    
+    Returns:
+        (applicable: bool, fte: float, formule: str, volume_axes: float)
+    """
+    produit = (getattr(tache, 'produit', '') or '').strip()
+    famille_uo = (getattr(tache, 'famille_uo', '') or '').strip()
+    unite_mesure = (getattr(tache, 'unite_mesure', '') or '').strip()
+    base_calcul = getattr(tache, 'base_calcul', None)
+    
+    # Vérifier la condition (comparaison insensible à la casse)
+    if (produit != "CR Arrivé" or 
+        famille_uo.upper() != "ARRIVÉE CAMION PRINCIPAL" or 
+        unite_mesure != "Courrier" or 
+        base_calcul != 40):
+        return (False, 0.0, "", 0.0)
+    
+    # Récupérer le volume CR ARRIVEE
+    volume_cr_annuel = 0.0
+    volumes_flux = getattr(ctx_volumes, 'volumes_flux', [])
+    
+    for vol_entry in volumes_flux:
+        if hasattr(vol_entry, 'flux'):
+            flux = getattr(vol_entry, 'flux', '')
+            sens = getattr(vol_entry, 'sens', '')
+            volume = getattr(vol_entry, 'volume', 0)
+        else:
+            flux = vol_entry.get('flux', '')
+            sens = vol_entry.get('sens', '')
+            volume = vol_entry.get('volume', 0)
+        
+        if flux == 'CR' and sens == 'ARRIVEE':
+            volume_cr_annuel = float(volume)
+            break
+    
+    # Conversion annuel -> journalier
+    nb_jours = getattr(ctx_volumes, 'nb_jours_ouvres_an', 264) or 264
+    volume_total = volume_cr_annuel / nb_jours if nb_jours > 0 else 0
+    
+    # Récupérer le % AXES (pour l'arrivée)
+    pct_axes = float(getattr(ctx_volumes, 'pct_axes_arrivee', 0.0) or 0.0)
+    
+    # Appliquer %AXES (INCLURE les axes, pas exclure)
+    volume_axes = volume_total * (pct_axes / 100.0)
+    
+    # Appliquer base_calcul = 40%
+    volume_effectif = volume_axes * 0.40
+    
+    # Calcul de la charge
+    temps_chrono_min = float(getattr(tache, 'moyenne_min', 0) or 0)
+    temps_calcule_min = volume_effectif * temps_chrono_min
+    charge_h = temps_calcule_min / 60.0
+    
+    # Calcul ETP
+    capacite_effective = capacite_nette_h * (productivite / 100.0)
+    fte = charge_h / capacite_effective if capacite_effective > 0 else 0.0
+    
+    # Règle : si fte <= 0.1 alors fte = 0
+    if fte <= 0.1:
+        fte = 0.0
+    
+    # Formule de traçabilité
+    formule = f"CR {volume_total:.0f} × {pct_axes:.0f}% × 40% × {temps_chrono_min:.2f}min = {temps_calcule_min:.2f}min/j → {charge_h:.2f}h/j → ETP={fte:.3f}"
+    
+    if debug:
+        print(f"   🎯 RÈGLE CCC CR ARRIVÉE AXES APPLIQUÉE:")
+        print(f"      - Produit: {produit}")
+        print(f"      - Volume CR total journalier: {volume_total:.2f}")
+        print(f"      - % AXES: {pct_axes:.0f}%")
+        print(f"      - Volume AXES (inclus): {volume_axes:.2f}")
+        print(f"      - Formule: {formule}")
+    
+    return (True, fte, formule, volume_axes)
+
+
+def apply_ccc_rule_cr_depart_axes_caisson(tache, ctx_volumes, capacite_nette_h: float, productivite: float, debug: bool = False):
+    """
+    Règle CCC CR #2 : CR Arrivé / Départ Axes / Caisson / Base 40 (AXES)
+    
+    Condition :
+        - produit == "CR Arrivé"
+        - famille_uo == "Départ Axes"
+        - unite_mesure == "Caisson"
+        - base_calcul == 40
+    
+    Volume (AXES uniquement) :
+        - volume_axes = VOLUME_CR_ARRIVÉ_DIST × (pct_axes/100)
+    
+    Conversion :
+        - volume_caisson = volume_axes / CR_PAR_CAISSON
+    
+    Formule :
+        - Temps_min = volume_caisson × 40% × Temps_chrono_min
+        - charge_h = Temps_min / 60
+        - fte = charge_h / (capacite_nette_h * productivite/100)
+        - si fte <= 0.1 alors fte = 0
+    
+    Contraintes :
+        - Utiliser pct_axes (partie AXES) et NON (1 - pct_axes)
+        - Appliquer %AXES avant conversion et avant base_calcul
+        - Conversion Caisson obligatoire
+    
+    Returns:
+        (applicable: bool, fte: float, formule: str, volume_caisson: float)
+    """
+    produit = (getattr(tache, 'produit', '') or '').strip()
+    famille_uo = (getattr(tache, 'famille_uo', '') or '').strip()
+    unite_mesure = (getattr(tache, 'unite_mesure', '') or '').strip()
+    base_calcul = getattr(tache, 'base_calcul', None)
+    
+    # Vérifier la condition (comparaison insensible à la casse)
+    if (produit != "CR Arrivé" or 
+        famille_uo.upper() != "DÉPART AXES" or 
+        unite_mesure != "Caisson" or 
+        base_calcul != 40):
+        return (False, 0.0, "", 0.0)
+    
+    # Récupérer le volume CR ARRIVEE (segment DISTRIBUTION ou GLOBAL)
+    volume_cr_annuel = 0.0
+    volumes_flux = getattr(ctx_volumes, 'volumes_flux', [])
+    
+    for vol_entry in volumes_flux:
+        if hasattr(vol_entry, 'flux'):
+            flux = getattr(vol_entry, 'flux', '')
+            sens = getattr(vol_entry, 'sens', '')
+            seg = getattr(vol_entry, 'segment', '')
+            volume = getattr(vol_entry, 'volume', 0)
+        else:
+            flux = vol_entry.get('flux', '')
+            sens = vol_entry.get('sens', '')
+            seg = vol_entry.get('segment', '')
+            volume = vol_entry.get('volume', 0)
+        
+        # Chercher d'abord DISTRIBUTION, sinon GLOBAL
+        if flux == 'CR' and sens == 'ARRIVEE':
+            if seg == 'DISTRIBUTION':
+                volume_cr_annuel = float(volume)
+                break
+            elif seg == 'GLOBAL' and volume_cr_annuel == 0:
+                volume_cr_annuel = float(volume)
+    
+    # Conversion annuel -> journalier
+    nb_jours = getattr(ctx_volumes, 'nb_jours_ouvres_an', 264) or 264
+    volume_total = volume_cr_annuel / nb_jours if nb_jours > 0 else 0
+    
+    # Récupérer le % AXES (pour le départ)
+    pct_axes = float(getattr(ctx_volumes, 'pct_axes_depart', 0.0) or 0.0)
+    
+    # Appliquer %AXES (INCLURE les axes, pas exclure)
+    volume_axes = volume_total * (pct_axes / 100.0)
+    
+    # Récupérer CR_PAR_CAISSON (paramètre de conversion)
+    cr_par_caisson = float(getattr(ctx_volumes, 'cr_par_caisson', 50.0) or 50.0)
+    
+    # Conversion CR -> Caisson
+    volume_caisson = volume_axes / cr_par_caisson if cr_par_caisson > 0 else 0
+    
+    # Appliquer base_calcul = 40%
+    volume_effectif = volume_caisson * 0.40
+    
+    # Calcul de la charge
+    temps_chrono_min = float(getattr(tache, 'moyenne_min', 0) or 0)
+    temps_calcule_min = volume_effectif * temps_chrono_min
+    charge_h = temps_calcule_min / 60.0
+    
+    # Calcul ETP
+    capacite_effective = capacite_nette_h * (productivite / 100.0)
+    fte = charge_h / capacite_effective if capacite_effective > 0 else 0.0
+    
+    # Règle : si fte <= 0.1 alors fte = 0
+    if fte <= 0.1:
+        fte = 0.0
+    
+    # Formule de traçabilité
+    formule = f"CR {volume_total:.0f} × {pct_axes:.0f}% = {volume_axes:.2f} ÷ {cr_par_caisson:.0f}/caisson × 40% × {temps_chrono_min:.2f}min = {temps_calcule_min:.2f}min/j → {charge_h:.2f}h/j → ETP={fte:.3f}"
+    
+    if debug:
+        print(f"   🎯 RÈGLE CCC CR DÉPART AXES CAISSON APPLIQUÉE:")
+        print(f"      - Produit: {produit}")
+        print(f"      - Famille UO: {famille_uo}")
+        print(f"      - Unité mesure: {unite_mesure}")
+        print(f"      - Volume CR total journalier: {volume_total:.2f}")
+        print(f"      - % AXES: {pct_axes:.0f}%")
+        print(f"      - Volume AXES: {volume_axes:.2f}")
+        print(f"      - CR par caisson: {cr_par_caisson:.0f}")
+        print(f"      - Volume caisson: {volume_caisson:.2f}")
+        print(f"      - Formule: {formule}")
+    
+    return (True, fte, formule, volume_caisson)
+
+
+def apply_ccc_rule_cr_dist_local(tache, ctx_volumes, capacite_nette_h: float, productivite: float, debug: bool = False):
+    """
+    Règle CCC CR #3 : CR Arrivé / Distribution Locale / Courrier / Base 40 (LOCAL)
+    
+    Condition :
+        - produit == "CR Arrivé"
+        - famille_uo == "Distribution Locale"
+        - unite_mesure == "Courrier"
+        - base_calcul == 40
+    
+    Volume (LOCAL uniquement, AXES exclu) :
+        - volume_local = VOLUME_CR_ARRIVÉ_DIST × (pct_local/100)
+        - ou: volume_local = VOLUME_CR_ARRIVÉ_DIST × (1 - pct_axes/100)
+    
+    Formule :
+        - Temps_min = volume_local × 40% × Temps_chrono_min
+        - charge_h = Temps_min / 60
+        - fte = charge_h / (capacite_nette_h * productivite/100)
+        - si fte <= 0.1 alors fte = 0
+    
+    Contraintes :
+        - AXES totalement exclu
+        - Appliquer %LOCAL avant base_calcul
+    
+    Returns:
+        (applicable: bool, fte: float, formule: str, volume_local: float)
+    """
+    produit = (getattr(tache, 'produit', '') or '').strip()
+    famille_uo = (getattr(tache, 'famille_uo', '') or '').strip()
+    unite_mesure = (getattr(tache, 'unite_mesure', '') or '').strip()
+    base_calcul = getattr(tache, 'base_calcul', None)
+    
+    # Vérifier la condition (comparaison insensible à la casse)
+    if (produit != "CR Arrivé" or 
+        famille_uo.upper() != "DISTRIBUTION LOCALE" or 
+        unite_mesure != "Courrier" or 
+        base_calcul != 40):
+        return (False, 0.0, "", 0.0)
+    
+    # Récupérer le volume CR ARRIVEE (segment DISTRIBUTION ou GLOBAL)
+    volume_cr_annuel = 0.0
+    volumes_flux = getattr(ctx_volumes, 'volumes_flux', [])
+    
+    for vol_entry in volumes_flux:
+        if hasattr(vol_entry, 'flux'):
+            flux = getattr(vol_entry, 'flux', '')
+            sens = getattr(vol_entry, 'sens', '')
+            seg = getattr(vol_entry, 'segment', '')
+            volume = getattr(vol_entry, 'volume', 0)
+        else:
+            flux = vol_entry.get('flux', '')
+            sens = vol_entry.get('sens', '')
+            seg = vol_entry.get('segment', '')
+            volume = vol_entry.get('volume', 0)
+        
+        # Chercher d'abord DISTRIBUTION, sinon GLOBAL
+        if flux == 'CR' and sens == 'ARRIVEE':
+            if seg == 'DISTRIBUTION':
+                volume_cr_annuel = float(volume)
+                break
+            elif seg == 'GLOBAL' and volume_cr_annuel == 0:
+                volume_cr_annuel = float(volume)
+    
+    # Conversion annuel -> journalier
+    nb_jours = getattr(ctx_volumes, 'nb_jours_ouvres_an', 264) or 264
+    volume_total = volume_cr_annuel / nb_jours if nb_jours > 0 else 0
+    
+    # Récupérer le % AXES (pour l'arrivée) - on va l'EXCLURE
+    pct_axes = float(getattr(ctx_volumes, 'pct_axes_arrivee', 0.0) or 0.0)
+    
+    # Calculer volume LOCAL (EXCLURE les axes)
+    # Option 1: Utiliser pct_local si disponible
+    pct_local = float(getattr(ctx_volumes, 'pct_local', None) or 0.0)
+    
+    if pct_local > 0:
+        # Utiliser pct_local directement
+        volume_local = volume_total * (pct_local / 100.0)
+    else:
+        # Sinon, calculer comme (1 - pct_axes)
+        volume_local = volume_total * (1 - pct_axes / 100.0)
+    
+    # Appliquer base_calcul = 40%
+    volume_effectif = volume_local * 0.40
+    
+    # Calcul de la charge
+    temps_chrono_min = float(getattr(tache, 'moyenne_min', 0) or 0)
+    temps_calcule_min = volume_effectif * temps_chrono_min
+    charge_h = temps_calcule_min / 60.0
+    
+    # Calcul ETP
+    capacite_effective = capacite_nette_h * (productivite / 100.0)
+    fte = charge_h / capacite_effective if capacite_effective > 0 else 0.0
+    
+    # Règle : si fte <= 0.1 alors fte = 0
+    if fte <= 0.1:
+        fte = 0.0
+    
+    # Formule de traçabilité
+    if pct_local > 0:
+        formule = f"CR {volume_total:.0f} × {pct_local:.0f}%LOCAL × 40% × {temps_chrono_min:.2f}min = {temps_calcule_min:.2f}min/j → {charge_h:.2f}h/j → ETP={fte:.3f}"
+    else:
+        formule = f"CR {volume_total:.0f} × (1-{pct_axes:.0f}%) × 40% × {temps_chrono_min:.2f}min = {temps_calcule_min:.2f}min/j → {charge_h:.2f}h/j → ETP={fte:.3f}"
+    
+    if debug:
+        print(f"   🎯 RÈGLE CCC CR DIST LOCAL APPLIQUÉE:")
+        print(f"      - Produit: {produit}")
+        print(f"      - Famille UO: {famille_uo}")
+        print(f"      - Volume CR total journalier: {volume_total:.2f}")
+        print(f"      - % AXES: {pct_axes:.0f}%")
+        print(f"      - % LOCAL: {pct_local:.0f}%")
+        print(f"      - Volume LOCAL (hors AXES): {volume_local:.2f}")
+        print(f"      - Formule: {formule}")
+    
+    return (True, fte, formule, volume_local)
+
+
+def apply_ccc_rule_cr_dist_local_caisson(tache, ctx_volumes, capacite_nette_h: float, productivite: float, debug: bool = False):
+    """
+    Règle CCC CR #4 : CR Arrivé / Distribution Locale / Caisson / Base 60
+    
+    Condition :
+        - produit == "CR Arrivé"
+        - famille_uo == "Distribution Locale"
+        - unite_mesure == "Caisson"
+        - base_calcul == 60
+    
+    Volume (LOCAL uniquement, AXES exclu) :
+        - volume_local = VOLUME_CR_ARRIVÉ_DIST × (1 - pct_axes/100)
+    
+    Conversion :
+        - volume_caisson = volume_local / CR_PAR_CAISSON
+    
+    Formule :
+        - Temps_min = volume_caisson × 60% × Temps_chrono_min
+        - charge_h = Temps_min / 60
+        - fte = charge_h / (capacite_nette_h * productivite/100)
+        - si fte <= 0.1 alors fte = 0
+    
+    Contraintes :
+        - AXES totalement exclu
+        - Appliquer (1 - %AXES) avant conversion et avant base_calcul
+        - Conversion Caisson obligatoire
+    
+    Returns:
+        (applicable: bool, fte: float, formule: str, volume_caisson: float)
+    """
+    produit = (getattr(tache, 'produit', '') or '').strip()
+    famille_uo = (getattr(tache, 'famille_uo', '') or '').strip()
+    unite_mesure = (getattr(tache, 'unite_mesure', '') or '').strip()
+    base_calcul = getattr(tache, 'base_calcul', None)
+    
+    # Vérifier la condition (comparaison insensible à la casse)
+    if (produit != "CR Arrivé" or 
+        famille_uo.upper() != "DISTRIBUTION LOCALE" or 
+        unite_mesure != "Caisson" or 
+        base_calcul != 60):
+        return (False, 0.0, "", 0.0)
+    
+    # Récupérer le volume CR ARRIVEE (segment DISTRIBUTION ou GLOBAL)
+    volume_cr_annuel = 0.0
+    volumes_flux = getattr(ctx_volumes, 'volumes_flux', [])
+    
+    for vol_entry in volumes_flux:
+        if hasattr(vol_entry, 'flux'):
+            flux = getattr(vol_entry, 'flux', '')
+            sens = getattr(vol_entry, 'sens', '')
+            seg = getattr(vol_entry, 'segment', '')
+            volume = getattr(vol_entry, 'volume', 0)
+        else:
+            flux = vol_entry.get('flux', '')
+            sens = vol_entry.get('sens', '')
+            seg = vol_entry.get('segment', '')
+            volume = vol_entry.get('volume', 0)
+        
+        # Chercher d'abord DISTRIBUTION, sinon GLOBAL
+        if flux == 'CR' and sens == 'ARRIVEE':
+            if seg == 'DISTRIBUTION':
+                volume_cr_annuel = float(volume)
+                break
+            elif seg == 'GLOBAL' and volume_cr_annuel == 0:
+                volume_cr_annuel = float(volume)
+    
+    # Conversion annuel -> journalier
+    nb_jours = getattr(ctx_volumes, 'nb_jours_ouvres_an', 264) or 264
+    volume_total = volume_cr_annuel / nb_jours if nb_jours > 0 else 0
+    
+    # Récupérer le % AXES (pour l'arrivée) - on va l'EXCLURE
+    pct_axes = float(getattr(ctx_volumes, 'pct_axes_arrivee', 0.0) or 0.0)
+    
+    # Calculer volume LOCAL (EXCLURE les axes)
+    volume_local = volume_total * (1 - pct_axes / 100.0)
+    
+    # Récupérer CR_PAR_CAISSON (paramètre de conversion)
+    cr_par_caisson = float(getattr(ctx_volumes, 'cr_par_caisson', 50.0) or 50.0)
+    
+    # Conversion CR -> Caisson
+    volume_caisson = volume_local / cr_par_caisson if cr_par_caisson > 0 else 0
+    
+    # Appliquer base_calcul = 60%
+    volume_effectif = volume_caisson * 0.60
+    
+    # Calcul de la charge
+    temps_chrono_min = float(getattr(tache, 'moyenne_min', 0) or 0)
+    temps_calcule_min = volume_effectif * temps_chrono_min
+    charge_h = temps_calcule_min / 60.0
+    
+    # Calcul ETP
+    capacite_effective = capacite_nette_h * (productivite / 100.0)
+    fte = charge_h / capacite_effective if capacite_effective > 0 else 0.0
+    
+    # Règle : si fte <= 0.1 alors fte = 0
+    if fte <= 0.1:
+        fte = 0.0
+    
+    # Formule de traçabilité
+    formule = f"CR {volume_total:.0f} × (1-{pct_axes:.0f}%) = {volume_local:.2f} ÷ {cr_par_caisson:.0f}/caisson × 60% × {temps_chrono_min:.2f}min = {temps_calcule_min:.2f}min/j → {charge_h:.2f}h/j → ETP={fte:.3f}"
+    
+    if debug:
+        print(f"   🎯 RÈGLE CCC CR DIST LOCAL CAISSON 60% APPLIQUÉE:")
+        print(f"      - Produit: {produit}")
+        print(f"      - Famille UO: {famille_uo}")
+        print(f"      - Volume CR total journalier: {volume_total:.2f}")
+        print(f"      - % AXES: {pct_axes:.0f}%")
+        print(f"      - Volume LOCAL (hors AXES): {volume_local:.2f}")
+        print(f"      - CR par caisson: {cr_par_caisson:.0f}")
+        print(f"      - Volume caisson: {volume_caisson:.2f}")
+        print(f"      - Formule: {formule}")
+    
+    return (True, fte, formule, volume_caisson)
+
+
+def apply_ccc_rule_cr_dist_local_100(tache, ctx_volumes, capacite_nette_h: float, productivite: float, debug: bool = False):
+    """
+    Règle CCC CR #5 : CR Arrivé / Distribution Locale / Courrier / Base 100 (LOCAL)
+    
+    Condition :
+        - produit == "CR Arrivé"
+        - famille_uo == "Distribution Locale"
+        - unite_mesure == "Courrier"
+        - base_calcul == 100
+    
+    Volume (LOCAL uniquement, AXES exclu) :
+        - volume_local = VOLUME_CR_ARRIVÉ_TOTAL × (1 - pct_axes/100)
+    
+    Formule :
+        - Temps_min = volume_local × Temps_chrono_min
+        - charge_h = Temps_min / 60
+        - fte = charge_h / (capacite_nette_h * productivite/100)
+        - si fte <= 0.1 alors fte = 0
+    
+    Contraintes :
+        - AXES totalement exclu même avec base_calcul = 100
+        - Distribution Locale ⇒ LOCAL uniquement
+    
+    Returns:
+        (applicable: bool, fte: float, formule: str, volume_local: float)
+    """
+    produit = (getattr(tache, 'produit', '') or '').strip()
+    famille_uo = (getattr(tache, 'famille_uo', '') or '').strip()
+    unite_mesure = (getattr(tache, 'unite_mesure', '') or '').strip()
+    base_calcul = getattr(tache, 'base_calcul', None)
+    
+    # Vérifier la condition (comparaison insensible à la casse)
+    if (produit != "CR Arrivé" or 
+        famille_uo.upper() != "DISTRIBUTION LOCALE" or 
+        unite_mesure != "Courrier" or 
+        base_calcul != 100):
+        return (False, 0.0, "", 0.0)
+    
+    # Récupérer le volume CR ARRIVEE (segment DISTRIBUTION ou GLOBAL)
+    volume_cr_annuel = 0.0
+    volumes_flux = getattr(ctx_volumes, 'volumes_flux', [])
+    
+    for vol_entry in volumes_flux:
+        if hasattr(vol_entry, 'flux'):
+            flux = getattr(vol_entry, 'flux', '')
+            sens = getattr(vol_entry, 'sens', '')
+            seg = getattr(vol_entry, 'segment', '')
+            volume = getattr(vol_entry, 'volume', 0)
+        else:
+            flux = vol_entry.get('flux', '')
+            sens = vol_entry.get('sens', '')
+            seg = vol_entry.get('segment', '')
+            volume = vol_entry.get('volume', 0)
+        
+        # Chercher d'abord DISTRIBUTION, sinon GLOBAL
+        if flux == 'CR' and sens == 'ARRIVEE':
+            if seg == 'DISTRIBUTION':
+                volume_cr_annuel = float(volume)
+                break
+            elif seg == 'GLOBAL' and volume_cr_annuel == 0:
+                volume_cr_annuel = float(volume)
+    
+    # Conversion annuel -> journalier
+    nb_jours = getattr(ctx_volumes, 'nb_jours_ouvres_an', 264) or 264
+    volume_total = volume_cr_annuel / nb_jours if nb_jours > 0 else 0
+    
+    # Récupérer le % AXES (pour l'arrivée) - on va l'EXCLURE
+    pct_axes = float(getattr(ctx_volumes, 'pct_axes_arrivee', 0.0) or 0.0)
+    
+    # Calculer volume LOCAL (EXCLURE les axes)
+    volume_local = volume_total * (1 - pct_axes / 100.0)
+    
+    # Pas de facteur base_calcul ici (100% = pas de réduction)
+    volume_effectif = volume_local
+    
+    # Calcul de la charge
+    temps_chrono_min = float(getattr(tache, 'moyenne_min', 0) or 0)
+    temps_calcule_min = volume_effectif * temps_chrono_min
+    charge_h = temps_calcule_min / 60.0
+    
+    # Calcul ETP
+    capacite_effective = capacite_nette_h * (productivite / 100.0)
+    fte = charge_h / capacite_effective if capacite_effective > 0 else 0.0
+    
+    # Règle : si fte <= 0.1 alors fte = 0
+    if fte <= 0.1:
+        fte = 0.0
+    
+    # Formule de traçabilité
+    formule = f"CR {volume_total:.0f} × (1-{pct_axes:.0f}%) = {volume_local:.2f} × {temps_chrono_min:.2f}min = {temps_calcule_min:.2f}min/j → {charge_h:.2f}h/j → ETP={fte:.3f}"
+    
+    if debug:
+        print(f"   🎯 RÈGLE CCC CR DIST LOCAL 100% APPLIQUÉE:")
+        print(f"      - Produit: {produit}")
+        print(f"      - Famille UO: {famille_uo}")
+        print(f"      - Volume CR total journalier: {volume_total:.2f}")
+        print(f"      - % AXES: {pct_axes:.0f}%")
+        print(f"      - Volume LOCAL (hors AXES): {volume_local:.2f}")
+        print(f"      - Formule: {formule}")
+    
+    return (True, fte, formule, volume_local)
+
+
+def apply_ccc_rule_cr_guichet(tache, ctx_volumes, capacite_nette_h: float, productivite: float, debug: bool = False):
+    """
+    Règle CCC CR #6 : CR Arrivé / Guichet / Courrier / Base 40 (LOCAL)
+    
+    Condition :
+        - produit == "CR Arrivé"
+        - famille_uo == "Guichet"
+        - unite_mesure == "Courrier"
+        - base_calcul == 40
+    
+    Volume (LOCAL uniquement, AXES exclu) :
+        - volume_local = VOLUME_CR_ARRIVÉ_TOTAL × (1 - pct_axes/100)
+    
+    Formule :
+        - Temps_min = volume_local × 40% × Temps_chrono_min
+        - charge_h = Temps_min / 60
+        - fte = charge_h / (capacite_nette_h * productivite/100)
+        - si fte <= 0.1 alors fte = 0
+    
+    Contraintes :
+        - AXES totalement exclu
+        - Guichet ⇒ LOCAL uniquement
+        - Appliquer %LOCAL avant base_calcul
+    
+    Returns:
+        (applicable: bool, fte: float, formule: str, volume_local: float)
+    """
+    produit = (getattr(tache, 'produit', '') or '').strip()
+    famille_uo = (getattr(tache, 'famille_uo', '') or '').strip()
+    unite_mesure = (getattr(tache, 'unite_mesure', '') or '').strip()
+    base_calcul = getattr(tache, 'base_calcul', None)
+    
+    # Vérifier la condition (comparaison insensible à la casse)
+    if (produit != "CR Arrivé" or 
+        famille_uo.upper() != "GUICHET" or 
+        unite_mesure != "Courrier" or 
+        base_calcul != 40):
+        return (False, 0.0, "", 0.0)
+    
+    # Récupérer le volume CR ARRIVEE (segment DISTRIBUTION ou GLOBAL)
+    volume_cr_annuel = 0.0
+    volumes_flux = getattr(ctx_volumes, 'volumes_flux', [])
+    
+    for vol_entry in volumes_flux:
+        if hasattr(vol_entry, 'flux'):
+            flux = getattr(vol_entry, 'flux', '')
+            sens = getattr(vol_entry, 'sens', '')
+            seg = getattr(vol_entry, 'segment', '')
+            volume = getattr(vol_entry, 'volume', 0)
+        else:
+            flux = vol_entry.get('flux', '')
+            sens = vol_entry.get('sens', '')
+            seg = vol_entry.get('segment', '')
+            volume = vol_entry.get('volume', 0)
+        
+        # Chercher d'abord DISTRIBUTION, sinon GLOBAL
+        if flux == 'CR' and sens == 'ARRIVEE':
+            if seg == 'DISTRIBUTION':
+                volume_cr_annuel = float(volume)
+                break
+            elif seg == 'GLOBAL' and volume_cr_annuel == 0:
+                volume_cr_annuel = float(volume)
+    
+    # Conversion annuel -> journalier
+    nb_jours = getattr(ctx_volumes, 'nb_jours_ouvres_an', 264) or 264
+    volume_total = volume_cr_annuel / nb_jours if nb_jours > 0 else 0
+    
+    # Récupérer le % AXES (pour l'arrivée) - on va l'EXCLURE
+    pct_axes = float(getattr(ctx_volumes, 'pct_axes_arrivee', 0.0) or 0.0)
+    
+    # Calculer volume LOCAL (EXCLURE les axes)
+    volume_local = volume_total * (1 - pct_axes / 100.0)
+    
+    # Appliquer base_calcul = 40%
+    volume_effectif = volume_local * 0.40
+    
+    # Calcul de la charge
+    temps_chrono_min = float(getattr(tache, 'moyenne_min', 0) or 0)
+    temps_calcule_min = volume_effectif * temps_chrono_min
+    charge_h = temps_calcule_min / 60.0
+    
+    # Calcul ETP
+    capacite_effective = capacite_nette_h * (productivite / 100.0)
+    fte = charge_h / capacite_effective if capacite_effective > 0 else 0.0
+    
+    # Règle : si fte <= 0.1 alors fte = 0
+    if fte <= 0.1:
+        fte = 0.0
+    
+    # Formule de traçabilité
+    formule = f"CR {volume_total:.0f} × (1-{pct_axes:.0f}%) × 40% × {temps_chrono_min:.2f}min = {temps_calcule_min:.2f}min/j → {charge_h:.2f}h/j → ETP={fte:.3f}"
+    
+    if debug:
+        print(f"   🎯 RÈGLE CCC CR GUICHET 40% APPLIQUÉE:")
+        print(f"      - Produit: {produit}")
+        print(f"      - Famille UO: {famille_uo}")
+        print(f"      - Volume CR total journalier: {volume_total:.2f}")
+        print(f"      - % AXES: {pct_axes:.0f}%")
+        print(f"      - Volume LOCAL (hors AXES): {volume_local:.2f}")
+        print(f"      - Formule: {formule}")
+    
+    return (True, fte, formule, volume_local)
+
+
+def apply_ccc_rule_cr_med_arrivee_axes(tache, ctx_volumes, capacite_nette_h: float, productivite: float, debug: bool = False):
+    """
+    Règle CCC CR MED #1 : CR MED / Arrivée Camions Axes / Courrier / Base 40
+    
+    Condition :
+        - produit == "CR MED"
+        - famille_uo == "Arrivée Camions Axes"
+        - unite_mesure == "Courrier"
+        - base_calcul == 40
+    
+    Volume (AXES uniquement, INCLURE) :
+        - volume_axes = VOLUME_CR_DEPART_TOTAL × (pct_axes/100)
+    
+    Formule :
+        - Temps_min = volume_axes × 40% × Temps_chrono_min
+        - charge_h = Temps_min / 60
+        - fte = charge_h / (capacite_nette_h * productivite/100)
+        - si fte <= 0.1 alors fte = 0
+    
+    Contraintes :
+        - Source volume = CR Départ uniquement
+        - Prendre uniquement AXES
+        - Appliquer %AXES avant base_calcul
+    
+    Returns:
+        (applicable: bool, fte: float, formule: str, volume_axes: float)
+    """
+    produit = (getattr(tache, 'produit', '') or '').strip()
+    famille_uo = (getattr(tache, 'famille_uo', '') or '').strip()
+    unite_mesure = (getattr(tache, 'unite_mesure', '') or '').strip()
+    base_calcul = getattr(tache, 'base_calcul', None)
+    
+    # Vérifier la condition (comparaison insensible à la casse)
+    if (produit != "CR MED" or 
+        famille_uo.upper() != "ARRIVÉE CAMIONS AXES" or 
+        unite_mesure != "Courrier" or 
+        base_calcul != 40):
+        return (False, 0.0, "", 0.0)
+    
+    # Récupérer le volume CR DEPART (segment DISTRIBUTION ou GLOBAL)
+    volume_cr_annuel = 0.0
+    volumes_flux = getattr(ctx_volumes, 'volumes_flux', [])
+    
+    for vol_entry in volumes_flux:
+        if hasattr(vol_entry, 'flux'):
+            flux = getattr(vol_entry, 'flux', '')
+            sens = getattr(vol_entry, 'sens', '')
+            seg = getattr(vol_entry, 'segment', '')
+            volume = getattr(vol_entry, 'volume', 0)
+        else:
+            flux = vol_entry.get('flux', '')
+            sens = vol_entry.get('sens', '')
+            seg = vol_entry.get('segment', '')
+            volume = vol_entry.get('volume', 0)
+        
+        # Chercher d'abord DISTRIBUTION, sinon GLOBAL (pour CR DEPART)
+        if flux == 'CR' and sens == 'DEPART':
+            if seg == 'DISTRIBUTION':
+                volume_cr_annuel = float(volume)
+                break
+            elif seg == 'GLOBAL' and volume_cr_annuel == 0:
+                volume_cr_annuel = float(volume)
+    
+    # Conversion annuel -> journalier
+    nb_jours = getattr(ctx_volumes, 'nb_jours_ouvres_an', 264) or 264
+    volume_total = volume_cr_annuel / nb_jours if nb_jours > 0 else 0
+    
+    # Récupérer le % AXES (pour le départ) - on va l'INCLURE
+    pct_axes = float(getattr(ctx_volumes, 'pct_axes_depart', 0.0) or 0.0)
+    
+    # Calculer volume AXES (INCLURE les axes uniquement)
+    volume_axes = volume_total * (pct_axes / 100.0)
+    
+    # Appliquer base_calcul = 40%
+    volume_effectif = volume_axes * 0.40
+    
+    # Calcul de la charge
+    temps_chrono_min = float(getattr(tache, 'moyenne_min', 0) or 0)
+    temps_calcule_min = volume_effectif * temps_chrono_min
+    charge_h = temps_calcule_min / 60.0
+    
+    # Calcul ETP
+    capacite_effective = capacite_nette_h * (productivite / 100.0)
+    fte = charge_h / capacite_effective if capacite_effective > 0 else 0.0
+    
+    # Règle : si fte <= 0.1 alors fte = 0
+    if fte <= 0.1:
+        fte = 0.0
+    
+    # Formule de traçabilité
+    formule = f"CR_MED {volume_total:.0f} × {pct_axes:.0f}%AXES × 40% × {temps_chrono_min:.2f}min = {temps_calcule_min:.2f}min/j → {charge_h:.2f}h/j → ETP={fte:.3f}"
+    
+    if debug:
+        print(f"   🎯 RÈGLE CCC CR MED ARRIVÉE AXES 40% APPLIQUÉE:")
+        print(f"      - Produit: {produit}")
+        print(f"      - Famille UO: {famille_uo}")
+        print(f"      - Volume CR MED Départ journalier: {volume_total:.2f}")
+        print(f"      - % AXES: {pct_axes:.0f}%")
+        print(f"      - Volume AXES (inclus): {volume_axes:.2f}")
+        print(f"      - Formule: {formule}")
+    
+    return (True, fte, formule, volume_axes)
+
+
+def apply_ccc_rule_cr_med_depart_camion(tache, ctx_volumes, capacite_nette_h: float, productivite: float, debug: bool = False):
+    """
+    Règle CCC CR MED #2 : CR MED / Départ Camion Principal / Courrier / Base 40
+    
+    Condition :
+        - produit == "CR MED"
+        - famille_uo == "Départ Camion Principal"
+        - unite_mesure == "Courrier"
+        - base_calcul == 40
+    
+    Volume (TOTAL, local + axes) :
+        - volume_total = VOLUME_CR_DEPART_TOTAL
+    
+    Formule :
+        - Temps_min = volume_total × 40% × Temps_chrono_min
+        - charge_h = Temps_min / 60
+        - fte = charge_h / (capacite_nette_h * productivite/100)
+        - si fte <= 0.1 alors fte = 0
+    
+    Contraintes :
+        - Inclure local + axes (volume complet)
+        - Pas de %AXES, pas de %LOCAL
+    
+    Returns:
+        (applicable: bool, fte: float, formule: str, volume_total: float)
+    """
+    produit = (getattr(tache, 'produit', '') or '').strip()
+    famille_uo = (getattr(tache, 'famille_uo', '') or '').strip()
+    unite_mesure = (getattr(tache, 'unite_mesure', '') or '').strip()
+    base_calcul = getattr(tache, 'base_calcul', None)
+    
+    # Vérifier la condition (comparaison insensible à la casse)
+    if (produit != "CR MED" or 
+        famille_uo.upper() != "DÉPART CAMION PRINCIPAL" or 
+        unite_mesure != "Courrier" or 
+        base_calcul != 40):
+        return (False, 0.0, "", 0.0)
+    
+    # Récupérer le volume CR DEPART (segment DISTRIBUTION ou GLOBAL)
+    volume_cr_annuel = 0.0
+    volumes_flux = getattr(ctx_volumes, 'volumes_flux', [])
+    
+    for vol_entry in volumes_flux:
+        if hasattr(vol_entry, 'flux'):
+            flux = getattr(vol_entry, 'flux', '')
+            sens = getattr(vol_entry, 'sens', '')
+            seg = getattr(vol_entry, 'segment', '')
+            volume = getattr(vol_entry, 'volume', 0)
+        else:
+            flux = vol_entry.get('flux', '')
+            sens = vol_entry.get('sens', '')
+            seg = vol_entry.get('segment', '')
+            volume = vol_entry.get('volume', 0)
+        
+        # Chercher d'abord DISTRIBUTION, sinon GLOBAL (pour CR DEPART)
+        if flux == 'CR' and sens == 'DEPART':
+            if seg == 'DISTRIBUTION':
+                volume_cr_annuel = float(volume)
+                break
+            elif seg == 'GLOBAL' and volume_cr_annuel == 0:
+                volume_cr_annuel = float(volume)
+    
+    # Conversion annuel -> journalier
+    nb_jours = getattr(ctx_volumes, 'nb_jours_ouvres_an', 264) or 264
+    volume_total = volume_cr_annuel / nb_jours if nb_jours > 0 else 0
+    
+    # Pas de filtrage AXES ou LOCAL - on prend le volume total
+    volume_effectif = volume_total * 0.40
+    
+    # Calcul de la charge
+    temps_chrono_min = float(getattr(tache, 'moyenne_min', 0) or 0)
+    temps_calcule_min = volume_effectif * temps_chrono_min
+    charge_h = temps_calcule_min / 60.0
+    
+    # Calcul ETP
+    capacite_effective = capacite_nette_h * (productivite / 100.0)
+    fte = charge_h / capacite_effective if capacite_effective > 0 else 0.0
+    
+    # Règle : si fte <= 0.1 alors fte = 0
+    if fte <= 0.1:
+        fte = 0.0
+    
+    # Formule de traçabilité
+    formule = f"CR_MED {volume_total:.0f} × 40% × {temps_chrono_min:.2f}min = {temps_calcule_min:.2f}min/j → {charge_h:.2f}h/j → ETP={fte:.3f}"
+    
+    if debug:
+        print(f"   🎯 RÈGLE CCC CR MED DÉPART CAMION 40% APPLIQUÉE:")
+        print(f"      - Produit: {produit}")
+        print(f"      - Famille UO: {famille_uo}")
+        print(f"      - Volume CR MED Départ total journalier: {volume_total:.2f}")
+        print(f"      - Formule: {formule}")
+    
+    return (True, fte, formule, volume_total)
+
+
+def apply_ccc_rule_cr_med_guichet(tache, ctx_volumes, capacite_nette_h: float, productivite: float, debug: bool = False):
+    """
+    Règle CCC CR MED #3 : CR MED / Guichet / Courrier / LOCAL uniquement
+    
+    Condition :
+        - produit == "CR MED"
+        - famille_uo == "Guichet"
+        - unite_mesure == "Courrier"
+        - base_calcul n'est pas restreint stricto sensu, mais souvent 40
+    
+    Volume (LOCAL, AXES exclu) :
+        - volume_local = VOLUME_CR_DEPART_DIST × (1 - pct_axes/100)
+        - On applique %LOCAL (ou 1-%AXES) sur le volume CR DEPART
+    
+    Formule :
+        - Temps_min = volume_local × (base_calcul/100) × Temps_chrono_min
+        - charge_h = Temps_min / 60
+        - fte = charge_h / (capacite_nette_h * productivite/100)
+        - si fte <= 0.1 alors fte = 0
+    
+    Contraintes :
+        - Utiliser uniquement le volume local (AXES totalement exclus)
+        - Aucune conversion (ni sac, ni caisson)
+    
+    Returns:
+        (applicable: bool, fte: float, formule: str, volume_local: float)
+    """
+    produit = (getattr(tache, 'produit', '') or '').strip()
+    famille_uo = (getattr(tache, 'famille_uo', '') or '').strip()
+    unite_mesure = (getattr(tache, 'unite_mesure', '') or '').strip()
+    base_calcul = getattr(tache, 'base_calcul', 0) or 0
+    
+    # Vérifier la condition (comparaison insensible à la casse)
+    if (produit != "CR MED" or 
+        famille_uo.upper() != "GUICHET" or 
+        unite_mesure != "Courrier"):
+        return (False, 0.0, "", 0.0)
+    
+    # Récupérer le volume CR DEPART (segment DISTRIBUTION ou GLOBAL)
+    volume_cr_annuel = 0.0
+    volumes_flux = getattr(ctx_volumes, 'volumes_flux', [])
+    
+    for vol_entry in volumes_flux:
+        if hasattr(vol_entry, 'flux'):
+            flux = getattr(vol_entry, 'flux', '')
+            sens = getattr(vol_entry, 'sens', '')
+            seg = getattr(vol_entry, 'segment', '')
+            volume = getattr(vol_entry, 'volume', 0)
+        else:
+            flux = vol_entry.get('flux', '')
+            sens = vol_entry.get('sens', '')
+            seg = vol_entry.get('segment', '')
+            volume = vol_entry.get('volume', 0)
+        
+        # Chercher d'abord DISTRIBUTION, sinon GLOBAL (pour CR DEPART)
+        if flux == 'CR' and sens == 'DEPART':
+            if seg == 'DISTRIBUTION':
+                volume_cr_annuel = float(volume)
+                break
+            elif seg == 'GLOBAL' and volume_cr_annuel == 0:
+                volume_cr_annuel = float(volume)
+    
+    # Conversion annuel -> journalier
+    nb_jours = getattr(ctx_volumes, 'nb_jours_ouvres_an', 264) or 264
+    volume_total = volume_cr_annuel / nb_jours if nb_jours > 0 else 0
+    
+    # Récupérer le % AXES (pour le départ) - on va l'EXCLURE
+    pct_axes = float(getattr(ctx_volumes, 'pct_axes_depart', 0.0) or 0.0)
+    
+    # Calculer volume LOCAL (EXCLURE les axes)
+    volume_local = volume_total * (1 - pct_axes / 100.0)
+    
+    # Appliquer base_calcul (souvent 40%)
+    volume_effectif = volume_local * (base_calcul / 100.0)
+    
+    # Calcul de la charge
+    temps_chrono_min = float(getattr(tache, 'moyenne_min', 0) or 0)
+    temps_calcule_min = volume_effectif * temps_chrono_min
+    charge_h = temps_calcule_min / 60.0
+    
+    # Calcul ETP
+    capacite_effective = capacite_nette_h * (productivite / 100.0)
+    fte = charge_h / capacite_effective if capacite_effective > 0 else 0.0
+    
+    # Règle : si fte <= 0.1 alors fte = 0
+    if fte <= 0.1:
+        fte = 0.0
+    
+    # Formule de traçabilité
+    formule = f"CR_MED {volume_total:.0f} × (1-{pct_axes:.0f}%) × {base_calcul}% × {temps_chrono_min:.2f}min = {temps_calcule_min:.2f}min/j → {charge_h:.2f}h/j → ETP={fte:.3f}"
+    
+    if debug:
+        print(f"   🎯 RÈGLE CCC CR MED GUICHET Local APPLIQUÉE:")
+        print(f"      - Produit: {produit}")
+        print(f"      - Famille UO: {famille_uo}")
+        print(f"      - Volume CR MED Départ journalier: {volume_total:.2f}")
+        print(f"      - % AXES: {pct_axes:.0f}%")
+        print(f"      - Volume LOCAL (hors AXES): {volume_local:.2f}")
+        print(f"      - Formule: {formule}")
+    
+    return (True, fte, formule, volume_local)
+
+
+def apply_ccc_rule_ebarkia_arrivee_dist_local(tache, ctx_volumes, capacite_nette_h: float, productivite: float, debug: bool = False):
+    """
+    Règle CCC E-Barkia #1 : E barkia Arrivé / Distribution Locale / Courrier / Base 100
+    
+    Condition :
+        - produit == "E barkia Arrivé"
+        - famille_uo == "Distribution Locale"
+        - unite_mesure == "Courrier"
+        - base_calcul == 100
+    
+    Volume (TOTAL, sans filtre) :
+        - volume_total = VOLUME_EBARKIA_DEPART_PRO
+        - Pas de %AXES, pas de %LOCAL
+    
+    Formule :
+        - Temps_min = volume_total × Temps_chrono_min
+        - charge_h = Temps_min / 60
+        - fte = charge_h / (capacite_nette_h * productivite/100)
+        - si fte <= 0.1 alors fte = 0
+    
+    Contraintes :
+        - Ne pas exclure les axes
+        - Pas de conversion
+    
+    Returns:
+        (applicable: bool, fte: float, formule: str, volume_total: float)
+    """
+    produit = (getattr(tache, 'produit', '') or '').strip()
+    famille_uo = (getattr(tache, 'famille_uo', '') or '').strip()
+    unite_mesure = (getattr(tache, 'unite_mesure', '') or '').strip()
+    base_calcul = getattr(tache, 'base_calcul', None)
+    
+    # Vérifier la condition (comparaison insensible à la casse)
+    if (produit != "E barkia Arrivé" or 
+        famille_uo.upper() != "DISTRIBUTION LOCALE" or 
+        unite_mesure != "Courrier" or 
+        base_calcul != 100):
+        return (False, 0.0, "", 0.0)
+    
+    # Récupérer le volume E-BARKIA DEPART PRO
+    # Attention: demande explicite d'utiliser le volume DEPART PRO pour un produit ARRIVEE
+    volume_ebarkia_annuel = 0.0
+    volumes_flux = getattr(ctx_volumes, 'volumes_flux', [])
+    
+    for vol_entry in volumes_flux:
+        if hasattr(vol_entry, 'flux'):
+            flux = getattr(vol_entry, 'flux', '')
+            sens = getattr(vol_entry, 'sens', '')
+            seg = getattr(vol_entry, 'segment', '')
+            volume = getattr(vol_entry, 'volume', 0)
+        else:
+            flux = vol_entry.get('flux', '')
+            sens = vol_entry.get('sens', '')
+            seg = vol_entry.get('segment', '')
+            volume = vol_entry.get('volume', 0)
+        
+        # Chercher E-BARKIA DEPART PRO
+        if flux == 'E-BARKIA' and sens == 'DEPART' and seg == 'PRO':
+            volume_ebarkia_annuel = float(volume)
+            break
+            
+    # Conversion annuel -> journalier
+    nb_jours = getattr(ctx_volumes, 'nb_jours_ouvres_an', 264) or 264
+    volume_total = volume_ebarkia_annuel / nb_jours if nb_jours > 0 else 0
+    
+    # Pas de filtre axes/local, on prend le total PRO
+    volume_effectif = volume_total
+    
+    # Calcul de la charge
+    temps_chrono_min = float(getattr(tache, 'moyenne_min', 0) or 0)
+    temps_calcule_min = volume_effectif * temps_chrono_min
+    charge_h = temps_calcule_min / 60.0
+    
+    # Calcul ETP
+    capacite_effective = capacite_nette_h * (productivite / 100.0)
+    fte = charge_h / capacite_effective if capacite_effective > 0 else 0.0
+    
+    # Règle : si fte <= 0.1 alors fte = 0
+    if fte <= 0.1:
+        fte = 0.0
+    
+    # Formule de traçabilité
+    formule = f"E-BARKIA_DEP_PRO {volume_total:.0f} × 100% × {temps_chrono_min:.2f}min = {temps_calcule_min:.2f}min/j → {charge_h:.2f}h/j → ETP={fte:.3f}"
+    
+    if debug:
+        print(f"   🎯 RÈGLE CCC E-BARKIA DIST LOCALE 100% APPLIQUÉE:")
+        print(f"      - Produit: {produit}")
+        print(f"      - Famille UO: {famille_uo}")
+        print(f"      - Volume E-BARKIA DEPART PRO journalier: {volume_total:.2f}")
+        print(f"      - Formule: {formule}")
+    
+    return (True, fte, formule, volume_total)
+
+
+def calculer_simulation_data_driven(
+    db: Session,
+    centre_poste_id: int,
+    volumes_ui: VolumesUIInput,
+    productivite: float = 100.0,
+    heures_par_jour: float = 8.0,
+    idle_minutes: float = 0.0,
+    ed_percent: float = 0.0,  # 🆕 Pourcentage "En Dehors"
+    debug: bool = False
+) -> SimulationResponse:
+    """
+    Calcule la simulation pour un intervenant (poste unique).
+    
+    🆕 REFACTORISATION : Cette fonction appelle maintenant calculer_simulation_centre_data_driven()
+    avec un seul poste pour garantir que les deux vues (Intervenant et Centre) utilisent
+    exactement la même logique de calcul et les mêmes règles métier.
+    
+    Args:
+        db: Session SQLAlchemy
+        centre_poste_id: ID du centre/poste
+        volumes_ui: Volumes UI (annuels)
+        productivite: Productivité en %
+        heures_par_jour: Heures de travail par jour
+        idle_minutes: Marge d'inactivité en minutes/jour
+        ed_percent: Pourcentage "En Dehors"
+        debug: Activer les logs détaillés
+    
+    Returns:
+        SimulationResponse avec les résultats calculés
+    """
+    
+    print(f"\n{'#'*100}")
+    print(f"### SIMULATION INTERVENANT (POSTE UNIQUE) - CENTRE_POSTE_ID: {centre_poste_id}")
+    print(f"{'#'*100}\n")
+    
+    print(f"🔄 [INTERVENANT] Appel de la fonction centre avec un seul poste...")
+    print(f"   Cette approche garantit l'utilisation des mêmes règles métier (2064, Dépeche, Facteur, CR Arrivé, etc.)")
+    
+    # Récupérer le centre_id du poste
+    centre_poste = db.query(CentrePoste).filter(CentrePoste.id == centre_poste_id).first()
+    if not centre_poste:
+        raise HTTPException(status_code=404, detail=f"Centre/Poste {centre_poste_id} non trouvé")
+    
+    centre_id = centre_poste.centre_id
+    print(f"   Centre ID: {centre_id}, Poste ID: {centre_poste_id}")
+    
+    # Appeler la fonction centre avec le filtre sur un seul poste
+    result = calculer_simulation_centre_data_driven(
+        db=db,
+        centre_id=centre_id,
+        volumes_ui=volumes_ui,
+        productivite=productivite,
+        heures_par_jour=heures_par_jour,
+        idle_minutes=idle_minutes,
+        ed_percent=ed_percent,
+        colis_amana_par_sac=volumes_ui.colis_amana_par_sac,
+        debug=debug,
+        poste_id_filter=centre_poste_id  # 🆕 Filtre pour un seul poste
+    )
+    
+    print(f"\n✅ [INTERVENANT] Simulation terminée via fonction centre")
+    print(f"   ETP: {result.fte_arrondi}")
+    print(f"   Heures totales: {result.total_heures}h")
+    print(f"   Nombre de tâches: {len(result.details_taches)}")
+    print(f"{'#'*100}\n")
+    
+    return result
+    
+    print(f"\n{'#'*100}")
+    print(f"### DEBUT SIMULATION DATA-DRIVEN - CENTRE_POSTE_ID: {centre_poste_id}")
+    print(f"{'#'*100}\n")
+    
+    print(f"\n🔧 [BACKEND - STEP 4] Initialisation du moteur data-driven...")
+    # 1. Initialiser le moteur data-driven
+    engine = DataDrivenEngine(db)
+    
+    # 🆕 Initialiser le contexte de calcul par famille
+    print(f"   [BACKEND] Initialisation du contexte par famille...")
+    # Initialiser le contexte
+    # print("\n💥💥💥 DÉBUT SIMULATION (NOUVELLE VERSION CODE) 💥💥💥")
+    ctx_volumes = VolumeContext(volumes_ui)
+    print(f"🔍 [DEBUG ULTIME] volumes_ui.taux_complexite = {getattr(volumes_ui, 'taux_complexite', 'ND')}")
+    print(f"🔍 [DEBUG ULTIME] ctx_volumes.taux_complexite = {ctx_volumes.taux_complexite}")
+    
+    # 🆕 Récupérer l'idée du centre réel pour exception 1913
+    real_centre_id = None
+    real_categorie_id = None
+    if centre_poste_id:
+        cp_obj = db.query(CentrePoste).filter(CentrePoste.id == centre_poste_id).first()
+        if cp_obj:
+            real_centre_id = cp_obj.centre_id
+            # Récupérer la catégorie du centre
+            centre_obj = db.query(Centre).filter(Centre.id == real_centre_id).first()
+            if centre_obj:
+                real_categorie_id = centre_obj.categorie_id
+    
+    # 🆕 Initialiser le moteur de règles métier pour le centre 2064
+    business_rules = get_business_rules_engine(real_centre_id or 0)
+    if business_rules.is_active:
+        print(f"✨ [RÈGLES MÉTIER] Moteur activé pour le centre {real_centre_id}")
+    
+    ctx_volumes.centre_id = real_centre_id
+    ctx_volumes.categorie_id = real_categorie_id  # 🆕 Ajouter categorie_id au contexte
+    print(f"   [BACKEND] Centre ID identifié: {real_centre_id}, Catégorie ID: {real_categorie_id}")
+
+    # 🆕 FORCAGE DES PARAMETRES (car ils viennent des args de la fonction, pas forcément du DTO)
+    if ed_percent is not None:
+        ctx_volumes.ed_percent = float(ed_percent)
+    
+    # On laisse VolumeContext gérer l'extraction fine des paramètres
+    print(f"   [BACKEND] DEBUG RAW VOLUMES UI: {volumes_ui}")
+
+    print(f"   [BACKEND] Contexte chargé: Arrivee={ctx_volumes.total_arrivee}, Guichet(Recu)={ctx_volumes.guichet_recu}")
+    print(f"   [BACKEND] Paramètres actifs: ED={ctx_volumes.ed_percent}%, Sac={ctx_volumes.colis_par_sac}")
+
+    print(f"✅ [BACKEND - STEP 4] Moteur data-driven initialisé")
+    
+    # 🆕 Initialiser le moteur de règles métier 2064
+    class BusinessRules:
+        def __init__(self, centre_id):
+            self.is_active = (centre_id in [2064, 1942])
+    
+    business_rules = BusinessRules(real_centre_id or 0)
+    if business_rules.is_active:
+        print(f"✨ [RÈGLES MÉTIER] Moteur activé pour le centre {real_centre_id}")
+    
+    print(f"\n🟡🟡 SIMULATION INTERVENANT (POSTE UNIQUE) - ID {centre_poste_id} 🟡🟡🟡")
+    
+    print(f"\n📋 [BACKEND - STEP 5] Récupération des tâches pour centre_poste_id={centre_poste_id}...")
+    # 2. Récupérer toutes les tâches du centre/poste (exclure etat='NA')
+    taches = db.query(Tache).filter(
+        Tache.centre_poste_id == centre_poste_id,
+        Tache.etat != 'NA'  # 🆕 Exclure les tâches non actives
+    ).all()
+    print(f"✅ [BACKEND - STEP 5] {len(taches)} tâches récupérées (hors etat='NA')")
+    
+    if debug:
+        print(f"\n{'='*80}")
+        print(f"DEBUG: SIMULATION DATA-DRIVEN - Centre/Poste ID: {centre_poste_id}")
+        print(f"{'='*80}")
+        vol_total_check = sum(getattr(t, 'volume_annuel', 0) or 0 for t in taches)
+        print(f"DEBUG: Parametres:")
+        print(f"   - Productivite: {productivite}%")
+        print(f"   - Heures/jour: {heures_par_jour}h")
+        print(f"   - Marge inactivite: {idle_minutes} min/jour")
+        print(f"   - Jours ouvres/an: {volumes_ui.nb_jours_ouvres_an}")
+        print(f"   - Nombre de taches: {len(taches)}")
+        print(f"   ⚠️ COMPARATEUR: VOLUME TOTAL BRUT REÇU = {vol_total_check}")
+        print(f"   ⚠️ DEBUG COEF: Taux Complexite: {ctx_volumes.taux_complexite}")
+        print(f"   ⚠️ DEBUG COEF: Nature Geo: {ctx_volumes.nature_geo}")
+        print(f"{'='*80}\n")
+    
+    print(f"\n🔄 [BACKEND - STEP 6] Traitement des tâches...")
+    # 3. Traiter chaque tâche
+    details_taches: List[TacheDetail] = []
+    heures_par_poste: Dict[int, float] = {}
+    postes_labels: Dict[int, str] = {}  # 🆕 Mapping CP_ID -> Label pour règles métiers
+    total_heures = 0.0
+    
+    taches_traitees = 0
+    taches_ignorees = 0
+    
+    task_results = []  # Pour agrégations futures
+    
+    # 🆕 Calcul de la capacité nette (heures/jour - temps mort)
+    idle_heures = idle_minutes / 60.0
+    heures_nettes = max(0.0, heures_par_jour - idle_heures)
+    print(f"   [BACKEND] Capacité nette calculée: {heures_nettes:.2f}h/jour (brut: {heures_par_jour}h - idle: {idle_heures:.2f}h)")
+    
+    try:
+        for idx, tache in enumerate(taches, 1):
+            # Debug: Toujours afficher les noms des premières tâches pour diagnostic
+            if idx <= 20:
+                print(f"   [DEBUG TASK] ID={tache.id} Nom='{getattr(tache, 'nom_tache', '')}' FamilleDB='{getattr(tache, 'famille_uo', '')}'")
+
+            if idx % 10 == 0 or idx == 1:
+                print(f"   [BACKEND - STEP 6.{idx}] Traitement tâche {idx}/{len(taches)}: {tache.nom_tache[:40]}...")
+            
+            # 🆕 RÈGLES MÉTIER 2064 : Priorité maximale
+            if business_rules.is_active:
+                # Vérifier si la tâche correspond à la règle Distribution Locale Courrier
+                famille_tache = getattr(tache, 'famille_uo', None)
+                unite_tache = getattr(tache, 'unite_mesure', None)
+                base_calcul_tache = getattr(tache, 'base_calcul', None)
+                chrono_tache = getattr(tache, 'moyenne_min', 0) or 0
+                produit_tache = getattr(tache, 'produit', None)
+                
+                print(f"   🔍 [RÈGLE 2064] Tâche: {tache.nom_tache}")
+                print(f"      - famille={famille_tache}, base_calcul={base_calcul_tache}, unite={unite_tache}, produit={produit_tache}")
+                
+                # 🆕 CONDITION GLOBALE : Produit doit être 'CO Arrivé', 'CO MED' ou 'CR Arrivé'
+                produit_upper = str(produit_tache or "").upper().strip()
+                is_produit_co_arrivee = produit_upper in ['CO ARRIVÉ', 'CO ARRIVE', 'CO']
+                is_produit_co_med = produit_upper == 'CO MED'
+                is_produit_co = is_produit_co_arrivee or is_produit_co_med
+                is_produit_cr_arrive = 'CR' in produit_upper and 'ARRIV' in produit_upper
+                
+                if not (is_produit_co or is_produit_cr_arrive):
+                    # Si le produit n'est ni CO ni CR Arrivé, on ignore cette tâche pour la règle 2064
+                    print(f"      ⏭️ [RÈGLE 2064] Ignoré (produit={produit_tache} n'est ni CO ni CR Arrivé)")
+                    # Continue avec le calcul par défaut
+                else:
+                    if is_produit_co:
+                        print(f"      ✅ [RÈGLE 2064] Produit CO détecté: {produit_tache}")
+                    elif is_produit_cr_arrive:
+                        print(f"      ✅ [RÈGLE 2064] Produit CR Arrivé détecté: {produit_tache}")
+                
+                # Condition Règle 2064 :
+                # 0. PRODUIT = 'CO Arrivé' ou 'CO MED' (vérifié ci-dessus)
+                # 1. Famille Distribution Locale ET (Nom contient " CO"  OU  Base=60 et Unité=Sac/Caisson)
+                # 2. Famille Arrivée Camion Principal ET (Nom contient " CO" OU Base=100 et Unité=Sac/Caisson)
+                # 3. Produit='CO MED' ET Base=100 ET Unité=Sac -> Volume CO DÉPART
+                
+                is_co_task = tache.nom_tache and ' CO' in tache.nom_tache.upper()
+                is_sac_base60 = (base_calcul_tache == 60 or str(base_calcul_tache) == '60') and unite_tache and ('SAC' in unite_tache.upper() or 'CAISSON' in unite_tache.upper())
+                is_sac_base100 = (base_calcul_tache == 100 or str(base_calcul_tache) == '100') and unite_tache and ('SAC' in unite_tache.upper() or 'CAISSON' in unite_tache.upper())
+                
+                famille_upper = famille_tache.upper() if famille_tache else ""
+                
+                # Règle spéciale CO MED Départ
+                match_co_med_depart = is_produit_co_med and is_sac_base100
+                
+                match_distribution = is_produit_co_arrivee and 'DISTRIBUTION LOCALE' in famille_upper and (is_co_task or is_sac_base60)
+                # Pour être sûr, on check 'ARRIV' et 'CAMION'
+                is_famille_arrivee = 'ARRIV' in famille_upper and 'CAMION' in famille_upper
+                match_arrivee = is_produit_co_arrivee and is_famille_arrivee and (is_co_task or is_sac_base100)
+                
+                # Nouvelle règle : Départ Axes (Famille contient AXE, Base 100, Sac)
+                is_famille_axes = 'AXE' in famille_upper or 'LIAISON' in famille_upper
+                match_depart_axes = is_produit_co_arrivee and is_famille_axes and is_sac_base100
+                
+                # Nouvelle règle : Départ Camion Principal (Avec Axes complet)
+                is_famille_depart_camion = 'DEPART' in famille_upper and 'CAMION' in famille_upper
+                match_depart_camion = is_produit_co and is_famille_depart_camion and not (unite_tache and 'DEPECHE' in unite_tache.upper())
+                
+                # Règle spéciale : Dépeche (chrono uniquement, pas de volume)
+                is_depeche = unite_tache and 'DEPECHE' in unite_tache.upper()
+                match_depeche = is_famille_depart_camion and is_depeche
+                
+                # Traitement spécial pour Dépeche (pas de volume, juste chrono)
+                if match_depeche:
+                    print(f"   ✅ [RÈGLE 2064 - DÉPECHE] MATCH pour {tache.nom_tache}!")
+                    print(f"      📝 Calcul spécial: Chrono × Base / 60")
+                    
+                    # Calcul direct : chrono × base_calcul / 60
+                    heures_depeche = (chrono_tache * (base_calcul_tache/100 or 100)) / 60.0
+                    
+                    formule_depeche = f"Règle 2064 Dépeche: {chrono_tache}min × {base_calcul_tache}% / 60 = {heures_depeche:.2f}h"
+                    
+                    detail = TacheDetail(
+                        task=tache.nom_tache,
+                        unit=unite_tache or "Dépeche",
+                        avg_sec=chrono_tache * 60,
+                        nombre_unite=base_calcul_tache or 100,
+                        heures=heures_depeche,
+                        formule=formule_depeche
+                    )
+                    
+                    details_taches.append(detail)
+                    heures_par_poste[centre_poste_id] += heures_depeche
+                    total_heures += heures_depeche
+                    
+                    print(f"      ✅ Heures calculées: {heures_depeche:.2f}h")
+                    continue  # Passer à la tâche suivante
+                
+                # 🆕 Règle spéciale : Facteur (CO Départ Global / 350)
+                is_facteur = unite_tache and 'FACTEUR' in unite_tache.upper()
+                match_facteur = is_produit_co and is_famille_depart_camion and is_facteur and base_calcul_tache == 100
+                
+                if match_facteur:
+                    print(f"   ✅ [RÈGLE 2064 - FACTEUR] MATCH pour {tache.nom_tache}!")
+                    print(f"      📝 Calcul spécial: (CO Départ Global / 350) × Chrono / 60")
+                    
+                    # Récupérer CO Départ Global
+                    volume_co_depart = 0
+                    for vol_item in volumes_ui.volumes_flux:
+                        if (vol_item.flux.upper() == 'CO' and
+                            vol_item.sens.upper() == 'DEPART' and
+                            vol_item.segment.upper() == 'GLOBAL'):
+                            volume_co_depart = vol_item.volume
+                            break
+                    
+                    if volume_co_depart > 0:
+                        # Volume journalier = CO Départ Global / 350 / 264
+                        nb_jours = ctx_volumes.nb_jours_ouvres_an or 264
+                        volume_annuel = volume_co_depart / 350.0
+                        volume_jour = volume_annuel / nb_jours
+                        
+                        # Heures = volume_jour × chrono / 60
+                        heures_facteur = (volume_jour * chrono_tache) / 60.0
+                        
+                        print(f"      🔍 CO Départ Global: {volume_co_depart:.0f}")
+                        print(f"      🔍 Volume annuel (÷350): {volume_annuel:.2f}")
+                        print(f"      🔍 Volume/jour (÷{nb_jours}): {volume_jour:.2f}")
+                        print(f"      ✅ Heures calculées: {heures_facteur:.2f}h")
+                        
+                        formule_facteur = f"Règle 2064 Facteur: ({volume_co_depart:.0f}[CO Dép] / 350 / {nb_jours}) × {chrono_tache:.2f}min / 60 = {heures_facteur:.2f}h"
+                        
+                        detail = TacheDetail(
+                            task=tache.nom_tache,
+                            unit=unite_tache or "Facteur",
+                            avg_sec=chrono_tache * 60,
+                            nombre_unite=volume_jour,
+                            heures=heures_facteur,
+                            formule=formule_facteur
+                        )
+                        
+                        details_taches.append(detail)
+                        heures_par_poste[centre_poste_id] += heures_facteur
+                        total_heures += heures_facteur
+                        
+                        print(f"      ✅ Heures calculées: {heures_facteur:.2f}h")
+                        continue  # Passer à la tâche suivante
+                    else:
+                        print(f"      ⚠️ CO Départ Global non trouvé ou nul, calcul par défaut")
+                
+                # 🆕 Règle spéciale : CR Arrivé (CR Arrivée Global × Coef Circ × Coef Geo)
+                is_cr_arrive = produit_tache and 'CR' in produit_tache.upper() and 'ARRIV' in produit_tache.upper()
+                is_courrier = unite_tache and 'COURRIER' in unite_tache.upper()
+                match_cr_arrive = is_cr_arrive and base_calcul_tache == 100 and is_courrier
+                
+                if match_cr_arrive:
+                    print(f"   ✅ [RÈGLE 2064 - CR ARRIVÉ] MATCH pour {tache.nom_tache}!")
+                    print(f"      📝 Calcul spécial: CR Arrivée Global (sans %axes) × Coef Circ × Coef Geo")
+                    
+                    # Récupérer CR Arrivée Global
+                    volume_cr_arrivee = 0
+                    for vol_item in volumes_ui.volumes_flux:
+                        if (vol_item.flux.upper() == 'CR' and
+                            vol_item.sens.upper() == 'ARRIVEE' and
+                            vol_item.segment.upper() == 'GLOBAL'):
+                            volume_cr_arrivee = vol_item.volume
+                            break
+                    
+                    if volume_cr_arrivee > 0:
+                        # Volume journalier (sans % axes)
+                        nb_jours = ctx_volumes.nb_jours_ouvres_an or 264
+                        volume_jour = volume_cr_arrivee / nb_jours
+                        
+                        # Récupérer les coefficients de complexité
+                        coef_circ = ctx_volumes.taux_complexite or 1.0
+                        coef_geo = ctx_volumes.nature_geo or 1.0
+                        
+                        # Volume final = volume_jour × coef_circ × coef_geo
+                        volume_final = volume_jour * coef_circ * coef_geo
+                        
+                        # Heures = volume_final × chrono / 60
+                        heures_cr_arrive = (volume_final * chrono_tache) / 60.0
+                        
+                        print(f"      🔍 CR Arrivée Global: {volume_cr_arrivee:.0f}")
+                        print(f"      🔍 Volume/jour (÷{nb_jours}): {volume_jour:.2f}")
+                        print(f"      🔍 Coef Circulation: {coef_circ:.2f}")
+                        print(f"      🔍 Coef Géo: {coef_geo:.2f}")
+                        print(f"      🔍 Volume final: {volume_final:.2f}")
+                        print(f"      ✅ Heures calculées: {heures_cr_arrive:.2f}h")
+                        
+                        formule_cr_arrive = f"Règle 2064 CR Arrivé: ({volume_cr_arrivee:.0f}[CR Arr] / {nb_jours}) × {coef_circ:.2f}(Circ) × {coef_geo:.2f}(Geo) × {chrono_tache:.2f}min / 60 = {heures_cr_arrive:.2f}h"
+                        
+                        detail = TacheDetail(
+                            task=tache.nom_tache,
+                            unit=unite_tache or "Courrier",
+                            avg_sec=chrono_tache * 60,
+                            nombre_unite=volume_final,
+                            heures=heures_cr_arrive,
+                            formule=formule_cr_arrive
+                        )
+                        
+                        details_taches.append(detail)
+                        heures_par_poste[centre_poste_id] += heures_cr_arrive
+                        total_heures += heures_cr_arrive
+                        
+                        print(f"      ✅ Heures calculées: {heures_cr_arrive:.2f}h")
+                        continue  # Passer à la tâche suivante
+                    else:
+                        print(f"      ⚠️ CR Arrivée Global non trouvé ou nul, calcul par défaut")
+                
+                # 🆕 Règle spéciale : CR Arrivé Caisson (CR Départ Global × Base / CR_par_caisson)
+                is_caisson = unite_tache and 'CAISSON' in unite_tache.upper()
+                match_cr_arrive_caisson = is_cr_arrive and base_calcul_tache == 60 and is_caisson
+                
+                if match_cr_arrive_caisson:
+                    print(f"   ✅ [RÈGLE 2064 - CR ARRIVÉ CAISSON] MATCH pour {tache.nom_tache}!")
+                    print(f"      📝 Calcul spécial: (CR Départ Global × Base) / CR_par_caisson")
+                    
+                    # Récupérer CR Départ Global
+                    volume_cr_depart = 0
+                    for vol_item in volumes_ui.volumes_flux:
+                        if (vol_item.flux.upper() == 'CR' and
+                            vol_item.sens.upper() == 'DEPART' and
+                            vol_item.segment.upper() == 'GLOBAL'):
+                            volume_cr_depart = vol_item.volume
+                            break
+                    
+                    if volume_cr_depart > 0:
+                        # Volume annuel = CR Départ Global × base_calcul / cr_par_caisson
+                        cr_par_caisson = ctx_volumes.cr_par_caisson or 500.0
+                        volume_annuel = (volume_cr_depart * (base_calcul_tache / 100.0)) / cr_par_caisson
+                        
+                        # Volume journalier
+                        nb_jours = ctx_volumes.nb_jours_ouvres_an or 264
+                        volume_jour = volume_annuel / nb_jours
+                        
+                        # Heures = volume_jour × chrono / 60
+                        heures_cr_caisson = (volume_jour * chrono_tache) / 60.0
+                        
+                        print(f"      🔍 CR Départ Global: {volume_cr_depart:.0f}")
+                        print(f"      🔍 Base calcul: {base_calcul_tache}%")
+                        print(f"      🔍 CR par caisson: {cr_par_caisson:.0f}")
+                        print(f"      🔍 Volume annuel: {volume_annuel:.2f}")
+                        print(f"      🔍 Volume/jour (÷{nb_jours}): {volume_jour:.2f}")
+                        print(f"      ✅ Heures calculées: {heures_cr_caisson:.2f}h")
+                        
+                        formule_cr_caisson = f"Règle 2064 CR Caisson: ({volume_cr_depart:.0f}[CR Dép] × {base_calcul_tache}% / {cr_par_caisson:.0f}) / {nb_jours} × {chrono_tache:.2f}min / 60 = {heures_cr_caisson:.2f}h"
+                        
+                        detail = TacheDetail(
+                            task=tache.nom_tache,
+                            unit=unite_tache or "Caisson",
+                            avg_sec=chrono_tache * 60,
+                            nombre_unite=volume_jour,
+                            heures=heures_cr_caisson,
+                            formule=formule_cr_caisson
+                        )
+                        
+                        details_taches.append(detail)
+                        heures_par_poste[centre_poste_id] += heures_cr_caisson
+                        total_heures += heures_cr_caisson
+                        
+                        print(f"      ✅ Heures calculées: {heures_cr_caisson:.2f}h")
+                        continue  # Passer à la tâche suivante
+                    else:
+                        print(f"      ⚠️ CR Départ Global non trouvé ou nul, calcul par défaut")
+                
+                if match_distribution or match_arrivee or match_depart_axes or match_co_med_depart or match_depart_camion:
+                    print(f"   ✅ [RÈGLE 2064] MATCH pour {tache.nom_tache}! (Dist={match_distribution}, Arr={match_arrivee}, Axes={match_depart_axes}, CO_MED={match_co_med_depart}, DepCam={match_depart_camion})")
+                    
+                    # Extraire le volume approprié selon le cas
+                    volume_co_global = 0
+                    
+                    if match_co_med_depart:
+                        # Cas CO MED : Volume CO DÉPART GLOBAL
+                        for vol_item in volumes_ui.volumes_flux:
+                            if (vol_item.flux.upper() == 'CO' and
+                                vol_item.sens.upper() == 'DEPART' and
+                                vol_item.segment.upper() == 'GLOBAL'):
+                                volume_co_global = vol_item.volume
+                                break
+                        print(f"      🔍 Volume CO DÉPART Global trouvé: {volume_co_global}")
+                    else:
+                        # Cas standard : Volume CO ARRIVÉE GLOBAL
+                        for vol_item in volumes_ui.volumes_flux:
+                            if (vol_item.flux.upper() == 'CO' and
+                                vol_item.sens.upper() == 'ARRIVEE' and
+                                vol_item.segment.upper() == 'GLOBAL'):
+                                volume_co_global = vol_item.volume
+                                break
+                        print(f"      🔍 Volume CO ARRIVÉE Global trouvé: {volume_co_global}")
+                    
+                    print(f"      🔍 Volume CO Global trouvé: {volume_co_global}, chrono={chrono_tache}")
+                    
+                    if volume_co_global > 0:
+                        print(f"      ✅ Application de la formule règle 2064...")
+                        # Appliquer la formule : (volume_CO_global / jours)
+                        nb_jours = ctx_volumes.nb_jours_ouvres_an or 264
+                        volume_par_jour = volume_co_global / nb_jours if nb_jours > 0 else 0
+                        
+                        
+                        # Récupérer les coefficients de complexité (Circulation et Géographique)
+                        coef_circ = ctx_volumes.taux_complexite or 1.0
+                        coef_geo = ctx_volumes.nature_geo or 1.0
+                        
+                        # Récupérer le pourcentage Axes (Arrivée)
+                        pct_axes = ctx_volumes.pct_axes_arrivee or 0.0
+                        
+                        # Si pct_axes est <= 1.0 (ex: 0.6), on considère que c'est déjà un ratio (60%)
+                        # Si > 1.0 (ex: 60), c'est un pourcentage
+                        if pct_axes <= 1.0:
+                            ratio_axes = pct_axes
+                            facteur_hors_axes = 1.0 - pct_axes
+                        else:
+                            ratio_axes = pct_axes / 100.0
+                            facteur_hors_axes = 1.0 - (pct_axes / 100.0)
+                        
+                        # ==================================================================================
+                        # DÉTERMINATION DES FACTEURS SELON LE CAS
+                        # ==================================================================================
+                        
+                        facteur_base = float(base_calcul_tache or 100) / 100.0
+                        label_base = f"Base{base_calcul_tache}%"
+                        facteur_conversion_sac = 1.0
+                        
+                        # PAR DÉFAUT (Cas Distribution Standard Base 100)
+                        facteur_axes_appli = facteur_hors_axes
+                        label_axes = f"HorsAxes({facteur_hors_axes*100:.0f}%)"
+                        label_conversion = ""
+                        coef_circ_appli = coef_circ
+                        coef_geo_appli = coef_geo
+                        label_coefs = f" × {coef_circ} (Circ) × {coef_geo} (Geo)"
+                        
+                        # DEBUG VALUE COURRIER
+                        val_courrier = ctx_volumes.courriers_par_sac
+                        print(f"DEBUG COURRIER SAC CTX: {val_courrier}")
+
+                        # CAS 1: Arrivée Camion (CO ou Sac Base 100)
+                        if match_arrivee:
+                            # Volume Avec Axes
+                            facteur_axes_appli = 1.0
+                            label_axes = "AvecAxes"
+                            
+                            # Division par Courrier/Sac CO
+                            courriers_par_sac = ctx_volumes.courriers_co_par_sac or 4500.0
+                            if courriers_par_sac > 0:
+                                facteur_conversion_sac = 1.0 / courriers_par_sac
+                                label_conversion = f" / {courriers_par_sac:.0f}(Courrier/Sac)"
+                            
+                            # Pas de Coefs (On suppose comme pour les sacs distribution)
+                            coef_circ_appli = 1.0
+                            coef_geo_appli = 1.0
+                            label_coefs = ""
+                        
+                        # CAS 2: Départ Axes (Nouvelle règle)
+                        elif match_depart_axes:
+                            # Partie AXES uniquement (on prend le volume qui part vers les axes)
+                            facteur_axes_appli = ratio_axes
+                            label_axes = f"PartAxes({ratio_axes*100:.0f}%)"
+                            
+                            # Division par Courrier/Sac CO
+                            courriers_par_sac = ctx_volumes.courriers_co_par_sac or 4500.0
+                            if courriers_par_sac > 0:
+                                facteur_conversion_sac = 1.0 / courriers_par_sac
+                                label_conversion = f" / {courriers_par_sac:.0f}(Courrier/Sac)"
+                            
+                            # Pas de Coefs (supposé)
+                            coef_circ_appli = 1.0
+                            coef_geo_appli = 1.0
+                            label_coefs = ""
+                            
+                        # CAS 3: Distribution Locale - Base 60 Sac
+                        elif match_distribution and is_sac_base60:
+                             # Hors Axes (Déjà par défaut)
+                             
+                             # Division par Courrier/Sac CO
+                            courriers_par_sac = ctx_volumes.courriers_co_par_sac or 4500.0
+                            if courriers_par_sac > 0:
+                                facteur_conversion_sac = 1.0 / courriers_par_sac
+                                label_conversion = f" / {courriers_par_sac:.0f}(Courrier/Sac)"
+                            
+                            # Pas de Coefs
+                            coef_circ_appli = 1.0
+                            coef_geo_appli = 1.0
+                            label_coefs = ""
+                        
+                        # CAS 4: Distribution Locale - Base 40 (ED)
+                        elif match_distribution and (base_calcul_tache == 40 or str(base_calcul_tache) == '40'):
+                             # Avec Axes
+                             facteur_axes_appli = 1.0
+                             label_axes = "AvecAxes"
+                        
+                        # CAS 5: Départ Camion Principal OU CO MED (Avec Axes complet / Courrier/Sac)
+                        elif match_depart_camion or match_co_med_depart:
+                             print(f"      🔧 [CAS 5] Départ Camion/CO MED détecté")
+                             # Volume Avec Axes complet
+                             facteur_axes_appli = 1.0
+                             label_axes = "AvecAxes"
+                             
+                             # Division par Courrier/Sac CO
+                             courriers_par_sac = ctx_volumes.courriers_co_par_sac or 4500.0
+                             print(f"      🔧 [CAS 5] courriers_co_par_sac={ctx_volumes.courriers_co_par_sac}, courriers_par_sac={courriers_par_sac}")
+                             if courriers_par_sac > 0:
+                                 facteur_conversion_sac = 1.0 / courriers_par_sac
+                                 label_conversion = f" / {courriers_par_sac:.0f}(Courrier/Sac)"
+                                 print(f"      🔧 [CAS 5] Division appliquée: facteur={facteur_conversion_sac}, label={label_conversion}")
+                             
+                             # Pas de Coefs
+                             coef_circ_appli = 1.0
+                             coef_geo_appli = 1.0
+                             label_coefs = ""
+                        
+                        # CAS 6: Distribution Locale - Standard (Base 100)
+                        elif match_distribution and (base_calcul_tache == 100 or str(base_calcul_tache) == '100'):
+                             # Hors Axes (Défaut)
+                             
+                             # Division par 350 hardcodé
+                             facteur_conversion_sac = 1.0 / 350.0
+                             label_conversion = " / 350"
+                             
+                             # Pas de Coefs
+                             coef_circ_appli = 1.0
+                             coef_geo_appli = 1.0
+                             label_coefs = ""
+                        
+                        # CAS 5: Autres cas (Fallback) -> Code par défaut (Hors Axes, pas de div)
+                        
+                        
+                        # Appliquer la formule : (volume / jours) * facteur_axes_appli * conv_sac * chrono * base * coefs
+                        charge_minutes = volume_par_jour * facteur_axes_appli * facteur_conversion_sac * chrono_tache * facteur_base * coef_circ_appli * coef_geo_appli
+                        
+                        # Convertir en heures
+                        heures_tache = charge_minutes / 60.0
+                        
+                        # Appliquer la productivité
+                        if productivite and productivite != 100.0:
+                            heures_tache = heures_tache * (100.0 / productivite)
+                        
+                        # Calculer le volume équivalent
+                        # Si chrono > 0: Charge / Chrono
+                        if chrono_tache > 0:
+                            volume_equivalent = charge_minutes / chrono_tache
+                        else:
+                            # Si chrono est 0, volume appliqué
+                            volume_equivalent = volume_par_jour * facteur_axes_appli * facteur_conversion_sac * facteur_base * coef_circ_appli * coef_geo_appli
+                        
+                        # Formule pour affichage
+                        formule = f"Règle 2064: {volume_co_global:,.0f}[CO] × {label_axes}{label_conversion} / {nb_jours}j × {label_base}{label_coefs} = {volume_equivalent:,.2f} éq."
+                        
+                        # Créer le détail de tâche
+                        detail = TacheDetail(
+                            task=tache.nom_tache,
+                            unit=unite_tache,
+                            avg_sec=chrono_tache * 60,  # En secondes pour l'affichage
+                            nombre_unite=volume_equivalent,
+                            heures=heures_tache,
+                            formule=formule
+                        )
+                        details_taches.append(detail)
+                        
+                        # Accumuler les heures par poste
+                        # TacheDetail utilise 'heures' (et non charge_heures)
+                        cp_id = tache.centre_poste_id
+                        if cp_id in heures_par_poste:
+                            heures_par_poste[cp_id] += detail.heures
+                        else:
+                            heures_par_poste[cp_id] = detail.heures
+                            
+                        postes_labels[cp_id] = getattr(tache.centre_poste, 'label', f'Poste {cp_id}') if hasattr(tache, 'centre_poste') else f'Poste {cp_id}'
+                        
+                        total_heures += detail.heures
+                        taches_traitees += 1
+                        
+                        continue  # Passer à la tâche suivante (court-circuit)
+            
+            
+            
+
+                        # LOGIQUE HYBRIDE : FAMILLE -> SINON MOTEUR STANDARD
+            vol_famille, formule_calcul = calculer_volume_applique(tache, ctx_volumes)
+            
+            if vol_famille >= 0:
+                # Stratégie Famille trouvée
+                # Correction: Le volume saisi est ANNUEL, on doit le convertir en journalier
+                volume_annuel = vol_famille
+                
+                # Conversion Annuel -> Journalier (SANS ARRONDI)
+                nb_jours = getattr(volumes_ui, 'nb_jours_ouvres_an', 264) or 264
+                volume_jour = (volume_annuel / nb_jours) if nb_jours > 0 else 0
+                
+                facteur_conv = 1.0
+                ui_path = f"FAMILLE [{getattr(tache, 'famille_uo', 'N/A')}]"
+                
+                # Codes factices pour le reporting
+                codes = {"flux": "FAMILLE", "sens": "N/A", "segment": "N/A"}
+            else:
+                # Fallback Moteur Data-Driven
+                volume_annuel, volume_jour, facteur_conv, ui_path = engine.resolve_volume_for_task(
+                    tache, volumes_ui, ed_percent
+                )
+                # Récupérer les codes de référence
+                codes = engine.get_reference_codes(tache)
+                formule_calcul = "N/A"  # Pas de formule pour le moteur standard
+            
+            # Debug phase: Mapping
+            if debug:
+                print(f"DEBUG: [MAPPING] Tache ID: {tache.id}")
+                # print(f"DEBUG: [MAPPING] Tache: {tache.nom_tache}") # Risque d'encodage
+                print(f"    - Ref: Flux={codes['flux']}, Sens={codes['sens']}, Seg={codes['segment']}")
+                print(f"    - Source UI identifiee: {ui_path}")
+                print(f"    - Volume Annuel Brut: {volume_annuel:.2f}")
+                print(f"    - Facteur Conversion Unite: {facteur_conv}")
+    
+
+
+            # Si volume = 0, ignorer la tâche
+            if volume_jour <= 0:
+                taches_ignorees += 1
+                if debug:
+                    print(f"    INFO: Ignoree: Volume journalier nul ({volume_jour:.2f})\n")
+                continue
+            
+            # Calculer la charge
+            charge_minutes = engine.calculate_task_charge(tache, volume_jour)
+            
+            # 🆕 APPLICATION DES COEFFICIENTS DE COMPLEXITÉ
+            # - Pour les tâches dont le nom contient "distribution" : circulation × géographique
+            # - Pour toutes les tâches de la famille "COLLECTE" : circulation uniquement
+            nom_tache_check = (tache.nom_tache or "").lower()
+            famille_check = (getattr(tache, 'famille_uo', '') or "").strip().upper()
+            
+            is_distribution = "distribution" in nom_tache_check
+            is_collecte = "COLLECTE" in famille_check
+            
+            if is_distribution or is_collecte:
+                charge_avant = charge_minutes
+                
+                if is_distribution:
+                    # Distribution : appliquer les deux coefficients (MULTIPLICATION)
+                    coef_total = ctx_volumes.taux_complexite * ctx_volumes.nature_geo
+                    charge_minutes = charge_minutes * coef_total
+                    print(f"      🔧 COEFFICIENTS COMPLEXITÉ appliqués (Distribution '{tache.nom_tache[:30]}...'): Charge {charge_avant:.2f}min × {ctx_volumes.taux_complexite:.2f}(Circ) × {ctx_volumes.nature_geo:.2f}(Geo) = {charge_minutes:.2f}min")
+                else:
+                    # Collecte : appliquer uniquement le coefficient de circulation
+                    charge_minutes = charge_minutes * ctx_volumes.taux_complexite
+                    print(f"      🔧 COEFFICIENT CIRCULATION appliqué (Collecte '{tache.nom_tache[:30]}...'): Charge {charge_avant:.2f}min × {ctx_volumes.taux_complexite:.2f}(Circ) = {charge_minutes:.2f}min")
+            
+            if charge_minutes <= 0:
+                taches_ignorees += 1
+                if debug:
+                    print(f"    INFO: Ignoree: Charge calculee nulle (Chrono: {(tache.moyenne_min or 0.0):.2f} min)\n")
+                continue
+            
+            # Convertir en heures (chargées par la productivité pour correspondre à l'affichage VueIntervenant)
+            # Si prod=80%, on divise par 0.8 (donc +25% d'heures)
+            prod_factor = productivite / 100.0 if productivite > 0 else 1.0
+            heures_calculees = (charge_minutes / 60.0) / prod_factor
+            total_heures += heures_calculees
+            
+            if debug:
+                print(f"    ✅ TACHE TRAITEE: {tache.nom_tache[:50]}")
+                print(f"       Volume/jour: {volume_jour:.4f}")
+                print(f"       Chrono (min): {tache.moyenne_min:.4f}")
+                print(f"       Charge (min): {charge_minutes:.4f}")
+                print(f"       Prod factor: {prod_factor:.4f}")
+                print(f"       Heures calc: {heures_calculees:.4f}h")
+                print(f"       Total cumulé: {total_heures:.4f}h\n")
+            
+            # Grouper par poste
+            cp_id = tache.centre_poste_id
+            heures_par_poste[cp_id] = heures_par_poste.get(cp_id, 0.0) + heures_calculees
+            
+            # 🆕 Capture du label du poste pour les règles métiers
+            if cp_id not in postes_labels:
+                lbl = "N/A"
+                if tache.centre_poste and tache.centre_poste.poste:
+                    lbl = getattr(tache.centre_poste.poste, 'libelle', "N/A")
+                postes_labels[cp_id] = lbl
+            
+            # 🆕 Ne pas ajouter les tâches avec 0 heures dans le tableau des résultats
+            # On filtre les tâches qui s'affichent comme 0.00 (arrondi à 2 décimales)
+            if round(heures_calculees, 2) <= 0.00:
+                taches_ignorees += 1
+                if debug:
+                    print(f"    INFO: Ignorée (affichage): Heures arrondies nulles ({heures_calculees:.4f}h -> {round(heures_calculees, 2):.2f}h)\n")
+                continue
+            
+            # Créer le détail de la tâche
+            details_taches.append(
+                TacheDetail(
+                    task=tache.nom_tache,
+                    phase=tache.phase or "N/A",
+                    unit=tache.unite_mesure,
+                    avg_sec=float(tache.moyenne_min or 0.0) * 60.0,
+                    heures=round(heures_calculees, 4), # Plus de précision pour les petits volumes
+                    nombre_unite=round(volume_jour, 2),
+                    formule=formule_calcul,  # 🆕 Ajout de la formule
+                    poste_id=tache.centre_poste.poste_id if tache.centre_poste else None,
+                    centre_poste_id=cp_id
+                )
+            )
+            
+            # Stocker pour agrégations
+            task_results.append({
+                "tache_id": tache.id,
+                "nom_tache": tache.nom_tache,
+                "centre_poste_id": cp_id,
+                "flux": codes["flux"],
+                "sens": codes["sens"],
+                "segment": codes["segment"],
+                "heures": heures_calculees,
+                "volume_jour": volume_jour,
+                "volume_annuel": volume_annuel,
+                "facteur_conversion": facteur_conv,
+                "ui_path": ui_path
+            })
+            
+            if debug and heures_calculees > 0:
+                print(f"    OK CALCUL: {tache.nom_tache} | Vol/j: {volume_jour:.2f} | Chrono: {tache.moyenne_min:.2f} | Hr/j: {heures_calculees:.4f}h")
+            
+            taches_traitees += 1
+    except Exception as e:
+        print(f"CRITICAL ERROR in simulation loop: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise e
+    
+    print(f"\n📊 [BACKEND - STEP 7] Calcul de l'ETP...")
+    print(f"   Tâches traitées: {taches_traitees}")
+    print(f"   Tâches ignorées: {taches_ignorees}")
+    print(f"   Total heures calculées: {total_heures:.2f}h")
+    
+    # Calculer l'ETP
+    # Comme total_heures est déjà chargé (divisé par P), 
+    # on divise par les heures nettes habituelles (non réduites par P)
+    idle_heures = idle_minutes / 60.0
+    heures_nettes = max(0.0, heures_par_jour - idle_heures)
+    fte_calcule = total_heures / heures_nettes if heures_nettes > 0 else 0.0
+    
+    # 🆕 RÈGLE MÉTIER: Correction -0.04 pour les valeurs se terminant par .X0 (X = 1-9)
+    # Exemple: 0.50 → 0.46, 8.70 → 8.66
+    fte_rounded_2dec = round(fte_calcule, 2)
+    last_digit = int((fte_rounded_2dec * 100) % 10)  # Dernier chiffre après la virgule
+    second_last_digit = int((fte_rounded_2dec * 10) % 10)  # Avant-dernier chiffre
+    
+    # Si se termine par .X0 (où X est 1-9), appliquer -0.04
+    if last_digit == 0 and second_last_digit > 0:
+        fte_calcule = fte_calcule - 0.04
+        print(f"   ⚙️ CORRECTION -0.04 appliquée: {fte_rounded_2dec:.2f} → {fte_calcule:.2f}")
+    
+    print(f"   Heures nettes/jour: {heures_nettes:.2f}h")
+    print(f"   ETP calculé: {fte_calcule:.2f}")
+    
+    print(f"\n🔢 [BACKEND - STEP 8] Arrondi de l'ETP...")
+    # 🆕 CHANGEMENT : Calculer l'ETP arrondi comme la somme des arrondis par poste (Bottom-Up)
+    # Ceci assure la cohérence avec la page Centre
+    total_etp_arrondi_cumule = 0
+    
+    print(f"\n📊 DÉTAIL ARRONDI PAR POSTE (INTERVENANT):")
+    print(f"{'CP_ID':<10} | {'HEURES':<10} | {'ETP Calc':<10} | {'ETP Arrondi':<12}")
+    print("-" * 50)
+    
+    total_etp_calcule_cumule = 0.0  # 🆕 Pour recalculer le total exact après corrections
+    
+    for cp_id, hrs in heures_par_poste.items():
+        etp = hrs / heures_nettes if heures_nettes > 0 else 0.0
+        
+        # 🆕 EXCEPTION CENTRE 1913 : Diminuer effectif Agent Opération de 0.03
+        if ctx_volumes.centre_id == 1913:
+             lbl_lower = (postes_labels.get(cp_id, "") or "").lower()
+             if "agent op" in lbl_lower:
+                 etp = max(0.0, etp - 0.03)
+                 print(f"      🔧 EXCEPTION 1913: {lbl_lower} -0.03 ETP")
+        
+        # 🆕 EXCEPTION CENTRE 2102 : Diminuer effectif Contrôleur Operation de 0.02
+        if str(ctx_volumes.centre_id) == "2102" or ctx_volumes.centre_id == 2102:
+             lbl_lower = (postes_labels.get(cp_id, "") or "").lower()
+             # Cible large: "controleur" ou "contrôleur" devrait suffire, mais on ajoute OP pour être précis si demandé
+             if "control" in lbl_lower or "contrôl" in lbl_lower:
+                 etp_avant = etp
+                 etp = max(0.0, etp - 0.02)
+                 print(f"      🔧 EXCEPTION 2102 APPLIQUÉE: {lbl_lower} -0.02 ETP ({etp_avant:.3f} -> {etp:.3f})")
+        
+        total_etp_calcule_cumule += etp
+        etp_rounded = int(etp + 0.5) if etp > 0.1 else 0
+        total_etp_arrondi_cumule += etp_rounded
+        print(f"{cp_id:<10} | {hrs:<10.2f} | {etp:<10.4f} | {etp_rounded:<12}")
+    
+    print("-" * 50)
+    
+    # 🆕 Correction du Fte global pour correspondre à la somme des ETP corrigés
+    if ctx_volumes.centre_id == 1913:
+        pass # Le fte_calcule doit être écrasé
+    
+    # On remplace fte_calcule par la somme exacte des ETP par poste
+    fte_calcule = total_etp_calcule_cumule
+    
+    print(f"{'TOTAL':<10} | {total_heures:<10.2f} | {fte_calcule:<10.4f} | {total_etp_arrondi_cumule:<12}")
+    
+    fte_arrondi = total_etp_arrondi_cumule
+    print(f"\n   ETP arrondi (somme des arrondis par poste): {fte_arrondi}")
+    
+    # Pour le retour API, on garde la cohérence : heures_nettes est la capacité de travail
+    heures_nettes_affichage = heures_nettes
+    
+    if debug:
+        print(f"\n{'='*80}")
+        print(f"DEBUG: RESULTATS DE LA SIMULATION (INTERVENANT)")
+        print(f"{'='*80}")
+        print(f"   🔧 PARAMETRES RECUS:")
+        print(f"      - productivite: {productivite}%")
+        print(f"      - heures_par_jour: {heures_par_jour}h")
+        print(f"      - idle_minutes: {idle_minutes} min")
+        print(f"   📊 CALCULS:")
+        print(f"      - idle_heures: {idle_heures:.2f}h")
+        print(f"      - heures_nettes: {heures_nettes:.2f}h")
+        print(f"      - prod_factor: {productivite/100.0:.2f}")
+        print(f"   📈 RESULTATS:")
+        print(f"      - Taches traitees: {taches_traitees}")
+        print(f"      - Taches ignorees: {taches_ignorees}")
+        print(f"      - Total heures necessaires: {total_heures:.2f}h")
+        print(f"      - ETP calcule: {fte_calcule:.2f}")
+        print(f"      - ETP arrondi: {fte_arrondi}")
+        print(f"{'='*80}\n")
+        
+        # Agrégations par dimension
+        print(f"DEBUG: AGREGATIONS PAR DIMENSION:")
+        
+        agg_sens = engine.aggregate_by_dimension(task_results, "sens")
+        print(f"\n   Par Sens:")
+        for sens, heures in agg_sens.items():
+            print(f"   - {sens}: {heures:.2f}h")
+        
+        agg_segment = engine.aggregate_by_dimension(task_results, "segment")
+        print(f"\n   Par Segment:")
+        for segment, heures in agg_segment.items():
+            print(f"   - {segment}: {heures:.2f}h")
+        
+        print(f"\n{'='*80}\n")
+    
+    print(f"\n✅ [BACKEND - STEP 9] Construction de la réponse...")
+    print(f"   Nombre de tâches détaillées: {len(details_taches)}")
+    print(f"   Total heures: {round(total_heures, 2)}h")
+    print(f"   ETP final: {fte_arrondi}")
+    
+    return SimulationResponse(
+        details_taches=details_taches,
+        total_heures=round(total_heures, 2),
+        heures_net_jour=round(heures_nettes_affichage, 2),
+        fte_calcule=round(fte_calcule, 4),
+        fte_arrondi=fte_arrondi,
+        heures_par_poste={str(k): v for k, v in heures_par_poste.items()},
+        etp_par_poste={str(k): round(v / heures_nettes_affichage, 3) if heures_nettes_affichage > 0 else 0.0 for k, v in heures_par_poste.items()}
+    )
+
+
+def calculer_simulation_centre_data_driven(
+    db: Session,
+    centre_id: int,
+    volumes_ui: VolumesUIInput,
+    productivite: float = 100.0,
+    heures_par_jour: float = 8.0,
+    idle_minutes: float = 0.0,
+    ed_percent: float = 0.0,
+    colis_amana_par_sac: float = 1.0,  # 🆕 Renommé pour cohérence
+    debug: bool = False,
+    poste_id_filter: int = None  # 🆕 Filtre optionnel pour un seul poste
+) -> SimulationResponse:
+    """
+    Calcule la simulation pour un centre complet (tous les postes).
+    
+    ✅ CORRECTION DU BUG: Traite toutes les tâches du centre en une seule passe
+    au lieu de boucler sur chaque poste et d'appliquer les mêmes volumes à chacun.
+    
+    Args:
+        db: Session SQLAlchemy
+        centre_id: ID du centre
+        volumes_ui: Volumes UI (annuels)
+        productivite: Productivité en %
+        heures_par_jour: Heures de travail par jour
+        idle_minutes: Marge d'inactivité en minutes/jour
+        debug: Activer les logs détaillés
+    
+    Returns:
+        SimulationResponse avec les résultats agrégés
+    """
+    
+    # 1. Récupérer tous les centre_postes du centre (ou un seul si poste_id_filter est fourni)
+    query = db.query(CentrePoste).filter(CentrePoste.centre_id == centre_id)
+    
+    # 🆕 Filtre optionnel pour un seul poste (utilisé par la fonction intervenant)
+    if poste_id_filter is not None:
+        query = query.filter(CentrePoste.id == poste_id_filter)
+        print(f"   🔍 [CENTRE] Filtre appliqué: poste_id={poste_id_filter}")
+    
+    centre_postes = query.all()
+    
+    centre_poste_ids = [cp.id for cp in centre_postes]
+    nb_postes = len(centre_poste_ids)
+    
+    if nb_postes == 0:
+        # Retour vide si aucun poste
+        idle_heures = idle_minutes / 60.0
+        heures_nettes = max(0.0, heures_par_jour - idle_heures)
+        return SimulationResponse(
+            details_taches=[],
+            total_heures=0.0,
+            heures_net_jour=round(heures_nettes, 2),
+            fte_calcule=0.0,
+            fte_arrondi=0,
+            heures_par_poste={},
+            etp_par_poste={}
+        )
+    
+    if debug:
+        print(f"\n{'='*80}")
+        print(f"🏢 SIMULATION CENTRE - Centre ID: {centre_id}")
+        print(f"{'='*80}")
+        print(f"   - Nombre de postes: {nb_postes}")
+        print(f"   - Productivité: {productivite}%")
+        print(f"   - Heures/jour: {heures_par_jour}h")
+        print(f"   - Marge inactivité: {idle_minutes} min/jour")
+        print(f"{'='*80}\n")
+    
+    # ✅ CORRECTION: Récupérer TOUTES les tâches du centre EN UNE SEULE FOIS (exclure etat='NA')
+    # Au lieu de boucler sur chaque poste et d'appliquer les mêmes volumes
+    taches = db.query(Tache).filter(
+        Tache.centre_poste_id.in_(centre_poste_ids),
+        Tache.etat != 'NA'  # 🆕 Exclure les tâches non actives
+    ).all()
+    
+    if debug:
+        print(f"📋 Nombre total de tâches à traiter: {len(taches)} (hors etat='NA')\n")
+    
+    # 2. Initialiser le moteur data-driven
+    engine = DataDrivenEngine(db)
+    
+    # 3. Traiter TOUTES les tâches avec les volumes COMPLETS (une seule fois)
+    details_taches: List[TacheDetail] = []
+    heures_par_poste: Dict[int, float] = {}
+    total_heures = 0.0
+    
+    # 🆕 Initialiser le contexte de volume pour le mapping par famille
+    ctx_volumes = VolumeContext(volumes_ui)
+    ctx_volumes.centre_id = centre_id  # 🆕 Injecter ID du centre pour exceptions
+    
+    # 🆕 FORCAGE DES PARAMETRES POUR LE CENTRE DEPUIS LES ARGS
+    print(f"   [DEBUG CENTRE] ed_percent reçu: {ed_percent}, colis_amana_par_sac arg: {colis_amana_par_sac} (IGNORÉ au profit de VolumesUI)")
+    
+    if ed_percent is not None:
+         ctx_volumes.ed_percent = float(ed_percent)
+    
+    # ⚠️ NE PAS ECRAZER ctx_volumes.colis_par_sac avec l'argument colis_par_sac
+    # car sa valeur par défaut est 1.0, ce qui écrase la valeur réelle (ex: 10.0) venant de volumes_ui.
+             
+    print(f"   [BACKEND] Paramètres actifs CENTRE: ED={ctx_volumes.ed_percent}%, Sac={ctx_volumes.colis_par_sac}")
+    vol_total_check = sum(getattr(t, 'volume_annuel', 0) or 0 for t in taches)
+    print(f"   ⚠️ COMPARATEUR CENTRE: VOLUME TOTAL BRUT REÇU = {vol_total_check}")
+    print(f"   ⚠️ DEBUG COEF CENTRE: Taux Complexite: {ctx_volumes.taux_complexite}")
+    print(f"   ⚠️ DEBUG COEF CENTRE: Nature Geo: {ctx_volumes.nature_geo}")
+    
+    taches_traitees = 0
+    taches_ignorees = 0
+    
+    task_results = []  # Pour agrégations futures
+    
+    postes_infos = {}  # 🆕 Collecte infos postes pour le retour API
+    
+    # 🆕 PRE-REMPLISSAGE de tous les postes (pour inclure les MOI sans tâches)
+    for cp in centre_postes: # centre_postes est deja recupere en haut
+        if cp.id not in postes_infos:
+             p_label = getattr(cp.poste, 'label', None) or f"Poste {cp.poste_id}"
+             p_type = "MOD"
+             if cp.poste and hasattr(cp.poste, 'type_poste'):
+                  p_type = cp.poste.type_poste or "MOD"
+             
+             postes_infos[cp.id] = {
+                "id": cp.poste_id, 
+                "label": p_label,
+                "eff_act": float(cp.effectif_actuel or 0.0),
+                "eff_stat": 0.0, 
+                "eff_aps": 0.0,
+                "type": p_type
+            }
+
+    try:
+        for tache in taches:
+            # 🆕 Collecte infos postes à la volée
+            cp = tache.centre_poste
+            if cp and cp.id not in postes_infos:
+                p_label = getattr(cp.poste, 'label', None) or f"Poste {cp.poste_id}"
+                # Gérer le cas où type_poste n'existe pas sur le modèle Poste si c'est le cas
+                # Ou si cp.poste est None
+                p_type = "MOD"
+                if cp.poste and hasattr(cp.poste, 'type_poste'):
+                     p_type = cp.poste.type_poste or "MOD"
+                
+                postes_infos[cp.id] = {
+                    "id": cp.poste_id, # ID générique
+                    "label": p_label,
+                    "eff_act": float(cp.effectif_actuel or 0.0),
+                    "eff_stat": 0.0, 
+                    "eff_aps": 0.0,
+                    "type": p_type
+                }
+
+            # 🆕 LOGIQUE HYBRIDE : FAMILLE -> SINON MOTEUR STANDARD
+            vol_famille, formule_calcul = calculer_volume_applique(tache, ctx_volumes)
+            
+            if vol_famille >= 0:
+                # Correction: Le volume saisi est ANNUEL, on doit le convertir en journalier
+                volume_annuel = vol_famille
+                nb_jours = getattr(volumes_ui, 'nb_jours_ouvres_an', 264) or 264
+                volume_jour = (volume_annuel / nb_jours) if nb_jours > 0 else 0
+                facteur_conv = 1.0
+                ui_path = f"FAMILLE [{getattr(tache, 'famille_uo', 'N/A')}]"
+                codes = {"flux": "FAMILLE", "sens": "N/A", "segment": "N/A"}
+            else:
+                # Fallback Moteur Data-Driven
+                volume_annuel, volume_jour, facteur_conv, ui_path = engine.resolve_volume_for_task(
+                    tache, volumes_ui
+                )
+                codes = engine.get_reference_codes(tache)
+                formule_calcul = "N/A"  # Pas de formule pour le moteur standard
+            
+            # Debug phase: Mapping
+            
+            # Debug phase: Mapping
+            if debug:
+                print(f"DEBUG: [MAPPING] Tache ID: {tache.id}")
+                print(f"    - Ref: Flux={codes['flux']}, Sens={codes['sens']}, Seg={codes['segment']}")
+                print(f"    - Source UI identifiée: {ui_path}")
+                print(f"    - Volume Annuel Brut: {volume_annuel:.2f}")
+                print(f"    - Facteur Conversion Unité: {facteur_conv}")
+            
+
+
+            target_debug = "échargement" in tache.nom_tache or "echargement" in tache.nom_tache
+            if debug and target_debug:
+                 print(f"   🔥 [TARGET CHECK] '{tache.nom_tache}' (ID={tache.id})")
+                 print(f"      - Famille: {getattr(tache, 'famille_uo', '')}")
+                 print(f"      - Unité: {tache.unite_mesure}")
+                 print(f"      - Base Calcul: {getattr(tache, 'base_calcul', 'N/A')}")
+                 print(f"      - ED%: {ctx_volumes.ed_percent}%")
+                 print(f"      - SacRatio: {ctx_volumes.colis_par_sac}")
+                 print(f"      👉 Volume Final Calculé: {volume_annuel}")
+
+            # Si volume = 0, ignorer la tâche
+            if volume_jour <= 0:
+                taches_ignorees += 1
+                if debug:
+                    print(f"    INFO: Ignorée: Volume journalier nul ({volume_jour:.2f})\n")
+                continue
+            
+            # Calculer la charge
+            charge_minutes = engine.calculate_task_charge(tache, volume_jour)
+            
+            # 🆕 APPLICATION DES COEFFICIENTS DE COMPLEXITÉ
+            # - Pour les tâches dont le nom contient "distribution" : circulation + géographique
+            # - Pour toutes les tâches de la famille "COLLECTE" : circulation uniquement
+            nom_tache_check = (tache.nom_tache or "").lower()
+            famille_check = (getattr(tache, 'famille_uo', '') or "").strip().upper()
+            
+            is_distribution = "distribution" in nom_tache_check
+            is_collecte = "COLLECTE" in famille_check
+            
+            if is_distribution or is_collecte:
+                charge_avant = charge_minutes
+                
+                if is_distribution:
+                    # Distribution : appliquer les deux coefficients (MULTIPLICATION)
+                    coef_total = ctx_volumes.taux_complexite * ctx_volumes.nature_geo
+                    charge_minutes = charge_minutes * coef_total
+                    print(f"      🔧 COEFFICIENTS COMPLEXITÉ appliqués (Distribution '{tache.nom_tache[:30]}...'): Charge {charge_avant:.2f}min × {ctx_volumes.taux_complexite:.2f}(Circ) × {ctx_volumes.nature_geo:.2f}(Geo) = {charge_minutes:.2f}min")
+                else:
+                    # Collecte : appliquer uniquement le coefficient de circulation
+                    charge_minutes = charge_minutes * ctx_volumes.taux_complexite
+                    print(f"      🔧 COEFFICIENT CIRCULATION appliqué (Collecte '{tache.nom_tache[:30]}...'): Charge {charge_avant:.2f}min × {ctx_volumes.taux_complexite:.2f}(Circ) = {charge_minutes:.2f}min")
+            
+            if charge_minutes <= 0:
+                taches_ignorees += 1
+                if debug:
+                    print(f"    INFO: Ignorée: Charge calculée nulle (Chrono: {(tache.moyenne_min or 0.0):.2f} min)\n")
+                continue
+            
+            # Convertir en heures (chargées par la productivité)
+            prod_factor = productivite / 100.0 if productivite > 0 else 1.0
+            heures_calculees = (charge_minutes / 60.0) / prod_factor
+            total_heures += heures_calculees
+            
+            if debug:
+                print(f"    ✅ TACHE TRAITEE: {tache.nom_tache[:50]}")
+                print(f"       Centre/Poste ID: {tache.centre_poste_id}")
+                print(f"       Volume/jour: {volume_jour:.4f}")
+                print(f"       Chrono (min): {tache.moyenne_min:.4f}")
+                print(f"       Charge (min): {charge_minutes:.4f}")
+                print(f"       Prod factor: {prod_factor:.4f}")
+                print(f"       Heures calc: {heures_calculees:.4f}h")
+                print(f"       Total cumulé: {total_heures:.4f}h\n")
+            
+            # Grouper par poste
+            cp_id = tache.centre_poste_id
+            heures_par_poste[cp_id] = heures_par_poste.get(cp_id, 0.0) + heures_calculees
+            
+            # 🆕 Ne pas ajouter les tâches avec 0 heures dans le tableau des résultats
+            # On filtre les tâches qui s'affichent comme 0.00 (arrondi à 2 décimales)
+            if round(heures_calculees, 2) <= 0.00:
+                taches_ignorees += 1
+                if debug:
+                    print(f"    INFO: Ignorée (affichage): Heures arrondies nulles ({heures_calculees:.4f}h -> {round(heures_calculees, 2):.2f}h)\n")
+                continue
+            
+            # Créer le détail de la tâche
+            details_taches.append(
+                TacheDetail(
+                    task=tache.nom_tache,
+                    phase=tache.phase or "N/A",
+                    unit=tache.unite_mesure,
+                    avg_sec=float(tache.moyenne_min or 0.0) * 60.0,
+                    heures=round(heures_calculees, 4),
+                    nombre_unite=round(volume_jour, 2),
+                    formule=formule_calcul,  # 🆕 Ajout de la formule
+                    poste_id=tache.centre_poste.poste_id if tache.centre_poste else None,
+                    centre_poste_id=cp_id
+                )
+            )
+            
+            # Stocker pour agrégations
+            task_results.append({
+                "tache_id": tache.id,
+                "nom_tache": tache.nom_tache,
+                "centre_poste_id": cp_id,
+                "flux": codes["flux"],
+                "sens": codes["sens"],
+                "segment": codes["segment"],
+                "heures": heures_calculees,
+                "volume_jour": volume_jour,
+                "volume_annuel": volume_annuel,
+                "facteur_conversion": facteur_conv,
+                "ui_path": ui_path
+            })
+            
+            if debug and heures_calculees > 0:
+                print(f"    ✅ CALCUL: {tache.nom_tache} | Vol/j: {volume_jour:.2f} | Chrono: {tache.moyenne_min:.2f} | Hr/j: {heures_calculees:.4f}h\n")
+            
+            taches_traitees += 1
+            
+    except Exception as e:
+        print(f"CRITICAL ERROR in centre simulation loop: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise e
+    
+    # 4. Calculer l'ETP (OBSOLÈTE : Remplacé par somme bottom-up des postes)
+    # idle_heures = idle_minutes / 60.0
+    # heures_nettes = max(0.0, heures_par_jour - idle_heures) * (productivite / 100.0)
+    # fte_calcule_global = total_heures / heures_nettes if heures_nettes > 0 else 0.0
+    
+    # Correction -0.04 désactivée au profit du calcul par poste
+    # ...
+    
+    idle_heures = idle_minutes / 60.0
+    heures_nettes = max(0.0, heures_par_jour - idle_heures)
+    
+    fte_calcule = 0.0
+    
+    # ETP arrondi (règle métier) - OBSOLÈTE (Bottom-Up utilisé)
+    # if fte_calcule <= 0.1:
+    #     fte_arrondi = 0
+    # else:
+    #     fte_arrondi = int(fte_calcule + 0.5)
+    
+    if debug:
+        print(f"\n{'='*80}")
+        print(f"📊 RÉSULTATS CENTRE")
+        print(f"{'='*80}")
+        print(f"   🔧 PARAMETRES RECUS:")
+        print(f"      - productivite: {productivite}%")
+        print(f"      - heures_par_jour: {heures_par_jour}h")
+        print(f"      - idle_minutes: {idle_minutes} min")
+        print(f"   📊 CALCULS:")
+        print(f"      - idle_heures: {idle_heures:.2f}h")
+        print(f"      - heures_nettes: {heures_nettes:.2f}h")
+        print(f"      - prod_factor: {productivite/100.0:.2f}")
+        print(f"   📈 RESULTATS:")
+        print(f"      - Tâches traitées: {taches_traitees}")
+        print(f"      - Tâches ignorées: {taches_ignorees}")
+        print(f"      - Total heures nécessaires: {total_heures:.2f}h")
+        # print(f"      - ETP calculé: {fte_calcule:.2f}") # Obsolète à ce stade
+        # print(f"      - ETP arrondi: {fte_arrondi}")      # Obsolète à ce stade
+        print(f"{'='*80}")
+        
+        # Agrégations par dimension
+        print(f"\nDEBUG: AGRÉGATIONS PAR DIMENSION:")
+        
+        agg_sens = engine.aggregate_by_dimension(task_results, "sens")
+        print(f"\n   Par Sens:")
+        for sens, heures in agg_sens.items():
+            print(f"   - {sens}: {heures:.2f}h")
+        
+        agg_segment = engine.aggregate_by_dimension(task_results, "segment")
+        print(f"\n   Par Segment:")
+        for segment, heures in agg_segment.items():
+            print(f"   - {segment}: {heures:.2f}h")
+        
+        print(f"\n{'='*80}\n")
+    
+    # 🆕 Construction de la liste des résultats par poste pour le front
+    postes_list = []
+    
+    # 🆕 CHANGEMENT DE STRATEGIE : Le total arrondi est la somme des arrondis par poste (Bottom-Up)
+    # Ceci assure que le Total affiché correspond à la somme des cartes de postes.
+    total_etp_arrondi_cumule = 0
+    total_etp_calcule_cumule = 0.0 # 🆕 Pour recalculer le total exact après corrections
+    
+    for cp_id, p_info in postes_infos.items():
+        hrs = heures_par_poste.get(cp_id, 0.0)
+        etp = hrs / heures_nettes if heures_nettes > 0 else 0.0
+        
+
+        
+        total_etp_calcule_cumule += etp # Cumul du réel corrigé
+        etp_rounded = int(etp + 0.5) if etp > 0.1 else 0
+        
+        total_etp_arrondi_cumule += etp_rounded
+        
+        row = PosteResultat(
+            id=p_info["id"],
+            centre_poste_id=cp_id,
+            poste_label=p_info["label"],
+            etp_calcule=round(etp, 3), # ETP ajusté
+            etp_arrondi=etp_rounded,
+            total_heures=round(hrs, 2),
+            effectif_actuel=p_info["eff_act"],
+            ecart=etp_rounded - p_info["eff_act"],
+            type_poste=p_info["type"],
+            effectif_statutaire=p_info["eff_stat"],
+            effectif_aps=p_info["eff_aps"]
+        )
+        postes_list.append(row)
+    
+    # 🆕 ECRESER fte_calcule global par la somme des postes corrigés pour alignement parfait
+    fte_calcule = total_etp_calcule_cumule
+    print(f"   📊 ETP GLOBAL RECALCULÉ (Somme postes): {fte_calcule:.4f}")
+
+    if debug:
+         print("\n📊 RÉCAPITULATIF PAR POSTE (BACKEND):")
+         print(f"{'CP_ID':<8} | {'LABEL':<35} | {'HEURES':<10} | {'ETP':<10}")
+         print("-" * 70)
+         for row in postes_list:
+             print(f"{row.centre_poste_id:<8} | {row.poste_label[:35]:<35} | {row.total_heures:<10.2f} | {row.etp_calcule:<10.4f}")
+         print("-" * 70 + "\n")
+
+    return SimulationResponse(
+        details_taches=details_taches,
+        total_heures=round(total_heures, 2),
+        heures_net_jour=round(heures_nettes, 2),
+        fte_calcule=round(fte_calcule, 4),
+        fte_arrondi=total_etp_arrondi_cumule, # ✅ Utilisation du cumul des postes
+        heures_par_poste={str(k): v for k, v in heures_par_poste.items()},
+        etp_par_poste={str(k): round(v / heures_nettes, 3) if heures_nettes > 0 else 0.0 for k, v in heures_par_poste.items()},
+        postes=postes_list
+    )
+
+
+def calculer_simulation_multi_centres_data_driven(
+    db: Session,
+    centre_ids: List[int],
+    volumes_ui: VolumesUIInput,
+    productivite: float = 100.0,
+    heures_par_jour: float = 8.0,
+    idle_minutes: float = 0.0,
+    debug: bool = False
+) -> SimulationResponse:
+    """
+    Calcule la simulation pour plusieurs centres (direction/national).
+    
+    Args:
+        db: Session SQLAlchemy
+        centre_ids: Liste des IDs de centres
+        volumes_ui: Volumes UI (annuels)
+        productivite: Productivité en %
+        heures_par_jour: Heures de travail par jour
+        idle_minutes: Marge d'inactivité en minutes/jour
+        debug: Activer les logs détaillés
+    
+    Returns:
+        SimulationResponse avec les résultats agrégés
+    """
+    
+    # Agréger les résultats de tous les centres
+    all_details: List[TacheDetail] = []
+    all_heures_par_poste: Dict[int, float] = {}
+    total_heures_global = 0.0
+    
+    for centre_id in centre_ids:
+        result = calculer_simulation_centre_data_driven(
+            db=db,
+            centre_id=centre_id,
+            volumes_ui=volumes_ui,
+            productivite=productivite,
+            heures_par_jour=heures_par_jour,
+            idle_minutes=idle_minutes,
+            debug=False
+        )
+        
+        all_details.extend(result.details_taches)
+        total_heures_global += result.total_heures
+        
+        for poste_id, heures in result.heures_par_poste.items():
+            all_heures_par_poste[poste_id] = all_heures_par_poste.get(poste_id, 0.0) + heures
+    
+    # Calculer l'ETP global
+    engine = DataDrivenEngine(db)
+    fte_calcule, fte_arrondi = engine.calculate_etp(
+        total_heures_global,
+        heures_par_jour,
+        idle_minutes,
+        productivite
+    )
+    
+    # Calculer heures nettes
+    idle_heures = idle_minutes / 60.0
+    heures_nettes = max(0.0, heures_par_jour - idle_heures)
+    heures_nettes_effectives = heures_nettes * (productivite / 100.0)
+    
+    return SimulationResponse(
+        details_taches=all_details,
+        total_heures=round(total_heures_global, 2),
+        heures_net_jour=round(heures_nettes, 2),
+        fte_calcule=round(fte_calcule, 2),
+        fte_arrondi=fte_arrondi,
+        heures_par_poste={str(k): v for k, v in all_heures_par_poste.items()}
+    )

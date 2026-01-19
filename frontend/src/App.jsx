@@ -13,6 +13,7 @@ import AppShell from "./layout/AppShell";
 import ChoixActivitePage from "./pages/ChoixActivitePage";
 import Sidebar from "./layout/Sidebar";
 import SimulationEffectifs from "./pages/Simulation";
+import SimulationDirectionV2 from "./pages/SimulationDirectionV2";
 
 // Simple error boundary to catch rendering errors in routes
 import React from "react";
@@ -55,6 +56,9 @@ import SimulationHistoryPage from "./pages/SimulationHistoryPage";
 // 🔹 IMPORTE TA PAGE MENU PARAMÉTRÉE
 import MenuAnalyseEffectifs from "./pages/SimulationMenu";
 import AlertsTestButton from "./components/alerts/AlertsTestButton";
+import CategorisationCentre from "./components/views/CategorisationCentre";
+
+// 🔹 NOUVELLE ARCHITECTURE DATA-DRIVEN - Intégrée directement dans SimulationEffectifs
 
 function NotFound() {
   return <div className="p-6">404 — Page introuvable</div>;
@@ -117,7 +121,7 @@ function Layout() {
         <Outlet />
       </AppShell>
       {/* Bouton de test des alertes - À retirer en production */}
-      <AlertsTestButton />
+      {/* <AlertsTestButton /> */}
     </>
   );
 }
@@ -200,8 +204,11 @@ export default function App() {
           {/* Variantes par flux (centre/direction/région/national) */}
           <Route path="simulation/centre" element={<RouteErrorBoundary><SimulationEffectifs /></RouteErrorBoundary>} />
           <Route path="simulation/direction" element={<RouteErrorBoundary><SimulationEffectifs /></RouteErrorBoundary>} />
+          <Route path="simulation/direction-v2" element={<RouteErrorBoundary><SimulationDirectionV2 /></RouteErrorBoundary>} />
           <Route path="simulation/region" element={<RouteErrorBoundary><SimulationEffectifs /></RouteErrorBoundary>} />
           <Route path="simulation/national" element={<RouteErrorBoundary><SimulationEffectifs /></RouteErrorBoundary>} />
+          <Route path="simulation/categorisation/:centreId" element={<RouteErrorBoundary><CategorisationCentre /></RouteErrorBoundary>} />
+
 
           {/* 404 dans /app */}
           <Route

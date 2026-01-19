@@ -1,0 +1,15 @@
+Attempting to import legacy_logic...
+❌ ERROR: Failed to import legacy_logic: invalid character '⇒' (U+21D2) (legacy_logic.py, line 266)
+Traceback (most recent call last):
+  File "c:\Users\Aelhammouch\simulateur-rh-V2\backend\app\services\verify_syntax.py", line 12, in <module>
+    from app.services.strategies.legacy_logic import calculer_volume_standard_logic
+  File "c:\Users\Aelhammouch\simulateur-rh-V2\backend\app\services\strategies\__init__.py", line 2, in <module>
+    from .factory import StrategyFactory
+  File "c:\Users\Aelhammouch\simulateur-rh-V2\backend\app\services\strategies\factory.py", line 3, in <module>
+    from .standard import StandardStrategy
+  File "c:\Users\Aelhammouch\simulateur-rh-V2\backend\app\services\strategies\standard.py", line 3, in <module>
+    from .legacy_logic import calculer_volume_standard_logic
+  File "c:\Users\Aelhammouch\simulateur-rh-V2\backend\app\services\strategies\legacy_logic.py", line 266
+    - Distribution Locale ⇒ LOCAL uniquement
+                          ^
+SyntaxError: invalid character '⇒' (U+21D2)

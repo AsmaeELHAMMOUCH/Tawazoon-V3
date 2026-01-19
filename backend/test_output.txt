@@ -1,0 +1,8 @@
+Famille='ARRIVEE CAMION' -> Vol=24000.0 | Formule='60000×40%(Ax)'
+Famille='DEPART CAMION' -> Vol=75000 | Formule='(60000[PartPro]+15000[Axe])'
+Famille='TRI DEPART' -> Vol=62999.99999999999 | Formule='90000×70%(Dist)'
+Famille='DISTRIBUTION' -> Vol=60000.0 | Formule='100000×60%(Dist)'
+Famille='GUICHET' -> Vol=0.0 | Formule='0'
+Famille='AUTRE CHOSE' -> Vol=0.0 | Formule='0'
+Famille='DEPART CAMION PRINCIPAL' -> Vol=75000 | Formule='(60000[PartPro]+15000[Axe])'
+Famille='TRI DÉPART' -> Vol=62999.99999999999 | Formule='90000×70%(Dist)'

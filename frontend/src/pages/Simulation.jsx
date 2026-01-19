@@ -49,6 +49,7 @@ export function PageDirection() {
 import { MapContainer, TileLayer, CircleMarker, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import { useLocation } from "react-router-dom";
+import { useSimulationParams } from "@/hooks/usePersistedState";
 
 // Using local Segmented/Tooltip components and lucide icons instead of antd
 const fadeCard = {
@@ -148,7 +149,8 @@ const CATEGORY_RULES = {
   default: new Set(FIELD_KEYS),
   "AM-Agence Messagerie": new Set(["sacs", "colis"]),
   "CD - Centre de Distribution": new Set(["sacs", "colis"]),
-  "Centre Unique": new Set(["sacs", "colis"]),
+  "Centre Unique": new Set(FIELD_KEYS), // 🆕 Tous les champs activés pour Centre Unique (cat8)
+  "CCC": new Set(FIELD_KEYS), // 🆕 Tous les champs activés pour CCC
   "CTD - Centre de Traitement et Distribution": new Set(["sacs", "colis"]),
 };
 
@@ -342,7 +344,9 @@ function GraphResultats({
   const refChart = useEchartAutoResize();
 
   // ---- Préparation des données
-  const heuresParTache = (resultats || []).map((r) => ({
+  const resultatsArray = useMemo(() => (Array.isArray(resultats) ? resultats : []), [resultats]);
+
+  const heuresParTache = resultatsArray.map((r) => ({
     name: r.task || r.nom_tache || "N/A",
     value: Number(r.heures ?? 0),
   }));
@@ -474,8 +478,8 @@ function GraphResultats({
       textStyle: { color: "#334155" },
       formatter: (name) => {
         const total =
-          (resultats || []).reduce((s, r) => s + Number(r.heures || 0), 0) || 1;
-        const item = (resultats || []).find(
+          resultatsArray.reduce((s, r) => s + Number(r.heures || 0), 0) || 1;
+        const item = resultatsArray.find(
           (r) => (r.task || r.nom_tache) === name
         );
         const v = item ? Number(item.heures || 0) : 0;
@@ -660,7 +664,7 @@ function GraphResultats({
 
   if (loading)
     return <div className="px-3 py-2 text-slate-500">Calcul en cours…</div>;
-  if (!resultats?.length)
+  if (resultatsArray.length === 0)
     return <div className="px-3 py-2 text-slate-500">Aucune donnée.</div>;
 
   return (
@@ -1310,29 +1314,39 @@ export default function SimulationEffectifs() {
       setMode(stateMode);
     }
   }, [location]);
-  // Filters
-  const [region, setRegion] = useState("");
+
+  // ✅ Utiliser le hook de persistance pour tous les champs de saisie
+  const {
+    region, setRegion,
+    centre, setCentre,
+    poste, setPoste,
+    productivite, setProductivite,
+    idleMinutes, setIdleMinutes,
+    tauxComplexite, setTauxComplexite,
+    natureGeo, setNatureGeo,
+    edPercent, setEdPercent,
+    colisAmanaParSac, setColisAmanaParSac,
+    courriersParSac, setCourriersParSac,
+    colisParCollecte, setColisParCollecte,
+    nbrCoSac, setNbrCoSac,
+    nbrCrSac, setNbrCrSac,
+    sacs, setSacs,
+    colis, setColis,
+    courrier, setCourrier,
+    scelle, setScelle,
+    courrierOrdinaire, setCourrierOrdinaire,
+    courrierRecommande, setCourrierRecommande,
+    ebarkia, setEbarkia,
+    lrh, setLrh,
+    amana, setAmana,
+    volumesFluxGrid, setVolumesFluxGrid,
+    pctAxesArrivee, setPctAxesArrivee,
+    pctAxesDepart, setPctAxesDepart,
+  } = useSimulationParams();
+
   const [categorie, setCategorie] = useState("Activité Postale");
-  const [centre, setCentre] = useState("");
-  const [poste, setPoste] = useState(ALL_ID); // valeur par défaut = "Tous"
-
-  // Inputs
-  const [sacs, setSacs] = useState(0);
-  const [colis, setColis] = useState(0);
-  const [courrier, setCourrier] = useState(0);
-  const [ebarkia, setEbarkia] = useState(0);
-  const [lrh, setLrh] = useState(0);
-  const [scelle, setScelle] = useState(0);
-  const [colisParCollecte, setColisParCollecte] = useState(1);
-  const [colisAmanaParSac, setColisAmanaParSac] = useState(5);
-  const [courriersParSac, setCourriersParSac] = useState(4500);
-  const [productivite, setProductivite] = useState(100);
   const [heuresNet, setHeuresNet] = useState(8);
-
-  // ✅ États manquants ajoutés
-  const [courrierOrdinaire, setCourrierOrdinaire] = useState(0);
-  const [courrierRecommande, setCourrierRecommande] = useState(0);
-  const [amana, setAmana] = useState(0);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   // Lookups
   const [regions, setRegions] = useState([]);
@@ -1340,7 +1354,7 @@ export default function SimulationEffectifs() {
   const [postesList, setPostesList] = useState([]);
   const postesOptions = useMemo(() => {
     const cleaned = (postesList ?? [])
-      .filter((p) => p && p.id !== ALL_ID && (p.label ?? p.name) !== "Tous")
+      .filter((p) => p && p.id !== ALL_ID && (p.label ?? p.name) !== "Tous" && !((p.label || p.name) || "").toLowerCase().includes("chef de centre"))
       .sort((a, b) =>
         (a.label ?? a.name).localeCompare(b.label ?? b.name, "fr", {
           ignorePunctuation: true,
@@ -1352,36 +1366,242 @@ export default function SimulationEffectifs() {
   const [categoriesList, setCategoriesList] = useState([]);
   const [centreCategorie, setCentreCategorie] = useState("");
 
-  // --- Données DR nationales (mock pour Vue Nationale) ---
-  const baseDirections = useMemo(() => [
-    { code: "CASA_SETTAT", nom: "DR Casa - Settat", centres: 40, etpActuel: 766, etpRecommande: 800, lat: 33.5731, lng: -7.5898 },
-    { code: "FES_MEKNES_OUJDA", nom: "DR Fès - Meknès - Oujda", centres: 35, etpActuel: 424, etpRecommande: 450, lat: 34.0181, lng: -5.0078 },
-    { code: "MARRAKECH_AGADIR", nom: "DR Marrakech - Agadir", centres: 30, etpActuel: 408, etpRecommande: 430, lat: 31.6295, lng: -7.9811 },
-    { code: "RABAT_TANGER", nom: "DR Rabat - Tanger", centres: 32, etpActuel: 575, etpRecommande: 600, lat: 34.0209, lng: -6.8416 },
-    { code: "LAAYOUNE_DAKHLA", nom: "DR Laâyoune - Dakhla", centres: 10, etpActuel: 71, etpRecommande: 80, lat: 27.1567, lng: -13.2021 },
-    { code: "SIEGE", nom: "Siège", centres: 1, etpActuel: 105, etpRecommande: 110, lat: 34.0209, lng: -6.8416 },
-  ], []);
+  // --- Données Nationales (Real) ---
+  const [nationalScenario, setNationalScenario] = useState("Standard");
+  const [regionsData, setRegionsData] = useState([]);
+  const [kpisNationaux, setKpisNationaux] = useState({
+    etpActuelTotal: 0,
+    etpRecommandeTotal: 0,
+    surplusDeficit: 0,
+    tauxProductiviteMoyen: 100,
+    fte_calcule: 0,
+    volumes: { sacs: 0, colis: 0, courrier: 0 },
+  });
 
-  const regionsData = useMemo(() => baseDirections.map((d) => {
-    const taux = d.etpRecommande > 0 ? Math.round((d.etpActuel / d.etpRecommande) * 100) : 0;
-    return { ...d, tauxOccupation: taux, etpCalcule: d.etpRecommande };
-  }), [baseDirections]);
+  useEffect(() => {
+    if (activeFlux === "national") {
+      let cancelled = false;
+      setLoading((prev) => ({ ...prev, simulation: true }));
 
-  const kpisNationaux = useMemo(() => ({
-    etpActuelTotal: regionsData.reduce((s, r) => s + r.etpActuel, 0),
-    etpRecommandeTotal: regionsData.reduce((s, r) => s + r.etpRecommande, 0),
-    surplusDeficit: regionsData.reduce((s, r) => s + (r.etpRecommande - r.etpActuel), 0),
-    tauxProductiviteMoyen: productivite || 98,
-    fte_calcule: regionsData.reduce((s, r) => s + r.etpRecommande, 0),
-    volumes: { sacs, colis, courrier },
-  }), [regionsData, productivite, sacs, colis, courrier]);
+      api.nationalSimulation({
+        productivite: Number(productivite),
+        heures_par_jour: Number(heuresNet),
+        scenario: nationalScenario,
+        year: 2024
+      })
+        .then((res) => {
+          if (cancelled) return;
+
+          // MODIFICATION : On initialise l'Effectif Calculé à 0 par défaut
+          // pour ne pas afficher de résidus de base de données (ex: 11.04).
+          // L'utilisateur partira d'une page vierge pour sa simulation.
+          const initialRegionsData = (res.regionsData || []).map(r => ({
+            ...r,
+            etpRecommande: 0,
+            surplusDeficit: 0 - (r.etpActuel || 0), // L'écart est donc purement le manque d'effectif vs 0 (soit -Actuel)
+            heures_totales: 0
+          }));
+
+          setRegionsData(initialRegionsData);
+
+          // On met aussi à jour les KPIs globaux pour refléter ces zéros
+          setKpisNationaux({
+            ...(res.kpisNationaux || {}),
+            etpRecommandeTotal: 0,
+            surplusDeficit: 0 - (res.kpisNationaux?.etpActuelTotal || 0),
+            fte_calcule: 0,
+            heures_totales: 0
+          });
+        })
+        .catch((e) => {
+          if (cancelled) return;
+          console.error("National sim error", e);
+          // Only set error if not already handled
+          setErr(e);
+        })
+        .finally(() => {
+          if (!cancelled) setLoading((prev) => ({ ...prev, simulation: false }));
+        });
+
+      return () => { cancelled = true; };
+    }
+  }, [activeFlux, productivite, heuresNet, nationalScenario, refreshTrigger]);
+
+  const handleImportNational = async (parsedCentres) => {
+    try {
+      console.log("Données importées (National):", parsedCentres);
+
+      setLoading((prev) => ({ ...prev, simulation: true }));
+
+      // parsedCentres est un array de centres avec leurs volumes
+      // Format: [{ nom_centre: "...", volumes: [{flux_id, sens_id, segment_id, volume}] }]
+
+      // Récupérer tous les centres pour faire le matching
+      const centresResponse = await fetch('/api/centres');
+      const allCentres = await centresResponse.json();
+
+      // Transformer les données pour l'API de simulation
+      const volumesData = parsedCentres.flatMap(centreData => {
+        // Trouver le centre correspondant
+        const centre = allCentres.find(c =>
+          c.label === centreData.nom_centre ||
+          c.nom === centreData.nom_centre
+        );
+
+        if (!centre) {
+          console.warn(`Centre non trouvé: ${centreData.nom_centre}`);
+          return [];
+        }
+
+        // Retourner les volumes avec l'ID du centre
+        return centreData.volumes.map(vol => ({
+          centre_id: centre.id,
+          centre_label: centre.label || centre.nom,
+          flux_id: vol.flux_id !== null && vol.flux_id !== undefined ? vol.flux_id : null,
+          sens_id: vol.sens_id,
+          segment_id: vol.segment_id,
+          volume: vol.volume
+        }));
+      });
+
+      console.log("Volumes transformés pour simulation nationale:", volumesData);
+
+      // Lancer la simulation nationale avec les volumes matriciels
+      if (volumesData.length > 0) {
+        const payload = {
+          mode: "data_driven",
+          volumes_matriciels: volumesData,
+          global_params: {
+            productivite: productivite || 100,
+            heures_par_jour: heuresNet || 7.5,
+            idle_minutes: 0,
+            taux_complexite: 0,
+            nature_geo: 0
+          }
+        };
+
+        console.log("Payload simulation nationale:", payload);
+
+        // Appeler l'endpoint de simulation nationale
+        const response = await fetch('/api/simulation/national', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+          throw new Error(`Erreur ${response.status}: ${response.statusText}`);
+        }
+
+        const result = await response.json();
+        console.log("Résultat simulation nationale:", result);
+
+        // Mettre à jour les KPIs nationaux
+        setKpisNationaux({
+          etpActuelTotal: 0, // On n'a pas l'effectif actuel dans la simulation
+          etpRecommandeTotal: result.kpis_nationaux.etp_total,
+          surplusDeficit: result.kpis_nationaux.etp_total, // Positif si on a besoin de plus
+          tauxProductiviteMoyen: productivite || 100,
+          fte_calcule: result.kpis_nationaux.etp_total,
+          volumes: { sacs: 0, colis: 0, courrier: 0 }, // TODO: calculer depuis volumes_matriciels
+        });
+
+        // Mettre à jour regionsData avec les directions
+        // Transformer les directions en format regionsData
+        // et préserver/ajouter les coordonnées géographiques pour la carte
+        // Helper pour normaliser les strings (supprimer accents, minuscule)
+        function normalize(str) {
+          return str ? str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() : "";
+        }
+
+        // --- FUSION DES RÉSULTATS ---
+        // on parcourt les régions existantes (qui contiennent déjà les coordonnées et l'effectif actuel)
+        // et on met à jour uniquement celles qui ont été simulées.
+        const newRegionsData = regionsData.map(region => {
+          // Chercher si cette région fait partie des résultats de la simulation
+          const match = result.directions.find(d =>
+            d.direction_id === region.id ||
+            normalize(d.direction_label) === normalize(region.nom)
+          );
+
+          if (match) {
+            console.log(`🔄 Mise à jour Direction: ${region.nom}`);
+
+            // C'est une direction simulée : on met à jour avec les résultats
+            return {
+              ...region,
+              etpRecommande: match.etp_total, // Remplacement STRICT
+              surplusDeficit: match.etp_total - (region.etpActuel || 0),
+              heures_totales: match.heures_totales
+            };
+          }
+
+          // ⚠️ CORRECTION : Si la direction n'est pas dans l'import, on la remet à 0
+          // pour ne pas polluer le résultat total avec des anciennes données (le fameux 11.04)
+          return {
+            ...region,
+            etpRecommande: 0,
+            surplusDeficit: 0 - (region.etpActuel || 0),
+            heures_totales: 0
+          };
+        });
+
+        // Debug du résultat final
+        const matchedRegion = newRegionsData.find(r => r.etpRecommande === 49.27 || r.nom.includes("FÈS"));
+        if (matchedRegion) {
+          console.log("✅ Vérification post-fusion pour Fès:", matchedRegion.etpRecommande);
+        } else {
+          console.warn("⚠️ Attention: La valeur 49.27 n'a pas été trouvée dans regionsData après fusion !");
+        }
+
+        // Mise à jour de regionsData
+        setRegionsData(newRegionsData);
+
+        // --- RECALCUL DES KPIS NATIONAUX ---
+        // On recalcule les totaux basés sur la nouvelle vue consolidée (newRegionsData)
+        // pour que "Total National" reflète l'ensemble (Simulé + Non Simulé)
+
+        const totalActuel = newRegionsData.reduce((sum, r) => sum + (r.etpActuel || 0), 0);
+        const totalRecommande = newRegionsData.reduce((sum, r) => sum + (r.etpRecommande || 0), 0);
+
+        setKpisNationaux(prev => ({
+          ...prev,
+          etpActuelTotal: totalActuel,
+          etpRecommandeTotal: totalRecommande,
+          surplusDeficit: totalRecommande - totalActuel,
+          fte_calcule: totalRecommande,
+          volumes: prev.volumes || { sacs: 0, colis: 0, courrier: 0 }
+        }));
+
+        alert(`✅ Simulation réussie !\n\n` +
+          `📊 ${result.centres_simules} centres simulés\n` +
+          `📍 ${result.kpis_nationaux.directions_total} directions\n` +
+          `👥 ETP Total: ${result.kpis_nationaux.etp_total}\n` +
+          `⏱️ Heures Totales: ${result.kpis_nationaux.heures_totales.toFixed(2)}h`);
+
+        // Pas besoin de trigger refresh car on a déjà mis à jour les states
+      } else {
+        alert("Aucun volume valide trouvé pour la simulation");
+      }
+
+    } catch (e) {
+      console.error("Import error", e);
+      setErr(e);
+      alert("Erreur lors de l'import : " + e.message);
+    } finally {
+      setLoading((prev) => ({ ...prev, simulation: false }));
+    }
+  };
 
   const getColor = (d) =>
     d > 95 ? "#7f1d1d" : d > 90 ? "#b91c1c" : d > 85 ? "#dc2626" : d > 80 ? "#ef4444" : d > 75 ? "#f97316" : d > 70 ? "#facc15" : "#22c55e";
 
   // Data
   const [referentiel, setReferentiel] = useState([]);
-  const [resultats, setResultats] = useState([]);
+  const [resultats, setResultats] = useState([]); // Peux être un tableau (legacy) ou un objet (data-driven)
+  const tasks = useMemo(() => (Array.isArray(resultats) ? resultats : resultats?.details_taches || []), [resultats]);
   const [totaux, setTotaux] = useState(null);
   const [hasSimulated, setHasSimulated] = useState(false);
   const [simDirty, setSimDirty] = useState(false);
@@ -1523,6 +1743,11 @@ export default function SimulationEffectifs() {
           );
           if (!selectedRegion) return;
           const data = await api.centres(selectedRegion.id);
+          console.log("🔍 [DEBUG API CENTRES] Données reçues:", data);
+          if (data && data.length > 0) {
+            console.log("🔍 [DEBUG API CENTRES] Premier centre:", data[0]);
+            console.log("🔍 [DEBUG API CENTRES] Champs du premier centre:", Object.keys(data[0]));
+          }
           if (!cancelled) setCentres(Array.isArray(data) ? data : []);
         } catch (e) {
           if (!cancelled) setCentres([]);
@@ -1548,7 +1773,10 @@ export default function SimulationEffectifs() {
         try {
           setLoading((l) => ({ ...l, postes: true }));
           const data = await api.postes(centre);
-          if (!cancelled) setPostesList(Array.isArray(data) ? data : []);
+          if (!cancelled) {
+            const rawData = Array.isArray(data) ? data : [];
+            setPostesList(rawData);
+          }
         } catch (e) {
           if (!cancelled) {
             setPostesList([]);
@@ -1623,11 +1851,22 @@ export default function SimulationEffectifs() {
             setReferentiel(
               data.map((r) => {
                 const minutes = (r.avg_sec ?? 0) / 60;
+                const taskName = r.task || r.nom_tache || r.tache || "N/A";
+                const produit = r.produit || r.product || "";
+
+                // Si plusieurs tâches ont le même nom, ajouter le produit pour différencier
+                const displayName = produit ? `${taskName} (${produit})` : taskName;
+
                 return {
-                  t: r.task || r.nom_tache || r.tache || "N/A",
+                  id: r.id || r.task_id || r.tache_id, // ✅ Ajout ID unique
+                  famille: r.famille || r.famille_uo || "", // ✅ Mappage famille
+                  etat: r.etat || "A", // ✅ Mappage état
+                  t: displayName, // ✅ Nom avec produit si nécessaire
                   ph: r.phase || r.ph || r.etape || "N/A",
                   u: r.unit || r.unite_mesure || r.unite || "N/A",
                   m: +minutes.toFixed(2), // ✅ nombre
+                  produit: produit, // ✅ Conserver produit original
+                  base_calcul: r.base_calcul || 100 // ✅ Conserver base
                 };
               })
             );
@@ -1664,16 +1903,224 @@ export default function SimulationEffectifs() {
     setLoading((l) => ({ ...l, simulation: true }));
     setErr(null);
 
+    // --- LOGS DE DÉBUT ---
+    console.log("%c🚀 Lancement de la simulation...", "color: #005EA8; font-weight: bold; font-size: 14px;");
+    console.log("📍 Flux Actif:", activeFlux);
+    console.log("👤 Poste sélectionné:", poste);
+    console.log("🔧 Overrides reçus:", overrides);
+
     const overrideVolumes = overrides.volumes || {};
-
-
 
     const heures_net_calculees =
       heuresNet && !Number.isNaN(Number(heuresNet))
         ? Number(heuresNet)
         : (8 * productivite) / 100;
 
-    // Correction : ne pas additionner les volumes annuels (amana, lrh...) aux volumes journaliers (colis, courrier)
+    // -------------------------------------------------------------------------
+    // 🆕 NOUVEAU : MODE DATA-DRIVEN (Vue Intervenant : Poste spécifique OU Tous les postes)
+    // -------------------------------------------------------------------------
+    const pid = poste && poste !== ALL_ID && !Number.isNaN(Number(poste)) ? Number(poste) : null;
+
+    // ✅ MODIFICATION: Utiliser DATA-DRIVEN pour la vue Intervenant (Poste spécifique) ET la vue Centre (Tous les postes)
+    // La vue Direction utilisera toujours le moteur LEGACY pour l'instant
+    if (activeFlux === 'poste' || activeFlux === 'centre') {
+      const resolvedID = pid ? (postesList.find(p => Number(p.id) === pid)?.centre_poste_id || pid) : null;
+      const centreID = centre ? Number(centre) : null;
+
+      console.log(`%c⚙️ Utilisation du moteur DATA-DRIVEN (${pid ? 'Poste' : 'Tous les postes'})`, "color: #2e7d32; font-weight: bold;");
+      if (pid) console.log("📍 ID Poste initial:", pid, "➡️ ID Poste résolu:", resolvedID);
+      else console.log("📍 Simulation Centre complet (tous postes), Centre ID:", centreID);
+
+      // 1. Préparation du payload VolumesUIInput (Commun)
+      const volumes_flux = overrides.volumes_flux || [];
+      const uiPayload = {
+        flux_arrivee: {
+          amana: { GLOBAL: amana || 0, PART: 0, PRO: 0, DIST: 0, AXES: 0 },
+          co: { GLOBAL: courrierOrdinaire || 0, PART: 0, PRO: 0, DIST: 0, AXES: 0 },
+          cr: { GLOBAL: courrierRecommande || 0, PART: 0, PRO: 0, DIST: 0, AXES: 0 },
+          ebarkia: { GLOBAL: ebarkia || 0, PART: 0, PRO: 0, DIST: 0, AXES: 0 },
+          lrh: { GLOBAL: lrh || 0, PART: 0, PRO: 0, DIST: 0, AXES: 0 }
+        },
+        guichet: { DEPOT: 0, RECUP: 0 },
+        flux_depart: {
+          amana: { GLOBAL: 0, PART: 0, PRO: 0, DIST: 0, AXES: 0 },
+          co: { GLOBAL: 0, PART: 0, PRO: 0, DIST: 0, AXES: 0 },
+          cr: { GLOBAL: 0, PART: 0, PRO: 0, DIST: 0, AXES: 0 },
+          ebarkia: { GLOBAL: 0, PART: 0, PRO: 0, DIST: 0, AXES: 0 },
+          lrh: { GLOBAL: 0, PART: 0, PRO: 0, DIST: 0, AXES: 0 }
+        },
+        colis_amana_par_sac: Number(colisAmanaParSac || 5),
+        courriers_par_sac: Number(courriersParSac || 4500),
+        colis_par_collecte: Number(colisParCollecte || 1),
+        // 🆕 Paramètres Axes (Conversion % -> decimal)
+        pct_axes_arrivee: Number(pctAxesArrivee ?? 40) / 100.0,
+        pct_axes_depart: Number(pctAxesDepart ?? 30) / 100.0,
+
+        // 🆕 Coefficients de complexité (priorité aux overrides venant de VueIntervenant)
+        taux_complexite: overrides.taux_complexite !== undefined ? Number(overrides.taux_complexite) : Number(tauxComplexite || 1),
+        nature_geo: overrides.nature_geo !== undefined ? Number(overrides.nature_geo) : Number(natureGeo || 1),
+
+        nb_jours_ouvres_an: 264,
+        volumes_flux: volumes_flux // ✅ AJOUT : Nécessaire pour le contexte par famille
+      };
+
+      // Injection des granularités (si saisies dans le tableau)
+      volumes_flux.forEach(v => {
+        const f = v.flux.toLowerCase() === 'eb' ? 'ebarkia' : v.flux.toLowerCase();
+        const s = v.sens;
+        const seg = v.segment === 'PARTICULIER' ? 'PART' : v.segment === 'PROFESSIONNEL' ? 'PRO' : v.segment;
+
+        if (s === 'ARRIVEE' && uiPayload.flux_arrivee[f]) uiPayload.flux_arrivee[f][seg] = v.volume;
+        else if (s === 'DEPART' && uiPayload.flux_depart[f]) uiPayload.flux_depart[f][seg] = v.volume;
+        else if (s === 'DEPOT') uiPayload.guichet.DEPOT = v.volume;
+        else if (s === 'RECUPERATION') uiPayload.guichet.RECUP = v.volume;
+      });
+
+      console.log("📦 Payload construit (Data-Driven):", uiPayload);
+
+      try {
+        const params = {
+          productivite: Number(productivite),
+          heures_par_jour: 8.0,
+          idle_minutes: overrides.idle_minutes !== undefined ? Number(overrides.idle_minutes) : Number(idleMinutes || 0),
+          ed_percent: overrides.ed_percent !== undefined ? Number(overrides.ed_percent || 0) : Number(edPercent || 0),
+          debug: true
+        };
+
+        let res;
+        // ✅ DISPATCH: Poste unique OU Centre complet
+        if (pid) {
+          res = await api.simulateDataDriven(resolvedID, uiPayload, params);
+        } else {
+          if (!centreID) throw new Error("Aucun centre sélectionné pour la simulation Data-Driven");
+          res = await api.simulateDataDrivenCentre(centreID, uiPayload, params);
+        }
+
+        console.log(`%c✅ Résultats reçus (Data-Driven ${pid ? 'Poste' : 'Centre'}):`, "color: #2e7d32; font-weight: bold;", res);
+
+        const details_taches = Array.isArray(res?.details_taches) ? res.details_taches : [];
+
+        // Pour "Tous les postes", on peut recevoir une structure agrégée ou différente.
+        // Adapter l'affichage selon le retour.
+        const tot = {
+          total_heures: res.total_heures ?? 0,
+          fte_calcule: res.fte_calcule ?? 0,
+          fte_arrondi: res.fte_arrondi ?? 0,
+          heures_net: res.heures_net_jour ?? heures_net_calculees,
+        };
+
+        // 🔌 ADAPTATEUR: Convertir la réponse Data-Driven vers le format attendu par VueCentre (qui attend 'postes' array)
+        let finalRes = { ...res, details_taches };
+
+        console.log("🔍 [DEBUG CONDITION ADAPTATEUR]");
+        console.log("   - activeFlux:", activeFlux);
+        console.log("   - poste (raw):", poste);
+        console.log("   - ALL_ID:", ALL_ID);
+        console.log("   - pid (computed):", pid);
+        console.log("   - Condition (!pid && activeFlux === 'centre'):", (!pid && activeFlux === 'centre'));
+
+        if (!pid) {
+          // On est en mode Centre complet (Vue Centre), il faut reconstruire la liste 'postes' pour les cartes KPI
+          // Peu importe activeFlux, si on est ici c'est qu'on a fait une simu DD Centre.
+
+          if (res.postes && Array.isArray(res.postes) && res.postes.length > 0) {
+            console.log("✅ [BACKEND DD V2] Utilisation directe de res.postes fournis par le backend:", res.postes);
+            finalRes = { ...finalRes, postes: res.postes };
+          } else {
+            // FALLBACK (Ancienne méthode)
+            // On est en mode Centre complet, il faut reconstruire la liste 'postes' pour les cartes KPI
+            const currentCentreId = centreID; // défini plus haut
+            const centrePostes = postesList.filter(p => String(p.centre_id) === String(currentCentreId));
+
+            console.log("🔍 [ADAPTATEUR DEBUG]");
+            console.log("   Backend ETP Keys:", Object.keys(res.etp_par_poste || {}));
+            console.log("   Referentiel Frontend (extrait 10):", centrePostes.map(p => `ID:${p.id} / CP:${p.centre_poste_id}`).slice(0, 10));
+
+            const postesAdapte = centrePostes.map((p, index) => {
+              // CORRECTION: Le backend renvoie les résultats indexés par centre_poste_id (ou id?)
+              // On essaie plusieurs clés pour être sûr
+              const keysToTry = [
+                String(p.centre_poste_id),
+                String(p.id),
+                p.centre_poste_id,
+                p.id
+              ];
+
+              let etpCalc = 0;
+              let hrsCalc = 0;
+              let matchedKey = null;
+
+              if (res.etp_par_poste) {
+                for (const k of keysToTry) {
+                  if (k !== undefined && k !== null && res.etp_par_poste[k] !== undefined) {
+                    etpCalc = res.etp_par_poste[k];
+                    hrsCalc = res.heures_par_poste[k];
+                    matchedKey = k;
+                    break;
+                  }
+                }
+              }
+
+              if (index < 5 && etpCalc > 0) {
+                console.log(`🔎 Poste Ref ID:${p.id} CP:${p.centre_poste_id} -> Keys tried:`, keysToTry, " -> MATCH:", matchedKey, " Value:", etpCalc);
+              }
+
+              return {
+                id: p.id,
+                poste_id: p.id,
+                centre_poste_id: p.centre_poste_id,
+                poste_label: p.label,
+                etp_calcule: etpCalc,
+                etp_arrondi: Math.round(etpCalc),
+                total_heures: hrsCalc,
+                effectif_actuel: 0,
+                ecart: 0 - etpCalc,
+                type_poste: "MOD",
+                // Ajouter champs manquants pour éviter bugs UI
+                effectif_statutaire: 0,
+                effectif_aps: 0,
+                etp_statutaire: 0,
+                etp_aps: 0
+              };
+            });
+
+            // Ajouter les postes qui seraient dans le résultat mais pas dans la liste (cas rares ?)
+            // ... (optionnel)
+
+            finalRes = { ...finalRes, postes: postesAdapte };
+          }
+          finalRes.centre_label = centres.find(c => String(c.id) === String(centreID))?.label || "Centre Inconnu";
+          console.log("🔌 Données adaptées pour VueCentre:", finalRes.postes);
+        }
+
+        setResultats(finalRes);
+        setTotaux(tot);
+        setHasSimulated(true);
+        setSimDirty(false);
+
+        // Logs détaillés par tâche
+        console.group(`📝 Détails des calculs par tâche (${details_taches.length} tâches)`);
+        details_taches.forEach(t => {
+          console.log(`- ${t.task.padEnd(40)} | Volume: ${String(t.nombre_unite).padStart(8)} | Heures: ${t.heures.toFixed(3)}h`);
+        });
+        console.groupEnd();
+
+        setLoading((l) => ({ ...l, simulation: false }));
+        return;
+      } catch (e) {
+        console.error("❌ Erreur Simulation Data-Driven:", e);
+        setErr(e?.message || "Erreur simulation Data-Driven");
+        setLoading((l) => ({ ...l, simulation: false }));
+        return;
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // 👴 LOGIQUE LEGACY (Pour Centre / Direction / National)
+    // -------------------------------------------------------------------------
+    // Cette partie ne sera atteinte que si activeFlux !== 'poste' (ex: vue Centre globale, Direction, etc.)
+    console.log("%c🏛️ Utilisation du moteur LEGACY", "color: #f57c00; font-weight: bold;");
+
     const courrier_journalier =
       overrideVolumes.courrier !== undefined
         ? Number(overrideVolumes.courrier || 0)
@@ -1683,11 +2130,6 @@ export default function SimulationEffectifs() {
       overrideVolumes.colis !== undefined
         ? Number(overrideVolumes.colis || 0)
         : Number(colis ?? 0);
-
-    const pid =
-      poste && poste !== ALL_ID && !Number.isNaN(Number(poste))
-        ? Number(poste)
-        : null;
 
     const colisCollecteOverride =
       overrides.colis_par_collecte ?? overrideVolumes.colis_par_collecte;
@@ -1740,31 +2182,62 @@ export default function SimulationEffectifs() {
         ebarkia: Number(ebarkia ?? 0),
         lrh: Number(lrh ?? 0),
         amana: Number(amana ?? 0),
+        idle_minutes: overrides.idle_minutes !== undefined ? Number(overrides.idle_minutes || 0) : Number(idleMinutes || 0),
+        ed_percent: overrides.ed_percent !== undefined ? Number(overrides.ed_percent || 0) : Number(edPercent || 0), // 🆕 ED%
+        taux_complexite: Number(tauxComplexite || 1), // 🆕 Coef Circulation
+        nature_geo: Number(natureGeo || 1), // 🆕 Coef Géo
+        pct_axes_arrivee: Number(pctAxesArrivee || 0.40),
+        pct_axes_depart: Number(pctAxesDepart || 0.30),
       },
     };
 
-
-
     try {
-      const res = await api.simulate(payload);
+      // ✅ MODIFICATION: Appeler l'endpoint approprié selon le flux actif
+      let res;
 
+      if (activeFlux === 'centre') {
+        // Vue Centre: utiliser l'endpoint /vue-centre-optimisee
+        console.log("📍 Appel endpoint: /vue-centre-optimisee");
+        res = await api.vueCentreOptimisee(payload);
 
-      const details_taches = Array.isArray(res?.details_taches)
-        ? res.details_taches
-        : [];
-      const tot = res
-        ? {
+        // Normalisation des résultats pour VueCentre
+        const details_taches = Array.isArray(res?.details_taches) ? res.details_taches : [];
+        const tot = {
           total_heures: res.total_heures ?? 0,
-          fte_calcule: res.fte_calcule ?? 0,
-          fte_arrondi: res.fte_arrondi ?? 0,
-          heures_net: res.heures_net_jour ?? heures_net_calculees,
-        }
-        : null;
+          fte_calcule: res.total_etp_calcule ?? 0,
+          fte_arrondi: res.total_etp_arrondi ?? 0,
+          heures_net: res.heures_net ?? heures_net_calculees,
+        };
 
-      setResultats(details_taches);
-      setTotaux(tot);
-      setHasSimulated(true);
-      setSimDirty(false);
+        // Pour VueCentre, on garde la structure complète avec .postes
+        setResultats(res);
+        setTotaux(tot);
+        setHasSimulated(true);
+        setSimDirty(false);
+        console.log("%c✅ Résultats LEGACY (Vue Centre) reçus:", "color: #f57c00; font-weight: bold;", res);
+      } else {
+        // Vue Intervenant (avec __ALL__): utiliser l'endpoint /simulate
+        console.log("📍 Appel endpoint: /simulate");
+        res = await api.simulate(payload);
+
+        const details_taches = Array.isArray(res?.details_taches)
+          ? res.details_taches
+          : [];
+        const tot = res
+          ? {
+            total_heures: res.total_heures ?? 0,
+            fte_calcule: res.fte_calcule ?? 0,
+            fte_arrondi: res.fte_arrondi ?? 0,
+            heures_net: res.heures_net_jour ?? heures_net_calculees,
+          }
+          : null;
+
+        setResultats(details_taches);
+        setTotaux(tot);
+        setHasSimulated(true);
+        setSimDirty(false);
+        console.log("%c✅ Résultats LEGACY (Vue Intervenant) reçus:", "color: #f57c00; font-weight: bold;", res);
+      }
     } catch (e) {
       console.error("Erreur simulate:", e);
       setResultats([]);
@@ -1799,12 +2272,26 @@ export default function SimulationEffectifs() {
 
       <HeaderSimulation mode={mode} setMode={setMode} scope={activeFlux} />
 
-      <div className="w-full px-4 pt-4 pb-6 space-y-2 -mt-1">
+      <div className="w-full px-2 pt-2 pb-4 space-y-2 -mt-1">
         {activeFlux === "national" && (
           <VueNationale
             kpisNationaux={kpisNationaux}
             regionsData={regionsData}
             getColor={getColor}
+            scenario={nationalScenario}
+            setScenario={setNationalScenario}
+            onImport={handleImportNational}
+            // Props ajoutées pour les paramètres
+            productivite={productivite}
+            setProductivite={setProductivite}
+            heuresNet={heuresNet}
+            setHeuresNet={setHeuresNet} // Si on veut le modifier, sinon juste passer la valeur
+            idleMinutes={idleMinutes}
+            setIdleMinutes={setIdleMinutes}
+            tauxComplexite={tauxComplexite}
+            setTauxComplexite={setTauxComplexite}
+            natureGeo={natureGeo}
+            setNatureGeo={setNatureGeo}
           />
         )}
 
@@ -1840,6 +2327,10 @@ export default function SimulationEffectifs() {
             setCourrier={setCourrier}
             productivite={productivite}
             setProductivite={setProductivite}
+            idleMinutes={idleMinutes}
+            setIdleMinutes={setIdleMinutes}
+            edPercent={edPercent}
+            setEdPercent={setEdPercent}
             heuresNet={heuresNet}
             fieldUiState={fieldUiState}
             Card={Card}
@@ -1847,6 +2338,31 @@ export default function SimulationEffectifs() {
             Input={Input}
             Select={Select}
             onSimuler={onSimuler}
+            resultats={resultats} // VueCentre gère l'objet avec .postes
+            totaux={totaux}
+            hasSimulated={hasSimulated}
+            simDirty={simDirty}
+            cOrd={courrierOrdinaire}
+            setCOrd={setCourrierOrdinaire}
+            cReco={courrierRecommande}
+            setCReco={setCourrierRecommande}
+            eBarkia={ebarkia}
+            setEBarkia={setEbarkia}
+            lrh={lrh}
+            setLrh={setLrh}
+            setScelle={setScelle}
+            volumesFluxGrid={volumesFluxGrid}
+            setVolumesFluxGrid={setVolumesFluxGrid}
+            nbrCoSac={nbrCoSac}
+            setNbrCoSac={setNbrCoSac}
+            nbrCrSac={nbrCrSac}
+            setNbrCrSac={setNbrCrSac}
+            pctAxesArrivee={pctAxesArrivee}
+            setPctAxesArrivee={setPctAxesArrivee}
+            pctAxesDepart={pctAxesDepart}
+            setPctAxesDepart={setPctAxesDepart}
+            EmptyStateFirstRun={EmptyStateFirstRun}
+            EmptyStateDirty={EmptyStateDirty}
           />
         )}
 
@@ -1855,7 +2371,7 @@ export default function SimulationEffectifs() {
           <VueIntervenant
             regions={regions}
             centres={centres}
-            postesOptions={postesOptions}
+            postesOptions={postesList}
             loading={loading}
             region={region}
             setRegion={setRegion}
@@ -1890,6 +2406,8 @@ export default function SimulationEffectifs() {
             setCourriersParSac={setCourriersParSac}
             productivite={productivite}
             setProductivite={setProductivite}
+            idleMinutes={idleMinutes}
+            setIdleMinutes={setIdleMinutes}
             heuresNet={heuresNet}
             setHeuresNet={setHeuresNet}
             onSimuler={handleSimulerIntervenant}
@@ -1899,7 +2417,7 @@ export default function SimulationEffectifs() {
             setRefDisplay={setRefDisplay}
             hasPhase={hasPhase}
             referentiel={referentiel}
-            resultats={resultats}
+            resultats={tasks} // VueIntervenant attend un tableau
             totaux={totaux}
             hasSimulated={hasSimulated}
             simDirty={simDirty}
@@ -1912,6 +2430,18 @@ export default function SimulationEffectifs() {
             EmptyStateDirty={EmptyStateDirty}
             GraphReferentiel={GraphReferentiel}
             GraphResultats={GraphResultats}
+            volumesFluxGrid={volumesFluxGrid}
+            setVolumesFluxGrid={setVolumesFluxGrid}
+            edPercent={edPercent}
+            setEdPercent={setEdPercent}
+            nbrCoSac={nbrCoSac}
+            setNbrCoSac={setNbrCoSac}
+            nbrCrSac={nbrCrSac}
+            setNbrCrSac={setNbrCrSac}
+            pctAxesArrivee={pctAxesArrivee}
+            setPctAxesArrivee={setPctAxesArrivee}
+            pctAxesDepart={pctAxesDepart}
+            setPctAxesDepart={setPctAxesDepart}
           />
         )}
 
@@ -2056,7 +2586,7 @@ export default function SimulationEffectifs() {
                     Calcul en cours...
                   </td>
                 </tr>
-              ) : resultats.length === 0 ? (
+              ) : tasks.length === 0 ? (
                 <tr>
                   <td
                     colSpan={4}
@@ -2066,7 +2596,7 @@ export default function SimulationEffectifs() {
                   </td>
                 </tr>
               ) : (
-                resultats.map((r, i) => (
+                tasks.map((r, i) => (
                   <tr
                     key={i}
                     className={i % 2 === 0 ? "bg-white" : "bg-slate-50"}
@@ -2087,7 +2617,7 @@ export default function SimulationEffectifs() {
         <div className="mb-4">
           <div className="font-semibold mb-2">Visualisation</div>
           <div className="h-60 border border-dashed border-slate-300 grid place-items-center text-slate-500">
-            {resultats.length
+            {tasks.length
               ? "Graphe de comparaison (à intégrer)"
               : "Aucun graphe"}
           </div>

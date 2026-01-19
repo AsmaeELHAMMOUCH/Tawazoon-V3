@@ -129,33 +129,8 @@ export default function SmartInsightsPanel({ centres, kpis, onScenarioApply }) {
                 ))}
             </div>
 
-            {/* Stress Test Scenarios */}
-            <div className="relative z-10 border-t border-white/10 pt-4">
-                <h4 className="text-[10px] font-bold text-indigo-200 uppercase tracking-widest mb-3 flex items-center gap-2">
-                    <TrendingUp size={12} />
-                    Stress Test (Projection)
-                </h4>
-                <div className="grid grid-cols-3 gap-2">
-                    <button onClick={() => onScenarioApply && onScenarioApply(1.0)} className="flex flex-col items-center justify-center p-2 rounded bg-white/5 hover:bg-white/10 border border-transparent hover:border-indigo-500/30 transition-all active:scale-95 group">
-                        <span className="text-xs font-bold text-slate-300 group-hover:text-white">Normal</span>
-                        <span className="text-[9px] text-slate-500 group-hover:text-indigo-300">Actuel</span>
-                    </button>
-                    <button onClick={() => onScenarioApply && onScenarioApply(1.15)} className="flex flex-col items-center justify-center p-2 rounded bg-white/5 hover:bg-red-500/10 border border-transparent hover:border-red-500/30 transition-all active:scale-95 group">
-                        <span className="text-xs font-bold text-slate-300 group-hover:text-red-200">Pic</span>
-                        <span className="text-[9px] text-slate-500 group-hover:text-red-400">+15%</span>
-                    </button>
-                    <button onClick={() => onScenarioApply && onScenarioApply(0.90)} className="flex flex-col items-center justify-center p-2 rounded bg-white/5 hover:bg-emerald-500/10 border border-transparent hover:border-emerald-500/30 transition-all active:scale-95 group">
-                        <span className="text-xs font-bold text-slate-300 group-hover:text-emerald-200">Creux</span>
-                        <span className="text-[9px] text-slate-500 group-hover:text-emerald-400">-10%</span>
-                    </button>
-                </div>
-            </div>
 
-            {/* Footer */}
-            <div className="mt-6 pt-4 border-t border-white/5 flex justify-between items-center text-[10px] text-slate-400">
-                <span>Tawazoon Intelligence v2.1</span>
-                <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Actif</span>
-            </div>
+
         </div>
     );
 }

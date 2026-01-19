@@ -129,6 +129,7 @@ function normalizePostes(payload) {
     id: p.id ?? p.poste_id ?? p.code ?? i,
     label: p.label ?? p.name ?? p.nom ?? p.nom_poste ?? String(p.id ?? p.poste_id ?? p.code ?? i),
     centre_id: p.centre_id ?? null,
+    centre_poste_id: p.centre_poste_id ?? null,
   }));
 }
 
@@ -146,6 +147,8 @@ function normalizeTaches(payload) {
     return {
       id: t.id ?? i,
       task: t.task ?? t.tache ?? t.nom_tache ?? t.name ?? "Tâche inconnue",
+      famille: t.famille_uo ?? t.famille ?? "",
+      etat: t.etat ?? "A", // ✅ Par défaut Actif
       phase: t.phase ?? t.ph ?? t.etape ?? null,
       unit: cleanUnit, // ✅ Unité nettoyée
       avg_sec: t.avg_sec ?? (t.moyenne_min ? t.moyenne_min * 60 : 0),
@@ -255,7 +258,7 @@ export const api = {
     const isDirectionV2 =
       payload &&
       payload.direction_id &&
-      Array.isArray(payload.volumes) &&
+      (Array.isArray(payload.volumes) || Array.isArray(payload.volumes_matriciels)) &&
       payload.global_params;
 
     const isDirectionLegacy = payload?.mode === "direction";
@@ -270,17 +273,48 @@ export const api = {
               heures_par_jour: Number(payload.global_params?.heures_par_jour ?? 7.5),
               idle_minutes: Number(payload.global_params?.idle_minutes ?? 0),
             },
-            volumes: (payload.volumes || []).map((v) => ({
-              centre_id: v.centre_id ? Number(v.centre_id) : null,
-              centre_label: v.centre_label ?? null,
-              sacs: Number(v.sacs ?? 0),
-              colis: Number(v.colis ?? 0),
-              courrier_ordinaire: Number(v.courrier_ordinaire ?? 0),
-              courrier_recommande: Number(v.courrier_recommande ?? 0),
-              ebarkia: Number(v.ebarkia ?? 0),
-              lrh: Number(v.lrh ?? 0),
-              amana: Number(v.amana ?? 0),
-            })),
+            // Si volumes_matriciels est déjà dans le payload (nouveau format)
+            ...(payload.volumes_matriciels && payload.volumes_matriciels.length > 0
+              ? {
+                  volumes_matriciels: payload.volumes_matriciels.map((v) => ({
+                    centre_id: v.centre_id ? Number(v.centre_id) : null,
+                    centre_label: v.centre_label ?? null,
+                    flux_id: v.flux_id !== null && v.flux_id !== undefined ? Number(v.flux_id) : null,
+                    sens_id: Number(v.sens_id),
+                    segment_id: Number(v.segment_id),
+                    volume: Number(v.volume ?? 0),
+                  })),
+                }
+              : {}),
+            // Si volumes classiques avec flux_id (détection automatique)
+            ...(payload.volumes && payload.volumes.length > 0 && payload.volumes[0].flux_id !== undefined
+              ? {
+                  volumes_matriciels: payload.volumes.map((v) => ({
+                    centre_id: v.centre_id ? Number(v.centre_id) : null,
+                    centre_label: v.centre_label ?? null,
+                    flux_id: v.flux_id !== null && v.flux_id !== undefined ? Number(v.flux_id) : null,
+                    sens_id: Number(v.sens_id),
+                    segment_id: Number(v.segment_id),
+                    volume: Number(v.volume ?? 0),
+                  })),
+                }
+              : {}),
+            // Si volumes classiques sans flux_id (ancien format)
+            ...(payload.volumes && payload.volumes.length > 0 && !payload.volumes[0].flux_id && !payload.volumes_matriciels
+              ? {
+                  volumes: payload.volumes.map((v) => ({
+                    centre_id: v.centre_id ? Number(v.centre_id) : null,
+                    centre_label: v.centre_label ?? null,
+                    sacs: Number(v.sacs ?? 0),
+                    colis: Number(v.colis ?? 0),
+                    courrier_ordinaire: Number(v.courrier_ordinaire ?? 0),
+                    courrier_recommande: Number(v.courrier_recommande ?? 0),
+                    ebarkia: Number(v.ebarkia ?? 0),
+                    lrh: Number(v.lrh ?? 0),
+                    amana: Number(v.amana ?? 0),
+                  })),
+                }
+              : {}),
           }
         : {
             direction_id: Number(payload.direction_id),
@@ -304,7 +338,7 @@ export const api = {
           };
 
       console.debug("simulate(api) [DIRECTION V2]: body=", body);
-      return await http("/simulation/direction", { method: "POST", body, signal });
+      return await http("/simulation/direction/v2", { method: "POST", body, signal });
     }
 
     // --------------------
@@ -345,10 +379,59 @@ export const api = {
       volumes_annuels: volumesAnnuels
     };
 
+    console.log('\n' + '='.repeat(80));
+    console.log('📤 [FRONTEND - API] Envoi de la simulation au backend');
+    console.log('='.repeat(80));
+    console.log('📍 Centre ID:', body.centre_id);
+    console.log('📍 Poste ID:', body.poste_id);
+    console.log('⚙️  Productivité:', body.productivite + '%');
+    console.log('⏱️  Heures nettes:', body.heures_net + 'h');
+    console.log('💤 Idle minutes:', body.idle_minutes + ' min');
+    console.log('\n📦 Volumes Journaliers:');
+    console.log('   - sacs:', volumesJournaliers.sacs);
+    console.log('   - colis:', volumesJournaliers.colis);
+    console.log('   - courriers_par_sac:', volumesJournaliers.courriers_par_sac);
+    console.log('   - colis_amana_par_sac:', volumesJournaliers.colis_amana_par_sac);
+    console.log('   - colis_par_collecte:', volumesJournaliers.colis_par_collecte);
+    console.log('\n📅 Volumes Annuels:');
+    console.log('   - courrier_ordinaire:', volumesAnnuels.courrier_ordinaire);
+    console.log('   - courrier_recommande:', volumesAnnuels.courrier_recommande);
+    console.log('   - ebarkia:', volumesAnnuels.ebarkia);
+    console.log('   - lrh:', volumesAnnuels.lrh);
+    console.log('   - amana:', volumesAnnuels.amana);
+    console.log('\n🔍 Payload Original Reçu:');
+    console.log('   payload.volumes:', payload.volumes);
+    console.log('='.repeat(80) + '\n');
+
     console.debug("simulate(api): payload sent to backend=", body);
     const data = await http("/simulate", { method: "POST", body, signal });
+    
+    console.log('\n' + '='.repeat(80));
+    console.log('✅ [FRONTEND - API] Réponse reçue du backend');
+    console.log('='.repeat(80));
+    console.log('📊 Résultat:', data);
+    console.log('='.repeat(80) + '\n');
+    
     console.debug("simulate(api): response from backend=", data);
     return data;
+  },
+
+  /**
+   * Simulation Data-Driven pour un intervenant
+   */
+  simulateDataDriven: async (centrePosteId, volumesUI, params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    const url = `/simulation-dd/intervenant/${centrePosteId}${query ? '?' + query : ''}`;
+    return await http(url, { method: "POST", body: volumesUI });
+  },
+
+  /**
+   * Simulation Data-Driven pour un centre
+   */
+  simulateDataDrivenCentre: async (centreId, volumesUI, params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    const url = `/simulation-dd/centre/${centreId}${query ? '?' + query : ''}`;
+    return await http(url, { method: "POST", body: volumesUI });
   },
 
   /**
@@ -503,6 +586,41 @@ export const api = {
     
     if (!res.ok) throw new Error("Erreur export Excel");
     return await res.blob();
+  },
+
+  // --- National Simulation ---
+  nationalSimulation: (params) => http("/national", { method: "POST", body: params }),
+  importVolumesRef: (data) => http("/volumes/import-ref", { method: "POST", body: data }),
+
+  /**
+   * Mise à jour de la catégorisation d'un centre
+   * @param {Array} postes - Liste optionnelle de {centre_poste_id, etp_arrondi}
+   */
+  updateCentreCategorisation: async (centreId, categorisationId, postes = []) => {
+    return await http(`/centres/${centreId}/categorisation`, {
+      method: "PUT",
+      body: { 
+        categorisation_id: Number(categorisationId),
+        postes: postes 
+      },
+    });
+  },
+
+  /**
+   * Sauvegarde une simulation pour la catégorisation
+   */
+  saveCategSimulation: async (data) => {
+    return await http("/categorisation/save-simulation", {
+      method: "POST",
+      body: data,
+    });
+  },
+
+  /**
+   * Récupère la dernière simulation de catégorisation pour un centre
+   */
+  getLatestCategSimulation: async (centreId) => {
+    return await http(`/categorisation/latest/${centreId}`);
   },
 
   /**

@@ -1,0 +1,24 @@
+FLUXES:
+  ID: 1, Code: 'AMANA'
+  ID: 2, Code: 'CO'
+  ID: 3, Code: 'CR'
+  ID: 4, Code: 'EB'
+  ID: 5, Code: 'LRH'
+  ID: 6, Code: 'EBARKIA'
+
+SENSES:
+  ID: 1, Code: 'ARRIVEE'
+  ID: 2, Code: 'DEPOT'
+  ID: 3, Code: 'RECUP'
+  ID: 4, Code: 'DEPART'
+  ID: 5, Code: 'GUICHET'
+
+SEGMENTS:
+  ID: 1, Code: 'GLOBAL'
+  ID: 2, Code: 'PART'
+  ID: 3, Code: 'PRO'
+  ID: 4, Code: 'DIST'
+  ID: 5, Code: 'AXES'
+  ID: 6, Code: 'PARTICULIER'
+  ID: 7, Code: 'PRO_B2B'
+  ID: 8, Code: 'DISTRIBUTION'

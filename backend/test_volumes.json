@@ -1,0 +1,21 @@
+{
+  "flux_arrivee": {
+    "amana": {"GLOBAL": 1000, "PART": 0, "PRO": 0, "DIST": 0, "AXES": 0},
+    "co": {"GLOBAL": 2000, "PART": 0, "PRO": 0, "DIST": 0, "AXES": 0},
+    "cr": {"GLOBAL": 500, "PART": 0, "PRO": 0, "DIST": 0, "AXES": 0},
+    "ebarkia": {"GLOBAL": 0, "PART": 0, "PRO": 0, "DIST": 0, "AXES": 0},
+    "lrh": {"GLOBAL": 0, "PART": 0, "PRO": 0, "DIST": 0, "AXES": 0}
+  },
+  "flux_depart": {
+    "amana": {"GLOBAL": 0, "PART": 0, "PRO": 0, "DIST": 0, "AXES": 0},
+    "co": {"GLOBAL": 0, "PART": 0, "PRO": 0, "DIST": 0, "AXES": 0},
+    "cr": {"GLOBAL": 0, "PART": 0, "PRO": 0, "DIST": 0, "AXES": 0},
+    "ebarkia": {"GLOBAL": 0, "PART": 0, "PRO": 0, "DIST": 0, "AXES": 0},
+    "lrh": {"GLOBAL": 0, "PART": 0, "PRO": 0, "DIST": 0, "AXES": 0}
+  },
+  "guichet": {
+    "DEPOT": 0,
+    "RECUP": 0
+  },
+  "nb_jours_ouvres_an": 264
+}

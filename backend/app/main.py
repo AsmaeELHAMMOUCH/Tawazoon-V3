@@ -13,26 +13,49 @@ from app.api.directions import router as directions_router
 from app.api.simuler_centre_par_type import router as simuler_centre_par_type_router
 from app.api.scoring import router as scoring_router
 from app.api.export import router as export_router # 🆕 Ajoût
+from app.api.volumes import router as volumes_router # 🆕 Nouvelle architecture Flux/Sens/Segment
+from app.api.simulation_direct import router as simulation_direct_router # 🆕 Simulation directe sans VolumeSimulation
+from app.api.simulation_data_driven import router as simulation_data_driven_router # 🆕 Architecture 100% data-driven
+from app.api.national import router as national_router # 🆕 Simulation nationale
+from app.api.categorisation import router as categorisation_router # 🆕 Catégorisation
 
 from app.core.db import engine, Base
-from app.models import db_models, scoring_models
+from app.models import db_models, scoring_models, categorisation_models
 
 # Create tables if they don't exist
 Base.metadata.create_all(bind=engine)
 
+
+# Force Reload Trigger
 app = FastAPI(
-    title="API Simulation Effectifs",
+    title="Simulateur RH API",
     description="API pour la simulation des effectifs avec flux en cascade",
     version="1.0.0",
     debug=True
 )
+
+
 @app.exception_handler(Exception)
 async def debug_exception_handler(request: Request, exc: Exception):
+    import traceback
+    with open("backend_error.log", "a", encoding="utf-8") as f:
+        f.write("-" * 80 + "\n")
+        f.write(f"Exception: {str(exc)}\n")
+        traceback.print_exc(file=f)
     traceback.print_exc()  # ✅ affiche le traceback complet dans le terminal
     return JSONResponse(
         status_code=500,
         content={"error": str(exc), "where": "unhandled_exception"}
     )
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    with open("backend_requests.log", "a", encoding="utf-8") as f:
+        f.write(f"REQUEST: {request.method} {request.url}\n")
+    response = await call_next(request)
+    with open("backend_requests.log", "a", encoding="utf-8") as f:
+        f.write(f"RESPONSE: {response.status_code}\n")
+    return response
+
 # Configuration CORS
 app.add_middleware(
     CORSMiddleware,
@@ -52,6 +75,11 @@ app.include_router(refs_router, prefix="/api")
 app.include_router(simulation_router, prefix="/api")    
 app.include_router(scoring_router, prefix="/api")
 app.include_router(export_router, prefix="/api") # ✅ Ajoût correct ici
+app.include_router(volumes_router) # ✅ Nouvelle architecture Flux/Sens/Segment
+app.include_router(simulation_direct_router) # ✅ Simulation directe sans VolumeSimulation
+app.include_router(simulation_data_driven_router) # ✅ Architecture 100% data-driven
+app.include_router(national_router, prefix="/api") # ✅ Simulation nationale
+app.include_router(categorisation_router, prefix="/api") # ✅ Catégorisation
 #app.include_router(views_router, prefix="/api")
 #app.include_router(simuler_centre_par_type_router, prefix="/api")
 
@@ -80,4 +108,4 @@ def ping():
 
 VERSION = "Version B"
 # Force reload
-# Force reload 12/29/2025 14:39:35
+# Force reload 01/05/2026 17:18:00

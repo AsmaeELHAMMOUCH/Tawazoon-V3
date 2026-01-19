@@ -74,6 +74,7 @@ export default function VueIntervenant({
 
   const [colisAmanaParSac, setColisAmanaParSac] = useState(5);
   const [courriersParSac, setCourriersParSac] = useState(4500);
+  const [edPercent, setEdPercent] = useState(0); // Nouveau paramètre ED%
 
   const sanitize = (val) =>
     String(val ?? "")
@@ -251,10 +252,18 @@ export default function VueIntervenant({
       const sacsInput = parseNonNeg(taskData.sacs) ?? 0;
       if (sacsInput > 0) return sacsInput;
 
-      if (dailyAmanaColis > 0) return dailyAmanaSacs;
+      if (dailyAmanaColis > 0) {
+        const pourcSac = 100 - (edPercent ?? 0);
+        const colisEnSac = dailyAmanaColis * (pourcSac / 100);
+        return Math.ceil(colisEnSac / colisAmanaParSac);
+      }
 
       const colisInput = parseNonNeg(colis) ?? 0;
-      if (colisInput > 0) return colisInput / colisAmanaParSac;
+      if (colisInput > 0) {
+        const pourcSac = 100 - (edPercent ?? 0);
+        const colisEnSac = colisInput * (pourcSac / 100);
+        return Math.ceil(colisEnSac / colisAmanaParSac);
+      }
 
       return 0;
     }
@@ -281,31 +290,35 @@ export default function VueIntervenant({
     return 0;
   }
 
-  const mergedResults = (referentiel || []).map((row, i) => {
-    const taskName = String(row.t || "").trim();
-    const fromBack = resIndex.get(taskName.toLowerCase());
-    const moyenneMin = Number(row.m ?? 0);
+  // 🔹 Filtrer le référentiel pour exclure les tâches avec moyenne_min = 0
+  const referentielFiltered = (referentiel || []).filter((row) => Number(row.m ?? 0) > 0);
 
-    const nbJour =
-      fromBack?.nombre_unite ??
-      fromBack?.nombre_Unite ??
-      nombreUniteParUnite(row.u, taskName, row);
+  const mergedResults = referentielFiltered
+    .map((row, i) => {
+      const taskName = String(row.t || "").trim();
+      const fromBack = resIndex.get(taskName.toLowerCase());
+      const moyenneMin = Number(row.m ?? 0);
 
-    const heuresLoc = +(
-      Number(nbJour || 0) *
-      (minutesAjustees(moyenneMin) / 60)
-    ).toFixed(2);
+      const nbJour =
+        fromBack?.nombre_unite ??
+        fromBack?.nombre_Unite ??
+        nombreUniteParUnite(row.u, taskName, row);
 
-    return {
-      seq: i + 1,
-      task: taskName || "N/A",
-      nombre_Unite: Number(nbJour || 0),
-      heures: heuresLoc,
-      _u: row.u,
-      _type_flux: row.type_flux,
-      _fromBack: fromBack,
-    };
-  });
+      const heuresLoc = +(
+        Number(nbJour || 0) *
+        (minutesAjustees(moyenneMin) / 60)
+      ).toFixed(2);
+
+      return {
+        seq: i + 1,
+        task: taskName || "N/A",
+        nombre_Unite: Number(nbJour || 0),
+        heures: heuresLoc,
+        _u: row.u,
+        _type_flux: row.type_flux,
+        _fromBack: fromBack,
+      };
+    });
 
   const totalHeuresAffichees = mergedResults.reduce(
     (acc, r) => acc + Number(r.heures || 0),
@@ -326,9 +339,16 @@ export default function VueIntervenant({
   const fteArrondiAffiche =
     fteCalcAffiche <= 0.1 ? 0 : roundHalfUp(fteCalcAffiche, 0);
 
-  // 🔹 ICI : préparation d’un body propre pour un POST backend
-  const handleSimuler = () => {
+  // 🔹 ICI : préparation d'un body propre pour un POST backend
+  const handleSimuler = (extraParams = {}) => {
     const ratioCollecte = Math.max(1, parseNonNeg(colisParCollecte) ?? 1);
+
+    // 🆕 Calcul des sacs avec ED%
+    const colisTotal = parseNonNeg(colis) ?? 0;
+    const pourcSac = Math.max(0, 100 - (edPercent ?? 0));
+    const colisEnSac = colisTotal * (pourcSac / 100);
+    const ratioSac = Math.max(1, parseNonNeg(colisAmanaParSac) ?? 5);
+    const nbSacsCalculated = Math.ceil(colisEnSac / ratioSac);
 
     const body = {
       // identifiants
@@ -353,6 +373,13 @@ export default function VueIntervenant({
       colis_par_collecte: ratioCollecte,
       part_particuliers: partParticuliers,
       part_professionnels: partProfessionnels,
+
+      // 🆕 Paramètres ED% et sacs calculés
+      ed_percent: Number(edPercent ?? 0),
+      sacs: nbSacsCalculated, // Nombre de sacs après application ED%
+
+      // fusion des paramètres supplémentaires (ex: sacs calculés, volumes_flux)
+      ...extraParams,
     };
 
     // on laisse le parent gérer l'appel POST (axios/fetch)
@@ -536,6 +563,8 @@ export default function VueIntervenant({
           partProfessionnels={partProfessionnels}
           getEffectiveFluxMode={getEffectiveFluxMode}
           onSimuler={handleSimuler}
+          edPercent={edPercent}
+          setEdPercent={setEdPercent}
         />
 
         {/* Référentiel & résultats */}
@@ -546,17 +575,15 @@ export default function VueIntervenant({
             actions={
               <div className="toggle-group text-[11px]">
                 <button
-                  className={`toggle-btn ${
-                    refDisplay === "tableau" ? "active" : ""
-                  }`}
+                  className={`toggle-btn ${refDisplay === "tableau" ? "active" : ""
+                    }`}
                   onClick={() => setRefDisplay("tableau")}
                 >
                   <TableIcon className="w-3.5 h-3.5" /> Tableau
                 </button>
                 <button
-                  className={`toggle-btn ${
-                    refDisplay === "graphe" ? "active" : ""
-                  }`}
+                  className={`toggle-btn ${refDisplay === "graphe" ? "active" : ""
+                    }`}
                   onClick={() => setRefDisplay("graphe")}
                 >
                   <BarChart3 className="w-3.5 h-3.5" /> Graphe
@@ -599,7 +626,7 @@ export default function VueIntervenant({
                             Chargement…
                           </td>
                         </tr>
-                      ) : (referentiel?.length ?? 0) === 0 ? (
+                      ) : (referentielFiltered?.length ?? 0) === 0 ? (
                         <tr className="bg-white">
                           <td
                             colSpan={hasPhase ? 5 : 4}
@@ -609,27 +636,28 @@ export default function VueIntervenant({
                           </td>
                         </tr>
                       ) : (
-                        referentiel.map((r, i) => (
-                          <tr
-                            key={i}
-                            className={i % 2 === 0 ? "bg-white" : "bg-slate-50"}
-                          >
-                            <td className="px-2 py-1.5">{i + 1}</td>
-                            <td className="px-2 py-1.5">{r.t}</td>
-                            {hasPhase && (
-                              <td className="px-2 py-1.5">
-                                {r.ph &&
-                                String(r.ph).trim().toLowerCase() !== "n/a"
-                                  ? r.ph
-                                  : ""}
+                        referentielFiltered
+                          .map((r, i) => (
+                            <tr
+                              key={i}
+                              className={i % 2 === 0 ? "bg-white" : "bg-slate-50"}
+                            >
+                              <td className="px-2 py-1.5">{i + 1}</td>
+                              <td className="px-2 py-1.5">{r.t}</td>
+                              {hasPhase && (
+                                <td className="px-2 py-1.5">
+                                  {r.ph &&
+                                    String(r.ph).trim().toLowerCase() !== "n/a"
+                                    ? r.ph
+                                    : ""}
+                                </td>
+                              )}
+                              <td className="px-2 py-1.5">{r.u}</td>
+                              <td className="px-2 py-1.5 text-center">
+                                {Number(r.m ?? 0).toFixed(2)}
                               </td>
-                            )}
-                            <td className="px-2 py-1.5">{r.u}</td>
-                            <td className="px-2 py-1.5 text-center">
-                              {Number(r.m ?? 0).toFixed(2)}
-                            </td>
-                          </tr>
-                        ))
+                            </tr>
+                          ))
                       )}
                     </tbody>
                   </table>
@@ -638,7 +666,7 @@ export default function VueIntervenant({
             ) : (
               <div className="p-2">
                 <GraphReferentiel
-                  referentiel={referentiel}
+                  referentiel={referentielFiltered}
                   loading={loading?.referentiel}
                   hasPhase={hasPhase}
                 />

@@ -1,4 +1,7 @@
-from sqlalchemy import Column, Float, Integer, String, ForeignKey
+from sqlalchemy import Column, Float, Integer, String, ForeignKey, Index
+from sqlalchemy.orm import relationship
+from app.core.db import Base
+
 from sqlalchemy.orm import relationship
 from app.core.db import Base
 
@@ -42,6 +45,8 @@ class Centre(Base):
 
     region_id = Column(Integer, ForeignKey("dbo.regions.id"), nullable=False)
     categorie_id = Column(Integer, ForeignKey("dbo.categories.id"), nullable=True)
+    id_categorisation = Column(Integer, nullable=True) # Pour la catégorisation (Classe A, B, C...)
+    t_aps = Column(Float, name="T_APS", nullable=True, default=0.0)
 
     region = relationship("Region", back_populates="centres")
     categorie = relationship("Categorie", back_populates="centres")
@@ -76,7 +81,10 @@ class CentrePoste(Base):
 
 class Tache(Base):
     __tablename__ = "taches"
-    __table_args__ = {"schema": "dbo"}
+    __table_args__ = (
+        Index("idx_taches_match", "centre_poste_id", "flux_id", "sens_id", "segment_id"),
+        {"schema": "dbo"}
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     centre_poste_id = Column(
@@ -84,17 +92,33 @@ class Tache(Base):
     )
 
     nom_tache = Column(String, nullable=False)
+    famille_uo = Column(String, nullable=True)  # ✅ AJOUT: Nécessaire pour le mapping par famille
     phase = Column(String, nullable=True)
     unite_mesure = Column(String, nullable=False)
+    etat = Column(String, nullable=True)  # 🆕 AJOUT: État de la tâche (ex: 'NA' pour non active)
 
     min_min = Column(Integer, nullable=True)
     min_sec = Column(Integer, nullable=True)
     max_min = Column(Integer, nullable=True)
     max_sec = Column(Integer, nullable=True)
+    
+    # 🆕 Nouveau champ pour la logique ED / Sac
+    base_calcul = Column(Integer, nullable=True)
+    
+    # 🆕 Champ produit pour la règle 2064
+    produit = Column(String, nullable=True)
 
     moyenne_min = Column(Float, nullable=True, default=0.0)
 
+    # New Foreign Keys
+    flux_id = Column(Integer, ForeignKey("dbo.flux.id"), nullable=True)
+    sens_id = Column(Integer, ForeignKey("dbo.volume_sens.id"), nullable=True)
+    segment_id = Column(Integer, ForeignKey("dbo.volume_segments.id"), nullable=True)
+
     centre_poste = relationship("CentrePoste", back_populates="taches")
+    flux = relationship("Flux")
+    sens = relationship("VolumeSens")
+    segment = relationship("VolumeSegment")
 
 
 class CentreVolumeRef(Base):
@@ -120,5 +144,53 @@ class CentreVolumeRef(Base):
     centre = relationship("Centre", back_populates="volume_ref")
 
 
-# Update Centre class to include persistence relationship
+class Flux(Base):
+    __tablename__ = "flux"
+    __table_args__ = {"schema": "dbo"}
+
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String(50), nullable=False)
+    libelle = Column(String(100), nullable=True)
+
+
+class VolumeSens(Base):
+    __tablename__ = "volume_sens"
+    __table_args__ = {"schema": "dbo"}
+
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String(50), nullable=False)
+    libelle = Column(String(100), nullable=True)
+
+
+class VolumeSegment(Base):
+    __tablename__ = "volume_segments"
+    __table_args__ = {"schema": "dbo"}
+
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String(50), nullable=False)
+    libelle = Column(String(100), nullable=True)
+
+
+class VolumeSimulation(Base):
+    __tablename__ = "volume_simulation"
+    __table_args__ = (
+        Index("idx_vol_sim_match", "simulation_id", "centre_poste_id", "flux_id", "sens_id", "segment_id"),
+        {"schema": "dbo"}
+    )
+
+    # Composite PK likely needed or just an ID. 
+    # Prompt says key: simulation_id + centre_poste_id + flux_id + sens_id + segment_id + volume
+    # We will use an auto-increment ID for simplicity in ORM unless strictly constrained.
+    id = Column(Integer, primary_key=True, index=True)
+    
+    simulation_id = Column(Integer, nullable=False, index=True)
+    centre_poste_id = Column(Integer, nullable=False)
+    flux_id = Column(Integer, nullable=False)
+    sens_id = Column(Integer, nullable=False)
+    segment_id = Column(Integer, nullable=False)
+    
+    volume = Column(Float, default=0.0)
+
+
+# Update Centre to include persistence relationship
 Centre.volume_ref = relationship("CentreVolumeRef", uselist=False, back_populates="centre")

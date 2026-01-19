@@ -1,0 +1,46 @@
+{
+  "centre_postes_count": 1090,
+  "total_tasks": 1089,
+  "tasks_by_centre": [
+    {
+      "centre_id": 8248,
+      "count": 48
+    },
+    {
+      "centre_id": 8288,
+      "count": 48
+    },
+    {
+      "centre_id": 7444,
+      "count": 43
+    },
+    {
+      "centre_id": 7862,
+      "count": 36
+    },
+    {
+      "centre_id": 211,
+      "count": 23
+    },
+    {
+      "centre_id": 562,
+      "count": 21
+    },
+    {
+      "centre_id": 590,
+      "count": 21
+    },
+    {
+      "centre_id": 8253,
+      "count": 21
+    },
+    {
+      "centre_id": 7935,
+      "count": 20
+    },
+    {
+      "centre_id": 7386,
+      "count": 18
+    }
+  ]
+}

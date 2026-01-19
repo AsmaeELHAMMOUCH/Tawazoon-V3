@@ -7,6 +7,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
+from app.models import db_models
 from app.schemas.refs import RegionOut, CategorieOut
 #from app.services.simulation import calculer_simulation  # Import du service
 #from app.schemas.models import VolumesInput, VolumesAnnuels
@@ -242,6 +243,8 @@ def list_centres(
     sql = """
         SELECT
           c.id,
+          CAST(c.T_APS AS FLOAT) AS t_aps_global,
+          CAST(c.APS AS FLOAT) AS aps_legacy, -- Au cas où T_APS est vide
           c.label,
           c.region_id,
           c.categorie_id,
@@ -275,17 +278,43 @@ def list_centres(
         ORDER BY c.label
     """
     rows = db.execute(text(sql), {"region_id": region_id}).mappings().all()
-    return [{**dict(r), "etp_calcule": None} for r in rows]
+    
+    # 🐛 DEBUG: Vérifier le contenu de T_APS pour le premier centre
+    if rows:
+        first_c = rows[0]
+        print(f"🔍 [DEBUG API CENTRES] Premier centre: ID={first_c.get('id')}, Label={first_c.get('label')}")
+        print(f"   -> T_APS (brut): {first_c.get('T_APS')}")
+        print(f"   -> APS (brut): {first_c.get('APS')}")
+    else:
+        print("🔍 [DEBUG API CENTRES] Aucune donnée trouvée pour cette région.")
+
+    result = [{**dict(r), "etp_calcule": None} for r in rows]
+    
+    # Vérifier le premier résultat
+    if result:
+        print(f"\n🔍 [DEBUG BACKEND] Premier centre dans result:")
+        print(f"   {result[0]}")
+    
+    return result
 
 @router.get("/postes")
 def list_postes(
     centre_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
 ):
+    # 🆕 Liste des postes à masquer pour le centre 2102
+    POSTES_MASQUES_CENTRE_2102 = [
+        "AGENT COURRIER",
+        "AGENT OPERATIONS COURRIER",
+        "GUICHETIER COURRIER",
+        "RESPONSABLE ENTREPRISES ET PROFESSIONNELS (COURRIER)"
+    ]
+    
     if centre_id is not None:
         sql = """
             SELECT 
                 p.id,
+                cp.id AS centre_poste_id,
                 p.label,
                 p.type_poste,
                 COALESCE(cp.effectif_actuel, 0) AS effectif_actuel
@@ -299,6 +328,7 @@ def list_postes(
         sql = """
             SELECT 
                 p.id,
+                NULL AS centre_poste_id,
                 p.label,
                 p.type_poste,
                 0 AS effectif_actuel
@@ -307,15 +337,22 @@ def list_postes(
         """
         rows = db.execute(text(sql)).mappings().all()
 
-    return [
-        {
+    # 🆕 Filtrer les postes masqués pour le centre 2102
+    result = []
+    for r in rows:
+        # Si c'est le centre 2102 et que le poste est dans la liste des masqués, on l'ignore
+        if centre_id == 2102 and r["label"] in POSTES_MASQUES_CENTRE_2102:
+            continue
+        
+        result.append({
             "id": r["id"],
+            "centre_poste_id": r["centre_poste_id"],
             "label": r["label"],
             "type_poste": r.get("type_poste"),
             "effectif_actuel": r.get("effectif_actuel", 0),
-        }
-        for r in rows
-    ]
+        })
+    
+    return result
 
 @router.get("/categories", response_model=List[CategorieOut])
 def list_categories(db: Session = Depends(get_db)):
@@ -345,10 +382,14 @@ def get_taches(
         SELECT
             t.id,
             t.nom_tache,
+            t.famille_uo,
+            t.etat,
             t.phase,
             t.unite_mesure,
             t.moyenne_min,
-            t.centre_poste_id
+            t.centre_poste_id,
+            t.produit,
+            t.base_calcul
         FROM dbo.taches t
         INNER JOIN dbo.centre_postes cp ON cp.id = t.centre_poste_id
         WHERE cp.centre_id = :centre_id
@@ -430,4 +471,57 @@ def consolide_postes(
     ]
 
     return {"rows": data, "totals": totals}
+
+
+
+class PosteUpdate(BaseModel):
+    centre_poste_id: int
+    etp_arrondi: float
+
+class UpdateCategorisationInput(BaseModel):
+    categorisation_id: int
+    postes: Optional[List[PosteUpdate]] = None
+
+@router.put("/centres/{centre_id}/categorisation")
+def update_centre_categorisation(
+    centre_id: int, 
+    input: UpdateCategorisationInput, 
+    db: Session = Depends(get_db)
+):
+    """
+    Met à jour l'id_categorisation d'un centre (Classe A, B, C, D...)
+    Optionnel : Met à jour les effectifs des postes (simulation -> réel)
+    """
+    centre = db.query(db_models.Centre).filter(db_models.Centre.id == centre_id).first()
+    if not centre:
+        raise HTTPException(status_code=404, detail="Centre non trouvé")
+    
+    # 1. Mise à jour de la catégorie (Classe)
+    centre.id_categorisation = input.categorisation_id
+    
+    # 2. Mise à jour des effectifs postes (si fourni)
+    updated_postes = 0
+    if input.postes:
+        for p_data in input.postes:
+            # On cherche le CentrePoste correspondant
+            cp = db.query(db_models.CentrePoste).filter(
+                db_models.CentrePoste.id == p_data.centre_poste_id,
+                db_models.CentrePoste.centre_id == centre_id # Sécurité
+            ).first()
+            
+            if cp:
+                # On met à jour l'effectif actuel avec l'arrondi de la simulation
+                # Attention : cela écrase la valeur précédente
+                cp.effectif_actuel = int(p_data.etp_arrondi)
+                updated_postes += 1
+
+    db.commit()
+    
+    return {
+        "status": "success", 
+        "centre_id": centre_id, 
+        "id_categorisation": centre.id_categorisation,
+        "updated_postes": updated_postes
+    }
+
 

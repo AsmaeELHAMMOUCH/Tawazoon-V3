@@ -24,7 +24,7 @@ const StepIndicator = ({ step, current }) => {
     );
 };
 
-const ImportModal = ({ isOpen, onClose, onValidate }) => {
+export const ImportModal = ({ isOpen, onClose, onValidate }) => {
     const [step, setStep] = useState(1);
     const [fileData, setFileData] = useState([]);
     const [fileName, setFileName] = useState("");
@@ -52,23 +52,179 @@ const ImportModal = ({ isOpen, onClose, onValidate }) => {
                 const wb = XLSX.read(bstr, { type: "binary" });
                 const wsname = wb.SheetNames[0];
                 const ws = wb.Sheets[wsname];
-                const data = XLSX.utils.sheet_to_json(ws);
 
-                const required = ["Nom du Centre"];
-                const first = data[0] || {};
-                const missing = required.filter(c => !(c in first));
+                // Lire toutes les données brutes (array of arrays)
+                const rawData = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
 
-                if (missing.length > 0) {
-                    setErrors([`Colonnes manquantes : ${missing.join(', ')}`]);
-                } else if (data.length === 0) {
-                    setErrors(["Le fichier semble vide."]);
-                } else {
-                    setErrors([]);
-                    setFileData(data);
-                    setStep(2);
+                // Trouver tous les centres dans le fichier
+                const centres = [];
+                let currentCentre = null;
+
+                // Mapping des flux et segments
+                const fluxMap = {
+                    "Amana": 1,
+                    "CO": 2,
+                    "CR": 3,
+                    "E-Barkia": 4,
+                    "LRH": 5
+                };
+
+                const segmentMap = {
+                    "GLOBAL": 1,
+                    "PART.": 2,
+                    "PRO": 3,
+                    "DIST.": 4,
+                    "AXES": 5,
+                    "DÉPÔT": 6,
+                    "RÉCUP.": 7
+                };
+
+                // Parcourir le fichier pour trouver les centres
+                for (let i = 0; i < rawData.length; i++) {
+                    const row = rawData[i];
+
+                    // Détecter un nouveau centre
+                    if (row[0] && row[0].toString().includes("Nom du Centre")) {
+                        // Sauvegarder le centre précédent si existe
+                        if (currentCentre && currentCentre.volumes.length > 0) {
+                            centres.push(currentCentre);
+                        }
+
+                        // Créer un nouveau centre
+                        currentCentre = {
+                            nom_centre: row[1] || "",
+                            volumes: [],
+                            startRow: i
+                        };
+                    }
+
+                    // Si on a un centre en cours, parser les sections
+                    if (currentCentre) {
+                        // FLUX ARRIVÉE
+                        if (row[0] && row[0].toString().includes("FLUX ARRIVÉE")) {
+                            const headerRow = rawData[i + 1];
+
+                            // Lire les 5 lignes de flux
+                            for (let j = 0; j < 5; j++) {
+                                const fluxRowIdx = i + 2 + j;
+                                if (fluxRowIdx >= rawData.length) break;
+
+                                const fluxRow = rawData[fluxRowIdx];
+                                const fluxName = fluxRow[0];
+                                const fluxId = fluxMap[fluxName];
+
+                                if (fluxId) {
+                                    // Lire les 5 segments
+                                    for (let k = 1; k <= 5; k++) {
+                                        const volume = parseFloat(fluxRow[k]) || 0;
+                                        if (volume > 0) {
+                                            const segmentName = headerRow[k];
+                                            const segmentId = segmentMap[segmentName];
+
+                                            if (segmentId) {
+                                                currentCentre.volumes.push({
+                                                    flux_id: fluxId,
+                                                    sens_id: 1, // Arrivée
+                                                    segment_id: segmentId,
+                                                    volume: volume
+                                                });
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // GUICHET
+                        if (row[0] && row[0].toString().includes("GUICHET") && !row[0].toString().includes("FLUX")) {
+                            const valueRow = rawData[i + 2];
+                            if (valueRow) {
+                                // DÉPÔT
+                                const depotVolume = parseFloat(valueRow[1]) || 0;
+                                if (depotVolume > 0) {
+                                    currentCentre.volumes.push({
+                                        flux_id: null,
+                                        sens_id: 2, // Guichet
+                                        segment_id: 6, // DÉPÔT
+                                        volume: depotVolume
+                                    });
+                                }
+
+                                // RÉCUP.
+                                const recupVolume = parseFloat(valueRow[2]) || 0;
+                                if (recupVolume > 0) {
+                                    currentCentre.volumes.push({
+                                        flux_id: null,
+                                        sens_id: 2, // Guichet
+                                        segment_id: 7, // RÉCUP.
+                                        volume: recupVolume
+                                    });
+                                }
+                            }
+                        }
+
+                        // FLUX DÉPART
+                        if (row[0] && row[0].toString().includes("FLUX DÉPART")) {
+                            const headerRow = rawData[i + 1];
+
+                            // Lire les 5 lignes de flux
+                            for (let j = 0; j < 5; j++) {
+                                const fluxRowIdx = i + 2 + j;
+                                if (fluxRowIdx >= rawData.length) break;
+
+                                const fluxRow = rawData[fluxRowIdx];
+                                const fluxName = fluxRow[0];
+                                const fluxId = fluxMap[fluxName];
+
+                                if (fluxId) {
+                                    // Lire les 5 segments
+                                    for (let k = 1; k <= 5; k++) {
+                                        const volume = parseFloat(fluxRow[k]) || 0;
+                                        if (volume > 0) {
+                                            const segmentName = headerRow[k];
+                                            const segmentId = segmentMap[segmentName];
+
+                                            if (segmentId) {
+                                                currentCentre.volumes.push({
+                                                    flux_id: fluxId,
+                                                    sens_id: 3, // Départ
+                                                    segment_id: segmentId,
+                                                    volume: volume
+                                                });
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
+
+                // Ajouter le dernier centre
+                if (currentCentre && currentCentre.volumes.length > 0) {
+                    centres.push(currentCentre);
+                }
+
+                // Validation
+                if (centres.length === 0) {
+                    setErrors(["Aucun centre trouvé dans le fichier"]);
+                    return;
+                }
+
+                // Vérifier que tous les centres ont un nom
+                const centresSansNom = centres.filter(c => !c.nom_centre);
+                if (centresSansNom.length > 0) {
+                    setErrors(["Certains centres n'ont pas de nom"]);
+                    return;
+                }
+
+                setErrors([]);
+                setFileData(centres);
+                setStep(2);
+
             } catch (err) {
-                setErrors(["Erreur de lecture du fichier Excel."]);
+                console.error("Erreur de lecture:", err);
+                setErrors(["Erreur de lecture du fichier Excel. Vérifiez le format."]);
             }
         };
         reader.readAsBinaryString(file);
@@ -135,11 +291,17 @@ const ImportModal = ({ isOpen, onClose, onValidate }) => {
                         <div className="w-full space-y-3">
                             <div className="bg-emerald-50 border border-emerald-100 rounded-md p-2 flex items-start gap-2">
                                 <CheckCircle2 size={16} className="text-emerald-600 mt-0.5" />
-                                <div>
+                                <div className="flex-1">
                                     <p className="text-[11px] font-bold text-emerald-800">Prêt à importer</p>
-                                    <p className="text-[10px] text-emerald-700">
-                                        <strong>{fileData.length}</strong> lignes détectées.
-                                    </p>
+                                    <div className="text-[10px] text-emerald-700 mt-1 space-y-1">
+                                        <p><strong>{fileData.length}</strong> centre(s) détecté(s)</p>
+                                        {fileData.map((centre, idx) => (
+                                            <div key={idx} className="pl-2 border-l-2 border-emerald-200">
+                                                <p><strong>{centre.nom_centre}</strong></p>
+                                                <p className="text-[9px]">{centre.volumes?.length || 0} volumes</p>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
                             </div>
                             <div className="flex justify-between gap-2 mt-4">
@@ -168,18 +330,156 @@ const ImportModal = ({ isOpen, onClose, onValidate }) => {
 export default function DirectionVolumesCard({
     onSimulate,
     loading,
-    lastImportStatus
+    lastImportStatus,
+    centres = [] // Ajout des centres en props
 }) {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [importMsg, setImportMsg] = useState(lastImportStatus ? { type: 'success', text: lastImportStatus } : null);
 
     const handleDownloadTemplate = () => {
-        const headers = ["Nom du Centre", "Sacs / an", "Colis / an", "Courrier Ordinaire / an", "Courrier Recommandé / an", "E-Barkia / an", "LRH / an", "Amana / an"];
-        const sample = [{ "Nom du Centre": "Centre Principal", "Sacs / an": 1000, "Colis / an": 500 }];
-        const ws = XLSX.utils.json_to_sheet(sample, { header: headers });
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Modèle");
-        XLSX.writeFile(wb, "modele_volumes.xlsx");
+        try {
+            // Créer un nouveau workbook
+            const wb = XLSX.utils.book_new();
+
+            // Préparer les données du template avec les centres de la direction
+            const templateData = [
+                // Titre
+                ["IMPORT VOLUMES - CENTRES DE LA DIRECTION"],
+                ["Remplissez les volumes pour chaque centre ci-dessous"],
+                ["Les centres sont pré-remplis avec les centres de votre direction"],
+                [],
+            ];
+
+            // Ajouter chaque centre
+            centres.forEach((centre, index) => {
+                if (index > 0) {
+                    templateData.push([]);
+                    templateData.push([]);
+                }
+
+                templateData.push([`=== CENTRE ${index + 1} ===`]);
+                templateData.push(["Nom du Centre:", centre.label || centre.nom || ""]);
+                templateData.push([]);
+
+                // SECTION A : FLUX ARRIVÉE
+                templateData.push(["A) FLUX ARRIVÉE"]);
+                templateData.push(["FLUX \\ SEGMENT", "GLOBAL", "PART.", "PRO", "DIST.", "AXES"]);
+                templateData.push(["Amana", "", "", "", "", ""]);
+                templateData.push(["CO", "", "", "", "", ""]);
+                templateData.push(["CR", "", "", "", "", ""]);
+                templateData.push(["E-Barkia", "", "", "", "", ""]);
+                templateData.push(["LRH", "", "", "", "", ""]);
+                templateData.push([]);
+
+                // SECTION B : GUICHET
+                templateData.push(["B) GUICHET"]);
+                templateData.push(["OPÉRATION", "DÉPÔT", "RÉCUP."]);
+                templateData.push(["Volume", "", ""]);
+                templateData.push([]);
+
+                // SECTION C : FLUX DÉPART
+                templateData.push(["C) FLUX DÉPART"]);
+                templateData.push(["FLUX \\ SEGMENT", "GLOBAL", "PART.", "PRO", "DIST.", "AXES"]);
+                templateData.push(["Amana", "", "", "", "", ""]);
+                templateData.push(["CO", "", "", "", "", ""]);
+                templateData.push(["CR", "", "", "", "", ""]);
+                templateData.push(["E-Barkia", "", "", "", "", ""]);
+                templateData.push(["LRH", "", "", "", "", ""]);
+            });
+
+            // Si aucun centre, ajouter un exemple
+            if (centres.length === 0) {
+                templateData.push(["=== CENTRE EXEMPLE ==="]);
+                templateData.push(["Nom du Centre:", "Centre Exemple"]);
+                templateData.push([]);
+                templateData.push(["A) FLUX ARRIVÉE"]);
+                templateData.push(["FLUX \\ SEGMENT", "GLOBAL", "PART.", "PRO", "DIST.", "AXES"]);
+                templateData.push(["Amana", "", "", "", "", ""]);
+                templateData.push(["CO", "", "", "", "", ""]);
+                templateData.push(["CR", "", "", "", "", ""]);
+                templateData.push(["E-Barkia", "", "", "", "", ""]);
+                templateData.push(["LRH", "", "", "", "", ""]);
+                templateData.push([]);
+                templateData.push(["B) GUICHET"]);
+                templateData.push(["OPÉRATION", "DÉPÔT", "RÉCUP."]);
+                templateData.push(["Volume", "", ""]);
+                templateData.push([]);
+                templateData.push(["C) FLUX DÉPART"]);
+                templateData.push(["FLUX \\ SEGMENT", "GLOBAL", "PART.", "PRO", "DIST.", "AXES"]);
+                templateData.push(["Amana", "", "", "", "", ""]);
+                templateData.push(["CO", "", "", "", "", ""]);
+                templateData.push(["CR", "", "", "", "", ""]);
+                templateData.push(["E-Barkia", "", "", "", "", ""]);
+                templateData.push(["LRH", "", "", "", "", ""]);
+            }
+
+            // Créer la feuille
+            const ws = XLSX.utils.aoa_to_sheet(templateData);
+
+            // Définir les largeurs de colonnes
+            ws['!cols'] = [
+                { wch: 20 },  // A
+                { wch: 12 },  // B
+                { wch: 12 },  // C
+                { wch: 12 },  // D
+                { wch: 12 },  // E
+                { wch: 12 },  // F
+            ];
+
+            // Ajouter la feuille au workbook
+            XLSX.utils.book_append_sheet(wb, ws, "Import Volumes");
+
+            // Créer la feuille "Guide"
+            const guideData = [
+                ["GUIDE DE REMPLISSAGE"],
+                [],
+                ["1. CENTRES PRÉ-REMPLIS"],
+                ["", "Les centres de votre direction sont déjà listés."],
+                ["", "Vous n'avez qu'à remplir les volumes pour chaque centre."],
+                [],
+                ["2. STRUCTURE DES DONNÉES"],
+                ["", "Pour chaque centre, 3 sections :"],
+                [],
+                ["A) FLUX ARRIVÉE", "Matrice 5 flux × 5 segments"],
+                ["", "  Flux : Amana, CO, CR, E-Barkia, LRH"],
+                ["", "  Segments : GLOBAL, PART., PRO, DIST., AXES"],
+                [],
+                ["B) GUICHET", "2 opérations uniquement"],
+                ["", "  - DÉPÔT : Volume des dépôts"],
+                ["", "  - RÉCUP. : Volume des récupérations"],
+                [],
+                ["C) FLUX DÉPART", "Même matrice que Flux Arrivée"],
+                ["", "  Flux : Amana, CO, CR, E-Barkia, LRH"],
+                ["", "  Segments : GLOBAL, PART., PRO, DIST., AXES"],
+                [],
+                ["3. RÈGLES DE SAISIE"],
+                ["", "✓ NE PAS modifier les noms de centres"],
+                ["", "✓ Saisir uniquement des nombres entiers ou décimaux"],
+                ["", "✓ Laisser vide si volume = 0"],
+                ["", "✓ Ne pas modifier la structure du tableau"],
+                [],
+                ["4. MAPPING DES SEGMENTS"],
+                ["GLOBAL", "Volume global non segmenté"],
+                ["PART.", "Segment Particuliers"],
+                ["PRO", "Segment Professionnels"],
+                ["DIST.", "Segment Distribution"],
+                ["AXES", "Segment Axes"],
+            ];
+
+            const wsGuide = XLSX.utils.aoa_to_sheet(guideData);
+            wsGuide['!cols'] = [
+                { wch: 25 },
+                { wch: 50 },
+            ];
+            XLSX.utils.book_append_sheet(wb, wsGuide, "Guide");
+
+            // Télécharger le fichier
+            const directionName = centres.length > 0 ? centres[0].direction || "Direction" : "Direction";
+            XLSX.writeFile(wb, `Template_Volumes_${directionName}_${new Date().toISOString().split('T')[0]}.xlsx`);
+
+        } catch (error) {
+            console.error('Erreur lors de la génération du template:', error);
+        }
     };
 
     const handleValidateImport = (data) => {

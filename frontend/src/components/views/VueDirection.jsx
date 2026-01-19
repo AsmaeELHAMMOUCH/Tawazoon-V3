@@ -9,20 +9,22 @@ import React, { useState, useEffect, useRef } from "react";
 import { useDirectionData } from "../../hooks/useDirectionData";
 import { useSimulation } from "../../context/SimulationContext";
 import {
-  Building2, Settings2, Play, AlertTriangle,
-  FileText, BarChart3, Share2, Mail, MessageCircle
+  LayoutDashboard, Settings2, Play, AlertTriangle, Building2,
+  FileText, BarChart3, Share2, Mail, MessageCircle, Gauge, Clock, MapPin, Sliders, ChevronDown,
+  UploadCloud, FileSpreadsheet
 } from "lucide-react";
 import jsPDF from "jspdf";
 import { toPng } from "html-to-image";
+import * as XLSX from "xlsx";
 
 // Components
 import IndicateursDirection from "../direction/IndicateursDirection";
-import DirectionVolumesCard from "../direction/DirectionVolumesCard";
+import DirectionVolumesCard, { ImportModal } from "../direction/DirectionVolumesCard";
 import DirectionCentresTable from "../direction/DirectionCentresTable";
 import DirectionDonutsRow from "../direction/DirectionDonutsRow";
 import DirectionConsolideTable from "../direction/DirectionConsolideTable";
 import DirectionPostesModal from "../direction/DirectionPostesModal";
-import SmartInsightsPanel from "../direction/SmartInsightsPanel";
+import DirectionOverviewChart from "../direction/DirectionOverviewChart";
 import { normalizePoste, fmt } from "../../utils/formatters";
 
 // ---------- Helpers ----------
@@ -52,7 +54,9 @@ export default function VueDirection({ api }) {
   const [params, setParams] = useState({
     productivite: 100,
     heuresParJour: 8,
-    idleMinutes: 0
+    idleMinutes: 0,
+    tauxComplexite: 0,
+    natureGeo: 0
   });
 
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -61,6 +65,7 @@ export default function VueDirection({ api }) {
   const [loadingPostes, setLoadingPostes] = useState(false);
   const [showParams, setShowParams] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [importModalOpen, setImportModalOpen] = useState(false);
   const initializedRef = useRef(false);
 
   // Persistence State
@@ -68,6 +73,157 @@ export default function VueDirection({ api }) {
   const [simMode, setSimMode] = useState("database");
 
   // 3. Handlers
+  const handleDownloadTemplate = () => {
+    try {
+      // Debug: Vérifier les centres disponibles
+      console.log("Centres disponibles:", centres);
+      console.log("Nombre de centres:", centres?.length || 0);
+
+      // Créer un nouveau workbook
+      const wb = XLSX.utils.book_new();
+
+      // Préparer les données du template avec les centres de la direction
+      const templateData = [
+        // Titre
+        ["IMPORT VOLUMES - CENTRES DE LA DIRECTION"],
+        ["Remplissez les volumes pour chaque centre ci-dessous"],
+        ["Les centres sont pré-remplis avec les centres de votre direction"],
+        [],
+      ];
+
+      // Ajouter chaque centre
+      centres.forEach((centre, index) => {
+        console.log(`Centre ${index + 1}:`, centre.label || centre.nom);
+        if (index > 0) {
+          templateData.push([]);
+          templateData.push([]);
+        }
+
+        templateData.push([`=== CENTRE ${index + 1} ===`]);
+        templateData.push(["Nom du Centre:", centre.label || centre.nom || ""]);
+        templateData.push([]);
+
+        // SECTION A : FLUX ARRIVÉE
+        templateData.push(["A) FLUX ARRIVÉE"]);
+        templateData.push(["FLUX \\ SEGMENT", "GLOBAL", "PART.", "PRO", "DIST.", "AXES"]);
+        templateData.push(["Amana", "", "", "", "", ""]);
+        templateData.push(["CO", "", "", "", "", ""]);
+        templateData.push(["CR", "", "", "", "", ""]);
+        templateData.push(["E-Barkia", "", "", "", "", ""]);
+        templateData.push(["LRH", "", "", "", "", ""]);
+        templateData.push([]);
+
+        // SECTION B : GUICHET
+        templateData.push(["B) GUICHET"]);
+        templateData.push(["OPÉRATION", "DÉPÔT", "RÉCUP."]);
+        templateData.push(["Volume", "", ""]);
+        templateData.push([]);
+
+        // SECTION C : FLUX DÉPART
+        templateData.push(["C) FLUX DÉPART"]);
+        templateData.push(["FLUX \\ SEGMENT", "GLOBAL", "PART.", "PRO", "DIST.", "AXES"]);
+        templateData.push(["Amana", "", "", "", "", ""]);
+        templateData.push(["CO", "", "", "", "", ""]);
+        templateData.push(["CR", "", "", "", "", ""]);
+        templateData.push(["E-Barkia", "", "", "", "", ""]);
+        templateData.push(["LRH", "", "", "", "", ""]);
+      });
+
+      // Si aucun centre, ajouter un exemple
+      if (centres.length === 0) {
+        templateData.push(["=== CENTRE EXEMPLE ==="]);
+        templateData.push(["Nom du Centre:", "Centre Exemple"]);
+        templateData.push([]);
+        templateData.push(["A) FLUX ARRIVÉE"]);
+        templateData.push(["FLUX \\ SEGMENT", "GLOBAL", "PART.", "PRO", "DIST.", "AXES"]);
+        templateData.push(["Amana", "", "", "", "", ""]);
+        templateData.push(["CO", "", "", "", "", ""]);
+        templateData.push(["CR", "", "", "", "", ""]);
+        templateData.push(["E-Barkia", "", "", "", "", ""]);
+        templateData.push(["LRH", "", "", "", "", ""]);
+        templateData.push([]);
+        templateData.push(["B) GUICHET"]);
+        templateData.push(["OPÉRATION", "DÉPÔT", "RÉCUP."]);
+        templateData.push(["Volume", "", ""]);
+        templateData.push([]);
+        templateData.push(["C) FLUX DÉPART"]);
+        templateData.push(["FLUX \\ SEGMENT", "GLOBAL", "PART.", "PRO", "DIST.", "AXES"]);
+        templateData.push(["Amana", "", "", "", "", ""]);
+        templateData.push(["CO", "", "", "", "", ""]);
+        templateData.push(["CR", "", "", "", "", ""]);
+        templateData.push(["E-Barkia", "", "", "", "", ""]);
+        templateData.push(["LRH", "", "", "", "", ""]);
+      }
+
+      // Créer la feuille
+      const ws = XLSX.utils.aoa_to_sheet(templateData);
+
+      // Définir les largeurs de colonnes
+      ws['!cols'] = [
+        { wch: 20 },  // A
+        { wch: 12 },  // B
+        { wch: 12 },  // C
+        { wch: 12 },  // D
+        { wch: 12 },  // E
+        { wch: 12 },  // F
+      ];
+
+      // Ajouter la feuille au workbook
+      XLSX.utils.book_append_sheet(wb, ws, "Import Volumes");
+
+      // Créer la feuille "Guide"
+      const guideData = [
+        ["GUIDE DE REMPLISSAGE"],
+        [],
+        ["1. CENTRES PRÉ-REMPLIS"],
+        ["", "Les centres de votre direction sont déjà listés."],
+        ["", "Vous n'avez qu'à remplir les volumes pour chaque centre."],
+        [],
+        ["2. STRUCTURE DES DONNÉES"],
+        ["", "Pour chaque centre, 3 sections :"],
+        [],
+        ["A) FLUX ARRIVÉE", "Matrice 5 flux × 5 segments"],
+        ["", "  Flux : Amana, CO, CR, E-Barkia, LRH"],
+        ["", "  Segments : GLOBAL, PART., PRO, DIST., AXES"],
+        [],
+        ["B) GUICHET", "2 opérations uniquement"],
+        ["", "  - DÉPÔT : Volume des dépôts"],
+        ["", "  - RÉCUP. : Volume des récupérations"],
+        [],
+        ["C) FLUX DÉPART", "Même matrice que Flux Arrivée"],
+        ["", "  Flux : Amana, CO, CR, E-Barkia, LRH"],
+        ["", "  Segments : GLOBAL, PART., PRO, DIST., AXES"],
+        [],
+        ["3. RÈGLES DE SAISIE"],
+        ["", "✓ NE PAS modifier les noms de centres"],
+        ["", "✓ Saisir uniquement des nombres entiers ou décimaux"],
+        ["", "✓ Laisser vide si volume = 0"],
+        ["", "✓ Ne pas modifier la structure du tableau"],
+        [],
+        ["4. MAPPING DES SEGMENTS"],
+        ["GLOBAL", "Volume global non segmenté"],
+        ["PART.", "Segment Particuliers"],
+        ["PRO", "Segment Professionnels"],
+        ["DIST.", "Segment Distribution"],
+        ["AXES", "Segment Axes stratégiques"],
+      ];
+
+      const wsGuide = XLSX.utils.aoa_to_sheet(guideData);
+      wsGuide['!cols'] = [
+        { wch: 25 },
+        { wch: 50 },
+      ];
+      XLSX.utils.book_append_sheet(wb, wsGuide, "Guide");
+
+      // Télécharger le fichier
+      const directionLabel = selectedDirection ? directions.find(d => d.id === selectedDirection)?.label || "Direction" : "Direction";
+      XLSX.writeFile(wb, `Template_Volumes_${directionLabel}_${new Date().toISOString().split('T')[0]}.xlsx`);
+
+    } catch (error) {
+      console.error('Erreur lors de la génération du template:', error);
+    }
+  };
+
   const handleSelectDirection = (id) => {
     actions.selectDirection(id);
     initializedRef.current = false;
@@ -90,10 +246,18 @@ export default function VueDirection({ api }) {
       global_params: {
         productivite: toNumber(params.productivite, 100),
         heures_par_jour: toNumber(params.heuresParJour, 7.5),
-        idle_minutes: toNumber(params.idleMinutes, 0)
+        idle_minutes: toNumber(params.idleMinutes, 0),
+        taux_complexite: toNumber(params.tauxComplexite, 0),
+        nature_geo: toNumber(params.natureGeo, 0)
       },
-      volumes: activeVolumes
+      // Utiliser volumes_matriciels si les données ont flux_id/sens_id/segment_id
+      // Sinon utiliser volumes (ancien format)
+      ...(activeVolumes.length > 0 && activeVolumes[0].flux_id !== undefined
+        ? { volumes_matriciels: activeVolumes }
+        : { volumes: activeVolumes })
     };
+
+    console.log("Payload envoyé au backend:", payload);
 
     await actions.runSimulation(payload);
   };
@@ -129,7 +293,11 @@ export default function VueDirection({ api }) {
           courrier_recommande: 0,
           ebarkia: 0,
           lrh: 0,
-          amana: 0
+          amana: 0,
+          // Paramètres de conversion avec valeurs par défaut
+          colis_amana_par_sac: 5,
+          courriers_par_sac: 4500,
+          colis_par_collecte: 1
         };
 
         Object.keys(row || {}).forEach((k) => {
@@ -151,15 +319,30 @@ export default function VueDirection({ api }) {
             return;
           }
 
-          if (key.includes("sac")) v.sacs = toNumber(val, 0);
-          else if (key.includes("colis") && !key.includes("amana") && !key.includes("sac")) v.colis = toNumber(val, 0);
-          else if (key.includes("ordinaire")) v.courrier_ordinaire = toNumber(val, 0);
-          else if (key.includes("recommande")) v.courrier_recommande = toNumber(val, 0);
-          else if (key.includes("ebarkia")) v.ebarkia = toNumber(val, 0);
-          else if (key.includes("lrh") || key.includes("24")) v.lrh = toNumber(val, 0);
-          else if (key.includes("colis_amana") && key.includes("sac")) v.colis_amana_par_sac = toNumber(val, null);
-          else if (key.includes("amana")) v.amana = toNumber(val, 0);
-          else if (key.includes("courrier") && key.includes("sac")) v.courriers_par_sac = toNumber(val, null);
+          // Volumes
+          if (key.includes("sac") && !key.includes("colis") && !key.includes("courrier")) {
+            v.sacs = toNumber(val, 0);
+          } else if (key.includes("colis") && !key.includes("amana") && !key.includes("sac") && !key.includes("collecte")) {
+            v.colis = toNumber(val, 0);
+          } else if (key.includes("ordinaire")) {
+            v.courrier_ordinaire = toNumber(val, 0);
+          } else if (key.includes("recommande")) {
+            v.courrier_recommande = toNumber(val, 0);
+          } else if (key.includes("ebarkia") || key.includes("e-barkia")) {
+            v.ebarkia = toNumber(val, 0);
+          } else if (key.includes("lrh") || key.includes("24")) {
+            v.lrh = toNumber(val, 0);
+          } else if (key.includes("amana") && !key.includes("sac")) {
+            v.amana = toNumber(val, 0);
+          }
+          // Paramètres de conversion
+          else if (key.includes("colis") && key.includes("amana") && key.includes("sac")) {
+            v.colis_amana_par_sac = toNumber(val, 5);
+          } else if (key.includes("courrier") && key.includes("sac")) {
+            v.courriers_par_sac = toNumber(val, 4500);
+          } else if (key.includes("colis") && key.includes("collecte")) {
+            v.colis_par_collecte = toNumber(val, 1);
+          }
         });
 
         if (!v.centre_label && row?.label) v.centre_label = String(row.label).trim();
@@ -190,6 +373,16 @@ export default function VueDirection({ api }) {
     setSelectedCentre(centre);
     setDetailModalOpen(true);
     setCentrePostes([]);
+
+    // CAS 1: Résultat de simulation disponible (prioritaire)
+    if (centre.details_postes && centre.details_postes.length > 0) {
+      // On utilise directement les données calculées
+      setCentrePostes(centre.details_postes);
+      setLoadingPostes(false);
+      return;
+    }
+
+    // CAS 2: Données statiques BDD (si pas de sim)
     setLoadingPostes(true);
     try {
       if (typeof api.postesByCentre === "function") {
@@ -360,165 +553,14 @@ Application Tawazoon RH`;
   };
 
   return (
-    <div className="min-h-screen bg-slate-50/50 pb-8 animate-in fade-in duration-300 font-sans">
+    <div className="min-h-screen bg-slate-50/50 pb-8 animate-in fade-in duration-300 font-sans" style={{ zoom: "90%" }}>
 
       {/* --- 1. PRO NAVBAR --- */}
-      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200 shadow-sm transition-all">
-        <div className="max-w-[1920px] mx-auto px-4 h-14 flex items-center justify-between relative">
+      {/* 1. COMPACT NAVBAR (V2 Style Harmonized) */}
+      {/* 1. TOP HEADER (Context & Actions) */}
 
-          {/* Logo / Brand */}
-          {/* Left Side: Brand + Selector */}
-          <div className="flex items-center gap-6">
-            {/* Identity */}
-            <div className="flex items-center gap-3">
-              <div className="bg-[#005EA8] p-1.5 rounded-lg text-white shadow-sm">
-                <BarChart3 size={18} />
-              </div>
-              <div>
-                <h1 className="text-sm font-bold text-slate-800 uppercase tracking-wide leading-none">Pilotage Direction</h1>
-                <p className="text-[10px] text-slate-400 font-medium">Vue Consolidée</p>
-              </div>
-            </div>
 
-            {/* Selector (Left Aligned) */}
-            <div className="hidden md:block">
-              <div className="flex items-center gap-3 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg shadow-sm focus-within:ring-2 focus-within:ring-[#005EA8]/20 transition-all hover:bg-white cursor-pointer group">
-                <Building2 size={18} className="text-[#005EA8] group-hover:scale-110 transition-transform shrink-0" />
-                <div className="w-px h-5 bg-slate-300 mx-0.5"></div>
-                <select
-                  className="text-sm font-bold text-slate-700 bg-transparent outline-none cursor-pointer min-w-[180px] max-w-[300px]"
-                  value={selectedDirection || ""}
-                  onChange={(e) => handleSelectDirection(e.target.value)}
-                  title="Choisir une direction"
-                >
-                  <option value="">-- Sélectionner une Direction --</option>
-                  {directions.map((d) => (
-                    <option key={d.id} value={d.id}>{d.label}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* Right Actions */}
-          <div className="flex items-center gap-4">
-            {selectedDirection && (
-              <div className="flex items-center gap-2">
-
-                {/* Settings Toggle */}
-                <button
-                  onClick={() => setShowParams(!showParams)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all shadow-sm ${showParams
-                    ? "bg-[#005EA8] text-white border-[#005EA8]"
-                    : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300"}`}
-                >
-                  <Settings2 size={14} className={showParams ? "animate-spin-slow" : ""} />
-                  Paramètres
-                </button>
-
-                {/* Share Toggle */}
-                <div className="relative">
-                  <button
-                    onClick={() => setShareOpen(!shareOpen)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all shadow-sm ${shareOpen
-                      ? "bg-[#005EA8] text-white border-[#005EA8]"
-                      : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300"}`}
-                  >
-                    <Share2 size={14} />
-                    Partager
-                  </button>
-
-                  {shareOpen && (
-                    <div className="absolute top-full right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-slate-200 py-1 z-50 animate-in slide-in-from-top-2 fade-in duration-200">
-                      <button
-                        onClick={() => handleShare('email')}
-                        className="w-full text-left px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                      >
-                        <Mail size={14} className="text-slate-400" />
-                        Via Email
-                      </button>
-                      <button
-                        onClick={() => handleShare('whatsapp')}
-                        className="w-full text-left px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                      >
-                        <MessageCircle size={14} className="text-green-500" />
-                        Via WhatsApp
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {/* Export PDF */}
-                <button
-                  onClick={handleExportPDF}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-red-700 hover:border-red-200 hover:bg-red-50 text-xs font-bold transition-all shadow-sm"
-                >
-                  <FileText size={14} />
-                  Export
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* --- SETTINGS PANEL (Collapsible) --- */}
-        {
-          selectedDirection && showParams && (
-            <div className="absolute top-14 left-0 w-full bg-slate-50/95 backdrop-blur border-b border-slate-200 shadow-lg z-30 animate-in slide-in-from-top-2">
-              <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-center gap-8">
-                <div className="flex items-center gap-3">
-                  <div className="bg-white p-2 rounded-full border border-slate-200 shadow-sm">
-                    <Settings2 size={16} className="text-[#005EA8]" />
-                  </div>
-                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Configuration de la Simulation</span>
-                </div>
-
-                <div className="h-8 w-px bg-slate-300 mx-4"></div>
-
-                <div className="flex items-center gap-6">
-                  <div className="flex flex-col items-center">
-                    <label className="text-[10px] font-bold text-slate-400 mb-1">PRODUCTIVITÉ (%)</label>
-                    <input
-                      type="number"
-                      className="w-16 text-center text-sm font-bold text-slate-800 bg-white border border-slate-300 rounded px-1 py-0.5 focus:ring-2 focus:ring-[#005EA8]"
-                      value={params.productivite}
-                      onChange={e => setParams(p => ({ ...p, productivite: parseFloat(e.target.value) }))}
-                    />
-                  </div>
-                  <div className="flex flex-col items-center">
-                    <label className="text-[10px] font-bold text-slate-400 mb-1">HEURES / JOUR</label>
-                    <input
-                      type="number"
-                      className="w-16 text-center text-sm font-bold text-slate-800 bg-slate-100 border border-slate-300 rounded px-1 py-0.5"
-                      value={params.heuresParJour}
-                      readOnly
-                    />
-                  </div>
-                  <div className="flex flex-col items-center">
-                    <label className="text-[10px] font-bold text-slate-400 mb-1">IDLE (MIN)</label>
-                    <input
-                      type="number"
-                      className="w-16 text-center text-sm font-bold text-slate-800 bg-white border border-slate-300 rounded px-1 py-0.5 focus:ring-2 focus:ring-[#005EA8]"
-                      value={params.idleMinutes}
-                      onChange={e => setParams(p => ({ ...p, idleMinutes: parseFloat(e.target.value) }))}
-                    />
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => runSim()}
-                  className="ml-4 px-4 py-2 bg-[#005EA8] hover:bg-[#004e8a] text-white text-xs font-bold rounded-lg shadow-md flex items-center gap-2 transition-all active:scale-95"
-                >
-                  <Play size={14} fill="currentColor" />
-                  Appliquer
-                </button>
-              </div>
-            </div>
-          )
-        }
-      </header >
-
-      <main className="px-4 py-4 max-w-[1920px] mx-auto">
+      <main className="px-4 xl:px-8 py-2 w-full mx-auto space-y-1">
 
         {/* Error State */}
         {error && (
@@ -529,32 +571,160 @@ Application Tawazoon RH`;
         )}
 
         {!selectedDirection ? (
-          /* --- 2. HERO EMPTY STATE --- */
-          <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-6 animate-in zoom-in-95 duration-500">
+          /* --- HERO EMPTY STATE --- */
+          <div className="flex flex-col items-center justify-center min-h-[50vh] text-center space-y-8 animate-in zoom-in-95 duration-500 mt-8">
+
+            {/* Icon Block */}
             <div className="relative group">
-              <div className="absolute -inset-4 bg-gradient-to-r from-blue-100 to-purple-100 rounded-full blur-xl opacity-50 group-hover:opacity-100 transition-opacity"></div>
-              <div className="relative bg-white p-6 rounded-2xl shadow-xl border border-slate-100">
-                <Building2 size={48} className="text-[#005EA8]" />
+              <div className="absolute -inset-8 bg-gradient-to-r from-blue-100 to-purple-100 rounded-full blur-3xl opacity-50 group-hover:opacity-80 transition-opacity"></div>
+              <div className="relative bg-white p-6 rounded-2xl shadow-xl border border-slate-100 transform group-hover:scale-105 transition-transform duration-300">
+                <Building2 size={48} className="text-[#005EA8]" strokeWidth={1.5} />
               </div>
             </div>
-            <div className="max-w-md space-y-2">
-              <h2 className="text-2xl font-bold text-slate-800">Sélectionnez une Direction</h2>
-              <p className="text-sm text-slate-500 leading-relaxed">
-                Pour accéder au tableau de bord, veuillez choisir un périmètre depuis le menu ci-dessus.
-                La simulation consolidée se chargera automatiquement.
-              </p>
-            </div>
-            <div className="flex items-center gap-2 text-xs font-semibold text-[#005EA8] bg-blue-50 px-4 py-2 rounded-full">
-              <Settings2 size={12} />
-              <span>Mode Pilotage Activé</span>
+
+            {/* Content Block */}
+            <div className="max-w-md space-y-6 w-full px-4">
+              <div className="space-y-2">
+                <h2 className="text-2xl font-bold text-slate-800 tracking-tight">Simulation par Direction Régionale</h2>
+                <p className="text-sm text-slate-500 leading-relaxed">
+                  Pour accéder au tableau de bord et aux simulations, veuillez sélectionner votre <strong>Direction Régionale</strong>.
+                </p>
+              </div>
+
+              {/* MAIN SELECTOR (Central) */}
+              <div className="relative max-w-sm mx-auto group">
+                <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl opacity-20 group-hover:opacity-40 blur transition duration-200"></div>
+                <div className="relative flex items-center gap-3 bg-white border border-slate-200 rounded-xl px-4 py-4 shadow-lg hover:shadow-xl transition-all cursor-pointer">
+                  <div className="p-1.5 bg-blue-50 text-[#005EA8] rounded-lg">
+                    <Building2 size={20} strokeWidth={2.5} />
+                  </div>
+                  <select
+                    className="w-full bg-transparent font-bold text-lg text-slate-800 outline-none cursor-pointer placeholder-slate-400"
+                    value=""
+                    onChange={(e) => handleSelectDirection(e.target.value)}
+                  >
+                    <option value="" disabled className="text-slate-400">Choisir une Direction...</option>
+                    {directions.map(d => <option key={d.id} value={d.id}>{d.label}</option>)}
+                  </select>
+                  <ChevronDown size={20} className="text-slate-400 group-hover:text-[#005EA8] transition-colors" />
+                </div>
+              </div>
             </div>
           </div>
         ) : (
-          /* --- 3. DASHBOARD CONTENT --- */
-          <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-500">
+          /* --- DASHBOARD CONTENT --- */
+          <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+
+
+            {/* 2. CRITICAL SECTION : SELECTOR + PARAMS GRID (50/50 Layout like VueCentre) */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-2 sticky top-[60px] z-30">
+
+              {/* LEFT: PERIMETER SELECTOR */}
+              <div className="bg-white border border-slate-200 rounded-xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] p-2 flex flex-col justify-center h-full animate-in slide-in-from-left-4 duration-500">
+                <div className="flex items-center gap-2 mb-3 border-b border-slate-50 pb-2">
+                  <div className="p-1.5 bg-blue-50 text-[#005EA8] rounded-lg">
+                    <Building2 size={16} strokeWidth={2.5} />
+                  </div>
+                  <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Périmètre / Direction</h3>
+                </div>
+
+                <div className="flex items-center gap-2 w-full">
+                  <div className="relative group flex-1">
+                    <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 shadow-inner group-hover:bg-white group-hover:shadow-md group-hover:border-blue-300 transition-all">
+                      <select
+                        className="appearance-none bg-transparent font-bold text-slate-800 text-sm xl:text-base w-full outline-none cursor-pointer"
+                        value={selectedDirection || ""}
+                        onChange={(e) => handleSelectDirection(e.target.value)}
+                      >
+                        {directions.map(d => <option key={d.id} value={d.id}>{d.label}</option>)}
+                      </select>
+                      <ChevronDown size={18} className="text-slate-400 pointer-events-none group-hover:text-[#005EA8] transition-colors" />
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={handleDownloadTemplate}
+                    className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-600 hover:text-[#005EA8] hover:border-blue-300 hover:bg-white transition-all shadow-sm"
+                    title="Télécharger le modèle Excel"
+                  >
+                    <FileSpreadsheet size={16} strokeWidth={2} />
+                    <span className="text-xs font-bold">Modèle</span>
+                  </button>
+
+                  <button
+                    onClick={() => setImportModalOpen(true)}
+                    className="flex items-center gap-2 px-3 py-2 bg-[#005EA8] border border-[#005EA8] rounded-lg text-white hover:bg-[#004e8a] transition-all shadow-md active:scale-95"
+                    title="Importer un fichier de volumes"
+                  >
+                    <UploadCloud size={16} strokeWidth={2} />
+                    <span className="text-xs font-bold">Importer</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* RIGHT: SIMULATION PARAMS */}
+              <div className="bg-white border border-slate-200 rounded-xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] p-2 h-full flex flex-col justify-center animate-in slide-in-from-right-4 duration-500">
+                <div className="flex items-center justify-between mb-3 border-b border-slate-50 pb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-blue-50 text-[#005EA8] rounded-lg">
+                      <Sliders size={16} strokeWidth={2.5} />
+                    </div>
+                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Simulation</h3>
+                  </div>
+                  <div className="flex items-center gap-2 bg-blue-50 px-2 py-1 rounded text-[#005EA8]">
+                    <span className="text-[10px] font-bold uppercase tracking-wider">Capacité Nette</span>
+                    <span className="font-mono text-sm font-bold">
+                      {(() => {
+                        const h = 8;
+                        const idleH = (params.idleMinutes || 0) / 60;
+                        const prod = (params.productivite || 100) / 100;
+                        const net = Math.max(0, (h - idleH) * prod);
+                        return net.toFixed(2).replace('.', ',');
+                      })()} h
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 flex-1">
+                    {/* Prod */}
+                    <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded px-2 py-1.5 overflow-hidden">
+                      <span className="text-[10px] font-bold text-slate-400">PROD</span>
+                      <input type="number" className="w-full bg-transparent font-mono text-xs font-bold text-center outline-none" value={params.productivite} onChange={e => setParams(p => ({ ...p, productivite: parseFloat(e.target.value) }))} />
+                      <span className="text-[10px] text-slate-400">%</span>
+                    </div>
+                    {/* Tps Mort */}
+                    <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded px-2 py-1.5 overflow-hidden">
+                      <span className="text-[10px] font-bold text-slate-400">MORT</span>
+                      <input type="number" className="w-full bg-transparent font-mono text-xs font-bold text-center outline-none" value={params.idleMinutes} onChange={e => setParams(p => ({ ...p, idleMinutes: parseFloat(e.target.value) }))} />
+                      <span className="text-[10px] text-slate-400">m</span>
+                    </div>
+                    {/* Circ */}
+                    <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded px-2 py-1.5 overflow-hidden">
+                      <span className="text-[10px] font-bold text-slate-400">CIRC</span>
+                      <input type="number" step="0.1" className="w-full bg-transparent font-mono text-xs font-bold text-center outline-none" value={params.tauxComplexite} onChange={e => setParams(p => ({ ...p, tauxComplexite: parseFloat(e.target.value) }))} />
+                    </div>
+                    {/* Geo */}
+                    <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded px-2 py-1.5 overflow-hidden">
+                      <span className="text-[10px] font-bold text-slate-400">GEO</span>
+                      <input type="number" step="0.1" className="w-full bg-transparent font-mono text-xs font-bold text-center outline-none" value={params.natureGeo} onChange={e => setParams(p => ({ ...p, natureGeo: parseFloat(e.target.value) }))} />
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => runSim()}
+                    className="bg-[#005EA8] hover:bg-[#004e8a] text-white p-2.5 rounded-lg shadow-sm transition-all active:scale-95 group shrink-0"
+                    title="Lancer la simulation"
+                  >
+                    <Play size={18} fill="currentColor" className="group-hover:translate-x-0.5 transition-transform" />
+                  </button>
+                </div>
+              </div>
+
+            </div>
 
             {/* KPI Section */}
-            <div className="mt-2">
+            <div className="-mt-2">
               <IndicateursDirection currentDir={{ label: currentDirLabel }} kpis={kpis} fmt={fmt} />
             </div>
 
@@ -576,6 +746,39 @@ Application Tawazoon RH`;
                   centres={centres}
                   loading={loading.centres || loading.sim}
                   onOpenDetail={openDetail}
+                  headerActions={
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleExportPDF}
+                        className="px-2 py-1 text-[10px] font-bold rounded border border-slate-200 text-slate-600 bg-slate-50 hover:bg-white hover:text-red-700 hover:border-red-200 flex items-center gap-1.5 transition-all"
+                      >
+                        <FileText size={12} /> Export PDF
+                      </button>
+
+                      {/* Share Button & Dropdown */}
+                      <div className="relative">
+                        <button
+                          onClick={() => setShareOpen(!shareOpen)}
+                          className={`px-2 py-1 text-[10px] font-bold rounded border transition-all flex items-center gap-1.5 ${shareOpen ? 'bg-[#005EA8] text-white border-[#005EA8]' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-white hover:text-[#005EA8]'}`}
+                        >
+                          <Share2 size={12} />
+                        </button>
+                        {shareOpen && (
+                          <div className="absolute top-full right-0 mt-1 w-48 bg-white rounded-lg shadow-xl border border-slate-100 py-1 animate-in fade-in slide-in-from-top-2 z-[9999]">
+                            <div className="px-3 py-1.5 border-b border-slate-50 mb-1">
+                              <span className="text-[9px] uppercase font-bold text-slate-400 tracking-widest">Partager</span>
+                            </div>
+                            <button onClick={() => handleShare('email')} className="w-full text-left px-3 py-2 text-[10px] font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2">
+                              <Mail size={12} className="text-blue-600" /> Par Email
+                            </button>
+                            <button onClick={() => handleShare('whatsapp')} className="w-full text-left px-3 py-2 text-[10px] font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2">
+                              <MessageCircle size={12} className="text-green-600" /> Par WhatsApp
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  }
                 />
 
                 {consolidation.rows && consolidation.rows.length > 0 && (
@@ -590,14 +793,10 @@ Application Tawazoon RH`;
               {/* Sidebar / Widgets */}
               <div className="xl:col-span-4 space-y-4">
                 {/* 1. AI Smart Panel (Wow Effect) */}
-                <SmartInsightsPanel
-                  centres={centres}
-                  kpis={kpis}
-                  onScenarioApply={handleScenarioApply}
-                />
+                <DirectionOverviewChart centres={centres} />
 
-                <DirectionVolumesCard onSimulate={handleManualSimulate} loading={loading.sim} />
-                <DirectionDonutsRow centres={centres} charts={consolidation.charts} />
+
+
               </div>
             </div>
           </div>
@@ -657,6 +856,55 @@ Application Tawazoon RH`;
 
         <DirectionPostesModal open={detailModalOpen} onClose={() => setDetailModalOpen(false)} centre={selectedCentre} postes={centrePostes} />
       </main>
+
+      <ImportModal
+        isOpen={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+        onValidate={(parsedCentres) => {
+          console.log("Données importées:", parsedCentres);
+
+          // parsedCentres est un array de centres avec leurs volumes
+          // Format: [{ nom_centre: "...", volumes: [{flux_id, sens_id, segment_id, volume}] }]
+
+          // Transformer les données pour l'API de simulation
+          // On doit envoyer les volumes au format attendu par le backend
+
+          // Pour chaque centre, on va créer une entrée avec ses volumes
+          const volumesData = parsedCentres.flatMap(centreData => {
+            // Trouver le centre correspondant dans la liste des centres
+            const centre = centres.find(c =>
+              c.label === centreData.nom_centre ||
+              c.nom === centreData.nom_centre
+            );
+
+            if (!centre) {
+              console.warn(`Centre non trouvé: ${centreData.nom_centre}`);
+              return [];
+            }
+
+            // Retourner les volumes avec l'ID du centre
+            return centreData.volumes.map(vol => ({
+              centre_id: centre.id,
+              centre_label: centre.label || centre.nom,
+              flux_id: vol.flux_id,
+              sens_id: vol.sens_id,
+              segment_id: vol.segment_id,
+              volume: vol.volume
+            }));
+          });
+
+          console.log("Volumes transformés pour simulation:", volumesData);
+
+          // Lancer la simulation avec les volumes importés
+          if (volumesData.length > 0) {
+            runSim("data_driven", volumesData);
+          } else {
+            console.error("Aucun volume valide trouvé pour la simulation");
+          }
+
+          setImportModalOpen(false);
+        }}
+      />
     </div >
   );
 }

@@ -1,107 +1,99 @@
 "use client";
 import React from "react";
-
-
-"use client";
-
 import {
   Users,
   Calculator,
-  CheckCircle2,
   TrendingUp,
-  TrendingDown,
+  AlertCircle,
+  LayoutDashboard,
+  ArrowUpRight,
+  ArrowDownRight,
+  CheckCircle2
 } from "lucide-react";
 
-/* UI compact identique à ta page */
-const Card = ({ title, children, className = "" }) => (
-  <section
-    className={`bg-white rounded-lg border border-slate-200 
-    shadow-sm ${className}`}
+/**
+ * Composant KPICard harmonisé avec la page Direction V2
+ * Style: Compact Premium
+ */
+const KPICard = ({ title, value, icon: Icon, trend, trendValue, colorClass, delay }) => (
+  <div
+    className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition-all duration-300 transform hover:-translate-y-0.5 relative overflow-hidden group h-full flex flex-col items-center justify-center text-center"
+    style={{ animationDelay: `${delay}ms` }}
   >
-    <header className="px-2 py-1.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 rounded-t-lg">
-      <h3 className="text-[10px] font-bold text-slate-800 uppercase tracking-wide leading-none">
-        {title}
-      </h3>
-    </header>
-    <div className="p-1.5">{children}</div>
-  </section>
-);
-
-/* KpiTile Ultra Compact Horizontal */
-const KpiTile = ({ title, value, note, icon: Icon, theme = "sky" }) => {
-  const themeConfig = {
-    sky: { bg: "bg-sky-50", text: "text-sky-700", border: "border-sky-100", icon: "text-sky-600", accent: "bg-sky-500" },
-    cyan: { bg: "bg-cyan-50", text: "text-cyan-700", border: "border-cyan-100", icon: "text-cyan-600", accent: "bg-cyan-500" },
-    amber: { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-100", icon: "text-amber-600", accent: "bg-amber-500" },
-    emerald: { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-100", icon: "text-emerald-600", accent: "bg-emerald-500" },
-    rose: { bg: "bg-red-50", text: "text-red-700", border: "border-red-100", icon: "text-red-600", accent: "bg-red-500" },
-  };
-  const t = themeConfig[theme] || themeConfig.sky;
-
-  return (
-    <div
-      className={`
-        relative rounded-md px-2 py-1.5 ${t.bg} border ${t.border}
-        flex items-center justify-between gap-2
-      `}
-    >
-      <div className="flex items-center gap-2">
-        {Icon && (
-          <div className={`p-1 rounded-md bg-white ${t.icon}`}>
-            <Icon size={14} />
-          </div>
-        )}
-        <div className="flex flex-col">
-          <span className="text-[8px] font-bold text-slate-500 uppercase tracking-tight leading-none mb-0.5">{title}</span>
-          <span className={`text-xs font-bold ${t.text} leading-none`}>{value}</span>
+    <div className={`absolute -top-2 -right-2 p-2 opacity-5 group-hover:opacity-10 transition-opacity ${colorClass}`}>
+      <Icon className="w-16 h-16" />
+    </div>
+    <div className="relative z-10 flex flex-col items-center w-full">
+      <div className="flex items-center gap-2 mb-1.5 justify-center">
+        <div className={`p-1.5 rounded-md ${colorClass && colorClass.replace('text-', 'bg-').replace('600', '50').replace('500', '50')} ${colorClass}`}>
+          <Icon className="w-4 h-4" />
         </div>
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-tight">{title}</p>
       </div>
 
-      {note && (
-        <div className="hidden sm:flex items-center gap-1 opacity-80">
-          <span className={`w-1 h-1 rounded-full ${t.accent}`}></span>
-          <span className="text-[8px] text-slate-500 font-medium">{note}</span>
-        </div>
-      )}
+      <div className="flex items-baseline gap-2 justify-center">
+        <h2 className="text-2xl font-bold text-slate-800 tracking-tight">{value}</h2>
+        {trend && (
+          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5 ${trend === 'up' ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
+            {trend === 'up' ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+            {trendValue}
+          </span>
+        )}
+      </div>
     </div>
-  );
-};
+  </div>
+);
 
 export default function IndicateursDirection({ currentDir, kpis, fmt }) {
-  const dirLabel = currentDir?.label || "Sélection";
+  // Calculs KPIs
   const delta = kpis?.delta ?? 0;
+  const fteTotal = kpis?.fte ?? 0;
+
+  // Calcul tendance (en %)
+  const trendPercent = fteTotal > 0 ? Math.round(Math.abs(delta / fteTotal) * 100) : 0;
+  const trendLabel = `${trendPercent}%`;
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-      <KpiTile
-        title="Centres Gérés"
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 animate-in fade-in duration-500">
+
+      {/* 1. CENTRES */}
+      <KPICard
+        title="Centres Gérés Par la Direction"
         value={fmt(kpis.centers)}
-        note="Périmètre"
-        icon={Users}
-        theme="sky"
+        icon={LayoutDashboard}
+        colorClass="text-slate-600"
+        delay={0}
       />
-      <KpiTile
-        title="Effectif Actuel (Réel)"
+
+      {/* 2. EFFECTIF ACTUEL */}
+      <KPICard
+        title="Effectif Actuel"
         value={fmt(kpis.fte)}
-        note="Collaborateurs"
-        icon={Calculator}
-        theme="cyan"
+        icon={Users}
+        colorClass="text-slate-600"
+        delay={50}
       />
-      <KpiTile
-        title="Effectif Cible (IA)"
+
+      {/* 3. CIBLE */}
+      <KPICard
+        title="Effectif Calculé"
         value={fmt(kpis.etp)}
-        note="Besoin calculé"
-        icon={CheckCircle2}
-        theme="amber"
-        isTarget={true} // Add visual emphasis if supported
+        icon={TrendingUp}
+        colorClass="text-blue-600"
+        delay={100}
       />
-      <KpiTile
-        title="Écart (Cible - Actuel)"
+
+      {/* 4. ECART */}
+      <KPICard
+        title="Écart Net"
         value={`${delta > 0 ? "+" : ""}${fmt(delta)}`}
-        note={delta > 0 ? "Sous-effectif (Besoin)" : delta < 0 ? "Sur-effectif (Excédent)" : "À l'équilibre"}
-        icon={delta !== 0 ? TrendingUp : CheckCircle2}
-        theme={delta > 0 ? "rose" : delta < 0 ? "violet" : "emerald"} // Changed 'cyan' to 'violet' for Surplus to match Pareto style or distinct
+        icon={AlertCircle}
+        colorClass={delta > 0 ? "text-red-500" : delta < -0.1 ? "text-emerald-500" : "text-amber-500"}
+        trend={delta > 0 ? 'up' : 'down'}
+        trendValue={trendLabel}
+        delay={150}
       />
+
     </div>
   );
 }

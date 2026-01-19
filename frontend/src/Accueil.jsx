@@ -23,6 +23,9 @@ import {
   Workflow,
 } from "lucide-react";
 import Company from "./components/Company"; // Ajustez le chemin selon votre structure
+import tawazoonLogo from "@/assets/LOGO_Tawazoon_RH.png";
+import logoBarid from "@/assets/BaridLogo.png";
+import logoAlmav from "@/assets/AlmavLogo.png";
 
 // Composant ChartMock
 function ChartMock({ title = "Activité globale" }) {
@@ -143,9 +146,9 @@ function Header({ navItems, menuOpen, setMenuOpen }) {
         {/* Logo et texte */}
         <div className="flex items-center gap-3 sm:gap-4">
           <img
-            src="/Public/LOGO_Tawazoon_RH.png"
+            src={tawazoonLogo}
             alt="Tawazoon RH"
-            className="h-8 sm:h-10 object-contain drop-shadow-[0_0_15px_rgba(0,212,255,0.7)]"
+            className="h-16 sm:h-24 object-contain drop-shadow-[0_0_15px_rgba(0,212,255,0.7)]"
           />
           <div className="flex flex-col leading-tight">
             <h1 className="text-xl sm:text-2xl md:text-3xl font-bold bg-gradient-to-r from-[#0077b6] to-[#48cae4] bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(72,202,228,0.4)]">
@@ -254,7 +257,7 @@ function HeroSection() {
         className="absolute inset-0 -z-10 flex items-center justify-center opacity-[0.08] blur-[80px] md:blur-[100px]"
       >
         <img
-          src="/public/LOGO_Tawazoon_RH.png"
+          src={tawazoonLogo}
           alt="Tawazoon RH Glow"
           className="w-[70%] max-w-[600px] mx-auto"
         />
@@ -394,7 +397,7 @@ function LeftColumn() {
             {/* ALMAV */}
             <div className="flex flex-col items-center gap-2">
               <img
-                src="/public/almav.png"
+                src={logoAlmav}
                 alt="ALMAV"
                 className="h-12 sm:h-14 object-contain drop-shadow-[0_0_25px_rgba(255,0,0,0.6)]"
               />
@@ -406,7 +409,7 @@ function LeftColumn() {
             {/* BARID AL-MAGHRIB */}
             <div className="flex flex-col items-center gap-2">
               <img
-                src="/public/BaridLogo.png"
+                src={logoBarid}
                 alt="Groupe Barid Al-Maghrib"
                 className="h-12 sm:h-14 object-contain bg-white rounded-md p-1 drop-shadow-[0_0_25px_rgba(0,102,255,0.6)]"
               />
@@ -448,17 +451,17 @@ function RightColumn() {
       <div className="grid w-full grid-cols-3 gap-4 text-center">
         <div className="rounded-xl border border-white/10 bg-white/[0.07] p-4 text-slate-200 shadow-inner shadow-white/5">
           <div className="text-[0.8rem] text-slate-400">Effectif actuel</div>
-          
+
         </div>
 
         <div className="rounded-xl border border-white/10 bg-white/[0.07] p-4 text-slate-200 shadow-inner shadow-white/5">
           <div className="text-[0.8rem] text-slate-400">Recommandé</div>
-          
+
         </div>
 
         <div className="rounded-xl border border-white/10 bg-white/[0.07] p-4 text-slate-200 shadow-inner shadow-white/5">
           <div className="text-[0.8rem] text-slate-400">Écart global</div>
-          
+
         </div>
       </div>
 

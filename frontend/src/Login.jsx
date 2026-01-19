@@ -3,6 +3,8 @@ import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { api } from "@/lib/api";
+import tawazoonLogo from "@/assets/LOGO_Tawazoon_RH.png";
+import logoAlmav from "@/assets/AlmavLogo.png";
 
 /* ---------------------- STAT BUBBLE ---------------------- */
 function Stat({ number, label }) {
@@ -19,9 +21,9 @@ function Stat({ number, label }) {
 /* ---------------------- CARROUSEL ECRANS ---------------------- */
 function ScreensCarousel() {
   const slides = [
-    { src: "/public/national.png", caption: "Vue Globale Nationale" },
-    { src: "/public/national1.png", caption: "Simulation par région" },
-    { src: "/public/centre.png", caption: "Pilotage Opérationnel RH" },
+    { src: "/national.png", caption: "Vue Globale Nationale" },
+    { src: "/national1.png", caption: "Simulation par région" },
+    { src: "/centre.png", caption: "Pilotage Opérationnel RH" },
   ];
   const [index, setIndex] = useState(0);
 
@@ -110,7 +112,7 @@ export default function Login({ onLogin }) {
         localStorage.removeItem("remember_email");
       }
       onLogin?.();
-      navigate("/choix-activite", { replace: true });
+      navigate("/app/actuel/menu", { replace: true });
     } catch (err) {
       setError(err?.message || "Erreur de connexion");
     } finally {
@@ -119,7 +121,10 @@ export default function Login({ onLogin }) {
   }
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-b from-slate-950 via-slate-900 to-black text-white">
+    <div
+      className="h-[125vh] w-full bg-gradient-to-b from-slate-950 via-slate-900 to-black text-white overflow-hidden"
+      style={{ zoom: "80%" }}
+    >
       {/* Background effects - same as other sections */}
       <div
         aria-hidden
@@ -131,9 +136,9 @@ export default function Login({ onLogin }) {
       </div>
 
       {/* Main container - full height and width */}
-      <div className="flex flex-col lg:flex-row w-full min-h-screen h-screen overflow-hidden">
+      <div className="flex flex-col lg:flex-row w-full h-full overflow-hidden">
         {/* Form section */}
-        <div className="relative flex flex-col justify-center items-center w-full lg:w-1/2 h-full min-h-screen p-6 md:p-8 bg-black/30 backdrop-blur-sm overflow-hidden">          {/* Image de fond */}
+        <div className="relative flex flex-col justify-center items-center w-full lg:w-1/2 h-full p-6 md:p-8 bg-black/30 backdrop-blur-sm overflow-hidden">          {/* Image de fond */}
           <img
             src="/img/back.jpg"
             alt="Background"
@@ -145,11 +150,11 @@ export default function Login({ onLogin }) {
           <div className="relative z-10 w-full max-w-md h-full flex flex-col justify-center">
             {/* Logo section */}
             <div className="flex flex-col items-center justify-center mb-8">
-              <div className="w-20 h-20 bg-white/10 rounded-lg flex items-center justify-center shadow-md mb-3 border border-white/20">
+              <div className="w-32 h-32 bg-white/10 rounded-lg flex items-center justify-center shadow-md mb-6 border border-white/20">
                 <img
-                  src="/LOGO_Tawazoon_RH.png"
+                  src={tawazoonLogo}
                   alt="Logo TAWAZOON RH"
-                  className="w-12 h-12 object-contain rounded"
+                  className="w-24 h-24 object-contain rounded"
                 />
               </div>
               <h1 className="text-xl font-semibold bg-gradient-to-r from-[#0077b6] to-[#48cae4] bg-clip-text text-transparent text-center">
@@ -329,7 +334,7 @@ export default function Login({ onLogin }) {
 
         {/* Hero section - now on the right side for desktop */}
         <div
-          className="hidden lg:block lg:w-1/2 relative overflow-hidden p-12"
+          className="hidden lg:block lg:w-1/2 relative overflow-hidden p-8"
           style={{
             background:
               "linear-gradient(145deg, rgba(60,110,160,0.75) 0%, rgba(80,140,190,0.65) 40%, rgba(100,170,220,0.6) 100%)",
@@ -343,11 +348,11 @@ export default function Login({ onLogin }) {
           <div className="w-full h-full max-w-7xl mx-auto flex flex-col justify-between">
             {/* Header */}
             <div className="flex items-center gap-4">
-              <div className="w-16 h-16 bg-white/10 rounded-lg flex items-center justify-center shadow-[0_10px_40px_rgba(0,0,0,0.4)] border border-white/20">
+              <div className="w-28 h-28 bg-white/10 rounded-lg flex items-center justify-center shadow-[0_10px_40px_rgba(0,0,0,0.4)] border border-white/20">
                 <img
-                  src="/LOGO_Tawazoon_RH.png"
+                  src={tawazoonLogo}
                   alt="Tawazoon RH"
-                  className="w-12 h-12 object-contain"
+                  className="w-20 h-20 object-contain"
                 />
               </div>
               <div>
@@ -361,13 +366,13 @@ export default function Login({ onLogin }) {
             </div>
 
             {/* Main content - centered */}
-            <div className="flex flex-col items-center justify-center flex-grow gap-10 text-center max-w-4xl mx-auto">
+            <div className="flex flex-col items-center justify-center flex-grow gap-6 text-center max-w-4xl mx-auto">
               <div className="space-y-8 text-center">
-                <h2 className="text-4xl md:text-5xl lg:text-6xl font-extrabold bg-gradient-to-r from-[#5EA9DD] to-[#9EE7FF] bg-clip-text text-transparent leading-[1.1] tracking-tight drop-shadow-[0_4px_12px_rgba(0,0,0,0.3)]">
+                <h2 className="text-2xl md:text-3xl lg:text-4xl font-extrabold bg-gradient-to-r from-[#5EA9DD] to-[#9EE7FF] bg-clip-text text-transparent leading-[1.1] tracking-tight drop-shadow-[0_4px_12px_rgba(0,0,0,0.3)]">
                   Optimisez vos ressources humaines<br className="hidden md:block" /> avec précision
                 </h2>
 
-                <p className="text-[#BEE9FF] text-xl md:text-2xl leading-relaxed max-w-3xl mx-auto font-medium drop-shadow-[0_2px_6px_rgba(0,0,0,0.3)]">
+                <p className="text-[#BEE9FF] text-lg md:text-xl leading-relaxed max-w-3xl mx-auto font-medium drop-shadow-[0_2px_6px_rgba(0,0,0,0.3)]">
                   Simulez, analysez et dimensionnez vos effectifs<br className="hidden md:block" />
                   pour une gestion RH efficace et stratégique.
                 </p>
@@ -377,11 +382,11 @@ export default function Login({ onLogin }) {
               <ScreensCarousel />
 
               {/* Demo preview - added to match the screenshot */}
-              <div className="w-full max-w-3xl mx-auto rounded-xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.6)] border border-white/10">
+              <div className="w-full max-w-3xl mx-auto rounded-xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.6)] border border-white/10 max-h-[35vh] flex items-start">
                 <img
                   src="/demo-preview.png"
                   alt="Aperçu de l'application"
-                  className="w-full h-auto"
+                  className="w-full h-auto object-cover object-top"
                 />
               </div>
             </div>
@@ -396,7 +401,7 @@ export default function Login({ onLogin }) {
 
               <div className="flex items-center gap-3">
                 <img
-                  src="/LOGO_Tawazoon_RH.png"
+                  src={logoAlmav}
                   alt="ALMAV Logo"
                   className="w-8 h-8 object-contain opacity-90"
                   style={{ backgroundColor: "rgba(255, 255, 255, 0.4)", borderRadius: "50%" }}

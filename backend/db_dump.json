@@ -1,0 +1,129 @@
+{
+  "flux": [
+    {
+      "id": 1,
+      "code": "AMANA",
+      "libelle": "Amana"
+    },
+    {
+      "id": 2,
+      "code": "CO",
+      "libelle": "CO"
+    },
+    {
+      "id": 3,
+      "code": "CR",
+      "libelle": "CR"
+    },
+    {
+      "id": 4,
+      "code": "EB",
+      "libelle": "E-Barkia"
+    },
+    {
+      "id": 5,
+      "code": "LRH",
+      "libelle": "LRH"
+    }
+  ],
+  "volume_sens": [],
+  "volume_segments": [],
+  "tasks_distribution": [
+    {
+      "flux_id": 1,
+      "sens_id": 3,
+      "segment_id": 2,
+      "c": 3
+    },
+    {
+      "flux_id": 3,
+      "sens_id": 3,
+      "segment_id": 3,
+      "c": 1
+    },
+    {
+      "flux_id": 3,
+      "sens_id": 1,
+      "segment_id": 1,
+      "c": 4
+    },
+    {
+      "flux_id": 2,
+      "sens_id": 4,
+      "segment_id": 1,
+      "c": 9
+    },
+    {
+      "flux_id": 3,
+      "sens_id": 1,
+      "segment_id": 2,
+      "c": 2
+    },
+    {
+      "flux_id": 2,
+      "sens_id": 4,
+      "segment_id": 2,
+      "c": 4
+    },
+    {
+      "flux_id": 2,
+      "sens_id": 2,
+      "segment_id": 2,
+      "c": 1
+    },
+    {
+      "flux_id": 1,
+      "sens_id": 4,
+      "segment_id": 1,
+      "c": 9
+    },
+    {
+      "flux_id": 2,
+      "sens_id": 1,
+      "segment_id": 1,
+      "c": 7
+    },
+    {
+      "flux_id": 3,
+      "sens_id": 3,
+      "segment_id": 2,
+      "c": 1
+    },
+    {
+      "flux_id": 5,
+      "sens_id": 1,
+      "segment_id": 1,
+      "c": 10
+    },
+    {
+      "flux_id": 1,
+      "sens_id": 2,
+      "segment_id": 2,
+      "c": 1
+    },
+    {
+      "flux_id": 1,
+      "sens_id": 1,
+      "segment_id": 1,
+      "c": 14
+    },
+    {
+      "flux_id": null,
+      "sens_id": null,
+      "segment_id": null,
+      "c": 1020
+    },
+    {
+      "flux_id": 2,
+      "sens_id": 1,
+      "segment_id": 2,
+      "c": 2
+    },
+    {
+      "flux_id": 3,
+      "sens_id": 4,
+      "segment_id": 1,
+      "c": 1
+    }
+  ]
+}
