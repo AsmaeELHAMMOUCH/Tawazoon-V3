@@ -1342,6 +1342,9 @@ export default function SimulationEffectifs() {
     volumesFluxGrid, setVolumesFluxGrid,
     pctAxesArrivee, setPctAxesArrivee,
     pctAxesDepart, setPctAxesDepart,
+    pctRetenue, setPctRetenue,
+    pctEchantillon, setPctEchantillon,
+    pctSac, setPctSac,
   } = useSimulationParams();
 
   const [categorie, setCategorie] = useState("Activité Postale");
@@ -1892,11 +1895,44 @@ export default function SimulationEffectifs() {
   }, [activeFlux, centre, poste]);
 
   useEffect(() => {
-    // Exemple : productivité (%) convertie en heures net sur 8h de base
+    // Calcul EXACT comme dans CNDPSimulation.jsx
+    // heuresNettesJourCalculees = Math.max(0.1, params.heures_par_jour - (params.idle_minutes/60.0)) * (params.productivite/100.0)
+
+    // Valeurs par défaut robustes
+    const idle = Number(idleMinutes || 0);
+
+    // Simplification absolue
+    // Si undefined => 100
+    // Sinon => conversion Number (donc "" -> 0, null -> 0, "80" -> 80)
+    const prodVal = productivite === undefined ? 100 : Number(productivite);
+
+    // Debug visible
+    console.log("🧮 Calc:", JSON.stringify({
+      idle,
+      rawProd: productivite,
+      prodVal
+    }));
+
     const baseHeures = 8;
-    const calcul = (productivite / 100) * baseHeures;
+
+    // Nouvelle Formule (21/01/2026) : (8h * Productivité) - Temps Mort
+    const heuresProd = baseHeures * (prodVal / 100.0);
+    const calcul = Math.max(0.1, heuresProd - (idle / 60.0));
+
+    // Debug logs
+    if (Math.abs(calcul - heuresNet) > 0.001) {
+      console.log("🧮 New Formula Calc:", JSON.stringify({
+        baseHeures,
+        prodVal,
+        heuresProd,
+        idleMinutes: idle,
+        idleHours: idle / 60.0,
+        result: calcul
+      }));
+    }
+
     setHeuresNet(calcul);
-  }, [productivite]);
+  }, [productivite, idleMinutes]);
 
   /* ---------- Simulation ---------- */
   const onSimuler = async (overrides = {}) => {
@@ -1922,8 +1958,8 @@ export default function SimulationEffectifs() {
     const pid = poste && poste !== ALL_ID && !Number.isNaN(Number(poste)) ? Number(poste) : null;
 
     // ✅ MODIFICATION: Utiliser DATA-DRIVEN pour la vue Intervenant (Poste spécifique) ET la vue Centre (Tous les postes)
-    // La vue Direction utilisera toujours le moteur LEGACY pour l'instant
-    if (activeFlux === 'poste' || activeFlux === 'centre') {
+    // MAIS EXCLURE CNDP (1965) qui utilise un moteur spécial via l'endpoint Legacy /simulate
+    if ((activeFlux === 'poste' || activeFlux === 'centre') && String(centre) !== '1965') {
       const resolvedID = pid ? (postesList.find(p => Number(p.id) === pid)?.centre_poste_id || pid) : null;
       const centreID = centre ? Number(centre) : null;
 
@@ -1932,7 +1968,42 @@ export default function SimulationEffectifs() {
       else console.log("📍 Simulation Centre complet (tous postes), Centre ID:", centreID);
 
       // 1. Préparation du payload VolumesUIInput (Commun)
-      const volumes_flux = overrides.volumes_flux || [];
+      // 🆕 RECONSTRUCTION AUTO DE VOLUMES_FLUX SI MANQUANT
+      let volumes_flux = overrides.volumes_flux || [];
+
+      if (volumes_flux.length === 0) {
+        // --- AMANA ---
+        const vAmana = Number(amana || 0);
+        const gAmanaArr = volumesFluxGrid?.arrivee?.amana || {};
+        const gAmanaDep = volumesFluxGrid?.depart?.amana || {};
+
+        // Si données grille présentes, on les priorise
+        let hasGridAmana = false;
+        if (gAmanaArr.part) { volumes_flux.push({ flux: 'AMANA', sens: 'ARRIVEE', segment: 'PART', volume: Number(gAmanaArr.part) }); hasGridAmana = true; }
+        if (gAmanaDep.global) { volumes_flux.push({ flux: 'AMANA', sens: 'DEPART', segment: 'GLOBAL', volume: Number(gAmanaDep.global) }); hasGridAmana = true; }
+
+        // Sinon Fallback Global (Legacy) -> par défaut Arrivée Global
+        if (!hasGridAmana && vAmana > 0) {
+          volumes_flux.push({ flux: 'AMANA', sens: 'ARRIVEE', segment: 'GLOBAL', volume: vAmana });
+        }
+
+        // --- COURRIER ORDINAIRE (CO) ---
+        const vCO = Number(courrierOrdinaire || 0);
+        if (vCO > 0) volumes_flux.push({ flux: 'CO', sens: 'ARRIVEE', segment: 'GLOBAL', volume: vCO });
+
+        // --- COURRIER RECOMMANDÉ (CR) ---
+        const vCR = Number(courrierRecommande || 0);
+        if (vCR > 0) volumes_flux.push({ flux: 'CR', sens: 'ARRIVEE', segment: 'GLOBAL', volume: vCR });
+
+        // --- E-BARKIA ---
+        const vEB = Number(ebarkia || 0);
+        if (vEB > 0) volumes_flux.push({ flux: 'EBARKIA', sens: 'ARRIVEE', segment: 'GLOBAL', volume: vEB });
+
+        // --- LRH ---
+        const vLRH = Number(lrh || 0);
+        if (vLRH > 0) volumes_flux.push({ flux: 'LRH', sens: 'ARRIVEE', segment: 'GLOBAL', volume: vLRH });
+      }
+
       const uiPayload = {
         flux_arrivee: {
           amana: { GLOBAL: amana || 0, PART: 0, PRO: 0, DIST: 0, AXES: 0 },
@@ -1961,7 +2032,13 @@ export default function SimulationEffectifs() {
         nature_geo: overrides.nature_geo !== undefined ? Number(overrides.nature_geo) : Number(natureGeo || 1),
 
         nb_jours_ouvres_an: 264,
-        volumes_flux: volumes_flux // ✅ AJOUT : Nécessaire pour le contexte par famille
+        volumes_flux: volumes_flux, // ✅ AJOUT : Nécessaire pour le contexte par famille
+
+        // 🆕 Paramètres CNDP
+        pct_retenue: Number(pctRetenue || 1),
+        pct_echantillon: Number(pctEchantillon || 5),
+        pct_sac: Number(pctSac || 60),
+        ed_percent: overrides.ed_percent !== undefined ? Number(overrides.ed_percent) : Number(edPercent || 60),
       };
 
       // Injection des granularités (si saisies dans le tableau)
@@ -2152,6 +2229,24 @@ export default function SimulationEffectifs() {
         ? Number(courriersParSacOverride || 0)
         : Number(courriersParSac ?? 0);
 
+    // 🆕 AJOUT : Passer volumes_ui complet même en mode legacy pour le moteur CNDP
+    // Pour CNDP (1965), on doit construire volumes_flux si non fourni par overrides
+    let cndp_volumes_flux = overrides.volumes_flux || [];
+    if (cndp_volumes_flux.length === 0 && String(centre) === '1965') {
+      // Construction manuelle comme dans le bloc Data-Driven
+      const vAmana = Number(amana || 0);
+      const gAmanaArr = volumesFluxGrid?.arrivee?.amana || {};
+      const gAmanaDep = volumesFluxGrid?.depart?.amana || {};
+
+      let hasGridAmana = false;
+      if (gAmanaArr.part) { cndp_volumes_flux.push({ flux: 'AMANA', sens: 'ARRIVEE', segment: 'PART', volume: Number(gAmanaArr.part) }); hasGridAmana = true; }
+      if (gAmanaDep.global) { cndp_volumes_flux.push({ flux: 'AMANA', sens: 'DEPART', segment: 'GLOBAL', volume: Number(gAmanaDep.global) }); hasGridAmana = true; }
+
+      if (!hasGridAmana && vAmana > 0) {
+        cndp_volumes_flux.push({ flux: 'AMANA', sens: 'ARRIVEE', segment: 'GLOBAL', volume: vAmana });
+      }
+    }
+
     const payload = {
       centre_id: centre ? Number(centre) : null,
       poste_id: pid,
@@ -2189,6 +2284,17 @@ export default function SimulationEffectifs() {
         pct_axes_arrivee: Number(pctAxesArrivee || 0.40),
         pct_axes_depart: Number(pctAxesDepart || 0.30),
       },
+      volumes_ui: {
+        volumes_flux: cndp_volumes_flux,
+        colis_amana_par_sac: colisAmanaFinal,
+        courriers_par_sac: Number(courriersParSacFinal),
+        colis_par_collecte: colisCollecteVal || 1,
+        pct_retenue: Number(pctRetenue || 1),
+        pct_echantillon: Number(pctEchantillon || 5),
+        pct_sac: Number(pctSac || 60),
+        ed_percent: overrides.ed_percent !== undefined ? Number(overrides.ed_percent) : Number(edPercent || 60),
+        nb_jours_ouvres_an: 264,
+      }
     };
 
     try {
@@ -2442,6 +2548,12 @@ export default function SimulationEffectifs() {
             setPctAxesArrivee={setPctAxesArrivee}
             pctAxesDepart={pctAxesDepart}
             setPctAxesDepart={setPctAxesDepart}
+            pctRetenue={pctRetenue}
+            setPctRetenue={setPctRetenue}
+            pctEchantillon={pctEchantillon}
+            setPctEchantillon={setPctEchantillon}
+            pctSac={pctSac}
+            setPctSac={setPctSac}
           />
         )}
 

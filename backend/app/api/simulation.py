@@ -61,12 +61,28 @@ from app.services.simulation_run import (
     upsert_simulation_result
 )
 
+from app.services.simulation_cndp import calculer_simulation_cndp
+
 # -------------------------------------------------------------------
 # /simulate : Vue Intervenant
 # -------------------------------------------------------------------
 @router.post("/simulate", response_model=SimulationResponse)
 def simulate_effectifs(request: SimulationRequest, db: Session = Depends(get_db)):
     try:
+        # 🆕 SPECIAL ENGINE FOR CNDP (Centre 1965)
+        if str(request.centre_id) == "1965" and request.volumes_ui:
+            print(f"🚀 [CNDP ENGINE] Using specialized simulation for center {request.centre_id}", flush=True)
+            resultat = calculer_simulation_cndp(
+                db=db,
+                centre_id=request.centre_id,
+                volumes_ui=request.volumes_ui,
+                productivite=request.productivite,
+                heures_par_jour=request.heures_net or 8.0,
+                idle_minutes=request.idle_minutes or 0.0,
+                poste_id_filter=request.poste_id
+            )
+            return resultat
+
         # 🆕 CHECK FOR NEW DETAILED SIMULATION MODE
         if request.volumes_details and len(request.volumes_details) > 0:
             print("==================== REQUEST RECEIVED /simulate (DETAILED SQL MODE) ====================", flush=True)

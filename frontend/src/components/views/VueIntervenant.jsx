@@ -33,6 +33,7 @@ import VolumeParamsCard from "../intervenant/VolumeParamsCard";
 import VirtualizedResultsTable from "../VirtualizedResultsTable";
 import ResultHeroCardCompact from "../results/ResultHeroCardCompact";
 import EnterpriseTable from "../tables/EnterpriseTable";
+import VolumeParamsCardCustom from "../intervenant/VolumeParamsCardCustom";
 
 /* ===================== KPI COMPONENTS (COPIED FROM VUECENTRE) ===================== */
 const KPICardGlass = ({
@@ -169,6 +170,9 @@ export default function VueIntervenant({
   setNbrCoSac = () => { },
   nbrCrSac = 0,
   setNbrCrSac = () => { },
+  pctRetenue, setPctRetenue,
+  pctEchantillon, setPctEchantillon,
+  pctSac, setPctSac,
 }) {
   const JOURS_OUVRES_AN = 264;
   const PAGE_SCALE = 0.8;
@@ -223,6 +227,16 @@ export default function VueIntervenant({
     console.log('⏱️ DEBOUNCE : Valeur debouncée (300ms après):', debouncedColis);
   }, [debouncedColis, colis]);
 
+  // 🔍 LOG PROPS DEBUG (Temporaire)
+  useEffect(() => {
+    console.log("👀 VueIntervenant Props Recus:", {
+      heuresNet,
+      productivite,
+      idleMinutes,
+      typeHeuresNet: typeof heuresNet
+    });
+  }, [heuresNet, productivite, idleMinutes]);
+
   // ✍️ Synchronisation des facteurs de conversion (locaux -> globaux)
   const updateColisAmanaParSac = (v) => setColisAmanaParSac(v);
   const updateCourriersParSac = (v) => setCourriersParSac(v);
@@ -269,17 +283,18 @@ export default function VueIntervenant({
   // 🔹 Productivité + temps mort → heures nettes
   // ✅ OPTIMISATION : Utilise les valeurs debouncées pour éviter les recalculs excessifs
   // 🔹 Capacité Nette (SANS REDUCTION PAR PRODUCTIVITE car déjà intégrée dans les charges tâches)
+  // 🗑️ ANCIEN CALCUL LOCAL SUPPRIMÉ
+  // Le calcul des heures nettes est maintenant géré par le parent (Simulation.jsx)
+  // qui applique correctement la formule : (8 - idle) * productivité
+  /*
   useEffect(() => {
     const heuresBase = 8.0;
     const idleH = Number(debouncedIdleMinutes || 0) / 60;
-
-    // On ne multiplie plus par productivité ici ! 
-    // La productivité est appliquée tâche par tâche dans mergedResults.
     const heuresNettes = Math.max(0, heuresBase - idleH);
-
     setHeuresBrutes(heuresBase);
     setHeuresNet(heuresNettes.toFixed(2));
   }, [debouncedIdleMinutes, setHeuresNet]);
+  */
 
   const posteValue = poste == null ? "" : String(poste);
 
@@ -444,11 +459,15 @@ export default function VueIntervenant({
   // 🔹 Filtrer le référentiel pour exclure les tâches avec moyenne_min = 0 ET filtrer par famille
   const referentielFiltered = useMemo(() => {
     return (referentiel || []).filter((row) => {
-      const hasMin = Number(row.m ?? 0) > 0;
+      // ✅ MODIFICATION: On affiche TOUT si on a des résultats de simulation (data-driven)
+      // Cela évite de masquer des tâches valides qui auraient m=0 mais un volume calculé par le backend
+      const hasBackResult = resultats && resultats.some(r => r.task === row.t);
+      const hasMin = Number(row.m ?? 0) > 0 || hasBackResult;
+
       const matchFamille = !filterFamille || row.famille === filterFamille;
-      return hasMin && matchFamille;
+      return matchFamille; // On lâche le filtre hasMin pour l'instant pour tester, ou on l'améliore
     });
-  }, [referentiel, filterFamille]);
+  }, [referentiel, filterFamille, resultats]);
 
   // ✅ OPTIMISATION : Memoization des résultats fusionnés
   const mergedResults = useMemo(() => {
@@ -522,6 +541,16 @@ export default function VueIntervenant({
     return res;
   }, [referentielFiltered, resIndex, annualValues, debouncedColis, debouncedProductivite, colisAmanaParSac, courriersParSac, colisParCollecte, hasSimulated, poste, postesOptions, heuresNet]);
 
+  // 🔍 DEBUG: Inspecter pourquoi les résultats sont vides
+  useEffect(() => {
+    if (hasSimulated) {
+      console.log("🔍 [DEBUG RESULTS] mergedResults length:", mergedResults.length);
+      console.log("🔍 [DEBUG RESULTS] simDirty:", simDirty);
+      console.log("🔍 [DEBUG RESULTS] poste:", poste);
+      console.log("🔍 [DEBUG RESULTS] activite structurelle?", mergedResults.find(r => r.task.includes("Structurelle")));
+    }
+  }, [mergedResults, hasSimulated, simDirty, poste]);
+
   // ✅ OPTIMISATION : Memoization du total des heures
   const totalHeuresAffichees = useMemo(() => {
     return mergedResults.reduce(
@@ -548,13 +577,6 @@ export default function VueIntervenant({
     }
     return baseHeuresNet > 0 ? totalHeuresFinal / baseHeuresNet : 0;
   }, [totalHeuresFinal, baseHeuresNet, totaux]);
-
-
-
-  const roundHalfUp = (n, decimals = 0) => {
-    const f = 10 ** decimals;
-    return Math.floor(n * f + 0.5) / f;
-  };
 
   // ✅ OPTIMISATION : Memoization du handler de simulation
   const fteArrondiAffiche = useMemo(() => {
@@ -638,11 +660,11 @@ export default function VueIntervenant({
             </div>
             <div className="flex flex-col w-full">
 
-              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider text-center">
                 Région
               </label>
               <select
-                className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer w-full truncate text-left"
+                className="bg-white border border-slate-200 rounded-md px-2 py-1 text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 cursor-pointer w-full truncate transition-colors"
                 value={region ?? ""}
                 onChange={(e) => setRegion(e.target.value)}
               >
@@ -663,11 +685,11 @@ export default function VueIntervenant({
               <Building className="w-3 h-3" />
             </div>
             <div className="flex flex-col w-full">
-              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider text-center">
                 Centre
               </label>
               <select
-                className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer w-full truncate disabled:opacity-50 text-left"
+                className="bg-white border border-slate-200 rounded-md px-2 py-1 text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 cursor-pointer w-full truncate disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 value={centre ?? ""}
                 onChange={(e) => setCentre(e.target.value)}
                 disabled={!region}
@@ -691,11 +713,11 @@ export default function VueIntervenant({
               <User className="w-3 h-3" />
             </div>
             <div className="flex flex-col w-full">
-              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider text-center">
                 Intervenant
               </label>
               <select
-                className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer w-full truncate disabled:opacity-50 text-left"
+                className="bg-white border border-slate-200 rounded-md px-2 py-1 text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 cursor-pointer w-full truncate disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 value={posteValue}
                 onChange={(e) => setPoste(e.target.value)}
                 disabled={!centre || loading.postes}
@@ -726,7 +748,7 @@ export default function VueIntervenant({
                 <Gauge className="w-3 h-3" />
               </div>
               <div className="flex flex-col w-full">
-                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider text-center">
                   Productivité
                 </label>
                 <div className="relative">
@@ -734,10 +756,10 @@ export default function VueIntervenant({
                     type="number"
                     min={0}
                     max={200}
-                    value={toInput(productivite)}
+                    value={productivite}
                     placeholder="100"
                     onChange={(e) =>
-                      setProductivite(parseNonNeg(e.target.value) ?? 100)
+                      setProductivite(e.target.value === "" ? 0 : Number(e.target.value))
                     }
                     className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full pr-6 text-center"
                   />
@@ -756,7 +778,7 @@ export default function VueIntervenant({
                 <Clock className="w-3 h-3" />
               </div>
               <div className="flex flex-col w-full">
-                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider text-center">
                   Temps mort
                 </label>
                 <div className="relative">
@@ -765,7 +787,7 @@ export default function VueIntervenant({
                     min={0}
                     value={idleMinutes}
                     onChange={(e) =>
-                      setIdleMinutes(Number(e.target.value || 0))
+                      setIdleMinutes(e.target.value === "" ? 0 : Number(e.target.value))
                     }
                     className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full pr-8 text-center"
                   />
@@ -776,52 +798,57 @@ export default function VueIntervenant({
               </div>
             </div>
 
-            <div className="w-px h-6 bg-slate-200 hidden md:block" />
+            {/* Masquer ces params pour CNDP (centre 1965) */}
+            {String(centre) !== '1965' && (
+              <>
+                <div className="w-px h-6 bg-slate-200 hidden md:block" />
 
-            {/* Complexité Circulation */}
-            <div className="flex items-center gap-1.5 min-w-[90px] flex-1">
-              <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
-                <Sliders className="w-3 h-3" />
-              </div>
-              <div className="flex flex-col w-full">
-                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                  Compl. Circ.
-                </label>
-                <select
-                  value={tauxComplexite}
-                  onChange={(e) =>
-                    setTauxComplexite(Number(e.target.value))
-                  }
-                  className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full text-center cursor-pointer"
-                >
-                  <option value="1">1</option>
-                  <option value="1.25">1.25</option>
-                  <option value="1.5">1.5</option>
-                </select>
-              </div>
-            </div>
+                {/* Complexité Circulation */}
+                <div className="flex items-center gap-1.5 min-w-[90px] flex-1">
+                  <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
+                    <Sliders className="w-3 h-3" />
+                  </div>
+                  <div className="flex flex-col w-full">
+                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider text-center">
+                      Compl. Circ.
+                    </label>
+                    <select
+                      value={tauxComplexite}
+                      onChange={(e) =>
+                        setTauxComplexite(Number(e.target.value))
+                      }
+                      className="bg-white border border-slate-200 rounded-md px-2 py-1 text-xs font-semibold text-slate-800 focus:outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-100 w-full text-center cursor-pointer transition-colors"
+                    >
+                      <option value="1">1</option>
+                      <option value="1.25">1.25</option>
+                      <option value="1.5">1.5</option>
+                    </select>
+                  </div>
+                </div>
 
-            <div className="w-px h-6 bg-slate-200 hidden md:block" />
+                <div className="w-px h-6 bg-slate-200 hidden md:block" />
 
-            {/* Complexité Géo */}
-            <div className="flex items-center gap-1.5 min-w-[90px] flex-1">
-              <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
-                <MapPin className="w-3 h-3" />
-              </div>
-              <div className="flex flex-col w-full">
-                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                  Compl. Géo
-                </label>
-                <select
-                  value={natureGeo}
-                  onChange={(e) => setNatureGeo(Number(e.target.value))}
-                  className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full text-center cursor-pointer"
-                >
-                  <option value="1">1</option>
-                  <option value="1.5">1.5</option>
-                </select>
-              </div>
-            </div>
+                {/* Complexité Géo */}
+                <div className="flex items-center gap-1.5 min-w-[90px] flex-1">
+                  <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
+                    <MapPin className="w-3 h-3" />
+                  </div>
+                  <div className="flex flex-col w-full">
+                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider text-center">
+                      Compl. Géo
+                    </label>
+                    <select
+                      value={natureGeo}
+                      onChange={(e) => setNatureGeo(Number(e.target.value))}
+                      className="bg-white border border-slate-200 rounded-md px-2 py-1 text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-100 w-full text-center cursor-pointer transition-colors"
+                    >
+                      <option value="1">1</option>
+                      <option value="1.5">1.5</option>
+                    </select>
+                  </div>
+                </div>
+              </>
+            )}
 
             <div className="w-px h-6 bg-slate-200 hidden md:block" />
 
@@ -831,7 +858,7 @@ export default function VueIntervenant({
                 <Clock className="w-3 h-3" />
               </div>
               <div className="flex flex-col">
-                <label className="text-[9px] font-bold text-[#005EA8] uppercase tracking-wider">
+                <label className="text-[9px] font-bold text-[#005EA8] uppercase tracking-wider text-center">
                   Capacité Nette
                 </label>
                 <div className="flex items-baseline gap-1">
@@ -850,66 +877,68 @@ export default function VueIntervenant({
 
 
 
-        {/* Paramètres de volume */}
-        <VolumeParamsCard
-          Card={Card}
-          Field={Field}
-          Input={Input}
-          centre={centre}
-          centreCategorie={centreCategorie}
-          loading={loading}
-          courrierOrdinaire={courrierOrdinaire}
-          setCourrierOrdinaire={setCourrierOrdinaire}
-          courrierRecommande={courrierRecommande}
-          setCourrierRecommande={setCourrierRecommande}
-          ebarkia={ebarkia}
-          setEbarkia={setEbarkia}
-          lrh={lrh}
-          setLrh={setLrh}
-          amana={amana}
-          setAmana={setAmana}
-          colisAmanaParSac={colisAmanaParSac}
-          setColisAmanaParSac={setColisAmanaParSac}
-          courriersParSac={courriersParSac}
-          setCourriersParSac={setCourriersParSac}
-          nbrCoSac={nbrCoSac}
-          setNbrCoSac={setNbrCoSac}
-          nbrCrSac={nbrCrSac}
-          setNbrCrSac={setNbrCrSac}
-          colisParCollecte={colisParCollecte}
-          setColisParCollecte={setColisParCollecte}
-          parseNonNeg={parseNonNeg}
-          toInput={toInput}
-          monthly={monthly}
-          formatInt={formatUnit}
-          splitFlux={splitFlux}
-          partParticuliers={partParticuliers}
-          setPartParticuliers={setPartParticuliers}
-          partProfessionnels={partProfessionnels}
-          getEffectiveFluxMode={getEffectiveFluxMode}
-          // 🆕 Synchro Grille Flux
-          volumesFluxGrid={volumesFluxGrid}
-          setVolumesFluxGrid={setVolumesFluxGrid}
-          onSimuler={handleSimuler}
-          simDirty={simDirty}
-          edPercent={edPercent}
-          setEdPercent={setEdPercent}
-          pctAxesArrivee={pctAxesArrivee}
-          setPctAxesArrivee={setPctAxesArrivee}
-          pctAxesDepart={pctAxesDepart}
-          setPctAxesDepart={setPctAxesDepart}
-          pctCollecte={pctCollecte}
-          setPctCollecte={setPctCollecte}
-        />
+        {/* Paramètres de volume - CONDITIONAL RENDERING */}
+        {/* TODO: Remplacer '1' par l'ID réel du centre de test ou une prop */}
+       
+          <VolumeParamsCard
+            Card={Card}
+            Field={Field}
+            Input={Input}
+            centre={centre}
+            centreCategorie={centreCategorie}
+            loading={loading}
+            courrierOrdinaire={courrierOrdinaire}
+            setCourrierOrdinaire={setCourrierOrdinaire}
+            courrierRecommande={courrierRecommande}
+            setCourrierRecommande={setCourrierRecommande}
+            ebarkia={ebarkia}
+            setEbarkia={setEbarkia}
+            lrh={lrh}
+            setLrh={setLrh}
+            amana={amana}
+            setAmana={setAmana}
+            colisAmanaParSac={colisAmanaParSac}
+            setColisAmanaParSac={setColisAmanaParSac}
+            courriersParSac={courriersParSac}
+            setCourriersParSac={setCourriersParSac}
+            nbrCoSac={nbrCoSac}
+            setNbrCoSac={setNbrCoSac}
+            nbrCrSac={nbrCrSac}
+            setNbrCrSac={setNbrCrSac}
+            colisParCollecte={colisParCollecte}
+            setColisParCollecte={setColisParCollecte}
+            parseNonNeg={parseNonNeg}
+            toInput={toInput}
+            monthly={monthly}
+            formatInt={formatUnit}
+            splitFlux={splitFlux}
+            partParticuliers={partParticuliers}
+            setPartParticuliers={setPartParticuliers}
+            partProfessionnels={partProfessionnels}
+            getEffectiveFluxMode={getEffectiveFluxMode}
+            // 🆕 Synchro Grille Flux
+            volumesFluxGrid={volumesFluxGrid}
+            setVolumesFluxGrid={setVolumesFluxGrid}
+            onSimuler={handleSimuler}
+            simDirty={simDirty}
+            edPercent={edPercent}
+            setEdPercent={setEdPercent}
+            pctAxesArrivee={pctAxesArrivee}
+            setPctAxesArrivee={setPctAxesArrivee}
+            pctAxesDepart={pctAxesDepart}
+            setPctAxesDepart={setPctAxesDepart}
+            pctCollecte={pctCollecte}
+            setPctCollecte={setPctCollecte}
+          />
 
         {/* Référentiel & résultats - Masquable */}
         {showDetails && (
           <div className="flex flex-col gap-2">
             {/* 🆕 Filtre Famille (Déplacé ici pour ne pas décaler les tableaux) */}
-            <div className="flex items-center gap-2 bg-slate-50/80 p-1.5 rounded-lg border border-slate-100 self-start">
-              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Filtre Famille:</span>
+            <div className="flex items-center gap-2 bg-white/80 p-1.5 rounded-lg border border-slate-100 self-start">
+              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider text-center">Filtre Famille:</span>
               <select
-                className="bg-white border border-slate-200 text-xs text-slate-700 rounded px-2 py-1 focus:outline-none focus:border-blue-500 w-full max-w-[240px]"
+                className="bg-white border border-slate-200 text-xs font-semibold text-slate-700 rounded-md px-2 py-1 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 cursor-pointer w-full max-w-[240px] transition-colors"
                 value={filterFamille}
                 onChange={e => setFilterFamille(e.target.value)}
               >
@@ -1175,6 +1204,6 @@ export default function VueIntervenant({
           </div>
         )}
       </div>
-    </div >
+    </div>
   );
 }

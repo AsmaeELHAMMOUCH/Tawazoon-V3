@@ -78,8 +78,11 @@ class VolumesUIInput(BaseModel):
     pct_axes_arrivee: float = Field(default=0.40, ge=0.0, le=1.0, description="% Axes Arrivée (0.40 = 40%)")
     pct_axes_depart: float = Field(default=0.30, ge=0.0, le=1.0, description="% Axes Départ (0.30 = 30%)")
     
-    # 🆕 Paramètres additionnels (ED, Collecte, Complexité)
+    # 🆕 Paramètres additionnels (ED, Collecte, Complexité, CNDP)
     ed_percent: float = Field(default=0.0, description="% ED (En Dehors)")
+    pct_retenue: float = Field(default=1.0, description="% Retenue")
+    pct_echantillon: float = Field(default=5.0, description="% échantillon")
+    pct_sac: float = Field(default=60.0, description="% SAC")
     pct_collecte: float = Field(default=5.0, description="% Collecte")
     taux_complexite: float = Field(default=1.0, description="Coefficient Complexité Circulation (Facteur)")
     nature_geo: float = Field(default=1.0, description="Coefficient Complexité Géographique")

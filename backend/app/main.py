@@ -18,9 +18,13 @@ from app.api.simulation_direct import router as simulation_direct_router # 🆕 
 from app.api.simulation_data_driven import router as simulation_data_driven_router # 🆕 Architecture 100% data-driven
 from app.api.national import router as national_router # 🆕 Simulation nationale
 from app.api.categorisation import router as categorisation_router # 🆕 Catégorisation
+from app.api.cndp_router import router as cndp_router # 🆕 CNDP Isolation
+from app.api.bandoeng_router import router as bandoeng_router # 🆕 Bandoeng Isolation
 
 from app.core.db import engine, Base
 from app.models import db_models, scoring_models, categorisation_models
+# ...
+
 
 # Create tables if they don't exist
 Base.metadata.create_all(bind=engine)
@@ -80,6 +84,8 @@ app.include_router(simulation_direct_router) # ✅ Simulation directe sans Volum
 app.include_router(simulation_data_driven_router) # ✅ Architecture 100% data-driven
 app.include_router(national_router, prefix="/api") # ✅ Simulation nationale
 app.include_router(categorisation_router, prefix="/api") # ✅ Catégorisation
+app.include_router(cndp_router, prefix="/api") # ✅ CNDP Isolation
+app.include_router(bandoeng_router, prefix="/api") # ✅ Bandoeng Isolation
 #app.include_router(views_router, prefix="/api")
 #app.include_router(simuler_centre_par_type_router, prefix="/api")
 

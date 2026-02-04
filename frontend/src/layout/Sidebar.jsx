@@ -66,6 +66,7 @@ export default function Sidebar({
     { label: "Par Direction", slug: "direction", flux: "direction" },
     { label: "Niveau Siège", slug: "region", flux: "siege" },
     { label: "Nationale", slug: "national", flux: "national" },
+    { label: "Centres Uniques", slug: "centres-uniques", flux: "centres-uniques" },
   ];
 
   const vueGlobaleSub = [

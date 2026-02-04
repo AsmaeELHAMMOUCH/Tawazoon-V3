@@ -108,13 +108,13 @@ def get_consolide_siege(
             SELECT 
                 p.id AS poste_id,
                 p.label,
-                p.type_poste,
+                p.type AS type_poste,
                 SUM(COALESCE(cp.effectif_actuel, 0)) AS etp_total
             FROM dbo.centre_postes cp
             INNER JOIN dbo.postes p ON p.id = cp.poste_id
             INNER JOIN dbo.centres c ON c.id = cp.centre_id
             WHERE c.region_id = :region_id
-            GROUP BY p.id, p.label, p.type_poste
+            GROUP BY p.id, p.label, p.type
             ORDER BY etp_total DESC;
         """
         rows = db.execute(text(sql), {"region_id": region_id}).mappings().all()
@@ -147,7 +147,7 @@ def get_siege_postes(
             SELECT
                 p.id        AS poste_id,
                 p.label     AS poste_label,
-                p.type_poste,
+                p.type      AS type_poste,
                 COALESCE(cp.effectif_actuel, 0) AS effectif_actuel
             FROM dbo.centre_postes cp
             JOIN dbo.postes p   ON p.id = cp.poste_id
@@ -238,6 +238,7 @@ def list_regions(db: Session = Depends(get_db)):
 @router.get("/centres")
 def list_centres(
     region_id: Optional[int] = Query(None),
+    centre_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
 ):
     sql = """
@@ -259,7 +260,7 @@ def list_centres(
             cp.centre_id,
             COUNT(*) AS nb_postes,
             CASE
-              WHEN MIN(p.type_poste) = MAX(p.type_poste) THEN MIN(p.type_poste)
+              WHEN MIN(p.type) = MAX(p.type) THEN MIN(p.type)
               ELSE 'MOI/MOD'
             END AS type_agg
           FROM dbo.centre_postes cp
@@ -275,9 +276,10 @@ def list_centres(
           GROUP BY cp.centre_id
         ) f ON f.centre_id = c.id
         WHERE (:region_id IS NULL OR c.region_id = :region_id)
+          AND (:centre_id IS NULL OR c.id = :centre_id)
         ORDER BY c.label
     """
-    rows = db.execute(text(sql), {"region_id": region_id}).mappings().all()
+    rows = db.execute(text(sql), {"region_id": region_id, "centre_id": centre_id}).mappings().all()
     
     # 🐛 DEBUG: Vérifier le contenu de T_APS pour le premier centre
     if rows:
@@ -316,7 +318,7 @@ def list_postes(
                 p.id,
                 cp.id AS centre_poste_id,
                 p.label,
-                p.type_poste,
+                p.type AS type_poste,
                 COALESCE(cp.effectif_actuel, 0) AS effectif_actuel
             FROM dbo.postes p
             INNER JOIN dbo.centre_postes cp ON cp.poste_id = p.id
@@ -330,7 +332,7 @@ def list_postes(
                 p.id,
                 NULL AS centre_poste_id,
                 p.label,
-                p.type_poste,
+                p.type AS type_poste,
                 0 AS effectif_actuel
             FROM dbo.postes p
             ORDER BY p.label
@@ -422,7 +424,7 @@ def consolide_postes(
         SELECT
             p.id             AS poste_id,
             p.label          AS poste_label,
-            p.type_poste     AS type_poste,
+            p.type           AS type_poste,
             SUM(COALESCE(cp.effectif_actuel,0)) AS etp_total,
             CAST(0.0 AS FLOAT)                   AS etp_requis,
             (0.0 - SUM(COALESCE(cp.effectif_actuel,0))) AS ecart,
@@ -432,7 +434,7 @@ def consolide_postes(
         JOIN dbo.postes  p  ON p.id = cp.poste_id
         {extra_join}
         {where_clause}
-        GROUP BY p.id, p.label, p.type_poste
+        GROUP BY p.id, p.label, p.type
         ORDER BY etp_total DESC;
     """
 

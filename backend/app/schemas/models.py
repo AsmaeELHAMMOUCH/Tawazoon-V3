@@ -44,6 +44,8 @@ class BulkVolumeUpsertRequest(BaseModel):
     centre_poste_id: int
     volumes: List[VolumeItem]
     
+from app.schemas.volumes_ui import VolumesUIInput
+
 class SimulationRequest(BaseModel):
     centre_id: Optional[int] = None
     poste_id: Optional[int] = None
@@ -55,6 +57,9 @@ class SimulationRequest(BaseModel):
     
     # New detailed volumes
     volumes_details: Optional[List[VolumeItem]] = None
+    
+    # 🆕 Structure complète pour les simulations spécialisées (ex: CNDP)
+    volumes_ui: Optional[VolumesUIInput] = None
     
     idle_minutes: Optional[float] = 0.0
 
@@ -93,6 +98,5 @@ class SimulationResponse(BaseModel):
     heures_net_jour: float
     details_taches: List[TacheDetail]
     heures_par_poste: Optional[dict] = None
-    etp_par_poste: Optional[dict] = None
+    etp_par_poste: Optional[dict] = None  # 🆕 Ajout pour CNDP
     postes: Optional[List[PosteResultat]] = []
-    

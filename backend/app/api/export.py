@@ -120,3 +120,219 @@ def export_history_excel(
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
+
+@router.get("/export/bandoeng/template")
+def generate_bandoeng_template():
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Modèle Import Volumes"
+    
+    # Styles
+    header_fill = PatternFill(start_color="007BFF", end_color="007BFF", fill_type="solid")
+    subheader_fill = PatternFill(start_color="E0E0E0", end_color="E0E0E0", fill_type="solid")
+    header_font = Font(bold=True, color="FFFFFF")
+    subheader_font = Font(bold=True)
+    center_align = Alignment(horizontal="center", vertical="center")
+    thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+    
+    # --- AMANA ---
+    ws.merge_cells('B1:G1')
+    ws['B1'] = "AMANA DEPOT"
+    ws['B1'].fill = header_fill
+    ws['B1'].font = header_font
+    ws['B1'].alignment = center_align
+
+    ws.merge_cells('H1:M1')
+    ws['H1'] = "AMANA REÇU"
+    ws['H1'].fill = header_fill
+    ws['H1'].font = header_font
+    ws['H1'].alignment = center_align
+
+    ws.merge_cells('B2:D2'); ws['B2'] = "GC"; ws['B2'].fill = subheader_fill; ws['B2'].alignment = center_align
+    ws.merge_cells('E2:G2'); ws['E2'] = "Particuliers"; ws['E2'].fill = subheader_fill; ws['E2'].alignment = center_align
+    ws.merge_cells('H2:J2'); ws['H2'] = "GC"; ws['H2'].fill = subheader_fill; ws['H2'].alignment = center_align
+    ws.merge_cells('K2:M2'); ws['K2'] = "Particuliers"; ws['K2'].fill = subheader_fill; ws['K2'].alignment = center_align
+
+    sub_headers = ["Global", "Local", "Axes"]
+    for i, col in enumerate(range(2, 14)): # Columns B to M
+        cell = ws.cell(row=3, column=col, value=sub_headers[i % 3])
+        cell.alignment = center_align
+        cell.border = thin_border
+
+    ws.cell(row=4, column=1, value="Volumes Amana").font = Font(bold=True)
+    # Placeholder row for user input
+    for col in range(2, 14):
+        cell = ws.cell(row=4, column=col)
+        cell.border = thin_border
+        cell.number_format = '#,##0'
+
+    # --- AUTRES FLUX (CR, CO) ---
+    start_row = 7
+    ws.merge_cells(f'B{start_row}:D{start_row}')
+    ws[f'B{start_row}'] = "MED"
+    ws[f'B{start_row}'].fill = header_fill
+    ws[f'B{start_row}'].font = header_font
+    ws[f'B{start_row}'].alignment = center_align
+
+    ws.merge_cells(f'E{start_row}:G{start_row}')
+    ws[f'E{start_row}'] = "ARRIVÉ"
+    ws[f'E{start_row}'].fill = header_fill
+    ws[f'E{start_row}'].font = header_font
+    ws[f'E{start_row}'].alignment = center_align
+
+    for i, col in enumerate(range(2, 8)): # Columns B to G
+        cell = ws.cell(row=start_row+1, column=col, value=sub_headers[i % 3])
+        cell.alignment = center_align
+        cell.border = thin_border
+
+    rows = ["CR", "CO"]
+    for i, label in enumerate(rows):
+        r = start_row + 2 + i
+        ws.cell(row=r, column=1, value=label).font = Font(bold=True)
+        for col in range(2, 8):
+            cell = ws.cell(row=r, column=col)
+            cell.border = thin_border
+            cell.number_format = '#,##0'
+    
+    # --- EL BARKIA ET LRH (structure simplifiée: MED et Arrivé uniquement) ---
+    simple_start_row = start_row + 2 + len(rows) + 1  # After CR and CO
+    ws.cell(row=simple_start_row, column=2, value="MED").fill = subheader_fill
+    ws.cell(row=simple_start_row, column=2).alignment = center_align
+    ws.cell(row=simple_start_row, column=2).border = thin_border
+    
+    ws.cell(row=simple_start_row, column=3, value="ARRIVÉ").fill = subheader_fill
+    ws.cell(row=simple_start_row, column=3).alignment = center_align
+    ws.cell(row=simple_start_row, column=3).border = thin_border
+    
+    simple_rows = ["El Barkia", "LRH"]
+    for i, label in enumerate(simple_rows):
+        r = simple_start_row + 1 + i
+        ws.cell(row=r, column=1, value=label).font = Font(bold=True)
+        for col in range(2, 4):  # Only MED and Arrivé columns
+            cell = ws.cell(row=r, column=col)
+            cell.border = thin_border
+            cell.number_format = '#,##0'
+
+    # Instructions
+    ws['A15'] = "Instructions:"
+    ws['A15'].font = Font(bold=True)
+    ws['A16'] = "1. Remplissez les cases blanches avec les volumes."
+    ws['A17'] = "2. Ne modifiez pas la structure du fichier."
+    ws['A18'] = "3. Une fois rempli, importez ce fichier dans l'application."
+
+    # Column widths
+    ws.column_dimensions['A'].width = 20
+    for col in range(2, 14):
+        ws.column_dimensions[get_column_letter(col)].width = 10
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    filename = "Modele_Import_Volumes_Bandoeng.xlsx"
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+@router.get("/export/bandoeng/tasks-template")
+def generate_bandoeng_tasks_template():
+    """
+    Génère un modèle Excel pour l'importation des tâches Bandoeng.
+    Colonnes: Nom de tâche, Produit, Famille, Unité de mesure, Responsable 1, Responsable 2, Temps_min, Temps_sec
+    """
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Modèle Import Tâches"
+    
+    # Styles
+    header_fill = PatternFill(start_color="005EA8", end_color="005EA8", fill_type="solid")
+    header_font = Font(bold=True, color="FFFFFF", size=11)
+    center_align = Alignment(horizontal="center", vertical="center")
+    left_align = Alignment(horizontal="left", vertical="center")
+    thin_border = Border(
+        left=Side(style='thin'), 
+        right=Side(style='thin'), 
+        top=Side(style='thin'), 
+        bottom=Side(style='thin')
+    )
+    
+    # --- TITRE ---
+    ws.merge_cells('A1:H1')
+    title_cell = ws['A1']
+    title_cell.value = "MODÈLE D'IMPORTATION DES TÂCHES - BANDOENG"
+    title_cell.font = Font(size=14, bold=True, color="005EA8")
+    title_cell.alignment = center_align
+    ws.row_dimensions[1].height = 25
+    
+    # --- EN-TÊTES ---
+    headers = [
+        "Nom de tâche",
+        "Produit", 
+        "Famille",
+        "Unité de mesure",
+        "Responsable 1",
+        "Responsable 2",
+        "Temps_min",
+        "Temps_sec"
+    ]
+    
+    for col_num, header_title in enumerate(headers, 1):
+        cell = ws.cell(row=3, column=col_num, value=header_title)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = center_align
+        cell.border = thin_border
+    
+    # --- LIGNES D'EXEMPLE (optionnel) ---
+    example_data = [
+        ["Tri courrier ordinaire", "CO", "Tri", "Sac", "Trieur", "Chef d'équipe", "5", "30"],
+        ["Réception colis", "Colis", "Réception", "Colis", "Magasinier", "Responsable logistique", "2", "15"],
+    ]
+    
+    for row_idx, row_data in enumerate(example_data, 4):
+        for col_num, value in enumerate(row_data, 1):
+            cell = ws.cell(row=row_idx, column=col_num, value=value)
+            cell.border = thin_border
+            if col_num <= 6:
+                cell.alignment = left_align
+            else:
+                cell.alignment = center_align
+    
+    # --- INSTRUCTIONS ---
+    instructions_start = 8
+    ws[f'A{instructions_start}'] = "INSTRUCTIONS :"
+    ws[f'A{instructions_start}'].font = Font(bold=True, size=11, color="D32F2F")
+    
+    instructions = [
+        "1. Remplissez les colonnes avec les informations des tâches à mettre à jour.",
+        "2. Les colonnes 'Nom de tâche', 'Produit', 'Famille' et 'Unité de mesure' servent à identifier la tâche dans la base.",
+        "3. Les colonnes 'Responsable 1', 'Responsable 2', 'Temps_min' et 'Temps_sec' seront mises à jour.",
+        "4. Temps_min = minutes, Temps_sec = secondes (ex: 5 min 30 sec).",
+        "5. Ne modifiez pas les en-têtes de colonnes.",
+        "6. Supprimez les lignes d'exemple avant l'importation.",
+        "7. Une fois rempli, importez ce fichier dans l'application Bandoeng."
+    ]
+    
+    for i, instruction in enumerate(instructions, instructions_start + 1):
+        ws[f'A{i}'] = instruction
+        ws[f'A{i}'].font = Font(size=10)
+    
+    # --- LARGEURS DE COLONNES ---
+    col_widths = [35, 15, 20, 20, 25, 25, 12, 12]
+    for i, width in enumerate(col_widths, 1):
+        ws.column_dimensions[get_column_letter(i)].width = width
+    
+    # --- RETOUR DU FICHIER ---
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    filename = "Modele_Import_Taches_Bandoeng.xlsx"
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
