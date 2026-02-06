@@ -47,7 +47,7 @@ class Centre(Base):
     direction_id = Column(Integer, nullable=True) # Added missing column
     categorie_id = Column(Integer, ForeignKey("dbo.categories.id"), nullable=True)
     id_categorisation = Column(Integer, nullable=True) # Pour la catégorisation (Classe A, B, C...)
-    t_aps = Column(Float, name="APS", nullable=True, default=0.0)
+    aps = Column(Float, name="APS", nullable=True, default=0.0)
 
     region = relationship("Region", back_populates="centres")
     categorie = relationship("Categorie", back_populates="centres")
@@ -61,9 +61,19 @@ class Poste(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     label = Column(String, nullable=False)
-    type_poste = Column(String(10), nullable=True, index=True)  # 'MOD' | 'MOI'
+    type_poste = Column("type", String(50))
+    Code = Column(String(50), nullable=True, unique=True)
+    hie_poste = Column(String(50), nullable=True)  # ✅ AJOUT: Code hiérarchie pour l'organigramme
 
     centre_postes = relationship("CentrePoste", back_populates="poste")
+
+class HierarchiePostes(Base):
+    __tablename__ = "Hierarchie_postes"
+    __table_args__ = {"schema": "dbo"}
+
+    id = Column("ID", Integer, primary_key=True, index=True)
+    label = Column(String, nullable=False)
+    code = Column("Code", String(50), nullable=False)  # Clé de jointure avec Poste.hie_poste
 
 
 class CentrePoste(Base):
@@ -74,6 +84,7 @@ class CentrePoste(Base):
     centre_id = Column(Integer, ForeignKey("dbo.centres.id"), nullable=False)
     poste_id = Column(Integer, ForeignKey("dbo.postes.id"), nullable=False)
     effectif_actuel = Column(Integer, nullable=True, default=0)
+    code_resp = Column(String(50), nullable=True)
 
     centre = relationship("Centre", back_populates="centre_postes")
     poste = relationship("Poste", back_populates="centre_postes")
@@ -97,22 +108,20 @@ class Tache(Base):
     phase = Column(String, nullable=True)
     unite_mesure = Column(String, nullable=False)
     etat = Column(String, nullable=True)  # 🆕 AJOUT: État de la tâche (ex: 'NA' pour non active)
-    ordre = Column(Integer, nullable=True) # 🆕 AJOUT: Ordre d'affichage
+    # ordre = Column(Integer, nullable=True) # 🆕 AJOUT: Ordre d'affichage
     
-    min_min = Column(Integer, nullable=True)
-    moy_sec = Column(Float, nullable=True) # Renamed/Added per user request
-    max_min = Column(Integer, nullable=True)
-    max_sec = Column(Integer, nullable=True)
-
- 
+    min_min = Column(String, nullable=True)
+    moy_sec = Column(String, nullable=True) 
+    max_min = Column(String, nullable=True)
+    max_sec = Column(String, nullable=True)
     
     # 🆕 Nouveau champ pour la logique ED / Sac
-    base_calcul = Column(Float, nullable=True)
+    base_calcul = Column(String, nullable=True)
     
     # 🆕 Champ produit pour la règle 2064
     produit = Column(String, nullable=True)
 
-    moyenne_min = Column(Float, nullable=True, default=0.0)
+    moyenne_min = Column(String, nullable=True, default="0.0")
 
     # New Foreign Keys
     flux_id = Column(Integer, ForeignKey("dbo.flux.id"), nullable=True)

@@ -19,9 +19,13 @@ from app.api.simulation_data_driven import router as simulation_data_driven_rout
 from app.api.national import router as national_router
 from app.api.categorisation import router as categorisation_router
 from app.api.builder import router as builder_router
+from app.api.cndp_router import router as cndp_router # 🆕 CNDP Isolation
+from app.api.bandoeng_router import router as bandoeng_router # 🆕 Bandoeng Isolation
 
 from app.core.db import engine, Base, get_db
 from app.models import db_models, scoring_models, categorisation_models
+# ...
+
 
 # Create tables if they don't exist
 Base.metadata.create_all(bind=engine)
@@ -102,6 +106,8 @@ for route in app.routes:
         print(f"   -> {route.path} [{route.methods}]")
 
 app.include_router(categorisation_router, prefix="/api") # ✅ Catégorisation
+app.include_router(cndp_router, prefix="/api") # ✅ CNDP Isolation
+app.include_router(bandoeng_router, prefix="/api") # ✅ Bandoeng Isolation
 #app.include_router(views_router, prefix="/api")
 from app.api.taches_mgmt import router as taches_mgmt_router # 🆕 Taches Management
 from app.api.postes_mgmt import router as postes_mgmt_router # 🆕 Postes Management

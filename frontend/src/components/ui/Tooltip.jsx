@@ -17,7 +17,8 @@ const Tooltip = memo(({
   children,
   position = 'top',
   icon = false,
-  delay = 200
+  delay = 200,
+  className = ""
 }) => {
   const [isVisible, setIsVisible] = useState(false);
   let timeoutId;
@@ -47,7 +48,7 @@ const Tooltip = memo(({
 
   return (
     <div
-      className="relative inline-flex items-center"
+      className={`relative inline-flex items-center ${className}`}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
@@ -62,8 +63,8 @@ const Tooltip = memo(({
           {/* Tooltip */}
           <div
             className={`
-              absolute z-50 px-3 py-2 text-xs text-white bg-[#005EA8] rounded-lg shadow-lg
-              whitespace-nowrap max-w-xs
+              absolute z-50 px-2 py-2 text-xs text-white bg-[#005EA8] rounded-lg shadow-lg
+              whitespace-normal max-w-lg text-center
               ${positionClasses[position]}
             `}
             style={{

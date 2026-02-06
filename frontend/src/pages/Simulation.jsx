@@ -2619,7 +2619,6 @@ export default function SimulationEffectifs() {
             idleMinutes={idleMinutes}
             setIdleMinutes={setIdleMinutes}
             tauxComplexite={tauxComplexite}
-            tauxComplexite={tauxComplexite}
             setTauxComplexite={setTauxComplexite}
             natureGeo={natureGeo}
             setNatureGeo={setNatureGeo}

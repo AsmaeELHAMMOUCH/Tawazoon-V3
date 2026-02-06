@@ -12,12 +12,12 @@ import traceback
 from fastapi import HTTPException
 
 router = APIRouter(tags=["directions"])
-print("⚡ CHARGEMENT MODULE DIRECTIONS (V2 ACTIVE)")
+print("[INFO] CHARGEMENT MODULE DIRECTIONS (V2 ACTIVE)")
 
 @router.post("/simulation/direction", response_model=DirectionSimResponse)
 def simulate_direction_advanced(payload: DirectionSimRequest, db: Session = Depends(get_db)):
-    print(f"🚀 API: REÇU POST /simulation/direction - ID={payload.direction_id} Mode={payload.mode}")
-    print(f"📦 API: Nombre de volumes reçus: {len(payload.volumes) if payload.volumes else 0}")
+    print(f"[API] REÇU POST /simulation/direction - ID={payload.direction_id} Mode={payload.mode}")
+    print(f"[API] Nombre de volumes reçus: {len(payload.volumes) if payload.volumes else 0}")
     try:
         return process_direction_simulation_v2(db, payload)
     except HTTPException:
@@ -122,7 +122,7 @@ def centres_by_direction(direction_id: int, db: Session = Depends(get_db)):
 @router.post("/simulation/direction/v2", response_model=DirectionSimResponse)
 def simulate_direction_v2_clean(payload: DirectionSimRequest, db: Session = Depends(get_db)):
     """Nouvelle route V2 propre pour la simulation direction"""
-    print(f"🚀 API V2: Simulation demandée ID={payload.direction_id}")
+    print(f"[API V2] Simulation demandée ID={payload.direction_id}")
     try:
         return process_direction_simulation_v2_clean(db, payload)
     except HTTPException:

@@ -4,10 +4,10 @@ from typing import Optional
 class Settings(BaseSettings):
     # Database
     DB_DRIVER: str = "ODBC Driver 17 for SQL Server"
-    DB_SERVER: str = "192.168.80.1,1433"
+    DB_SERVER: str = "BK-P-06"
     DB_NAME: str = "simulateur"
     DB_USER: str = "sa"
-    DB_PASSWORD: str = "Sql@123"
+    DB_PASSWORD: str = "Dev@2000"
     
     # API
     API_V1_PREFIX: str = "/api"

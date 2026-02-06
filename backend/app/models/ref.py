@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Float, Integer, String, ForeignKey
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, foreign, remote
 from app.core.db import Base
 
 class Activite(Base):
@@ -39,8 +39,10 @@ class Poste(Base):
     __tablename__ = "postes"
     __table_args__ = {'schema': 'dbo'}
     id = Column(Integer, primary_key=True, index=True)
-    label = Column(String, nullable=False)
-    type_poste = Column(String(10), nullable=True, index=True)  # 'MOD' | 'MOI'
+    label = Column(String(255))
+    type_poste = Column("type", String(50))
+    # Code linked to dbo.Poste.Code
+    Code = Column(String(50), nullable=True, unique=True)
     centre_postes = relationship("CentrePoste", back_populates="poste")
 
 class CentrePoste(Base):
@@ -53,6 +55,14 @@ class CentrePoste(Base):
     centre = relationship("Centre", back_populates="centre_postes")
     poste = relationship("Poste", back_populates="centre_postes")
     taches = relationship("Tache", back_populates="centre_poste")
+    code_resp = Column(String(50), nullable=True)
+    
+    poste_ref = relationship(
+        "Poste",
+        primaryjoin="foreign(CentrePoste.code_resp) == remote(Poste.Code)",
+        uselist=False,
+        viewonly=True
+    )
 
 class Tache(Base):
     __tablename__ = "taches"

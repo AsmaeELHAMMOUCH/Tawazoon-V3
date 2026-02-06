@@ -38,23 +38,28 @@ export function useSimulationParams() {
   const [region, setRegion] = usePersistedState('sim_region', '');
   const [centre, setCentre] = usePersistedState('sim_centre', '');
   const [poste, setPoste] = usePersistedState('sim_poste', '__ALL__');
-  
+
   // Paramètres de performance
   const [productivite, setProductivite] = usePersistedState('sim_productivite', 100);
   const [idleMinutes, setIdleMinutes] = usePersistedState('sim_idleMinutes', 0);
   const [tauxComplexite, setTauxComplexite] = usePersistedState('sim_tauxComplexite', 0);
   const [natureGeo, setNatureGeo] = usePersistedState('sim_natureGeo', 0);
-  
+
   // Paramètres ED et ratios
   const [edPercent, setEdPercent] = usePersistedState('sim_edPercent', 60);
   const [colisAmanaParSac, setColisAmanaParSac] = usePersistedState('sim_colisAmanaParSac', 10);
   const [courriersParSac, setCourriersParSac] = usePersistedState('sim_courriersParSac', 4500);
   const [colisParCollecte, setColisParCollecte] = usePersistedState('sim_colisParCollecte', 1);
-  
+
   // 🆕 Axes vs Distribution (pourcentages UI 0-100)
   const [pctAxesArrivee, setPctAxesArrivee] = usePersistedState('sim_pctAxesArrivee', 40);
   const [pctAxesDepart, setPctAxesDepart] = usePersistedState('sim_pctAxesDepart', 30);
   
+  // 🆕 Amana Specific (Image Request)
+  const [pctRetenue, setPctRetenue] = usePersistedState('sim_pctRetenue', 1);
+  const [pctEchantillon, setPctEchantillon] = usePersistedState('sim_pctEchantillon', 5);
+  const [pctSac, setPctSac] = usePersistedState('sim_pctSac', 60);
+
   // 🆕 Collecte et Retour
   const [pctCollecte, setPctCollecte] = usePersistedState('sim_pctCollecte', 5.0);
 
@@ -75,7 +80,7 @@ export function useSimulationParams() {
   const [colis, setColis] = usePersistedState('sim_colis', 0);
   const [courrier, setCourrier] = usePersistedState('sim_courrier', 0);
   const [scelle, setScelle] = usePersistedState('sim_scelle', 0);
-  
+
   // Volumes annuels
   const [courrierOrdinaire, setCourrierOrdinaire] = usePersistedState('sim_courrierOrdinaire', 0);
   const [courrierRecommande, setCourrierRecommande] = usePersistedState('sim_courrierRecommande', 0);
@@ -95,13 +100,13 @@ export function useSimulationParams() {
     region, setRegion,
     centre, setCentre,
     poste, setPoste,
-    
+
     // Performance
     productivite, setProductivite,
     idleMinutes, setIdleMinutes,
     tauxComplexite, setTauxComplexite,
     natureGeo, setNatureGeo,
-    
+
     // ED et ratios
     edPercent, setEdPercent,
     colisAmanaParSac, setColisAmanaParSac,
@@ -120,13 +125,18 @@ export function useSimulationParams() {
     pctRetour, setPctRetour,
     pctInternational, setPctInternational,
     shift, setShift,
-    
+
+    // 🆕 Amana Specific
+    pctRetenue, setPctRetenue,
+    pctEchantillon, setPctEchantillon,
+    pctSac, setPctSac,
+
     // Volumes journaliers
     sacs, setSacs,
     colis, setColis,
     courrier, setCourrier,
     scelle, setScelle,
-    
+
     // Volumes annuels
     courrierOrdinaire, setCourrierOrdinaire,
     courrierRecommande, setCourrierRecommande,

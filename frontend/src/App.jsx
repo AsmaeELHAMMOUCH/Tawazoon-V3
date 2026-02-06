@@ -65,6 +65,10 @@ import PostesManager from "./pages/admin/PostesManager"; // 🆕 Page gestion Po
 import Glossary from "./pages/help/Glossary"; // 🆕 Page Glossaire
 import MainMenu from "./pages/MainMenu"; // 🆕 Page Menu Principal
 import CentresUniques from "./pages/CentresUniques"; // 🆕 Page Centres Uniques
+import CNDPSimulation from "./pages/centres_uniq/CNDPSimulation"; // 🆕 CNDP Isolated Page
+import SimulationCentresUniques from "./pages/SimulationCentresUniques"; // 🆕 Parent Page CNDP/Bandoeng
+import GlobalImportPage from "./pages/GlobalImportPage"; // 🆕 Global Import
+
 
 // 🔹 NOUVELLE ARCHITECTURE DATA-DRIVEN - Intégrée directement dans SimulationEffectifs
 
@@ -228,6 +232,12 @@ export default function App() {
           <Route path="simulation/region" element={<RouteErrorBoundary><SimulationEffectifs /></RouteErrorBoundary>} />
           <Route path="simulation/national" element={<RouteErrorBoundary><SimulationEffectifs /></RouteErrorBoundary>} />
           <Route path="simulation/categorisation/:centreId" element={<RouteErrorBoundary><CategorisationCentre /></RouteErrorBoundary>} />
+          <Route path="simulation/cndp" element={<RouteErrorBoundary><CNDPSimulation /></RouteErrorBoundary>} />
+          <Route path="simulation/centres-uniques" element={<RouteErrorBoundary><SimulationCentresUniques /></RouteErrorBoundary>} />
+
+          {/* Administration */}
+          <Route path="admin/import-tasks" element={<RouteErrorBoundary><GlobalImportPage /></RouteErrorBoundary>} />
+
           <Route path="creer-centre" element={<RouteErrorBoundary><CentreBuilder /></RouteErrorBoundary>} />
           <Route path="centres-uniques" element={<RouteErrorBoundary><CentresUniques /></RouteErrorBoundary>} />
           <Route path="builder" element={<RouteErrorBoundary><AjoutTache /></RouteErrorBoundary>} />

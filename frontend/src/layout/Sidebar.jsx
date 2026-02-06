@@ -23,6 +23,8 @@ import {
   Layers, // 🆕 Import
   UserRound, // 🆕 Import
   HelpCircle, // 🆕 Import
+  TrendingUp,
+  Database,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import tawazoonLogo from "@/assets/LOGO_Tawazoon_RH.png";
@@ -71,6 +73,8 @@ export default function Sidebar({
     { label: "Par Région", slug: "direction", flux: "direction" },
     { label: "National", slug: "national", flux: "national" },
     { label: "Niveau Siège", slug: "region", flux: "siege" },
+    { label: "Nationale", slug: "national", flux: "national" },
+    { label: "Centres Uniques", slug: "centres-uniques", flux: "centres-uniques" },
   ];
 
   const vueGlobaleSub = [
@@ -84,6 +88,17 @@ export default function Sidebar({
       label: "Économies budgétaires",
       icon: PiggyBank,
       path: "/app/vue-globale/economies-budgetaires",
+    },
+    {
+      id: "projections",
+      label: "Projections",
+      icon: TrendingUp,
+    },
+    {
+      id: "admin-import",
+      label: "Mise à jour Tâches",
+      icon: Database,
+      path: "/app/admin/import-tasks"
     },
     {
       label: "Comparatif Positions",
