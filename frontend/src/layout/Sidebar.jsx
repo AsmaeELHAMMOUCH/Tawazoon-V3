@@ -19,6 +19,8 @@ import {
   ArrowLeftRight,
   Tag,
   History,
+  TrendingUp,
+  Database,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import tawazoonLogo from "@/assets/LOGO_Tawazoon_RH.png";
@@ -80,6 +82,17 @@ export default function Sidebar({
       label: "Économies budgétaires",
       icon: PiggyBank,
       path: "/app/vue-globale/economies-budgetaires",
+    },
+    {
+      id: "projections",
+      label: "Projections",
+      icon: TrendingUp,
+    },
+    {
+      id: "admin-import",
+      label: "Mise à jour Tâches",
+      icon: Database,
+      path: "/app/admin/import-tasks"
     },
     {
       label: "Comparatif Positions",

@@ -62,6 +62,7 @@ class BandoengParameters:
     pct_local: float = 0.0
     pct_international: float = 0.0
     pct_national: float = 0.0
+    pct_march_ordinaire: float = 0.0
     productivite: float = 100.0
     idle_minutes: float = 0.0
     ratio_trieur: float = 1200.0
@@ -181,6 +182,16 @@ def get_volume_by_product(produit: str, volumes: BandoengInputVolumes) -> float:
     if p in ["AMANA DÉPÔT TOTAL","AMANA DEPOT","AMANA DÉPÔT","AMANA DEPÔT"]:
         return sum_amana_depot()
     
+    if p == "CO LOCAL":
+        # Request: CO Local = CO Med Local + CO Arrivé Local
+        return (get_grid_val(g, ['co', 'med', 'local']) + 
+                get_grid_val(g, ['co', 'arrive', 'local']))
+
+    if p == "CR LOCAL":
+        # Request: CR Local = CR Med Local + CR Arrivé Local
+        return (get_grid_val(g, ['cr', 'med', 'local']) + 
+                get_grid_val(g, ['cr', 'arrive', 'local']))
+
     if p == "CO MED LOCAL":
         return get_grid_val(g, ['co', 'med', 'local'])
     
@@ -311,6 +322,13 @@ def calculate_task_duration(
         m = params.coeff_circ * pct
         multiplier *= m
         phase_part = f" * Circ*Collect({m:.4f})"
+
+    elif "circul_march" in phase:
+        pct = (params.pct_march_ordinaire / 100.0)
+        m = params.coeff_circ * pct
+        multiplier *= m
+        phase_part = f" * Circ*March({m:.4f})"
+
         
     elif "retour" in phase:
         pct = (params.pct_retour / 100.0)

@@ -1,5 +1,5 @@
 from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, Response, Form
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from app.core.db import get_db
@@ -11,8 +11,9 @@ from app.services.bandoeng_engine import (
     BandoengTaskResult
 )
 
-from openpyxl import load_workbook
+from openpyxl import load_workbook, Workbook
 import io
+from copy import deepcopy
 
 router = APIRouter(prefix="/bandoeng", tags=["Bandoeng Simulation"])
 
@@ -48,6 +49,7 @@ class BandoengParamsIn(BaseModel):
     pct_local: float = 0.0
     pct_international: float = 0.0
     pct_national: float = 0.0
+    pct_march_ordinaire: float = 0.0
     productivite: float = 100.0
     idle_minutes: float = 0.0
     ratio_trieur: float = 1200.0
@@ -119,6 +121,7 @@ def simulate_bandoeng(request: BandoengSimulateRequest, db: Session = Depends(ge
             pct_local=request.params.pct_local,
             pct_international=request.params.pct_international,
             pct_national=request.params.pct_national,
+            pct_march_ordinaire=request.params.pct_march_ordinaire,
             productivite=request.params.productivite,
             idle_minutes=request.params.idle_minutes,
             ratio_trieur=request.params.ratio_trieur,
@@ -380,174 +383,245 @@ async def import_bandoeng_volumes(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail=f"Erreur lors de la lecture du fichier Excel: {str(e)}")
 
 
+@router.get("/import-template")
+def get_import_template():
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Modele Import"
+    headers = [
+        "Nom de tâche", "Produit", "Famille", "Unité de mesure", 
+        "Responsable 1", "Responsable 2", "Temps_min", "Temps_sec"
+    ]
+    ws.append(headers)
+    
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    
+    return Response(
+        content=buffer.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=modele_import_taches.xlsx"}
+    )
+
 @router.post("/import/tasks")
-async def import_bandoeng_tasks(file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def import_bandoeng_tasks(
+    centre_id: int = Query(..., description="ID du centre cible"),
+    file: UploadFile = File(...), 
+    db: Session = Depends(get_db)
+):
     """
     Importe les tâches depuis un fichier Excel et met à jour les responsables et chronos.
-    
-    Logique:
-    1. Recherche par: nom_tache, produit, famille_uo, unite_mesure, centre_id=1942
-    2. Met à jour: moyenne_min, moy_sec (et potentiellement les responsables via centre_poste)
+    Gère la duplication des tâches si deux responsables sont fournis.
     """
     try:
         content = await file.read()
         wb = load_workbook(filename=io.BytesIO(content), data_only=True)
         ws = wb.active
         
-        # Statistiques
         updated_count = 0
+        duplicate_count = 0
         not_found_count = 0
         errors = []
         
-        # Parcourir les lignes (à partir de la ligne 4, après les en-têtes à la ligne 3)
-        for row_idx in range(4, ws.max_row + 1):
-            # Lire les valeurs et nettoyer les espaces
-            nom_tache_raw = ws.cell(row=row_idx, column=1).value
-            produit_raw = ws.cell(row=row_idx, column=2).value
-            famille_raw = ws.cell(row=row_idx, column=3).value
-            unite_mesure_raw = ws.cell(row=row_idx, column=4).value
-            responsable_1_raw = ws.cell(row=row_idx, column=5).value
-            responsable_2_raw = ws.cell(row=row_idx, column=6).value
-            temps_min = ws.cell(row=row_idx, column=7).value
-            temps_sec = ws.cell(row=row_idx, column=8).value
+        # --- Helper: Resolve CentrePoste ---
+        from app.models.db_models import Tache, CentrePoste, Poste
+        from sqlalchemy import func, or_
+        
+        def resolve_centre_poste(session, c_id, resp_name):
+            if not resp_name:
+                return None
+                
+            l_resp = resp_name.strip()
+            # 1. Trouver le Poste (Exact match on Label, slightly loose)
+            # Utilisation de ILIKE via func.lower pour etre insensible a la casse
+            poste = session.query(Poste).filter(func.lower(func.trim(Poste.label)) == l_resp.lower()).first()
             
-            # Nettoyer les espaces (début et fin)
-            nom_tache = str(nom_tache_raw).strip() if nom_tache_raw else None
-            produit = str(produit_raw).strip() if produit_raw else None
-            famille = str(famille_raw).strip() if famille_raw else None
-            unite_mesure = str(unite_mesure_raw).strip() if unite_mesure_raw else None
-            responsable_1 = str(responsable_1_raw).strip() if responsable_1_raw else None
-            responsable_2 = str(responsable_2_raw).strip() if responsable_2_raw else None
+            if not poste:
+                return None
             
-            # Ignorer les lignes vides
-            if not nom_tache or nom_tache == "" or nom_tache == "None":
-                continue
-            
-            # Convertir les temps en nombres (gérer virgule et point comme séparateur décimal)
-            try:
-                # Convertir en string et remplacer virgule par point si nécessaire
-                if temps_min is not None:
-                    temps_min_str = str(temps_min).replace(',', '.')
-                    temps_min_val = float(temps_min_str)
-                else:
-                    temps_min_val = 0.0
-                    
-                if temps_sec is not None:
-                    temps_sec_str = str(temps_sec).replace(',', '.')
-                    temps_sec_val = float(temps_sec_str)
-                else:
-                    temps_sec_val = 0.0
-                    
-            except (ValueError, TypeError) as e:
-                errors.append(f"Ligne {row_idx}: Temps invalide (min={temps_min}, sec={temps_sec}) - {str(e)}")
-                continue
-            
-            # Stocker temps_min directement dans moyenne_min (sans conversion)
-            moyenne_min_val = temps_min_val
-            
-            # Debug logging
-            print(f"DEBUG Import - Ligne {row_idx}: temps_min={temps_min} -> moyenne_min={moyenne_min_val}, "
-                  f"temps_sec={temps_sec} -> moy_sec={temps_sec_val}")
-            
-            # Rechercher la tâche dans la base
-            # On doit joindre avec centre_poste pour filtrer par centre_id
-            from app.models.db_models import Tache, CentrePoste, Poste
-            from sqlalchemy import func
-            
-            query = (
-                db.query(Tache)
-                .join(CentrePoste, Tache.centre_poste_id == CentrePoste.id)
-                .filter(CentrePoste.centre_id == BANDOENG_CENTRE_ID)
+            # 2. Trouver CentrePoste via Code
+            if not poste.Code:
+                # Fallback: try finding by ID if possible? No, user said "par le nom... table postes... code de postes... table centres_poste (code_resp)"
+                return None
+                
+            cp = (
+                session.query(CentrePoste)
+                .filter(CentrePoste.centre_id == c_id)
+                .filter(CentrePoste.code_resp == poste.Code)
+                .first()
             )
             
-            # Filtres sur la tâche (avec TRIM et LOWER pour maximiser les correspondances)
-            if nom_tache:
-                query = query.filter(func.lower(func.trim(Tache.nom_tache)) == nom_tache.lower())
-            if produit:
-                # Utilisation de ILIKE simulé par lower() + like pour compatibilité
-                query = query.filter(func.lower(Tache.produit).like(f"%{produit.lower()}%"))
-            if famille:
-                query = query.filter(func.lower(func.trim(Tache.famille_uo)) == famille.lower())
-            if unite_mesure:
-                query = query.filter(func.lower(func.trim(Tache.unite_mesure)) == unite_mesure.lower())
-            
-            tasks = query.all()
-            
-            if not tasks:
-                not_found_count += 1
-                errors.append(
-                    f"Ligne {row_idx}: Tâche non trouvée (nom={nom_tache}, produit={produit}, "
-                    f"famille={famille}, unité={unite_mesure})"
+            if cp:
+                return cp.id
+            else:
+                # 3. Créer CentrePoste
+                new_cp = CentrePoste(
+                    centre_id=c_id,
+                    poste_id=poste.id,  # "poste_id le meme de la ligne trouvée"
+                    code_resp=poste.Code,
+                    effectif_actuel=0
                 )
-                continue
+                session.add(new_cp)
+                session.flush()
+                return new_cp.id
+
+        # --- Main Loop ---
+        for row_idx in range(2, ws.max_row + 1):
+            # Lecture
+            nom_tache = str(ws.cell(row=row_idx, column=1).value or "").strip()
+            produit = str(ws.cell(row=row_idx, column=2).value or "").strip()
+            famille = str(ws.cell(row=row_idx, column=3).value or "").strip()
+            unite_mesure = str(ws.cell(row=row_idx, column=4).value or "").strip()
             
-            # Mettre à jour toutes les tâches trouvées
-            for task in tasks:
-                task.moyenne_min = moyenne_min_val
-                task.moy_sec = temps_sec_val
+            resp1_raw = str(ws.cell(row=row_idx, column=5).value or "").strip()
+            resp2_raw = str(ws.cell(row=row_idx, column=6).value or "").strip()
+            
+            t_min_raw = ws.cell(row=row_idx, column=7).value
+            t_sec_raw = ws.cell(row=row_idx, column=8).value
+            
+            if not nom_tache or nom_tache == "None":
+                continue
                 
-                # Mise à jour du responsable si fourni
-                if responsable_1 and str(responsable_1).strip():
-                    responsable_label = str(responsable_1).strip()
+            # Parsing Temps
+            try:
+                t_min = float(str(t_min_raw).replace(',', '.')) if t_min_raw is not None else 0.0
+                t_sec = float(str(t_sec_raw).replace(',', '.')) if t_sec_raw is not None else 0.0
+            except:
+                errors.append(f"Ligne {row_idx}: Temps invalide")
+                continue
+                
+            # Recherche Tâches
+            q = (
+                db.query(Tache)
+                .join(CentrePoste, Tache.centre_poste_id == CentrePoste.id)
+                .filter(CentrePoste.centre_id == centre_id)
+                .filter(func.lower(func.trim(Tache.nom_tache)) == nom_tache.lower())
+                .filter(func.lower(func.trim(Tache.famille_uo)) == famille.lower())
+                .filter(func.lower(func.trim(Tache.unite_mesure)) == unite_mesure.lower())
+            )
+            
+            # Filtre Produit (LIKE)
+            if produit:
+                 q = q.filter(func.lower(Tache.produit).like(f"%{produit.lower()}%"))
+            
+            found_tasks = q.all()
+            
+            if not found_tasks:
+                not_found_count += 1
+                errors.append(f"Avertissement Ligne {row_idx}: Tâche '{nom_tache}' (Fam: {famille}, Unit: {unite_mesure}) non trouvée.")
+                continue
+                
+            # --- Application Règles ---
+            cp_id_1 = resolve_centre_poste(db, centre_id, resp1_raw) if resp1_raw else None
+            # Pour resp2, on ne le cherche que si resp2_raw existe
+            cp_id_2 = resolve_centre_poste(db, centre_id, resp2_raw) if resp2_raw else None
+            
+            # Cas A : Deux Responsables
+            if resp1_raw and resp2_raw:
+                if len(found_tasks) == 1:
+                    # 1 seule tâche -> Update T1, Dupliquer T2
+                    t1 = found_tasks[0]
                     
-                    # 1. Chercher ou créer le Poste (avec TRIM pour nettoyer les espaces)
-                    poste = db.query(Poste).filter(func.trim(Poste.label) == responsable_label).first()
+                    # Update T1
+                    if cp_id_1: t1.centre_poste_id = cp_id_1
+                    t1.moyenne_min = t_min
+                    t1.moy_sec = t_sec
+                    updated_count += 1
                     
-                    if not poste:
-                        errors.append(f"Ligne {row_idx}: Poste '{responsable_label}' introuvable. Mise à jour annulée.")
-                        continue
-
-                    if not poste.Code:
-                        errors.append(f"Ligne {row_idx}: Poste '{responsable_label}' (ID: {poste.id}) n'a pas de Code. Impossible de lier par Code.")
-                        continue
-
-                    print(f"DEBUG: Poste '{responsable_label}' OK. ID={poste.id}, Code={poste.Code}")
-
-                    # 2. Chercher ou créer le CentrePoste
-                    centre_poste = (
-                        db.query(CentrePoste)
-                        .filter(CentrePoste.code_resp == poste.Code)
-                        .filter(CentrePoste.centre_id == BANDOENG_CENTRE_ID)
-                        .first()
-                    )
-                    
-                    if centre_poste:
-                        print(f"DEBUG: CentrePoste EXISTANT trouvé. ID={centre_poste.id}, CentreID={centre_poste.centre_id}, CodeResp={centre_poste.code_resp}")
-                    else:
-                        print(f"DEBUG: CentrePoste introuvable pour Code={poste.Code} et Centre={BANDOENG_CENTRE_ID}. Création...")
-                        # Créer une nouvelle association centre-poste
-                        centre_poste = CentrePoste(
-                            centre_id=BANDOENG_CENTRE_ID,
-                            poste_id=poste.id,
-                            code_resp=poste.Code,
-                            effectif_actuel=0
+                    # Create T2 (Duplicate)
+                    if cp_id_2:
+                        # On doit copier l'objet Tache. 
+                        # SQLAlchemy ne supporte pas deepcopy directement sur les instances attachées facilement sans détacher.
+                        # On crée une nouvelle instance manuellement
+                        t2 = Tache(
+                            centre_poste_id=cp_id_2,
+                            nom_tache=t1.nom_tache,
+                            famille_uo=t1.famille_uo,
+                            phase=t1.phase,
+                            unite_mesure=t1.unite_mesure,
+                            etat=t1.etat,
+                            produit=t1.produit,
+                            base_calcul=t1.base_calcul,
+                            flux_id=t1.flux_id,
+                            sens_id=t1.sens_id,
+                            segment_id=t1.segment_id,
+                            moyenne_min=t_min,
+                            moy_sec=t_sec
                         )
-                        db.add(centre_poste)
-                        db.flush()  # Pour obtenir l'ID
-                        print(f"DEBUG: NOUVEAU CentrePoste créé. ID={centre_poste.id}, CentreID={centre_poste.centre_id} (Code: {poste.Code})")
-                    
-                    # 3. Mettre à jour le centre_poste_id de la tâche
-                    old_cp_id = task.centre_poste_id
-                    task.centre_poste_id = centre_poste.id
-                    print(f"DEBUG: Tâche '{task.nom_tache}' mise à jour. Old CP_ID={old_cp_id} -> New CP_ID={centre_poste.id}")
+                        db.add(t2)
+                        duplicate_count += 1
+                    else:
+                        errors.append(f"Ligne {row_idx}: Resp2 '{resp2_raw}' introuvable/création impossible. Duplication annulée.")
                 
+                elif len(found_tasks) >= 2:
+                    # 2+ tâches -> Update T1 et T2
+                    # Tâche 1 -> Resp 1
+                    t1 = found_tasks[0]
+                    if cp_id_1: t1.centre_poste_id = cp_id_1
+                    t1.moyenne_min = t_min
+                    t1.moy_sec = t_sec
+                    updated_count += 1
+                    
+                    # Tâche 2 -> Resp 2
+                    t2 = found_tasks[1]
+                    if cp_id_2: t2.centre_poste_id = cp_id_2
+                    t2.moyenne_min = t_min
+                    t2.moy_sec = t_sec
+                    updated_count += 1
+                    
+                    # Les autres ? (Si > 2) - Le plan dit "Mettre chrono à 0" pour les doublons en Cas B, mais pour Cas A "Update T1, Update T2". 
+                    # On assume que les autres (T3...) ne sont pas touchés ou mis à 0?
+                    # Dans le doute du commentaire "on modifie ni le chrono ni le responsable" qui s'appliquait avant modif,
+                    # je vais appliquer la logique Cas B aux extras : Chrono 0
+                    for t_extra in found_tasks[2:]:
+                         t_extra.moyenne_min = 0
+                         t_extra.moy_sec = 0
 
-            updated_count += len(tasks)
-        
-        # Commit des changements
+            # Cas B : Un Seul Responsable (Resp1)
+            elif resp1_raw and not resp2_raw:
+                if len(found_tasks) == 1:
+                     # Simple update
+                     t1 = found_tasks[0]
+                     if cp_id_1: t1.centre_poste_id = cp_id_1
+                     t1.moyenne_min = t_min
+                     t1.moy_sec = t_sec
+                     updated_count += 1
+                
+                elif len(found_tasks) >= 2:
+                    # Règle modifiée : T1 -> Update Resp/Chrono, T2..TN -> Chrono=0
+                    t1 = found_tasks[0]
+                    if cp_id_1: t1.centre_poste_id = cp_id_1
+                    t1.moyenne_min = t_min
+                    t1.moy_sec = t_sec
+                    updated_count += 1
+                    
+                    # Les autres -> Chrono 0
+                    for t_other in found_tasks[1:]:
+                        t_other.moyenne_min = 0
+                        t_other.moy_sec = 0
+                        # Pas de modif de responsable
+            
+            else:
+                 # Aucun responsable fourni ? On met juste à jour le chrono ?
+                 # Pas spécifié, on assume update chrono sur tous
+                 for t in found_tasks:
+                     t.moyenne_min = t_min
+                     t.moy_sec = t_sec
+                     updated_count += 1
+
         db.commit()
         
         return {
             "success": True,
             "updated_count": updated_count,
+            "duplicate_count": duplicate_count,
             "not_found_count": not_found_count,
-            "errors": errors,
-            "message": f"{updated_count} tâche(s) mise(s) à jour avec succès."
+            "errors": errors
         }
-        
+
     except Exception as e:
         db.rollback()
         import traceback
         traceback.print_exc()
-        raise HTTPException(status_code=400, detail=f"Erreur lors de l'importation: {str(e)}")
-
+        raise HTTPException(status_code=400, detail=f"Erreur import: {str(e)}")

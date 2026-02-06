@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+﻿import React, { useState, useEffect, useRef } from "react";
 import * as XLSX from 'xlsx';
 import {
     Card, CardContent, CardHeader, CardTitle
@@ -65,6 +65,7 @@ const DEFAULT_PARAMS = {
     pct_local: 0,
     pct_international: 0,
     pct_national: 100,
+    pct_march_ordinaire: 0,
     productivite: 100,
     idle_minutes: 0,
     shift: 1
@@ -113,20 +114,24 @@ const FormattedInput = ({ value, onChange, className, suffix }) => {
 /* ===================== KPI COMPONENTS (MATCHING CNDP) ===================== */
 const EffectifFooter = ({ totalLabel, totalValue, modValue, moiValue, apsLabel, apsValue }) => (
     <div className="text-[10px] text-slate-600 space-y-1.5">
-        <div className="flex flex-wrap items-center justify-center gap-2 rounded-full bg-slate-50 px-2 py-1">
-            <span className="font-semibold text-slate-700">{totalLabel}</span>
-            <span className="px-2 py-0.5 rounded-full bg-white text-slate-800 font-semibold shadow-sm">Total : {totalValue}</span>
-        </div>
+        {totalValue && (
+            <div className="flex flex-wrap items-center justify-center gap-2 rounded-full bg-slate-50 px-2 py-1">
+                {totalLabel && <span className="font-semibold text-slate-700">{totalLabel}</span>}
+                <span className="px-2 py-0.5 rounded-full bg-white text-slate-800 font-semibold shadow-sm">Total : {totalValue}</span>
+            </div>
+        )}
         <div className="flex items-center justify-center gap-2">
             <span className="px-1.5 py-0.5 rounded-full bg-blue-50 text-[#005EA8]">MOD : {modValue}</span>
             {moiValue !== undefined && moiValue !== null && (
                 <span className="px-1.5 py-0.5 rounded-full bg-fuchsia-50 text-fuchsia-700">MOI : {moiValue}</span>
             )}
         </div>
-        <div className="flex flex-wrap items-center justify-center gap-2 rounded-full bg-emerald-50/70 px-2 py-1">
-            <span className="font-semibold text-emerald-800">{apsLabel}</span>
-            <span className="px-2 py-0.5 rounded-full bg-white/90 text-emerald-700 font-semibold shadow-sm">Total APS : {apsValue}</span>
-        </div>
+        {(apsValue !== undefined && apsValue !== null) && (
+            <div className="flex flex-wrap items-center justify-center gap-2 rounded-full bg-emerald-50/70 px-2 py-1">
+                <span className="font-semibold text-emerald-800">{apsLabel}</span>
+                <span className="px-2 py-0.5 rounded-full bg-white/90 text-emerald-700 font-semibold shadow-sm">Total APS : {apsValue}</span>
+            </div>
+        )}
     </div>
 );
 
@@ -137,10 +142,12 @@ const KPICardGlass = ({
     const T = {
         blue: { ring: "ring-blue-300/60", halo: "from-blue-400/25", text: "text-[#005EA8]", dot: "bg-[#005EA8]" },
         amber: { ring: "ring-amber-300/60", halo: "from-amber-400/25", text: "text-amber-600", dot: "bg-amber-500" },
+        cyan: { ring: "ring-cyan-300/60", halo: "from-cyan-400/25", text: "text-cyan-600", dot: "bg-cyan-500" },
+        rose: { ring: "ring-rose-300/60", halo: "from-rose-400/25", text: "text-rose-600", dot: "bg-rose-500" },
+        emerald: { ring: "ring-emerald-300/60", halo: "from-emerald-400/25", text: "text-emerald-600", dot: "bg-emerald-500" },
         green: { ring: "ring-emerald-300/60", halo: "from-emerald-400/25", text: "text-emerald-600", dot: "bg-emerald-500" },
         slate: { ring: "ring-slate-300/60", halo: "from-slate-400/20", text: "text-slate-700", dot: "bg-slate-500" },
         red: { ring: "ring-rose-300/60", halo: "from-rose-400/25", text: "text-rose-600", dot: "bg-rose-500" },
-        cyan: { ring: "ring-cyan-300/60", halo: "from-cyan-400/25", text: "text-cyan-600", dot: "bg-cyan-500" },
     }[tone] || { ring: "ring-blue-300/60", halo: "from-blue-400/25", text: "text-[#005EA8]", dot: "bg-[#005EA8]" };
 
     return (
@@ -244,6 +251,7 @@ export default function BandoengSimulation() {
 
     // UI State
     const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+    const [isImportTasksOpen, setIsImportTasksOpen] = useState(false);
 
     const [params, setParams] = useState(DEFAULT_PARAMS);
 
@@ -411,7 +419,7 @@ export default function BandoengSimulation() {
             toast.success(`Besoin total calculé : ${data.total_ressources_humaines} ETP`);
         } catch (error) {
             console.error("Simulation error:", error);
-            toast.error("Échec de la simulation");
+            toast.error("Ã‰chec de la simulation");
         } finally {
             setLoading(false);
         }
@@ -480,14 +488,24 @@ export default function BandoengSimulation() {
 
         const toastId = toast.loading("Importation des tâches en cours...");
         try {
-            const data = await importBandoengTasks(file);
+            // Pass the BANDOENG_CENTRE_ID to the API
+            const data = await importBandoengTasks(file, BANDOENG_CENTRE_ID);
             if (data && data.success) {
+                const dupMsg = data.duplicate_count > 0 ? `, ${data.duplicate_count} dupliquée(s)` : "";
                 toast.success(
-                    `${data.updated_count} tâche(s) mise(s) à jour. ${data.not_found_count} non trouvée(s).`,
+                    `${data.updated_count} tâche(s) mise(s) Ã  jour${dupMsg}. ${data.not_found_count} non trouvée(s).`,
                     { id: toastId, duration: 5000 }
                 );
                 if (data.errors && data.errors.length > 0) {
                     console.warn("Erreurs d'importation:", data.errors);
+                    toast.error(`${data.errors.length} erreurs (voir console)`, { duration: 5000 });
+                }
+                // Close dialog on success
+                setIsImportTasksOpen(false);
+
+                // Refresh data by re-running simulation
+                if (gridValues) {
+                    handleSimulate();
                 }
             }
         } catch (error) {
@@ -557,22 +575,12 @@ export default function BandoengSimulation() {
     const displayMOI = centreDetails ? centreDetails.moi_global : totalMoiGlobal;
     const displayAPS = centreDetails ? (centreDetails.aps || 0) : apsValue;
 
-    // Logique APS Calculé (Demandé par User)
-    // 1) Statutaire Actuel > Statutaire Calculé : si APS Actuel > Ecart => APS Actuel - Ecart, sinon 0
-    // 2) Statutaire Actuel < Statutaire Calculé : Abs(Ecart)
-    const statutaireCalcule = (isMOD ? fteCalculated : 0) + displayMOI;
-    const ecartStatutaire = displayStatutaire - statutaireCalcule;
+    // Logique APS Calculé (Demandé par User: Cible Final vs Actuel)
+    // APS = (Cible - Actuel) > 0 ? (Cible - Actuel) : 0
+    const statutaireCible = (isMOD ? fteArrondi : 0) + displayMOI;
+    const ecartCible = statutaireCible - displayStatutaire;
 
-    let apsCalculeDisplay = 0;
-    if (displayStatutaire > statutaireCalcule) {
-        if (displayAPS > ecartStatutaire) {
-            apsCalculeDisplay = displayAPS - ecartStatutaire;
-        } else {
-            apsCalculeDisplay = 0;
-        }
-    } else {
-        apsCalculeDisplay = Math.abs(ecartStatutaire);
-    }
+    const apsCalculeDisplay = ecartCible > 0 ? ecartCible : 0;
 
     // Prepare Organizational Chart Data
     const orgChartData = React.useMemo(() => {
@@ -974,7 +982,7 @@ export default function BandoengSimulation() {
                                     </div>
 
                                     {/* Groupe 3: Pourcentages */}
-                                    <div className="flex gap-1 border-r border-slate-200 pr-1 flex-[4]">
+                                    <div className="flex gap-1 border-r border-slate-200 pr-1 flex-[6]">
                                         <div className="flex flex-col gap-1 flex-1">
                                             <Label className="text-[9px] uppercase text-slate-500 font-bold text-center">% Retour</Label>
                                             <div className="flex items-center gap-1">
@@ -1027,6 +1035,20 @@ export default function BandoengSimulation() {
                                                     className={baseInputClass + " w-full"}
                                                     value={params.pct_local}
                                                     onChange={(val) => handleParamChange('pct_local', val)}
+                                                    suffix="%"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-col gap-1 flex-1">
+                                            <Label className="text-[9px] uppercase text-slate-500 font-bold text-center">% March Ord</Label>
+                                            <div className="flex items-center gap-1">
+                                                <div className="w-5 h-5 rounded-full bg-slate-50 text-slate-600 flex items-center justify-center shrink-0">
+                                                    <Box className="w-3 h-3" />
+                                                </div>
+                                                <FormattedInput
+                                                    className={baseInputClass + " w-full"}
+                                                    value={params.pct_march_ordinaire}
+                                                    onChange={(val) => handleParamChange('pct_march_ordinaire', val)}
                                                     suffix="%"
                                                 />
                                             </div>
@@ -1155,12 +1177,8 @@ export default function BandoengSimulation() {
                                                 total={formatSmallNumber(totalCalculated)}
                                             >
                                                 <EffectifFooter
-                                                    totalLabel="Statutaire"
-                                                    totalValue={formatSmallNumber(totalCalculated)}
                                                     modValue={formatSmallNumber(targetCalculatedMOD)}
                                                     moiValue={formatSmallNumber(targetCalculatedMOI)}
-                                                    apsLabel="APS"
-                                                    apsValue={formatSmallNumber(apsCalculeDisplay)}
                                                 />
                                             </KPICardGlass>
                                         );
@@ -1168,12 +1186,25 @@ export default function BandoengSimulation() {
 
                                     {/* ETP Final */}
                                     {(() => {
+                                        // Targets
                                         const targetFinalMOD = isMOD ? fteArrondi : 0;
                                         const targetFinalMOI = selectedPosteObj
                                             ? (isMoiPoste(selectedPosteObj) ? Number(selectedPosteObj.effectif_actuel || 0) : 0)
                                             : displayMOI;
 
                                         const totalFinal = targetFinalMOD + targetFinalMOI;
+
+                                        // Actuals for Footer comparison
+                                        let actualStatutaire = 0;
+                                        if (selectedPosteObj) {
+                                            const val = Number(selectedPosteObj.effectif_actuel || 0);
+                                            actualStatutaire = val; // Assuming selected is either MOD or MOI, so total is just val
+                                        } else {
+                                            actualStatutaire = displayMOD + displayMOI;
+                                        }
+
+                                        // APS (Target)
+                                        const apsDisplay = Math.round(apsCalculeDisplay);
 
                                         return (
                                             <KPICardGlass
@@ -1185,42 +1216,49 @@ export default function BandoengSimulation() {
                                             >
                                                 <EffectifFooter
                                                     totalLabel="Statutaire"
-                                                    totalValue={Math.round(totalFinal)}
+                                                    totalValue={Math.round(actualStatutaire)}
                                                     modValue={targetFinalMOD}
                                                     moiValue={formatSmallNumber(targetFinalMOI)}
                                                     apsLabel="APS"
-                                                    apsValue={Math.round(apsCalculeDisplay)}
+                                                    apsValue={apsDisplay}
                                                 />
                                             </KPICardGlass>
                                         );
                                     })()}
 
-                                    {/* Ecart Total */}
+                                    {/* Besoin */}
                                     {(() => {
-                                        // Targets
-                                        const targetMOD = isMOD ? fteArrondi : 0;
-                                        const targetMOI = selectedPosteObj
+                                        // Cibles (Final)
+                                        const targetFinalMOD = isMOD ? fteArrondi : 0;
+                                        const targetFinalMOI = selectedPosteObj
                                             ? (isMoiPoste(selectedPosteObj) ? Number(selectedPosteObj.effectif_actuel || 0) : 0)
                                             : displayMOI;
+                                        const statutaireCible = targetFinalMOD + targetFinalMOI;
 
-                                        // Actuals
-                                        const actualMOD = selectedPosteObj
-                                            ? (isMOD ? Number(selectedPosteObj.effectif_actuel || 0) : 0)
-                                            : displayMOD;
+                                        // Actuels
+                                        let actualMOD = 0;
+                                        let actualMOI = 0;
+                                        if (selectedPosteObj) {
+                                            actualMOD = isMOD ? Number(selectedPosteObj.effectif_actuel || 0) : 0;
+                                            actualMOI = isMoiPoste(selectedPosteObj) ? Number(selectedPosteObj.effectif_actuel || 0) : 0;
+                                        } else {
+                                            actualMOD = displayMOD;
+                                            actualMOI = displayMOI;
+                                        }
+                                        const actualStatutaire = actualMOD + actualMOI;
 
-                                        const actualMOI = selectedPosteObj
-                                            ? (isMoiPoste(selectedPosteObj) ? Number(selectedPosteObj.effectif_actuel || 0) : 0)
-                                            : displayMOI;
+                                        // APS Delta (Besoin)
+                                        const apsTarget = Math.round(apsCalculeDisplay);
+                                        const apsActual = Math.round(displayAPS);
+                                        const apsDelta = apsTarget - apsActual;
 
-                                        const ecartMOD = targetMOD - actualMOD;
-                                        const ecartMOI = targetMOI - actualMOI; // Should be 0 for MOI
+                                        // "si on a augmente l'APS" -> on affiche de combien
+                                        const valToDisplay = apsDelta > 0 ? apsDelta : 0;
 
-                                        // Target APS = Math.round(apsCalculeDisplay)
-                                        const targetAPS = Math.round(apsCalculeDisplay);
-                                        const ecartAPS = targetAPS - displayAPS;
-
-                                        const ecartTotal = ecartMOD + ecartMOI + ecartAPS;
-                                        const ecartStatutaire = ecartMOD + ecartMOI;
+                                        // Footer Ecarts
+                                        const diffMOD = targetFinalMOD - actualMOD;
+                                        const diffMOI = targetFinalMOI - actualMOI;
+                                        const diffStatutaire = statutaireCible - actualStatutaire;
 
                                         const formatSigned = (val) => {
                                             const num = Number(val);
@@ -1230,23 +1268,24 @@ export default function BandoengSimulation() {
 
                                         return (
                                             <KPICardGlass
-                                                label="Écart Total"
-                                                icon={ecartTotal < 0 ? TrendingDown : TrendingUp}
-                                                tone={ecartTotal > 0 ? "rose" : ecartTotal < 0 ? "emerald" : "slate"}
+                                                label="Besoin"
+                                                icon={valToDisplay > 0 ? TrendingUp : CheckCircle2}
+                                                tone={valToDisplay > 0 ? "rose" : "emerald"}
                                                 emphasize
-                                                total={formatSigned(ecartTotal)}
+                                                total={valToDisplay > 0 ? `+${Math.round(valToDisplay)}` : "0"}
                                             >
                                                 <EffectifFooter
-                                                    totalLabel="Statutaire"
-                                                    totalValue={formatSigned(ecartStatutaire)}
-                                                    modValue={formatSigned(ecartMOD)}
-                                                    moiValue={Math.round(ecartMOI)}
-                                                    apsLabel="APS"
-                                                    apsValue={formatSigned(ecartAPS)}
+                                                    totalLabel="Ecart Statutaire"
+                                                    totalValue={formatSigned(Math.round(diffStatutaire))}
+                                                    modValue={formatSigned(diffMOD)}
+                                                    moiValue={formatSigned(diffMOI)}
+                                                    apsLabel="Var. APS"
+                                                    apsValue={formatSigned(Math.round(apsDelta))}
                                                 />
                                             </KPICardGlass>
                                         );
                                     })()}
+
                                 </div>
 
                                 {/* Organizational Chart Section */}
@@ -1305,36 +1344,20 @@ export default function BandoengSimulation() {
                                                         <h3 className="text-xs font-semibold text-slate-700">
                                                             Référentiel Temps
                                                         </h3>
-                                                        <Tooltip content="Temps moyen nécessaire pour traiter une unité (colis, sac…) par responsable" position="bottom">
+                                                        <Tooltip content="Temps moyen nécessaire pour traiter une unité (colis, sacâ€¦) par responsable" position="bottom">
                                                             <HelpCircle className="w-3.5 h-3.5 text-[#005EA8] cursor-help" />
                                                         </Tooltip>
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center gap-2">
-                                                    <input
-                                                        type="file"
-                                                        ref={taskFileInputRef}
-                                                        className="hidden"
-                                                        accept=".xlsx"
-                                                        onChange={handleTaskFileUpload}
-                                                    />
                                                     <Button
                                                         variant="outline"
                                                         size="sm"
-                                                        onClick={handleDownloadTasksTemplate}
-                                                        className="h-6 text-[9px] bg-white text-slate-600 hover:text-[#005EA8] hover:border-[#005EA8]/30 px-2"
-                                                    >
-                                                        <Download className="w-3 h-3 mr-1" />
-                                                        Modèle
-                                                    </Button>
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        onClick={() => taskFileInputRef.current?.click()}
-                                                        className="h-6 text-[9px] bg-white text-slate-600 hover:text-[#005EA8] hover:border-[#005EA8]/30 px-2"
+                                                        onClick={() => setIsImportTasksOpen(true)}
+                                                        className="h-6 text-[10px] bg-white text-slate-600 hover:text-[#005EA8] hover:border-[#005EA8]/30 px-2"
                                                     >
                                                         <Upload className="w-3 h-3 mr-1" />
-                                                        Importer
+                                                        Importer Tâches
                                                     </Button>
                                                 </div>
                                             </div>
@@ -1435,7 +1458,7 @@ export default function BandoengSimulation() {
                                                             Résultats de Simulation
                                                             <Badge variant="secondary" className="text-[9px] h-4 px-1 ml-2">{results.tasks?.length}</Badge>
                                                         </h3>
-                                                        <Tooltip content="Volumes × temps → heures nécessaires par tâche" position="bottom">
+                                                        <Tooltip content="Volumes Ã— temps â†’ heures nécessaires par tâche" position="bottom">
                                                             <HelpCircle className="w-3.5 h-3.5 text-[#005EA8] cursor-help" />
                                                         </Tooltip>
                                                     </div>
@@ -1497,6 +1520,73 @@ export default function BandoengSimulation() {
 
                 </div>
             </div>
+            {/* Import Tasks Dialog */}
+            <Dialog open={isImportTasksOpen} onOpenChange={setIsImportTasksOpen}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-[#005EA8]">
+                            <Upload className="w-5 h-5" />
+                            Importation des Tâches
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="flex flex-col gap-6 py-4">
+                        <div className="space-y-4">
+                            <div className="flex items-start gap-3 p-3 bg-blue-50/50 rounded-lg border border-blue-100">
+                                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold shrink-0">1</span>
+                                <div className="space-y-1">
+                                    <h4 className="text-sm font-semibold text-slate-800">Télécharger le modèle</h4>
+                                    <p className="text-xs text-slate-500">
+                                        Commencez par télécharger le fichier Excel modèle contenant les colonnes requises.
+                                    </p>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={handleDownloadTasksTemplate}
+                                        className="h-8 text-xs mt-1 hover:text-[#005EA8] hover:bg-blue-50"
+                                    >
+                                        <Download className="w-3.5 h-3.5 mr-2" />
+                                        Télécharger le modèle
+                                    </Button>
+                                </div>
+                            </div>
+
+                            <div className="flex items-start gap-3 p-3 bg-emerald-50/50 rounded-lg border border-emerald-100">
+                                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold shrink-0">2</span>
+                                <div className="space-y-1">
+                                    <h4 className="text-sm font-semibold text-slate-800">Importer le fichier</h4>
+                                    <p className="text-xs text-slate-500">
+                                        Sélectionnez votre fichier rempli pour mettre Ã  jour les chronos et responsables.
+                                    </p>
+                                    <div className="mt-2">
+                                        <input
+                                            type="file"
+                                            ref={taskFileInputRef}
+                                            className="hidden"
+                                            accept=".xlsx"
+                                            onChange={handleTaskFileUpload}
+                                        />
+                                        <Button
+                                            onClick={() => taskFileInputRef.current?.click()}
+                                            className="h-8 text-xs bg-[#005EA8] hover:bg-[#004e8a] text-white"
+                                        >
+                                            <Upload className="w-3.5 h-3.5 mr-2" />
+                                            Sélectionner un fichier
+                                        </Button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-50 p-3 rounded text-xs text-slate-500 flex gap-2">
+                            <Info className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+                            <div>
+                                <p>Le système identifiera les tâches par leur Nom, Produit, Famille et Unité.</p>
+                                <p className="mt-1">Si deux responsables sont renseignés, la tâche sera dupliquée automatiquement.</p>
+                            </div>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div >
     );
 }

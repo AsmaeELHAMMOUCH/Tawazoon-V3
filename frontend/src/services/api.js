@@ -2,6 +2,10 @@ import axios from 'axios';
 
 const API_BASE_URL = '/api'; // Adjust if needed
 
+export const api = axios.create({
+    baseURL: API_BASE_URL
+});
+
 export const simulateCNDP = async (payload) => {
     try {
         const response = await axios.post(`${API_BASE_URL}/cndp/simulate`, payload);
@@ -62,7 +66,7 @@ export const importBandoengVolumes = async (file) => {
 
 export const downloadBandoengTasksTemplate = async () => {
     try {
-        const response = await axios.get(`${API_BASE_URL}/export/bandoeng/tasks-template`, {
+        const response = await axios.get(`${API_BASE_URL}/bandoeng/import-template`, {
             responseType: 'blob',
         });
 
@@ -80,12 +84,12 @@ export const downloadBandoengTasksTemplate = async () => {
     }
 };
 
-export const importBandoengTasks = async (file) => {
+export const importBandoengTasks = async (file, centreId) => {
     try {
         const formData = new FormData();
         formData.append("file", file);
 
-        const response = await axios.post(`${API_BASE_URL}/bandoeng/import/tasks`, formData, {
+        const response = await axios.post(`${API_BASE_URL}/bandoeng/import/tasks?centre_id=${centreId}`, formData, {
             headers: {
                 "Content-Type": "multipart/form-data",
             },

@@ -59,6 +59,7 @@ import AlertsTestButton from "./components/alerts/AlertsTestButton";
 import CategorisationCentre from "./components/views/CategorisationCentre";
 import CNDPSimulation from "./pages/centres_uniq/CNDPSimulation"; // 🆕 CNDP Isolated Page
 import SimulationCentresUniques from "./pages/SimulationCentresUniques"; // 🆕 Parent Page CNDP/Bandoeng
+import GlobalImportPage from "./pages/GlobalImportPage"; // 🆕 Global Import
 
 
 // 🔹 NOUVELLE ARCHITECTURE DATA-DRIVEN - Intégrée directement dans SimulationEffectifs
@@ -213,6 +214,9 @@ export default function App() {
           <Route path="simulation/categorisation/:centreId" element={<RouteErrorBoundary><CategorisationCentre /></RouteErrorBoundary>} />
           <Route path="simulation/cndp" element={<RouteErrorBoundary><CNDPSimulation /></RouteErrorBoundary>} />
           <Route path="simulation/centres-uniques" element={<RouteErrorBoundary><SimulationCentresUniques /></RouteErrorBoundary>} />
+
+          {/* Administration */}
+          <Route path="admin/import-tasks" element={<RouteErrorBoundary><GlobalImportPage /></RouteErrorBoundary>} />
 
 
 
