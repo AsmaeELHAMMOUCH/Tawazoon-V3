@@ -61,9 +61,9 @@ class Poste(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     label = Column(String, nullable=False)
-    type_poste = Column("type", String(50))
+    type_poste = Column("type_poste", String(50))
     Code = Column(String(50), nullable=True, unique=True)
-    hie_poste = Column(String(50), nullable=True)  # ✅ AJOUT: Code hiérarchie pour l'organigramme
+    #hie_poste = Column(String(50), nullable=True)  # ✅ AJOUT: Code hiérarchie pour l'organigramme
 
     centre_postes = relationship("CentrePoste", back_populates="poste")
 
@@ -84,7 +84,7 @@ class CentrePoste(Base):
     centre_id = Column(Integer, ForeignKey("dbo.centres.id"), nullable=False)
     poste_id = Column(Integer, ForeignKey("dbo.postes.id"), nullable=False)
     effectif_actuel = Column(Integer, nullable=True, default=0)
-    code_resp = Column(String(50), nullable=True)
+    #code_resp = Column(String(50), nullable=True)
 
     centre = relationship("Centre", back_populates="centre_postes")
     poste = relationship("Poste", back_populates="centre_postes")

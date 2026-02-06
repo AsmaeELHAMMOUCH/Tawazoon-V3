@@ -40,9 +40,9 @@ class Poste(Base):
     __table_args__ = {'schema': 'dbo'}
     id = Column(Integer, primary_key=True, index=True)
     label = Column(String(255))
-    type_poste = Column("type", String(50))
+    type_poste = Column("type_poste", String(50))
     # Code linked to dbo.Poste.Code
-    Code = Column(String(50), nullable=True, unique=True)
+    #Code = Column(String(50), nullable=True, unique=True)
     centre_postes = relationship("CentrePoste", back_populates="poste")
 
 class CentrePoste(Base):
@@ -55,15 +55,15 @@ class CentrePoste(Base):
     centre = relationship("Centre", back_populates="centre_postes")
     poste = relationship("Poste", back_populates="centre_postes")
     taches = relationship("Tache", back_populates="centre_poste")
-    code_resp = Column(String(50), nullable=True)
+    #code_resp = Column(String(50), nullable=True)
     
-    poste_ref = relationship(
+"""    poste_ref = relationship(ch
         "Poste",
         primaryjoin="foreign(CentrePoste.code_resp) == remote(Poste.Code)",
         uselist=False,
         viewonly=True
     )
-
+"""
 class Tache(Base):
     __tablename__ = "taches"
     __table_args__ = {'schema': 'dbo'}

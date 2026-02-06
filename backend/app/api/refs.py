@@ -108,13 +108,13 @@ def get_consolide_siege(
             SELECT 
                 p.id AS poste_id,
                 p.label,
-                p.type AS type_poste,
+                p.type_poste AS type_poste,
                 SUM(COALESCE(cp.effectif_actuel, 0)) AS etp_total
             FROM dbo.centre_postes cp
             INNER JOIN dbo.postes p ON p.id = cp.poste_id
             INNER JOIN dbo.centres c ON c.id = cp.centre_id
             WHERE c.region_id = :region_id
-            GROUP BY p.id, p.label, p.type
+            GROUP BY p.id, p.label, p.type_poste
             ORDER BY etp_total DESC;
         """
         rows = db.execute(text(sql), {"region_id": region_id}).mappings().all()
@@ -147,7 +147,7 @@ def get_siege_postes(
             SELECT
                 p.id        AS poste_id,
                 p.label     AS poste_label,
-                p.type      AS type_poste,
+                p.type_poste AS type_poste,
                 COALESCE(cp.effectif_actuel, 0) AS effectif_actuel
             FROM dbo.centre_postes cp
             JOIN dbo.postes p   ON p.id = cp.poste_id
@@ -265,7 +265,7 @@ def list_centres(
             cp.centre_id,
             COUNT(*) AS nb_postes,
             CASE
-              WHEN MIN(p.type) = MAX(p.type) THEN MIN(p.type)
+              WHEN MIN(p.type_poste) = MAX(p.type_poste) THEN MIN(p.type_poste)
               ELSE 'MOI/MOD'
             END AS type_agg
           FROM dbo.centre_postes cp
@@ -327,7 +327,7 @@ def list_postes(
                 p.id,
                 NULL AS centre_poste_id,
                 p.label,
-                p.type AS type_poste,
+                p.type_poste AS type_poste,
                 0 AS effectif_actuel
             FROM dbo.postes p
             ORDER BY p.label
@@ -431,7 +431,7 @@ def consolide_postes(
         SELECT
             p.id             AS poste_id,
             p.label          AS poste_label,
-            p.type           AS type_poste,
+            p.type_poste           AS type_poste,
             SUM(COALESCE(cp.effectif_actuel,0)) AS etp_total,
             CAST(0.0 AS FLOAT)                   AS etp_requis,
             (0.0 - SUM(COALESCE(cp.effectif_actuel,0))) AS ecart,

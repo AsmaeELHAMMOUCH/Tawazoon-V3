@@ -43,8 +43,11 @@ const KPICardGlass = ({
 }) => {
   const T = {
     blue: { ring: "ring-blue-300/60", halo: "from-blue-400/25", text: "text-[#005EA8]", dot: "bg-[#005EA8]" },
+    cyan: { ring: "ring-cyan-300/60", halo: "from-cyan-400/25", text: "text-cyan-600", dot: "bg-cyan-500" },
     amber: { ring: "ring-amber-300/60", halo: "from-amber-400/25", text: "text-amber-600", dot: "bg-amber-500" },
     green: { ring: "ring-emerald-300/60", halo: "from-emerald-400/25", text: "text-emerald-600", dot: "bg-emerald-500" },
+    emerald: { ring: "ring-emerald-300/60", halo: "from-emerald-400/25", text: "text-emerald-600", dot: "bg-emerald-500" },
+    rose: { ring: "ring-rose-300/60", halo: "from-rose-400/25", text: "text-rose-600", dot: "bg-rose-500" },
     slate: { ring: "ring-slate-300/60", halo: "from-slate-400/20", text: "text-slate-700", dot: "bg-slate-500" },
     red: { ring: "ring-rose-300/60", halo: "from-rose-400/25", text: "text-rose-600", dot: "bg-rose-500" },
   }[tone] || { ring: "ring-blue-300/60", halo: "from-blue-400/25", text: "text-[#005EA8]", dot: "bg-[#005EA8]" };
@@ -86,38 +89,24 @@ const KPICardGlass = ({
   );
 };
 
-const EffectifFooter = ({ totalLabel, totalValue, modValue, moiValue, apsLabel, apsValue, showSpecialTag = false, casValue, besoinAPS }) => (
+const EffectifFooter = ({ totalLabel, totalValue, modValue, moiValue, apsLabel, apsValue }) => (
   <div className="text-[10px] text-slate-600 space-y-1.5">
-    <div className="flex flex-wrap items-center justify-center gap-2 rounded-full bg-slate-50 px-2 py-1">
-      <span className="font-semibold text-slate-700">{totalLabel}</span>
-      <span className="px-2 py-0.5 rounded-full bg-white text-slate-800 font-semibold shadow-sm">Total : {totalValue}</span>
-    </div>
+    {totalValue !== undefined && (
+      <div className="flex flex-wrap items-center justify-center gap-2 rounded-full bg-slate-50 px-2 py-1">
+        {totalLabel && <span className="font-semibold text-slate-700">{totalLabel}</span>}
+        <span className="px-2 py-0.5 rounded-full bg-white text-slate-800 font-semibold shadow-sm">Total : {totalValue}</span>
+      </div>
+    )}
     <div className="flex items-center justify-center gap-2">
-      <span className="px-1.5 py-0.5 rounded-full bg-blue-50 text-[#005EA8]">
-        MOD : {modValue}
-      </span>
+      <span className="px-1.5 py-0.5 rounded-full bg-blue-50 text-[#005EA8]">MOD : {modValue}</span>
       {moiValue !== undefined && moiValue !== null && (
         <span className="px-1.5 py-0.5 rounded-full bg-fuchsia-50 text-fuchsia-700">MOI : {moiValue}</span>
       )}
     </div>
-
-    {/* APS Ligne - Visible si value > 0 ou label présent */}
-    {(apsValue > 0 || apsLabel) && (
+    {(apsValue !== undefined && apsValue !== null) && (
       <div className="flex flex-wrap items-center justify-center gap-2 rounded-full bg-emerald-50/70 px-2 py-1">
         <span className="font-semibold text-emerald-800">{apsLabel || "APS"}</span>
-        <span className="px-2 py-0.5 rounded-full bg-white/90 text-emerald-700 font-semibold shadow-sm">
-          Total APS : {apsValue}
-        </span>
-      </div>
-    )}
-
-
-
-    {showSpecialTag && (
-      <div className="flex justify-center mt-1">
-        <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-[9px] font-bold border border-amber-200">
-          Cas Spécial : {casValue}
-        </span>
+        <span className="px-2 py-0.5 rounded-full bg-white/90 text-emerald-700 font-semibold shadow-sm">Total APS : {apsValue}</span>
       </div>
     )}
   </div>
@@ -740,129 +729,80 @@ export default function VueIntervenant({
   // 🆕 Récupération du Cas Spécial
   const casValue = selectedCentreWithAPS?.cas;
 
-  // 🆕 Logique d'affichage
-  const displayMOI = isGlobalView || !isMOD;
+  // 🆕 Helper pour formater petits nombres
+  const formatSmallNumber = (v) => Number(v || 0).toFixed(2).replace('.', ',');
 
-  // Actuel
-  // Si Vue Globale : Total Centre (MOD + MOI + APS Global).
-  // Si Vue Poste : Juste le poste (MOD ou MOI) + son APS. Pas d'ajout du MOI Global.
-  const effActuelDisplay = isGlobalView
-    ? (totalEffectifCentreStats.mod + totalMoiGlobal + apsGlobalCentre)
-    : (effectifActuel + effAPS); // effectifActuel est celui du poste (MOD ou MOI)
+  // 🆕 Logique d'affichage KPI alignée sur Bandoeng
+  const kpiData = useMemo(() => {
+    let actualMOD = 0;
+    let actualMOI = 0;
+    let actualAPS = 0;
+    let actualStatutaire = 0;
+    let actualTotal = 0;
 
-  const effActuelMOD = isGlobalView ? totalEffectifCentreStats.mod : (isMOD ? effectifActuel : 0);
+    const excludedLabels = ["Gestionnaire clients en compte", "CHEF DE CENTRE"];
+    const currentLabel = (selectedPosteObj?.label || "").trim();
+    const isExcludedPoste = excludedLabels.some(x => x.toLowerCase() === currentLabel.toLowerCase());
 
-  // Valeur MOI à afficher dans le footer
-  // Si Global: Total MOI Centre.
-  // Si Poste MOI: Effectif du poste.
-  // Si Poste MOD: Null (caché).
-  const effActuelMOI_Footer = isGlobalView
-    ? totalMoiGlobal
-    : (isMOD ? null : effectifActuel);
+    const etpCalcValue = isGlobalView
+      ? (totaux?.total_heures ? totaux.fte_calcule : 0)
+      : (isExcludedPoste ? 0 : fteCalcAffiche);
 
-  const effAPS_Footer = isGlobalView ? apsGlobalCentre : effAPS;
+    if (selectedPosteObj) {
+      // Vue Individuelle
+      const val = Number(selectedPosteObj.effectif_actuel || 0);
+      if (isMoiPoste(selectedPosteObj)) {
+        actualMOI = val;
+      } else {
+        actualMOD = val;
+      }
+      actualStatutaire = actualMOD + actualMOI;
+      actualTotal = actualStatutaire + (selectedPosteObj.effectif_aps || 0);
+    } else {
+      // Vue Globale
+      actualMOD = totalEffectifCentreStats.mod;
+      actualMOI = totalMoiGlobal;
+      actualAPS = apsGlobalCentre;
+      actualStatutaire = actualMOD + actualMOI;
+      actualTotal = actualStatutaire + actualAPS;
+    }
 
-  // Calculé
-  // Si Vue Poste, et MOD, on prend fteCalcAffiche.
-  // Si Vue Poste MOI ??? (Généralement pas simu, mais bon -> 1 ou effectifActuel)
-  // Exception spécifique: Gestionnaire clients en compte, CHEF DE CENTRE -> Calculé = 0
-  const excludedLabels = ["Gestionnaire clients en compte", "CHEF DE CENTRE"];
-  const currentLabel = (selectedPosteObj?.label || "").trim();
-  const isExcludedPoste = excludedLabels.some(x => x.toLowerCase() === currentLabel.toLowerCase());
+    const targetCalculatedMOD = isGlobalView ? etpCalcValue : (isMOD ? fteCalcAffiche : 0);
+    const targetCalculatedMOI = isGlobalView ? totalMoiGlobal : (isMoiPoste(selectedPosteObj) ? effectifActuel : 0);
+    const totalCalculated = targetCalculatedMOD + targetCalculatedMOI;
 
-  const etpCalcDisplay = isGlobalView
-    ? (totaux?.total_heures ? totaux.fte_calcule : 0) // DataDriven result Global
-    : (isExcludedPoste ? 0 : fteCalcAffiche); // Pour un poste (0 si exclu)
+    const targetFinalMOD = isGlobalView ? Math.round(etpCalcValue) : (isMOD ? fteArrondiAffiche : 0);
+    const targetFinalMOI = isGlobalView ? totalMoiGlobal : (isMoiPoste(selectedPosteObj) ? effectifActuel : 0);
+    const totalFinal = targetFinalMOD + targetFinalMOI;
 
-  const etpCalcMOD = etpCalcDisplay; // Alias pour compatibilité JSX existant
+    // Logique APS
+    const statutaireCible = totalFinal;
+    const ecartCible = statutaireCible - actualStatutaire;
+    const apsCalculeDisplay = ecartCible > 0 ? ecartCible : 0;
 
-  // Arrondi
-  // Pour Global, on arrondit le total calculé (comme VueCentre)
-  const etpArrMOD = (isMOD && !isExcludedPoste) ? fteArrondiAffiche : 0;
-  const etpArrDisplay = isGlobalView ? (Math.round(etpCalcDisplay) + totalMoiGlobal) : etpArrMOD;
+    // Ecarts
+    const apsActual = actualAPS;
+    const apsDelta = apsCalculeDisplay - apsActual;
+    const valToDisplay = apsDelta > 0 ? apsDelta : 0;
 
-  // 🆕 NOUVELLE RÈGLE APS
-  // StatutaireActuel = MOD_actuel + MOI_actuel
-  const statutaireActuel = effActuelMOD + (effActuelMOI_Footer || 0);
+    const diffMOD = targetFinalMOD - actualMOD;
+    const diffMOI = targetFinalMOI - actualMOI;
+    const diffStatutaire = statutaireCible - actualStatutaire;
 
-  // StatutaireCalcule = MOD_calcule + MOI_calcule
-  // En vue globale: etpArrDisplay inclut déjà MOI, donc on utilise Math.round(etpCalcDisplay) + totalMoiGlobal
-  // En vue poste: etpArrMOD + MOI (qui est 0 pour MOD, effectifActuel pour MOI)
-  const statutaireCalcule = isGlobalView
-    ? Math.round(etpCalcDisplay) + totalMoiGlobal
-    : etpArrMOD + (isMOD ? 0 : effectifActuel);
+    return {
+      actualMOD, actualMOI, actualAPS, actualStatutaire, actualTotal,
+      targetCalculatedMOD, targetCalculatedMOI, totalCalculated,
+      targetFinalMOD, targetFinalMOI, totalFinal,
+      apsCalculeDisplay, valToDisplay, apsDelta,
+      diffMOD, diffMOI, diffStatutaire
+    };
+  }, [selectedPosteObj, totalEffectifCentreStats, totalMoiGlobal, apsGlobalCentre, isGlobalView, totaux, isMOD, fteCalcAffiche, effectifActuel, fteArrondiAffiche]);
 
-  // APS calculé = max(0, StatutaireCalcule - StatutaireActuel)
-  const apsCalcule = Math.max(0, statutaireCalcule - statutaireActuel);
-
-  // Ecart (Actuel - Arrondi) -> Surplus > 0, Besoin < 0, STATUTAIRE uniquement
-
-  // Ecart (Actuel Total - Arrondi) -> Surplus > 0, Besoin < 0, Incluant APS
-  // CORRECTION: Ecart = Actuel - (Calculé + Global MOI) pour être cohérent avec VueCentre
-  // Note: etpArrDisplay inclut déjà totalMoiGlobal si on est en vue globale
-  const ecartDisplay = effActuelDisplay - etpArrDisplay;
-
-  // --- Override Logic (Cas A: Besoin > Actuel) ---
-  const totalCalculated = isGlobalView
-    ? (etpCalcDisplay + totalMoiGlobal + apsCalcule)
-    : (fteCalcAffiche + apsCalcule);
-
-  const totalCurrentGlobal = isGlobalView
-    ? (effActuelMOD + (effActuelMOI_Footer ?? 0) + effAPS_Footer)
-    : (effActuelMOD + effAPS_Footer);
-
-  /* 
-   * ✅ LOGIQUE OVERRIDE (Step 804) - CORRECTION
-   * - Vue Globale ("ALL") :
-   *   Si Calculé < Actuel (Surplus/Protection) : On Override pour afficher l'Actuel (on ne licencie pas sur le papier).
-   *   Si Calculé > Actuel (Besoin) : On affiche le Calculé (Besoin de recrutement), comme VueCentre.
-   * - Vue Poste Spéficique : Pas d'override.
-   */
-  const needOverride = isGlobalView && (totalCalculated < totalCurrentGlobal);
-
-  // ✅ CIBLE MOI (Step 752): Global -> Total, Spécifique MOD -> 0, Spécifique MOI -> Valeur Footer
-  const targetMOI = isGlobalView ? totalMoiGlobal : (isMOD ? 0 : (effActuelMOI_Footer ?? 0));
-
-  // ✅ CIBLE APS (Step 766): Global -> Calculé, Spécifique -> 0
-  const targetAPS = isGlobalView ? apsCalcule : 0;
-
-  const dispCalcMOD = needOverride ? effActuelMOD : etpCalcMOD;
-  const dispCalcMOI = needOverride ? (effActuelMOI_Footer ?? 0) : targetMOI;
-  const dispCalcAPS = needOverride ? (totalCalculated - (dispCalcMOD + dispCalcMOI)) : targetAPS;
-  const dispCalcTotal = isGlobalView ? totalCalculated : (dispCalcMOD + dispCalcMOI + dispCalcAPS);
-
-  // --- Override Logic Arrondi (Derived from Calc Override) ---
-  const dispArrMOD = needOverride ? effActuelMOD : etpArrMOD;
-  // Note: For MOI, etpArrDisplay logic in standard mode was (Math.round(etpCalcDisplay) + totalMoiGlobal).
-  // Here we align with standard logic: if override, we force actual.
-  // Here we align with standard logic: if override, we force actual.
-  const dispArrMOI = needOverride ? (effActuelMOI_Footer ?? 0) : targetMOI;
-  const dispArrAPS = needOverride ? Math.round(dispCalcAPS) : Math.round(targetAPS);
-
-  // Total Arrondi = (Rounded MOD + MOI) + Rounded APS
-  // Standard mode total: (isGlobal ? Math.round(etpCalcDisplay + totalMoiGlobal + apsCalcule) : ...)
-  // Let's ensure consistency.
-  // If needOverride: Total = StatutaireActuel + Rounded(APS_Calculated)
-  const dispArrTotal = needOverride
-    ? (dispArrMOD + dispArrMOI + dispArrAPS)
-    : (isGlobalView
-      ? Math.round(etpCalcDisplay + totalMoiGlobal + apsCalcule)
-      : (dispArrMOD + dispArrMOI + dispArrAPS)); // ✅ Specific View: Sum components (excludes APS)
-
-  // --- Override Logic Ecart (Derived from Arrondi Override) ---
-  // Ecart = Actuel - Arrondi.
-  // Cas A (needOverride): Arrondi (Statutaire) is forced to Actuel. -> Ecart Statutaire = 0.
-  // Ecart APS = Actuel APS - Arrondi APS.
-
-  const targetActuelAPS = isGlobalView ? effAPS_Footer : 0;
-  const dispEcartMOD = needOverride ? (effActuelMOD - dispArrMOD) : (effActuelMOD - etpArrMOD);
-  const dispEcartMOI = needOverride ? ((effActuelMOI_Footer ?? 0) - dispArrMOI) : ((effActuelMOI_Footer ?? 0) - targetMOI);
-  const dispEcartAPS = needOverride ? (effAPS_Footer - dispArrAPS) : (targetActuelAPS - dispArrAPS);
-
-  const dispEcartStatutaire = dispEcartMOD + dispEcartMOI;
-  const dispEcartTotal = dispEcartStatutaire + dispEcartAPS;
-
-  const formatSmallNumber = (v, d = 2) => Number(v || 0).toFixed(d).replace('.', ',');
+  const formatSigned = (val) => {
+    const num = Number(val);
+    if (isNaN(num)) return "0";
+    return num > 0 ? `+${num}` : `${num}`;
+  };
 
   const handleSimuler = useCallback((overrides = {}) => {
     console.log("🖱️ [VueIntervenant] Click Simuler. State Taux:", tauxComplexite, "NatureGeo:", natureGeo);
@@ -1467,195 +1407,85 @@ export default function VueIntervenant({
               </h3>
             </div>
 
-            <div className={`grid grid-cols-1 md:grid-cols-3 ${isTestMode ? 'xl:grid-cols-3' : 'xl:grid-cols-5'} gap-4`}>
+            <div className="grid grid-cols-5 gap-2">
               {/* Charge Totale */}
-              <div className="relative overflow-hidden rounded-2xl border border-white/50 bg-white/55 backdrop-blur-xl p-2.5 min-h-[90px] pb-3 ring-1 ring-slate-200 shadow-sm flex flex-col items-center justify-center transition-all hover:ring-blue-200">
-                <div className="text-[11px] font-semibold text-slate-600 mb-1">Charge Totale MOD</div>
-                <div className="text-xl font-bold text-slate-800">{Number(totalHeuresFinal || 0).toFixed(2)}</div>
-                <div className="text-[10px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full mt-1">heures / jour</div>
+              <div className="relative overflow-hidden rounded-xl border border-white/50 bg-white/55 backdrop-blur-xl p-2 min-h-[70px] pb-2 ring-1 ring-slate-200 shadow-sm flex flex-col items-center justify-center transition-all hover:ring-blue-200 hover:scale-[1.02] duration-300">
+                <div className="text-[10px] font-semibold text-slate-600 mb-0.5">Charge Totale</div>
+                <div className="text-lg font-bold text-slate-800">{Number(totalHeuresFinal || 0).toFixed(2)}</div>
+                <div className="text-[9px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full mt-0.5">heures / jour</div>
               </div>
 
-              {/* 1️⃣ Effectif Actuel */}
-              {!isTestMode && (
-                <KPICardGlass
-                  icon={UserRound}
-                  tone="slate"
-                  emphasize
-                  label="Effectif Actuel"
-                  total={effActuelDisplay}
-                  toggleable={false}
-                  customFooter={
-                    <EffectifFooter
-                      totalLabel={isGlobalView ? "Statutaire" : "Total"}
-                      totalValue={effActuelMOD + (effActuelMOI_Footer || 0)}
-                      modValue={effActuelMOD}
-                      moiValue={effActuelMOI_Footer !== null ? formatSmallNumber(effActuelMOI_Footer, 0) : null}
-                      apsLabel={isGlobalView ? "APS" : null}
-                      apsValue={isGlobalView ? formatSmallNumber(effAPS_Footer, 0) : null}
-                      casValue={isGlobalView ? casValue : null}
-                    />
-                  }
-                />
-              )}
-
-              {/* 2️⃣ Effectif Calculé (Besoin) */}
+              {/* Effectif Actuel */}
               <KPICardGlass
-                label="Effectif Calculé"
+                label="Effectif Actuel"
+                icon={User}
+                tone="cyan"
+                emphasize
+                total={Math.round(kpiData.actualTotal)}
+              >
+                <EffectifFooter
+                  totalLabel="Statutaire"
+                  totalValue={Math.round(kpiData.actualStatutaire)}
+                  modValue={Math.round(kpiData.actualMOD)}
+                  moiValue={Math.round(kpiData.actualMOI)}
+                  apsLabel="APS"
+                  apsValue={Math.round(kpiData.actualAPS)}
+                />
+              </KPICardGlass>
+
+              {/* ETP Calculé */}
+              <KPICardGlass
+                label="ETP Calculé"
                 icon={Calculator}
                 tone="blue"
                 emphasize
-                total={formatSmallNumber(etpCalcMOD + targetMOI)}
-                toggleable={false}
+                total={formatSmallNumber(kpiData.totalCalculated)}
+              >
+                <EffectifFooter
+                  modValue={formatSmallNumber(kpiData.targetCalculatedMOD)}
+                  moiValue={formatSmallNumber(kpiData.targetCalculatedMOI)}
+                />
+              </KPICardGlass>
 
-                customFooter={
-                  (() => {
-                    // 🆕 Règle Utilisateur (Step 26 "Non...") :
-                    // Si Statutaire Calculé < Statutaire Actuel => On affiche Actuel dans la décomposition.
-                    // Sinon on affiche le Réellement Calculé.
-
-                    // 1. Calcul du Statutaire Calculé (Total MOD + Total MOI)
-                    const statCalcMOD = etpCalcMOD;
-                    const statCalcMOI = targetMOI;
-                    const statCalcTotal = statCalcMOD + statCalcMOI;
-
-                    // 2. Calcul du Statutaire Actuel (Total MOD + Total MOI)
-                    const statActMOD = effActuelMOD;
-                    const statActMOI = effActuelMOI_Footer || 0;
-                    const statActTotal = statActMOD + statActMOI;
-
-                    // 3. Condition : Si Calculé > Actuel (Besoin Statutaire) -> Force Actuel pour le détail
-                    // "dans statutaire calculé met l effetif réelment calculé et pour MOD ET MOI met l actuel"
-                    const showActuel = !isTestMode && (statCalcTotal > statActTotal);
-
-                    // 4. Sélection des valeurs à afficher pour le détail
-                    const displayMOD = showActuel ? statActMOD : statCalcMOD;
-                    const displayMOI = showActuel ? statActMOI : statCalcMOI;
-
-                    // 🆕 Règle Utilisateur (Step 90) : Le total statutaire doit correspondre à la somme affichée (donc Actuel si override)
-                    const displayTotal = displayMOD + displayMOI;
-
-                    // 🆕 Règle Utilisateur (Step 122) : APS = Effectif Calculé Réellement - Statutaire Calculé (affiché)
-                    const realCalculatedTotal = etpCalcMOD + targetMOI;
-                    const displayAPS = Math.max(0, realCalculatedTotal - displayTotal);
-
-                    return (
-                      <EffectifFooter
-                        totalLabel={isGlobalView ? "Statutaire" : "Total"}
-                        totalValue={formatSmallNumber(displayTotal, 2)}
-                        modValue={formatSmallNumber(displayMOD, 2)}
-                        moiValue={formatSmallNumber(displayMOI, 0)}
-                        apsLabel={isGlobalView ? "APS" : null}
-                        apsValue={isGlobalView ? formatSmallNumber(displayAPS, 2) : null}
-                        casValue={isGlobalView ? casValue : null}
-                      />
-                    );
-                  })()
-                }
-              />
-
-              {/* 3️⃣ Effectif Cible (Arrondi) */}
+              {/* ETP Final */}
               <KPICardGlass
-                label="Effectif Arrondi"
+                label="ETP Final"
                 icon={CheckCircle2}
                 tone="amber"
                 emphasize
-                total={Math.round(etpCalcMOD + targetMOI)}
-                toggleable={false}
-                customFooter={
-                  (() => {
-                    // 🆕 Règle Utilisateur (Step 113) : Arrondi de l'APS affiché dans la carte calculé
-                    // Si Statutaire Calculé > Statutaire Actuel => APS affiché = Need - Actuel
-                    // Sinon (Surplus) => APS affiché = targetAPS (car displayTotal = Statutaire Calculé)
-
-                    const statCalc = etpCalcMOD + targetMOI;
-                    const statAct = effActuelMOD + (effActuelMOI_Footer || 0);
-                    const isOverride = !isTestMode && (statCalc > statAct);
-
-                    // APS Calculé dans la carte précédente
-                    // Si Override: APS = statCalc - statAct
-                    // Si Pas Override: APS = targetAPS
-                    const apsCalculeDisplay = isOverride ? (statCalc - statAct) : targetAPS;
-
-                    const apsArrondi = Math.round(apsCalculeDisplay);
-
-                    return (
-                      <EffectifFooter
-                        totalLabel={isGlobalView ? "Statutaire" : "Total"}
-                        totalValue={Math.round(etpCalcMOD + targetMOI)}
-                        modValue={dispArrMOD}
-                        moiValue={formatSmallNumber(dispArrMOI, 0)}
-                        apsLabel={isGlobalView ? "APS" : null}
-                        apsValue={isGlobalView ? formatSmallNumber(apsArrondi, 0) : null}
-                        casValue={isGlobalView ? casValue : null}
-                      />
-                    );
-                  })()
-                }
-              />
-
-
-
-              {/* 4️⃣ Écart Total */}
-              {!isTestMode && (
-                <KPICardGlass
-                  label="Écart Total"
-                  icon={dispEcartTotal < 0 ? TrendingDown : TrendingUp}
-                  tone="slate"
-                  emphasize
-                  total={
-                    (() => {
-                      // 🆕 Règle Utilisateur (Step 80) : Total Ecart = Effectif Actuel - Effectif Arrondi (tel qu'affiché)
-                      // Effectif Arrondi affiché = Math.round(etpCalcMOD + targetMOI) (Step 65)
-                      // Effectif Actuel = effActuelDisplay
-
-                      const totalArrondiVisuel = Math.round(etpCalcMOD + targetMOI);
-                      const ecartVisuel = effActuelDisplay - totalArrondiVisuel;
-
-                      return (
-                        <>
-                          {formatSmallNumber(ecartVisuel, 0)}
-                          <span className="text-[12px] font-normal ml-1 opacity-80">
-                            ({ecartVisuel > 0 ? "Surplus" : ecartVisuel < 0 ? "Besoin" : "Équilibre"})
-                          </span>
-                        </>
-                      );
-                    })()
-                  }
-                  customFooter={
-                    (() => {
-                      // 🆕 Règle Utilisateur (Step 75) : Écart Statutaire = Actuel - Arrondi
-                      // Arrondi Statutaire (Base Calculé) = Math.round(Calculated MOD + MOI Cible)
-
-                      const statAct = effActuelMOD + (effActuelMOI_Footer || 0);
-                      const statArr = Math.round(etpCalcMOD + targetMOI);
-                      const gapStat = statAct - statArr;
-
-                      const apsAct = effAPS_Footer;
-                      const apsArr = Math.round(targetAPS);
-                      const gapAPS = apsAct - apsArr;
-
-                      // Détail (pour cohérence avec la formule globale)
-                      // 🆕 Règle Utilisateur (Step 85) : Ecart MOD = MOD Actuel - MOD Arrondi (affichés)
-                      const gapMOD = effActuelMOD - dispArrMOD;
-                      const gapMOI = (effActuelMOI_Footer || 0) - targetMOI;
-
-                      return (
-                        <EffectifFooter
-                          totalLabel="Écart Statutaire"
-                          totalValue={gapStat}
-                          modValue={gapMOD}
-                          moiValue={formatSmallNumber(gapMOI, 0)}
-                        // APS masqué
-                        />
-                      );
-                    })()
-                  }
+                total={Math.round(kpiData.totalFinal)}
+              >
+                <EffectifFooter
+                  totalLabel="Statutaire"
+                  totalValue={Math.round(kpiData.actualStatutaire)}
+                  modValue={kpiData.targetFinalMOD}
+                  moiValue={formatSmallNumber(kpiData.targetFinalMOI)}
+                  apsLabel="APS"
+                  apsValue={Math.round(kpiData.apsCalculeDisplay)}
                 />
-              )}
+              </KPICardGlass>
+
+              {/* Besoin */}
+              <KPICardGlass
+                label="Besoin"
+                icon={kpiData.valToDisplay > 0 ? TrendingUp : CheckCircle2}
+                tone={kpiData.valToDisplay > 0 ? "rose" : "emerald"}
+                emphasize
+                total={kpiData.valToDisplay > 0 ? `+${Math.round(kpiData.valToDisplay)}` : "0"}
+              >
+                <EffectifFooter
+                  totalLabel="Ecart Statutaire"
+                  totalValue={formatSigned(Math.round(kpiData.diffStatutaire))}
+                  modValue={formatSigned(kpiData.diffMOD)}
+                  moiValue={formatSigned(kpiData.diffMOI)}
+                  apsLabel="Var. APS"
+                  apsValue={formatSigned(Math.round(kpiData.apsDelta))}
+                />
+              </KPICardGlass>
             </div>
           </div>
         )}
       </div>
-    </div >
+    </div>
   );
 }
