@@ -23,8 +23,7 @@ class Settings(BaseSettings):
             f"DRIVER={self.DB_DRIVER};"
             f"SERVER={self.DB_SERVER};"
             f"DATABASE={self.DB_NAME};"
-            f"UID={self.DB_USER};"
-            f"PWD={self.DB_PASSWORD};"
+            f"Trusted_Connection=yes;" 
             f"TrustServerCertificate=yes;"  # Ajoute cela si tu utilises un certificat auto-signé
     )
 

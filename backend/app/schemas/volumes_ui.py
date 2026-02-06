@@ -90,6 +90,24 @@ class VolumesUIInput(BaseModel):
     pct_retour: float = Field(default=0.0, description="% Retour (Retour info facteur etc.)")
     pct_international: float = Field(default=0.0, description="% International")
     
+    # 🆕 Paramètres spécifiques CCI (Center ID 1952)
+    # Single-value fields (backward compatibility for non-CCI centres)
+    nbr_courrier_liasse: Optional[float] = Field(default=50.0, description="Nombre de courriers par liasse (CCI)")
+    pct_retour: Optional[float] = Field(default=0.0, description="Pourcentage de retour (CCI)")
+    
+    # 🆕 CO/CR-specific fields (Centre 1952 only)
+    courriers_co_par_sac: Optional[float] = Field(default=2500.0, description="Nombre de courriers CO par sac")
+    courriers_cr_par_sac: Optional[float] = Field(default=500.0, description="Nombre de courriers CR par sac")
+    nb_courrier_liasse_co: Optional[float] = Field(default=500.0, description="Nombre de courriers CO par liasse")
+    nb_courrier_liasse_cr: Optional[float] = Field(default=500.0, description="Nombre de courriers CR par liasse")
+    pct_retour_co: Optional[float] = Field(default=1.0, description="Pourcentage de retour CO")
+    pct_retour_cr: Optional[float] = Field(default=1.0, description="Pourcentage de retour CR")
+    annotes_co: Optional[float] = Field(default=0.0, description="Pourcentage d'annotés CO")
+    annotes_cr: Optional[float] = Field(default=0.0, description="Pourcentage d'annotés CR")
+    pct_reclam_co: Optional[float] = Field(default=0.0, description="Pourcentage de réclamations CO")
+    pct_reclam_cr: Optional[float] = Field(default=0.0, description="Pourcentage de réclamations CR")
+
+    
     # Nombre de jours ouvrés par an (fixe, configurable)
     nb_jours_ouvres_an: int = Field(default=264, description="Nombre de jours ouvrés par an")
 

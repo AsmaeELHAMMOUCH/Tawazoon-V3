@@ -15,7 +15,7 @@ function getToken() {
     try {
       localStorage.removeItem("auth_token");
       sessionStorage.removeItem("auth_token");
-    } catch (e) {}
+    } catch (e) { }
   }
   return null;
 }
@@ -37,7 +37,7 @@ async function http(path, { method = "GET", body, signal } = {}) {
     try {
       localStorage.removeItem("auth_token");
       sessionStorage.removeItem("auth_token");
-    } catch (e) {}
+    } catch (e) { }
   }
 
   const raw = await res.text();
@@ -63,9 +63,9 @@ async function http(path, { method = "GET", body, signal } = {}) {
 function normalizeRegions(payload) {
   const list =
     Array.isArray(payload) ? payload :
-    Array.isArray(payload?.regions) ? payload.regions :
-    Array.isArray(payload?.items) ? payload.items :
-    [];
+      Array.isArray(payload?.regions) ? payload.regions :
+        Array.isArray(payload?.items) ? payload.items :
+          [];
 
   return list.map((r, i) => ({
     id:
@@ -88,9 +88,9 @@ function normalizeRegions(payload) {
 function normalizeCategories(payload) {
   const list =
     Array.isArray(payload) ? payload :
-    Array.isArray(payload?.categories) ? payload.categories :
-    Array.isArray(payload?.items) ? payload.items :
-    [];
+      Array.isArray(payload?.categories) ? payload.categories :
+        Array.isArray(payload?.items) ? payload.items :
+          [];
   return list.map((c, i) => ({
     id: c.id ?? c.categorie_id ?? c.code ?? i,
     label: c.label ?? c.name ?? c.nom ?? c.nom_categorie ?? String(c.id ?? c.categorie_id ?? i),
@@ -100,14 +100,14 @@ function normalizeCategories(payload) {
 function normalizeCentres(payload) {
   const list =
     Array.isArray(payload) ? payload :
-    Array.isArray(payload?.centres) ? payload.centres :
-    Array.isArray(payload?.items) ? payload.items :
-    [];
+      Array.isArray(payload?.centres) ? payload.centres :
+        Array.isArray(payload?.items) ? payload.items :
+          [];
 
   // DEBUG SPECIFIC FOR VALFLEURI
   const valfleuri = list.find(x => x.label && x.label.includes("VALFLEURI"));
   if (valfleuri) {
-     console.log("DEBUG API VALFLEURI RAW:", valfleuri);
+    console.log("DEBUG API VALFLEURI RAW:", valfleuri);
   }
 
   return list.map((c, i) => ({
@@ -128,9 +128,9 @@ function normalizeCentres(payload) {
 function normalizePostes(payload) {
   const list =
     Array.isArray(payload) ? payload :
-    Array.isArray(payload?.postes) ? payload.postes :
-    Array.isArray(payload?.items) ? payload.items :
-    [];
+      Array.isArray(payload?.postes) ? payload.postes :
+        Array.isArray(payload?.items) ? payload.items :
+          [];
   return list.map((p, i) => ({
     id: p.id ?? p.poste_id ?? p.code ?? i,
     label: p.label ?? p.name ?? p.nom ?? p.nom_poste ?? String(p.id ?? p.poste_id ?? p.code ?? i),
@@ -144,9 +144,9 @@ function normalizePostes(payload) {
 function normalizeTaches(payload) {
   const list =
     Array.isArray(payload) ? payload :
-    Array.isArray(payload?.taches) ? payload.taches :
-    Array.isArray(payload?.items) ? payload.items :
-    [];
+      Array.isArray(payload?.taches) ? payload.taches :
+        Array.isArray(payload?.items) ? payload.items :
+          [];
   return list.map((t, i) => {
     // 🔴 CORRECTION : Nettoyer "minute"
     const rawUnit = t.unit ?? t.unite ?? t.unite_mesure;
@@ -284,76 +284,76 @@ export const api = {
     if (isDirectionV2 || isDirectionLegacy) {
       const body = isDirectionV2
         ? {
-            direction_id: Number(payload.direction_id),
-            mode: payload.mode === "recommande" ? "recommande" : "actuel",
-            global_params: {
-              productivite: Number(payload.global_params?.productivite ?? 100),
-              heures_par_jour: Number(payload.global_params?.heures_par_jour ?? 7.5),
-              idle_minutes: Number(payload.global_params?.idle_minutes ?? 0),
-            },
-            // Si volumes_matriciels est déjà dans le payload (nouveau format)
-            ...(payload.volumes_matriciels && payload.volumes_matriciels.length > 0
-              ? {
-                  volumes_matriciels: payload.volumes_matriciels.map((v) => ({
-                    centre_id: v.centre_id ? Number(v.centre_id) : null,
-                    centre_label: v.centre_label ?? null,
-                    flux_id: v.flux_id !== null && v.flux_id !== undefined ? Number(v.flux_id) : null,
-                    sens_id: Number(v.sens_id),
-                    segment_id: Number(v.segment_id),
-                    volume: Number(v.volume ?? 0),
-                  })),
-                }
-              : {}),
-            // Si volumes classiques avec flux_id (détection automatique)
-            ...(payload.volumes && payload.volumes.length > 0 && payload.volumes[0].flux_id !== undefined
-              ? {
-                  volumes_matriciels: payload.volumes.map((v) => ({
-                    centre_id: v.centre_id ? Number(v.centre_id) : null,
-                    centre_label: v.centre_label ?? null,
-                    flux_id: v.flux_id !== null && v.flux_id !== undefined ? Number(v.flux_id) : null,
-                    sens_id: Number(v.sens_id),
-                    segment_id: Number(v.segment_id),
-                    volume: Number(v.volume ?? 0),
-                  })),
-                }
-              : {}),
-            // Si volumes classiques sans flux_id (ancien format)
-            ...(payload.volumes && payload.volumes.length > 0 && !payload.volumes[0].flux_id && !payload.volumes_matriciels
-              ? {
-                  volumes: payload.volumes.map((v) => ({
-                    centre_id: v.centre_id ? Number(v.centre_id) : null,
-                    centre_label: v.centre_label ?? null,
-                    sacs: Number(v.sacs ?? 0),
-                    colis: Number(v.colis ?? 0),
-                    courrier_ordinaire: Number(v.courrier_ordinaire ?? 0),
-                    courrier_recommande: Number(v.courrier_recommande ?? 0),
-                    ebarkia: Number(v.ebarkia ?? 0),
-                    lrh: Number(v.lrh ?? 0),
-                    amana: Number(v.amana ?? 0),
-                  })),
-                }
-              : {}),
-          }
+          direction_id: Number(payload.direction_id),
+          mode: payload.mode === "recommande" ? "recommande" : "actuel",
+          global_params: {
+            productivite: Number(payload.global_params?.productivite ?? 100),
+            heures_par_jour: Number(payload.global_params?.heures_par_jour ?? 7.5),
+            idle_minutes: Number(payload.global_params?.idle_minutes ?? 0),
+          },
+          // Si volumes_matriciels est déjà dans le payload (nouveau format)
+          ...(payload.volumes_matriciels && payload.volumes_matriciels.length > 0
+            ? {
+              volumes_matriciels: payload.volumes_matriciels.map((v) => ({
+                centre_id: v.centre_id ? Number(v.centre_id) : null,
+                centre_label: v.centre_label ?? null,
+                flux_id: v.flux_id !== null && v.flux_id !== undefined ? Number(v.flux_id) : null,
+                sens_id: Number(v.sens_id),
+                segment_id: Number(v.segment_id),
+                volume: Number(v.volume ?? 0),
+              })),
+            }
+            : {}),
+          // Si volumes classiques avec flux_id (détection automatique)
+          ...(payload.volumes && payload.volumes.length > 0 && payload.volumes[0].flux_id !== undefined
+            ? {
+              volumes_matriciels: payload.volumes.map((v) => ({
+                centre_id: v.centre_id ? Number(v.centre_id) : null,
+                centre_label: v.centre_label ?? null,
+                flux_id: v.flux_id !== null && v.flux_id !== undefined ? Number(v.flux_id) : null,
+                sens_id: Number(v.sens_id),
+                segment_id: Number(v.segment_id),
+                volume: Number(v.volume ?? 0),
+              })),
+            }
+            : {}),
+          // Si volumes classiques sans flux_id (ancien format)
+          ...(payload.volumes && payload.volumes.length > 0 && !payload.volumes[0].flux_id && !payload.volumes_matriciels
+            ? {
+              volumes: payload.volumes.map((v) => ({
+                centre_id: v.centre_id ? Number(v.centre_id) : null,
+                centre_label: v.centre_label ?? null,
+                sacs: Number(v.sacs ?? 0),
+                colis: Number(v.colis ?? 0),
+                courrier_ordinaire: Number(v.courrier_ordinaire ?? 0),
+                courrier_recommande: Number(v.courrier_recommande ?? 0),
+                ebarkia: Number(v.ebarkia ?? 0),
+                lrh: Number(v.lrh ?? 0),
+                amana: Number(v.amana ?? 0),
+              })),
+            }
+            : {}),
+        }
         : {
-            direction_id: Number(payload.direction_id),
-            mode: "actuel",
-            global_params: {
-              productivite: Number(payload.productivite ?? 100),
-              heures_par_jour: Number(payload.heures_net ?? 7.5),
-              idle_minutes: Number(payload.idle_minutes ?? 0),
-            },
-            volumes: (payload.imported_volumes || []).map((v) => ({
-              centre_id: v.centre_id ? Number(v.centre_id) : null,
-              centre_label: v.centre_label || v.label || null,
-              sacs: Number(v.sacs ?? 0),
-              colis: Number(v.colis ?? 0),
-              courrier_ordinaire: Number(v.courrier_ordinaire ?? v.courrier ?? 0),
-              courrier_recommande: Number(v.courrier_recommande ?? 0),
-              ebarkia: Number(v.ebarkia ?? 0),
-              lrh: Number(v.lrh ?? 0),
-              amana: Number(v.amana ?? 0),
-            })),
-          };
+          direction_id: Number(payload.direction_id),
+          mode: "actuel",
+          global_params: {
+            productivite: Number(payload.productivite ?? 100),
+            heures_par_jour: Number(payload.heures_net ?? 7.5),
+            idle_minutes: Number(payload.idle_minutes ?? 0),
+          },
+          volumes: (payload.imported_volumes || []).map((v) => ({
+            centre_id: v.centre_id ? Number(v.centre_id) : null,
+            centre_label: v.centre_label || v.label || null,
+            sacs: Number(v.sacs ?? 0),
+            colis: Number(v.colis ?? 0),
+            courrier_ordinaire: Number(v.courrier_ordinaire ?? v.courrier ?? 0),
+            courrier_recommande: Number(v.courrier_recommande ?? 0),
+            ebarkia: Number(v.ebarkia ?? 0),
+            lrh: Number(v.lrh ?? 0),
+            amana: Number(v.amana ?? 0),
+          })),
+        };
 
       console.debug("simulate(api) [DIRECTION V2]: body=", body);
       return await http("/simulation/direction/v2", { method: "POST", body, signal });
@@ -368,7 +368,7 @@ export const api = {
 
     // Correction : Mappage des volumes (VueCentre envoie un format mixte)
     const vol = payload.volumes || {};
-    
+
     // 1. Volumes Journaliers (SACS, COLIS)
     const volumesJournaliers = {
       sacs: Number(vol.sacs ?? vol.SACS ?? 0),
@@ -423,13 +423,13 @@ export const api = {
 
     console.debug("simulate(api): payload sent to backend=", body);
     const data = await http("/simulate", { method: "POST", body, signal });
-    
+
     console.log('\n' + '='.repeat(80));
     console.log('✅ [FRONTEND - API] Réponse reçue du backend');
     console.log('='.repeat(80));
     console.log('📊 Résultat:', data);
     console.log('='.repeat(80) + '\n');
-    
+
     console.debug("simulate(api): response from backend=", data);
     return data;
   },
@@ -500,7 +500,7 @@ export const api = {
   logout: async () => {
     try {
       await http("/logout", { method: "POST" });
-    } catch {}
+    } catch { }
   },
 
   me: async () => {
@@ -586,22 +586,22 @@ export const api = {
   getSimulationReplay: async (simulationId) => {
     return await http(`/replay/${simulationId}`);
   },
-  
+
   exportHistoryExcel: async ({ centre_id } = {}) => {
     const params = new URLSearchParams();
     if (centre_id) params.append("centre_id", centre_id);
-    
+
     // On veut le blob, pas JSON
     const t = getToken();
     const headers = {};
     if (t) headers.Authorization = `Bearer ${t}`;
-    
+
     const query = params.toString() ? `?${params.toString()}` : "";
     const res = await fetch(`${API_BASE}/export/history/excel${query}`, {
-        method: "GET",
-        headers
+      method: "GET",
+      headers
     });
-    
+
     if (!res.ok) throw new Error("Erreur export Excel");
     return await res.blob();
   },
@@ -617,9 +617,9 @@ export const api = {
   updateCentreCategorisation: async (centreId, categorisationId, postes = []) => {
     return await http(`/centres/${centreId}/categorisation`, {
       method: "PUT",
-      body: { 
+      body: {
         categorisation_id: Number(categorisationId),
-        postes: postes 
+        postes: postes
       },
     });
   },

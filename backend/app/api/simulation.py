@@ -55,6 +55,7 @@ from app.services.simulation_shared import (
     regroup_tasks_for_scenarios,
     creer_tache_regroupee
 )
+from app.services.simulation_CCI import calculate_cci_simulation
 from app.services.simulation_run import (
     insert_simulation_run,
     bulk_insert_volumes,
@@ -320,6 +321,34 @@ def simulate_vue_centre_optimisee(
     try:
         if not request.centre_id:
             raise HTTPException(status_code=400, detail="centre_id obligatoire")
+
+        # 🆕 ROUTING SPECIAL CASA CCI (1952) pour Vue Centre
+        if request.centre_id == 1952:
+             print("==================== REQUEST RECEIVED /vue-centre-optimisee (CASA CCI 1952) ====================", flush=True)
+             cci_res = calculate_cci_simulation(db, request)
+             
+             # Mapping vers le format attendu par VueCentre (dict legacy)
+             # SimulationResponse (fte_calcule) -> Legacy Dict (total_etp_calcule)
+             postes_payload = [p.dict() for p in cci_res.postes] if cci_res.postes else []
+             
+             # Calcul ecart total
+             total_effectif_actuel = sum([p.get("effectif_actuel", 0) for p in postes_payload])
+             total_ecart = (cci_res.fte_arrondi or 0) - total_effectif_actuel
+
+             return {
+                 "centre_id": request.centre_id,
+                 "centre_label": "CASA CCI", # Ou fetch depuis DB si critique
+                 "total_heures": cci_res.total_heures,
+                 "total_etp_calcule": cci_res.fte_calcule, # Mapping important
+                 "total_etp_arrondi": cci_res.fte_arrondi,
+                 "ecart_total": total_ecart,
+                 "heures_net": cci_res.heures_net_jour,
+                 "postes": postes_payload,
+                 "details_taches": [t.dict() for t in cci_res.details_taches],
+                 # Champs supp pour éviter bug frontend
+                 "type_agg": "MOI/MOD", 
+                 "postes_meta": {} 
+             }
 
         # 0) infos centre
         sql_centre = """

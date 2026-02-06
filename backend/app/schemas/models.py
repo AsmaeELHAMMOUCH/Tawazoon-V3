@@ -38,6 +38,12 @@ class VolumeItem(BaseModel):
     segment_id: int
     volume: float = Field(ge=0)
 
+class VolumeItemUI(BaseModel):
+    flux: str
+    sens: str
+    segment: str
+    volume: float = Field(ge=0)
+
 class BulkVolumeUpsertRequest(BaseModel):
     """Requête pour upsert bulk de volumes dans VolumeSimulation"""
     simulation_id: int
@@ -59,10 +65,34 @@ class SimulationRequest(BaseModel):
     volumes_details: Optional[List[VolumeItem]] = None
     
     # 🆕 Structure complète pour les simulations spécialisées (ex: CNDP)
-    volumes_ui: Optional[VolumesUIInput] = None
+    # volumes_ui: Optional[VolumesUIInput] = None
     
+    # New Volume UI (String based)
+    volumes_ui: Optional[List[VolumeItemUI]] = None
+
     idle_minutes: Optional[float] = 0.0
     is_test: Optional[bool] = False
+    nbr_courrier_liasse: Optional[float] = None
+    pct_retour: Optional[float] = None
+    courriers_par_sac: Optional[float] = None  # 🆕 Added for flat access
+    pct_reclamation: Optional[float] = None   # 🆕 Added for flat access
+    annotes: Optional[float] = None            # 🆕 Added for flat access
+    
+    # 🆕 CO/CR-specific fields (Centre 1952 only)
+    courriers_co_par_sac: Optional[float] = None
+    courriers_cr_par_sac: Optional[float] = None
+    nb_courrier_liasse_co: Optional[float] = None
+    nb_courrier_liasse_cr: Optional[float] = None
+    pct_retour_co: Optional[float] = None
+    pct_retour_cr: Optional[float] = None
+    annotes_co: Optional[float] = None
+    annotes_cr: Optional[float] = None
+    pct_reclam_co: Optional[float] = None
+    pct_reclam_cr: Optional[float] = None
+    
+    # 🆕 Shift Logic (Requested for CCI/CNA/CCP)
+    shift_param: Optional[float] = Field(1.0, ge=0.0)
+    pct_international: Optional[float] = Field(0.0, ge=0.0) # For CCP international logic
 
 class TacheDetail(BaseModel):
     id: Optional[int] = None  # 🆕 ID unique de la tâche pour matching précis
@@ -71,6 +101,7 @@ class TacheDetail(BaseModel):
     unit: str
     base_calcul: Optional[int] = None  # 🆕 Base de calcul (60, 100, 40) pour affichage frontend
     produit: Optional[str] = None  # 🆕 Produit (AMANA, CO, CR, etc.) pour différenciation
+    famille_uo: Optional[str] = None  # 🆕 Famille UO (CO, CR, etc.) pour différenciation des tâches dupliquées
     avg_sec: float
     heures: Optional[float] = None
     nombre_unite: Optional[float] = None
@@ -101,3 +132,22 @@ class SimulationResponse(BaseModel):
     heures_par_poste: Optional[dict] = None
     etp_par_poste: Optional[dict] = None  # 🆕 Ajout pour CNDP
     postes: Optional[List[PosteResultat]] = []
+    
+    # 🆕 Totaux globaux (pour affichage Synthèse)
+    # Identical to older fields but explicit 'actuel'
+    total_mod_actuel: Optional[float] = 0
+    total_moi_actuel: Optional[float] = 0
+    total_aps_actuel: Optional[float] = 0
+    
+    total_moi: Optional[int] = 0
+    total_aps: Optional[int] = 0
+    
+    # 🆕 Proposed Breakdown (Arrondi / Optimized Logic)
+    # Target Values after Optimization (APS Reduced etc.)
+    total_mod_target: Optional[float] = 0
+    total_moi_target: Optional[float] = 0
+    total_aps_target: Optional[float] = 0
+    
+    # Calculated Logic Breakdown
+    total_mod_calcule: Optional[float] = 0 # Simulated Workload
+    
