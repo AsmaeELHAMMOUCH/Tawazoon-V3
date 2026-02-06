@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import ReactECharts from "echarts-for-react";
 import { motion } from "framer-motion";
 import {
@@ -42,6 +42,9 @@ import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 
+import DirectionPostesModal from "../direction/DirectionPostesModal";
+import { Eye } from "lucide-react";
+
 /* ---------------------------------------------------------------------------
    STYLES / CONSTANTES
    --------------------------------------------------------------------------- */
@@ -53,8 +56,8 @@ const DANGER_COLOR = "#EF4444"; // Rouge
 const BG_COLOR = "#F8FAFC"; // Fond très clair
 
 const cardStyle = "bg-white rounded-xl shadow-[0_2px_10px_-3px_rgba(0,0,0,0.1)] border border-slate-100 p-3 transition-all duration-300 hover:shadow-[0_10px_30px_-5px_rgba(0,0,0,0.1)] hover:-translate-y-1";
-const kpiValueStyle = "text-xl font-extrabold text-slate-900 tracking-tight mt-1 mb-0.5";
-const kpiLabelStyle = "text-[9px] font-bold uppercase tracking-widest text-slate-500 flex items-center gap-1.5 mb-0.5";
+const kpiValueStyle = "text-lg font-extrabold text-slate-900 tracking-tight mt-0.5 mb-0.5";
+const kpiLabelStyle = "text-[8px] font-bold uppercase tracking-widest text-slate-500 flex items-center gap-1.5 mb-0.5";
 
 /* ---------------------------------------------------------------------------
    ANIMATION VARIANTS (Faster)
@@ -213,7 +216,7 @@ const KpiCard = ({ title, value, icon: Icon, trend, trendValue, color = "blue", 
     const theme = colorMap[color] || colorMap.blue;
 
     return (
-        <div className={`relative bg-white rounded-xl shadow-sm border border-slate-100 p-2 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 group overflow-hidden h-full min-h-[70px]`}>
+        <div className={`relative bg-white rounded-xl shadow-sm border border-slate-100 p-1.5 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 group overflow-hidden h-full min-h-[60px]`}>
             {/* Colored Accent Line at Bottom */}
             <div className={`absolute bottom-0 left-0 right-0 h-1 ${theme.bg.replace('bg-', 'bg-')} ${theme.border} opacity-80`}></div>
 
@@ -231,8 +234,8 @@ const KpiCard = ({ title, value, icon: Icon, trend, trendValue, color = "blue", 
             <div className="relative z-10 flex flex-col h-full items-center justify-center text-center gap-1">
 
                 {/* Icon with Ring Effect */}
-                <div className={`p-1.5 rounded-xl ${theme.bg} ${theme.text} ring-2 ${theme.iconRing} inline-flex items-center justify-center shadow-sm`}>
-                    <Icon size={18} strokeWidth={2} />
+                <div className={`p-1 rounded-xl ${theme.bg} ${theme.text} ring-2 ${theme.iconRing} inline-flex items-center justify-center shadow-sm`}>
+                    <Icon size={14} strokeWidth={2} />
                 </div>
 
                 <div className="flex flex-col items-center gap-0.5">
@@ -287,10 +290,58 @@ export default function VueNationale({
     tauxComplexite,
     setTauxComplexite,
     natureGeo,
-    setNatureGeo
+    setNatureGeo,
+    detailedData,
+    categoriesList = [], // 🆕 Receive reference list
+    onNavigateToDirection // 🆕 Navigation handler
 }) {
     // State for tabs
-    const [activeTab, setActiveTab] = useState("directions"); // 'directions' | 'activite'
+    const [activeTab, setActiveTab] = useState("directions"); // 'directions' | 'centres' | 'postes'
+    const [typologieFilter, setTypologieFilter] = useState("ALL"); // For Centres view
+    const [detailCentre, setDetailCentre] = useState(null); // Pour le modal détail centre
+
+    // 🆕 Persist Reference "Effectif Actuel" (High Water Mark) to prevent drop on Import
+    const [fixedEtpActuel, setFixedEtpActuel] = useState(0);
+
+    useEffect(() => {
+        if (kpisNationaux?.etpActuelTotal) {
+            setFixedEtpActuel(prev => Math.max(prev, kpisNationaux.etpActuelTotal));
+        }
+    }, [kpisNationaux]);
+
+    // 🆕 DEBUG: Log regionsData pour vérifier les valeurs MOI/MOD/APS
+    useEffect(() => {
+        if (regionsData && regionsData.length > 0) {
+            console.log("📊 [FRONTEND DEBUG] Données regionsData reçues:");
+            regionsData.forEach(r => {
+                console.log(`  - ${r.nom}: MOI=${r.moi}, MOD=${r.mod}, APS=${r.aps}, Total=${r.etpActuel}`);
+            });
+        }
+    }, [regionsData]);
+
+    // 🆕 Helper Formatage Millier (fr-FR)
+    const fmt = (val, decimals = 2) => {
+        if (val === undefined || val === null || isNaN(val)) return "-";
+        return Number(val).toLocaleString('fr-FR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+    };
+    const fmtInt = (val) => {
+        if (val === undefined || val === null || isNaN(val)) return "0";
+        return Number(val).toLocaleString('fr-FR', { maximumFractionDigits: 2 });
+    };
+
+    // Derived Data for Filters
+    const availableTypologies = useMemo(() => {
+        if (categoriesList && categoriesList.length > 0) {
+            return categoriesList.map(c => c.label).sort();
+        }
+        return [];
+    }, [categoriesList]);
+
+    const filteredCentres = useMemo(() => {
+        if (!detailedData?.centres) return [];
+        if (typologieFilter === "ALL") return detailedData.centres;
+        return detailedData.centres.filter(c => c.typologie === typologieFilter);
+    }, [detailedData, typologieFilter]);
 
     // Managed Scenario State (Prop or Local Fallback)
     const [localScenario, setLocalScenario] = useState("Standard");
@@ -484,6 +535,193 @@ TAWAZOON RH - Simulation Nationale
             setExportStatus("idle");
         }
     };
+    // Fonction d'export Excel Avancé avec ExcelJS (Images + Styles)
+    const handleExportExcel = async () => {
+        try {
+            setExportStatus("loading");
+
+            // Chargement dynamique des librairies si non importées globalement (ou utilisation des globales si disponibles)
+            const ExcelJS = await import('exceljs');
+            const { saveAs } = await import('file-saver');
+
+            const workbook = new ExcelJS.Workbook();
+            workbook.creator = 'Tawazoon RH';
+            workbook.created = new Date();
+
+            let sheetName = "Export";
+            let data = [];
+            let columns = [];
+
+            // 1. Préparation des données selon l'onglet
+            if (activeTab === "directions") {
+                sheetName = "Directions";
+                columns = [
+                    { header: "Direction", key: "nom", width: 40 },
+                    { header: "Nombre Centres", key: "centres", width: 15 },
+                    { header: "Effectif Actuel", key: "etpActuel", width: 15 },
+                    { header: "Effectif Calculé", key: "etpRecommande", width: 15 },
+                    { header: "Ecart", key: "ecart", width: 10 },
+                    { header: "Taux Occupation (%)", key: "taux", width: 20 },
+                ];
+                data = regionsData.map(r => ({
+                    nom: r.nom,
+                    centres: r.centres,
+                    etpActuel: r.etpActuel,
+                    etpRecommande: r.etpRecommande,
+                    ecart: r.etpRecommande - r.etpActuel,
+                    taux: r.tauxOccupation
+                }));
+            } else if (activeTab === "centres") {
+                sheetName = "Centres";
+                columns = [
+                    { header: "Centre", key: "nom", width: 30 },
+                    { header: "Direction", key: "direction", width: 30 },
+                    { header: "Typologie", key: "typologie", width: 15 },
+                    { header: "Effectif Actuel", key: "etpActuel", width: 15 },
+                    { header: "Effectif Calculé", key: "etpRecommande", width: 15 },
+                    { header: "Ecart", key: "ecart", width: 10 },
+                ];
+                data = filteredCentres.map(c => ({
+                    nom: c.nom,
+                    direction: c.direction_label,
+                    typologie: c.typologie,
+                    etpActuel: c.etp_actuel,
+                    etpRecommande: c.etp_calcule,
+                    ecart: c.ecart
+                }));
+            } else if (activeTab === "postes") {
+                sheetName = "Postes";
+                columns = [
+                    { header: "Poste", key: "poste", width: 40 },
+                    { header: "Type", key: "type", width: 10 },
+                    { header: "Centre", key: "centre", width: 30 },
+                    { header: "Effectif Actuel", key: "etpActuel", width: 15 },
+                    { header: "Effectif Calculé", key: "etpRecommande", width: 15 },
+                    { header: "Ecart", key: "ecart", width: 10 },
+                ];
+                data = detailedData?.postes?.map(p => ({
+                    poste: p.poste_label,
+                    type: p.type_poste || "MOD",
+                    centre: p.centre_label || p.nom_centre || "-",
+                    etpActuel: p.etp_actuel,
+                    etpRecommande: p.etp_calcule,
+                    ecart: (p.etp_calcule || 0) - (p.etp_actuel || 0)
+                })) || [];
+            }
+
+            if (data.length === 0) {
+                alert("Aucune donnée à exporter.");
+                setExportStatus("idle");
+                return;
+            }
+
+            const sheet = workbook.addWorksheet(sheetName);
+
+            // 2. Configuration de la mise en page (Hauteur Header)
+            sheet.getRow(1).height = 100; // Espace pour les logos
+
+            // 3. Ajout des Logos (Barid + Almav)
+            const loadLogo = async (url) => {
+                try {
+                    const response = await fetch(url);
+                    const blob = await response.blob();
+                    return await blob.arrayBuffer();
+                } catch (e) {
+                    console.warn(`Impossible de charger le logo: ${url}`);
+                    return null;
+                }
+            };
+
+            const logoBaridBuffer = await loadLogo('/BaridLogo.png');
+            const logoAlmavBuffer = await loadLogo('/almavlogo.png');
+
+            if (logoBaridBuffer) {
+                const logoId = workbook.addImage({
+                    buffer: logoBaridBuffer,
+                    extension: 'png',
+                });
+                sheet.addImage(logoId, {
+                    tl: { col: 0, row: 0 }, // A1
+                    ext: { width: 200, height: 80 },
+                    editAs: 'oneCell'
+                });
+            }
+
+            if (logoAlmavBuffer) {
+                const logoId = workbook.addImage({
+                    buffer: logoAlmavBuffer,
+                    extension: 'png',
+                });
+                // Position: Fin de la largeur (approx colonne 5 ou 6)
+                const lastColIndex = columns.length - 1;
+                sheet.addImage(logoId, {
+                    tl: { col: lastColIndex, row: 0 },
+                    ext: { width: 150, height: 80 },
+                    editAs: 'oneCell'
+                });
+            }
+
+            // 4. Titre et Métadonnées (Lignes 3-4)
+            // On merge sur la largeur du tableau (columns.length)
+            const lastColLetter = String.fromCharCode(65 + columns.length - 1); // A, B, C...
+
+            sheet.mergeCells(`A3:${lastColLetter}3`);
+            const titleCell = sheet.getCell('A3');
+            titleCell.value = `RAPPORT DÉTAILLÉ - ${sheetName.toUpperCase()}`;
+            titleCell.font = { name: 'Arial', size: 16, bold: true, color: { argb: 'FF005EA8' } };
+            titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
+
+            sheet.mergeCells(`A4:${lastColLetter}4`);
+            const dateCell = sheet.getCell('A4');
+            dateCell.value = `Généré le: ${new Date().toLocaleString()}`;
+            dateCell.font = { name: 'Arial', size: 10, italic: true };
+            dateCell.alignment = { vertical: 'middle', horizontal: 'center' };
+
+            // 5. En-têtes de Colonnes (Ligne 6)
+            const headerRowNumber = 6;
+            const headerRow = sheet.getRow(headerRowNumber);
+
+            columns.forEach((col, idx) => {
+                const cell = headerRow.getCell(idx + 1);
+                cell.value = col.header;
+                cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 12 };
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF005EA8' } };
+                cell.border = { top: { style: 'medium' }, left: { style: 'medium' }, bottom: { style: 'medium' }, right: { style: 'medium' } };
+                cell.alignment = { vertical: 'middle', horizontal: 'center' };
+                sheet.getColumn(idx + 1).width = col.width;
+            });
+            headerRow.height = 30;
+
+            // 6. Données (Ligne 7+)
+            data.forEach(item => {
+                const rowValues = columns.map(col => item[col.key]);
+                const row = sheet.addRow(rowValues);
+
+                row.eachCell((cell) => {
+                    cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+                    cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+                });
+            });
+
+            // Sauvegarde
+            const buffer = await workbook.xlsx.writeBuffer();
+            saveAs(new Blob([buffer]), `Tawazoon_Export_${sheetName}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+
+            setExportStatus("success");
+            setTimeout(() => setExportStatus("idle"), 2500);
+            setIsExportMenuOpen(false);
+
+        } catch (e) {
+            console.error("Export ExcelJS error:", e);
+            setExportStatus("idle");
+            alert("Erreur lors de l'export Excel");
+        }
+    };
+    // 🆕 Fonction pour télécharger le template par Centre (Server-Side)
+    const handleDownloadTemplateCentres = () => {
+        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001';
+        window.open(`${API_URL}/api/simulation/template/centres`, '_blank');
+    };
 
     // Fonction pour télécharger le template d'import matriciel
     const handleDownloadTemplate = async () => {
@@ -528,7 +766,7 @@ TAWAZOON RH - Simulation Nationale
                     }
 
                     templateData.push([`=== CENTRE ${centreIndex + 1} ===`]);
-                    templateData.push(["Nom du Centre:", centre.label]);
+                    templateData.push(["Nom du Centre:", `${centre.label} (ID: ${centre.id})`]);
                     templateData.push([]);
 
                     // Section A : FLUX ARRIVÉE
@@ -555,6 +793,25 @@ TAWAZOON RH - Simulation Nationale
                     templateData.push(["CR", "", "", "", "", ""]);
                     templateData.push(["E-Barkia", "", "", "", "", ""]);
                     templateData.push(["LRH", "", "", "", "", ""]);
+                    templateData.push([]);
+
+                    // Section D: PARAMÈTRES
+                    templateData.push(["D) PARAMÈTRES DE SIMULATION"]);
+                    templateData.push(["PARAMÈTRE", "VALEUR", "UNITÉ"]);
+                    templateData.push(["Productivité", centre.productivite || 100, "%"]);
+                    templateData.push(["Temps Mort", centre.temps_mort || 0, "min"]);
+                    templateData.push(["Compl. Circulaire", centre.coeff_circ || 1, ""]);
+                    templateData.push(["Compl. Géographique", centre.coeff_geo || 1, ""]);
+                    templateData.push(["Capacité Nette", centre.capacite_nette || 8.00, "h/j"]);
+                    templateData.push(["Nb Colis/Sac", centre.colis_sac || 10, ""]);
+                    templateData.push(["% En Dehors (ED)", centre.ed_percent || 40, "%"]);
+                    templateData.push(["% Axes Arrivée", centre.pct_axes_arr || 0, "%"]);
+                    templateData.push(["% Axes Départ", centre.pct_axes_dep || 0, "%"]);
+                    templateData.push(["% Collecte", centre.pct_collecte || 5, "%"]);
+                    templateData.push(["% Retour", centre.pct_retour || 5, "%"]);
+                    templateData.push(["Nb CO/Sac", centre.nbr_co_sac || 4500, ""]);
+                    templateData.push(["Nb CR/Sac", centre.nbr_cr_sac || 500, ""]);
+                    templateData.push(["CR/Caisson", centre.cr_caisson || 500, ""]);
                 });
             }
 
@@ -695,13 +952,14 @@ TAWAZOON RH - Simulation Nationale
                     {/* Actions Rapides dans le header */}
                     <div className="flex items-center gap-2">
                         <button
-                            className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-md text-xs font-semibold text-emerald-700 hover:bg-emerald-100 hover:border-emerald-300 transition-all"
-                            onClick={handleDownloadTemplate}
-                            title="Télécharger le modèle d'import"
+                            className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 border border-indigo-200 rounded-md text-xs font-semibold text-indigo-700 hover:bg-indigo-100 hover:border-indigo-300 transition-all"
+                            onClick={handleDownloadTemplateCentres}
+                            title="Télécharger le modèle par Centre (Matriciel)"
                         >
                             <FileSpreadsheet size={14} />
-                            <span className="hidden sm:inline">Modèle</span>
+                            <span className="hidden sm:inline">Modèle Centres</span>
                         </button>
+
 
                         <button
                             className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-md text-xs font-semibold text-slate-700 hover:text-[#005EA8] hover:border-[#005EA8] transition-all"
@@ -724,23 +982,29 @@ TAWAZOON RH - Simulation Nationale
                                 {exportStatus === 'loading' && <Loader2 size={14} className="animate-spin" />}
                                 {exportStatus === 'success' ? <CheckCircle2 size={14} /> : <Download size={14} />}
                                 <span className="hidden sm:inline">{exportStatus === 'success' ? 'Exporté' : 'Exporter'}</span>
-                                {exportStatus !== 'success' && <ChevronDown size={12} className={`transition-transform ${isExportMenuOpen ? 'rotate-180' : ''}`} />}
+                                <ChevronDown size={12} className={`transition-transform ${isExportMenuOpen ? 'rotate-180' : ''}`} />
                             </button>
 
                             {isExportMenuOpen && (
                                 <div className="absolute top-full right-0 mt-2 w-48 bg-white border border-slate-200 rounded-lg shadow-xl z-50 overflow-hidden">
-                                    <button onClick={() => handleExport("Excel")} className="w-full flex items-center gap-2 px-3 py-2 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 text-xs font-medium transition-colors text-left">
+                                    {/* 🆕 Button dedicated to Excel Data Export */}
+                                    <button onClick={handleExportExcel} className="w-full flex items-center gap-2 px-3 py-2 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 text-xs font-medium transition-colors text-left">
                                         <FileSpreadsheet size={14} className="text-emerald-600" />
-                                        <span>Excel (.xlsx)</span>
+                                        <span>Données (.xlsx)</span>
+                                    </button>
+                                    <div className="border-t border-slate-100 my-1"></div>
+                                    <button onClick={() => handleExport("Excel")} className="w-full flex items-center gap-2 px-3 py-2 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 text-xs font-medium transition-colors text-left hidden">
+                                        <FileSpreadsheet size={14} className="text-emerald-600" />
+                                        <span>Rapport Excel</span>
                                     </button>
                                     <button onClick={() => handleExport("PDF")} className="w-full flex items-center gap-2 px-3 py-2 hover:bg-rose-50 text-slate-700 hover:text-rose-700 text-xs font-medium transition-colors text-left border-t border-slate-50">
                                         <FileText size={14} className="text-rose-600" />
-                                        <span>PDF (.pdf)</span>
+                                        <span>Rapport PDF</span>
                                     </button>
-                                    <button onClick={() => handleExport("PowerPoint")} className="w-full flex items-center gap-2 px-3 py-2 hover:bg-orange-50 text-slate-700 hover:text-orange-700 text-xs font-medium transition-colors text-left border-t border-slate-50">
+                                    {/* <button onClick={() => handleExport("PowerPoint")} className="w-full flex items-center gap-2 px-3 py-2 hover:bg-orange-50 text-slate-700 hover:text-orange-700 text-xs font-medium transition-colors text-left border-t border-slate-50">
                                         <Presentation size={14} className="text-orange-600" />
                                         <span>PowerPoint (.pptx)</span>
-                                    </button>
+                                    </button> */}
                                 </div>
                             )}
                         </div>
@@ -793,174 +1057,389 @@ TAWAZOON RH - Simulation Nationale
                 </div>
             </header>
 
-            {/* ========================================
-                ZONE PARAMÈTRES : Configuration Simulation
-                ======================================== */}
-            <motion.div
-                variants={itemVariants}
-                className="bg-white/80 backdrop-blur-xl rounded-xl border border-white/60 shadow-[0_4px_20px_-10px_rgba(2,6,23,0.12)] mb-3"
-            >
-                <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between bg-white/50">
-                    <div className="flex items-center gap-2">
-                        <div className="p-1.5 bg-blue-50 text-[#005EA8] rounded-lg">
-                            <Activity size={18} />
-                        </div>
-                        <div>
-                            <h3 className="text-sm font-bold text-slate-900 leading-tight">
-                                Paramètres de Simulation
-                            </h3>
-                            <p className="text-[10px] text-slate-500 mt-0.5">
-                                Configuration globale appliquée à l'ensemble du réseau
-                            </p>
-                        </div>
-                    </div>
+
+            {/* --- DETAILED DATA TABLE --- */}
+            <motion.div variants={itemVariants} className={`${cardStyle} mb-3`}>
+                <div className="text-xs text-slate-400 font-mono mb-1 p-1 bg-slate-50 border border-slate-100 rounded">
+                    DEBUG: Centres={detailedData?.centres?.length || 0} | Postes={detailedData?.postes?.length || 0}
+                </div>
+                <div className="flex items-center gap-6 border-b border-slate-100 mb-0 pb-0">
+                    <button
+                        onClick={() => setActiveTab("directions")}
+                        className={`pb-4 px-2 text-sm font-bold border-b-2 transition-colors ${activeTab === 'directions' ? 'border-[#005EA8] text-[#005EA8]' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                    >
+                        Détail par Direction
+                    </button>
+                    <button
+                        onClick={() => setActiveTab("centres")}
+                        className={`pb-4 px-2 text-sm font-bold border-b-2 transition-colors ${activeTab === 'centres' ? 'border-[#005EA8] text-[#005EA8]' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                    >
+                        Consolidé Centre
+                    </button>
+                    <button
+                        onClick={() => setActiveTab("postes")}
+                        className={`pb-4 px-2 text-sm font-bold border-b-2 transition-colors ${activeTab === 'postes' ? 'border-[#005EA8] text-[#005EA8]' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                    >
+                        Consolidé Postes
+                    </button>
                 </div>
 
-                <div className="p-3 bg-white/40">
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                        {/* Productivité */}
-                        <div className="flex flex-col gap-1.5 p-2 rounded-lg bg-white/60 border border-slate-200/60 hover:border-blue-200 transition-colors">
-                            <label className="text-[10px] font-semibold text-slate-600 uppercase flex items-center gap-1.5">
-                                <Gauge size={12} className="text-blue-500" />
-                                Productivité (%)
-                            </label>
-                            <input
-                                type="number"
-                                value={productivite}
-                                onChange={(e) => setProductivite && setProductivite(e.target.value)}
-                                className="w-full bg-transparent text-sm font-bold text-slate-800 focus:outline-none border-b border-transparent focus:border-blue-500 px-1"
-                                min="0" max="200"
-                            />
-                        </div>
-
-                        {/* Heures de Service (Brut) */}
-                        <div className="flex flex-col gap-1.5 p-2 rounded-lg bg-white/60 border border-slate-200/60 hover:border-blue-200 transition-colors">
-                            <label className="text-[10px] font-semibold text-slate-600 uppercase flex items-center gap-1.5">
-                                <Clock size={12} className="text-blue-500" />
-                                Heures de Service
-                            </label>
-                            <input
-                                type="number"
-                                step="0.5"
-                                value={heuresNet}
-                                onChange={(e) => setHeuresNet && setHeuresNet(e.target.value)}
-                                className="w-full bg-transparent text-sm font-bold text-slate-800 focus:outline-none border-b border-transparent focus:border-blue-500 px-1"
-                                min="0" max="24"
-                            />
-                        </div>
-
-                        {/* Temps Inactif */}
-                        <div className="flex flex-col gap-1.5 p-2 rounded-lg bg-white/60 border border-slate-200/60 hover:border-blue-200 transition-colors">
-                            <label className="text-[10px] font-semibold text-slate-600 uppercase flex items-center gap-1.5">
-                                <Clock size={12} className="text-slate-400" />
-                                Temps Inactif (min)
-                            </label>
-                            <div className="flex items-center justify-between">
-                                <input
-                                    type="number"
-                                    value={idleMinutes || 0}
-                                    onChange={(e) => setIdleMinutes && setIdleMinutes(e.target.value)}
-                                    className="w-16 bg-transparent text-sm font-bold text-slate-800 focus:outline-none border-b border-transparent focus:border-blue-500 px-1"
-                                    min="0"
-                                />
-                                {/* Affichage du Net Calculé */}
-                                <div className="text-[9px] text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 whitespace-nowrap">
-                                    Net: {((heuresNet * 60 - (idleMinutes || 0)) / 60).toFixed(2)}h
+                <div className="pt-6 overflow-x-auto">
+                    {activeTab === "directions" ? (
+                        <table className="w-full text-sm text-left">
+                            <thead>
+                                <tr className="text-xs uppercase text-slate-400 font-bold border-b border-slate-100">
+                                    <th className="py-2 px-3">Direction / Entité</th>
+                                    <th className="py-2 px-3 text-center">Centres</th>
+                                    <th className="py-2 px-3 text-right text-xs text-purple-600">MOI</th>
+                                    <th className="py-2 px-3 text-right text-xs text-blue-600">MOD</th>
+                                    <th className="py-2 px-3 text-right text-xs text-orange-600">APS</th>
+                                    <th className="py-2 px-3 text-right font-extrabold bg-slate-50">Total Act.</th>
+                                    <th className="py-2 px-3 text-right">Effectif calculé</th>
+                                    <th className="py-2 px-3 text-right">Écart</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-50">
+                                {regionsData.map((r, i) => (
+                                    <tr
+                                        key={i}
+                                        onClick={() => onNavigateToDirection && onNavigateToDirection(r.id)}
+                                        className="hover:bg-slate-50 transition-colors cursor-pointer group"
+                                    >
+                                        <td className="py-2 px-3 font-semibold text-slate-700 group-hover:text-[#005EA8]">{r.nom}</td>
+                                        <td className="py-2 px-3 text-center text-slate-500">{r.centres}</td>
+                                        <td className="py-2 px-3 text-right text-xs text-purple-700">{fmt(r.moi, 1)}</td>
+                                        <td className="py-2 px-3 text-right text-xs text-blue-700">{fmt(r.mod, 1)}</td>
+                                        <td className="py-2 px-3 text-right text-xs text-orange-700">{fmt(r.aps, 1)}</td>
+                                        <td className="py-2 px-3 text-right font-extrabold bg-slate-50">{fmt(r.etpActuel, 1)}</td>
+                                        <td className="py-2 px-3 text-right font-medium text-slate-600">{fmt(r.etpRecommande, 2)}</td>
+                                        <td className={`py-2 px-3 text-right font-bold ${r.etpRecommande - r.etpActuel < 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
+                                            {r.etpRecommande - r.etpActuel > 0 ? '+' : ''}{fmt(r.etpRecommande - r.etpActuel, 2)}
+                                        </td>
+                                    </tr>
+                                ))}
+                                {/* Totals row */}
+                                <tr className="bg-slate-50/80 font-bold text-slate-800">
+                                    <td className="py-2.5 px-3">TOTAL NATIONAL</td>
+                                    <td className="py-2.5 px-3 text-center">{regionsData.reduce((sum, r) => sum + (r.centres || 0), 0)}</td>
+                                    <td className="py-2.5 px-3 text-right text-purple-700">{fmt(regionsData.reduce((s, r) => s + (r.moi || 0), 0), 1)}</td>
+                                    <td className="py-2.5 px-3 text-right text-blue-700">{fmt(regionsData.reduce((s, r) => s + (r.mod || 0), 0), 1)}</td>
+                                    <td className="py-2.5 px-3 text-right text-orange-700">{fmt(regionsData.reduce((s, r) => s + (r.aps || 0), 0), 1)}</td>
+                                    <td className="py-2.5 px-3 text-right bg-slate-100">{fmt(kpisNationaux.etpActuelTotal, 1)}</td>
+                                    <td className="py-2.5 px-3 text-right">{fmt(kpisNationaux.etpRecommandeTotal, 2)}</td>
+                                    <td className="py-2.5 px-3 text-right">{fmt(kpisNationaux.surplusDeficit, 2)}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    ) : activeTab === "centres" ? (
+                        <div className="space-y-4">
+                            {/* Filter Bar */}
+                            <div className="flex items-center gap-2 mb-2 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                                <span className="text-xs font-bold text-slate-500 uppercase">Filtre Typologie:</span>
+                                <div className="flex-1 max-w-[200px]">
+                                    <select
+                                        value={typologieFilter}
+                                        onChange={(e) => setTypologieFilter(e.target.value)}
+                                        className="w-full text-xs border border-slate-300 rounded-md px-2 py-1.5 bg-white text-slate-700 outline-none focus:border-[#005EA8] focus:ring-1 focus:ring-[#005EA8] transition-all"
+                                    >
+                                        <option value="ALL">TOUTES LES TYPOLOGIES</option>
+                                        {availableTypologies.map(type => (
+                                            <option key={type} value={type}>
+                                                {type}
+                                            </option>
+                                        ))}
+                                    </select>
                                 </div>
                             </div>
-                        </div>
 
-                        {/* Taux Complexité */}
-                        <div className="flex flex-col gap-1.5 p-2 rounded-lg bg-white/60 border border-slate-200/60 hover:border-blue-200 transition-colors">
-                            <label className="text-[10px] font-semibold text-slate-600 uppercase flex items-center gap-1.5">
-                                <Activity size={12} className="text-blue-500" />
-                                Complexité (%)
-                            </label>
-                            <input
-                                type="number"
-                                value={tauxComplexite || 0}
-                                onChange={(e) => setTauxComplexite && setTauxComplexite(e.target.value)}
-                                className="w-full bg-transparent text-sm font-bold text-slate-800 focus:outline-none border-b border-transparent focus:border-blue-500 px-1"
-                                min="0"
-                            />
+                            {detailedData?.centres ? (
+                                <table className="w-full text-sm text-left">
+                                    <thead>
+                                        <tr className="text-xs uppercase text-slate-400 font-bold border-b border-slate-100">
+                                            <th className="py-2 px-3">Centre</th>
+                                            <th className="py-2 px-3">Direction</th>
+                                            <th className="py-2 px-3 text-center">Typologie</th>
+                                            <th className="py-2 px-3 text-right text-[10px] text-purple-600">MOI</th>
+                                            <th className="py-2 px-3 text-right text-[10px] text-blue-600">MOD</th>
+                                            <th className="py-2 px-3 text-right text-[10px] text-orange-600">APS</th>
+                                            <th className="py-2 px-3 text-right font-bold bg-slate-50">Total</th>
+                                            <th className="py-2 px-3 text-right">Calculé</th>
+                                            <th className="py-2 px-3 text-right">Écart</th>
+                                            <th className="py-2 px-3 text-center">Détail</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-50">
+                                        {filteredCentres.map((c, i) => (
+                                            <tr key={i} className="hover:bg-slate-50 transition-colors">
+                                                <td className="py-2 px-3 font-semibold text-slate-700">{c.nom}</td>
+                                                <td className="py-2 px-3 text-slate-500 text-xs">{c.direction_label}</td>
+                                                <td className="py-2 px-3 text-center">
+                                                    <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                                                        {c.typologie}
+                                                    </span>
+                                                </td>
+                                                <td className="py-2 px-3 text-right text-xs text-purple-700">{fmt(c.act_moi, 1)}</td>
+                                                <td className="py-2 px-3 text-right text-xs text-blue-700">{fmt(c.act_mod, 1)}</td>
+                                                <td className="py-2 px-3 text-right text-xs text-orange-700">{fmt(c.act_aps, 1)}</td>
+                                                <td className="py-2 px-3 text-right font-bold bg-slate-50">{fmt(c.etp_actuel, 1)}</td>
+                                                <td className="py-2 px-3 text-right font-medium text-slate-600">{fmt(c.etp_calcule, 2)}</td>
+                                                <td className={`py-2 px-3 text-right font-bold ${c.ecart < 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
+                                                    {c.ecart > 0 ? '+' : ''}{fmt(c.ecart, 2)}
+                                                </td>
+                                                <td className="py-2 px-3 text-center">
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); setDetailCentre(c); }}
+                                                        className="text-slate-400 hover:text-[#005EA8] transition-colors p-1 rounded hover:bg-blue-50"
+                                                        title="Voir le détail des postes"
+                                                    >
+                                                        <Eye size={16} />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            ) : (
+                                <div className="p-8 text-center text-slate-400 italic">
+                                    Aucune donnée détaillée disponible. Veuillez relancer une simulation nationale.
+                                </div>
+                            )}
                         </div>
+                    ) : (
+                        <div className="space-y-4">
+                            {detailedData?.postes ? (
+                                <>
+                                    <table className="w-full text-sm text-left">
+                                        <thead>
+                                            <tr className="text-xs uppercase text-slate-400 font-bold border-b border-slate-100">
+                                                <th className="py-2 px-3">Intitulé du Poste</th>
+                                                <th className="py-2 px-3 text-center">Type</th>
+                                                <th className="py-2 px-3 text-right">Effectif Actuel</th>
+                                                <th className="py-2 px-3 text-right">Effectif calculé</th>
+                                                <th className="py-2 px-3 text-right">Écart</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-50">
+                                            {detailedData.postes.map((p, i) => (
+                                                <tr key={i} className="hover:bg-slate-50 transition-colors">
+                                                    <td className="py-2 px-3 font-semibold text-slate-700">{p.poste_label}</td>
+                                                    <td className="py-2 px-3 text-center">
+                                                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${p.type_poste === 'MOI' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                                                            {p.type_poste || 'MOD'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="py-2 px-3 text-right font-medium">{fmt(p.etp_actuel, 2)}</td>
+                                                    <td className="py-2 px-3 text-right font-medium text-slate-600">{fmt(p.etp_calcule, 2)}</td>
+                                                    <td className={`py-2 px-3 text-right font-bold ${(p.etp_calcule - p.etp_actuel) > 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
+                                                        {(p.etp_calcule - p.etp_actuel) > 0 ? '+' : ''}{fmt((p.etp_calcule - p.etp_actuel), 2)}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                        <tfoot className="bg-slate-50 border-t border-slate-200">
+                                            <tr>
+                                                <td className="py-2 px-3 text-xs font-bold text-slate-600 uppercase">
+                                                    TOTAL
+                                                </td>
+                                                <td className="py-2 px-3 text-center text-xs font-bold text-slate-600">
+                                                    -
+                                                </td>
+                                                <td className="py-2 px-3 text-right text-xs font-bold text-slate-600">
+                                                    {fmt(detailedData.postes.reduce((sum, p) => sum + (p.etp_actuel || 0), 0), 2)}
+                                                </td>
+                                                <td className="py-2 px-3 text-right text-xs font-bold text-[#005EA8]">
+                                                    {fmt(detailedData.postes.reduce((sum, p) => sum + (p.etp_calcule || 0), 0), 2)}
+                                                </td>
+                                                <td className={`py-2 px-3 text-right text-xs font-bold ${detailedData.postes.reduce((sum, p) => sum + (p.etp_calcule - p.etp_actuel), 0) > 0 ? "text-rose-600" : "text-emerald-600"
+                                                    }`}>
+                                                    {detailedData.postes.reduce((sum, p) => sum + (p.etp_calcule - p.etp_actuel), 0) > 0 ? "+" : ""}
+                                                    {fmt(detailedData.postes.reduce((sum, p) => sum + (p.etp_calcule - p.etp_actuel), 0), 2)}
+                                                </td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                    <div className="mt-2 text-[10px] text-slate-400 font-medium px-3 text-right flex justify-between items-center bg-slate-50 p-2 rounded">
+                                        <span>
+                                            Données consolidées
+                                        </span>
+                                        <span>
+                                            Total Centres impactés : <span className="font-bold text-slate-700">{detailedData.centres_simules || detailedData.centres?.length || 0}</span>
+                                        </span>
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="p-8 text-center text-slate-400 italic">
+                                    Aucune donnée consolidée par poste disponible.
+                                </div>
+                            )}
+                        </div>
+                    )}
 
-                        {/* Nature Géo */}
-                        <div className="flex flex-col gap-1.5 p-2 rounded-lg bg-white/60 border border-slate-200/60 hover:border-blue-200 transition-colors">
-                            <label className="text-[10px] font-semibold text-slate-600 uppercase flex items-center gap-1.5">
-                                <MapIcon size={12} className="text-blue-500" />
-                                Nature Géo (%)
-                            </label>
-                            <input
-                                type="number"
-                                value={natureGeo || 0}
-                                onChange={(e) => setNatureGeo && setNatureGeo(e.target.value)}
-                                className="w-full bg-transparent text-sm font-bold text-slate-800 focus:outline-none border-b border-transparent focus:border-blue-500 px-1"
-                                min="0"
-                            />
-                        </div>
+
+                    <div className="mt-4 flex justify-end">
+                        <button className="flex items-center gap-2 text-sm font-semibold text-[#005EA8] hover:underline">
+                            Voir le détail complet des centres <ArrowRight size={14} />
+                        </button>
                     </div>
                 </div>
             </motion.div>
-
             {/* ========================================
-                ZONE 1 : KPI NATIONAUX (Ligne unique)
-                ======================================== */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 mb-3">
-                <motion.div variants={itemVariants} className="h-full">
-                    <KpiCard
-                        title="Effectif Actuel"
-                        value={kpisNationaux.etpActuelTotal}
-                        icon={Users}
-                        color="blue"
-                        tooltip="Total des effectifs (ETP) actuellement en poste dans toutes les directions régionales."
-                    />
-                </motion.div>
-                <motion.div variants={itemVariants} className="h-full">
-                    <KpiCard
-                        title="Effectif Calculé"
-                        value={kpisNationaux.fte_calcule ?? 0}
-                        icon={Calculator}
-                        color="blue"
-                        tooltip="Besoin théorique en ETP calculé par le moteur de simulation."
-                    />
-                </motion.div>
-                <motion.div variants={itemVariants} className="h-full">
-                    <KpiCard
-                        title="Écart Global"
-                        value={kpisNationaux.surplusDeficit > 0 ? `+${kpisNationaux.surplusDeficit}` : kpisNationaux.surplusDeficit}
-                        icon={AlertTriangle}
-                        color={kpisNationaux.surplusDeficit < 0 ? "red" : "orange"}
-                        tooltip="Différence entre l'effectif actuel et le calculé. Négatif = déficit."
-                    />
-                </motion.div>
-                <motion.div variants={itemVariants} className="h-full">
-                    <KpiCard
-                        title="Taux d'Adéquation"
-                        value={`${kpisNationaux.tauxProductiviteMoyen ?? 98}%`}
-                        icon={Gauge}
-                        color="green"
-                        tooltip="Pourcentage de couverture des besoins par l'effectif actuel."
-                    />
-                </motion.div>
-            </div>
+    ZONE 3 : DÉTAIL PAR DIRECTION + CHARTS
+   ======================================== */}
+            <motion.div
+                variants={itemVariants}
+                className="grid grid-cols-1 xl:grid-cols-3 gap-3 mb-3"
+            >
+                {/* =========================
+      LIGNE 1 – GAUCHE (2/3)
+      Répartition Directions
+     ========================= */}
+                <div className="xl:col-span-2">
+                    <div className={`${cardStyle} p-0 overflow-hidden h-full`}>
+                        <div className="p-3 border-b border-slate-100">
+                            <h3 className="font-semibold text-sm text-slate-800 flex items-center gap-2">
+                                <MapIcon size={16} className="text-[#005EA8]" />
+                                Répartition par Direction Régionale
+                            </h3>
+                        </div>
 
-            {/* ========================================
-                ZONE 2 : ANALYSE RÉGIONALE (2 colonnes)
-                ======================================== */}
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 mb-3">
+                        <div className="p-3">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                                {regionsData.map((r) => {
+                                    const ecart = r.etpRecommande - r.etpActuel;
+                                    const isDeficit = ecart < 0;
 
-                {/* COLONNE PRINCIPALE (65%) - Carte + Graphique */}
-                <div className="xl:col-span-2 flex flex-col gap-3">
+                                    return (
+                                        <div
+                                            key={r.code}
+                                            onClick={() => onNavigateToDirection && onNavigateToDirection(r.id)}
+                                            className="bg-slate-50 rounded-lg p-3 border border-slate-200 hover:shadow-md transition-all cursor-pointer group"
+                                        >
+                                            {/* Header */}
+                                            <div className="flex items-start justify-between mb-2">
+                                                <h4 className="font-semibold text-xs text-slate-800 group-hover:text-[#005EA8]">
+                                                    {r.nom}
+                                                </h4>
+                                                <span
+                                                    className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold ${isDeficit
+                                                        ? "bg-rose-100 text-rose-700"
+                                                        : ecart === 0
+                                                            ? "bg-emerald-100 text-emerald-700"
+                                                            : "bg-amber-100 text-amber-700"
+                                                        }`}
+                                                >
+                                                    {r.centres} centres
+                                                </span>
+                                            </div>
 
+                                            {/* KPIs */}
+                                            <div className="grid grid-cols-3 gap-2 text-center mb-2">
+                                                <div className="bg-white rounded p-2 border border-slate-100">
+                                                    <div className="text-[9px] text-slate-500 font-semibold mb-0.5">
+                                                        Actuel
+                                                    </div>
+                                                    <div className="text-sm font-bold text-slate-800">
+                                                        {fmtInt(r.etpActuel)}
+                                                    </div>
+                                                </div>
+
+                                                <div className="bg-white rounded p-2 border border-slate-100">
+                                                    <div className="text-[9px] text-slate-500 font-semibold mb-0.5">
+                                                        Calculé
+                                                    </div>
+                                                    <div className="text-sm font-bold text-blue-600">
+                                                        {fmtInt(r.etpRecommande)}
+                                                    </div>
+                                                </div>
+
+                                                <div
+                                                    className={`bg-white rounded p-2 border ${isDeficit
+                                                        ? "border-rose-200"
+                                                        : "border-emerald-200"
+                                                        }`}
+                                                >
+                                                    <div className="text-[9px] text-slate-500 font-semibold mb-0.5">
+                                                        Écart
+                                                    </div>
+                                                    <div
+                                                        className={`text-sm font-bold ${isDeficit
+                                                            ? "text-rose-600"
+                                                            : "text-emerald-600"
+                                                            }`}
+                                                    >
+                                                        {ecart > 0 ? "+" : ""}
+                                                        {fmtInt(ecart)}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* =========================
+      LIGNE 1 – DROITE (1/3)
+      Pie chart
+     ========================= */}
+                <div>
+                    <div className={cardStyle}>
+                        <h3 className="font-semibold text-sm text-slate-800 mb-2">
+                            Répartition Effectifs par Direction
+                        </h3>
+                        <ReactECharts
+                            option={getPieOption(regionsData)}
+                            style={{ height: 260 }}
+                            opts={{ renderer: "canvas" }}
+                        />
+                    </div>
+                </div>
+
+                {/* =========================
+      LIGNE 2 – GAUCHE (2/3)
+      Comparatif Actuel vs Calculé
+     ========================= */}
+                <div className="xl:col-span-2">
+                    <div className={cardStyle}>
+                        <h3 className="font-semibold text-sm text-slate-800 mb-3 flex items-center gap-2">
+                            <BarChart3 size={16} className="text-[#005EA8]" />
+                            Comparatif Actuel vs Calculé
+                        </h3>
+
+                        <ReactECharts
+                            option={getBarOption(regionsData)}
+                            style={{ height: 260 }}
+                            opts={{ renderer: "canvas" }}
+                        />
+                    </div>
+                </div>
+
+                {/* =========================
+      LIGNE 2 – DROITE (1/3)
+      (réservé futur)
+     ========================= */}
+                <div />
+            </motion.div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 mb-3 items-stretch">
+
+                {/* COLONNE PRINCIPALE (2/3) */}
+                <div className="xl:col-span-2 flex flex-col">
                     {/* Carte Géographique des Écarts */}
-                    <motion.div variants={itemVariants} className={`${cardStyle} p-0 overflow-hidden flex flex-col h-[300px]`}>
+                    <motion.div
+                        variants={itemVariants}
+                        className={`${cardStyle} p-0 overflow-hidden flex flex-col h-[300px]`}
+                    >
                         <div className="p-2 border-b border-slate-100 flex justify-between items-center">
                             <h3 className="font-semibold text-sm text-slate-800 flex items-center gap-2">
                                 <MapIcon size={16} className="text-[#005EA8]" />
                                 Carte Géographique des Écarts
                             </h3>
                         </div>
+
                         <div className="flex-1 relative z-0">
                             <MapContainer
                                 center={[31.7917, -7.0926]}
@@ -979,36 +1458,46 @@ TAWAZOON RH - Simulation Nationale
                                             center={[r.lat, r.lng]}
                                             radius={Math.max(Math.abs(ecart) * 0.05, 4)}
                                             pathOptions={{
-                                                color: isDeficit ? '#EF4444' : '#10B981',
-                                                fillColor: isDeficit ? '#FCA5A5' : '#6EE7B7',
+                                                color: isDeficit ? "#EF4444" : "#10B981",
+                                                fillColor: isDeficit ? "#FCA5A5" : "#6EE7B7",
                                                 fillOpacity: 0.7,
-                                                weight: 2
+                                                weight: 2,
                                             }}
                                             className={Math.abs(ecart) > 50 ? "animate-pulse" : ""}
                                         >
-                                            <Popup
-                                                maxWidth={160}
-                                                minWidth={140}
-                                                className="compact-popup"
-                                            >
+                                            <Popup maxWidth={160} minWidth={140} className="compact-popup">
                                                 <div className="p-1">
                                                     <p className="font-semibold text-[11px] text-slate-800 mb-1 leading-tight border-b border-slate-100 pb-0.5">
-                                                        {r.nom.replace('DR ', '')}
+                                                        {r.nom.replace("DR ", "")}
                                                     </p>
                                                     <div className="space-y-0.5">
                                                         <div className="grid grid-cols-[auto_1fr] gap-2 items-center">
-                                                            <span className="text-[9px] text-slate-500 font-medium">Actuel</span>
-                                                            <span className="text-[10px] font-bold text-slate-800 text-right">{r.etpActuel}</span>
+                                                            <span className="text-[9px] text-slate-500 font-medium">
+                                                                Actuel
+                                                            </span>
+                                                            <span className="text-[10px] font-bold text-slate-800 text-right">
+                                                                {r.etpActuel}
+                                                            </span>
                                                         </div>
                                                         <div className="grid grid-cols-[auto_1fr] gap-2 items-center">
-                                                            <span className="text-[9px] text-slate-500 font-medium">Calculé</span>
-                                                            <span className="text-[10px] font-bold text-blue-600 text-right">{r.etpRecommande}</span>
+                                                            <span className="text-[9px] text-slate-500 font-medium">
+                                                                Calculé
+                                                            </span>
+                                                            <span className="text-[10px] font-bold text-blue-600 text-right">
+                                                                {r.etpRecommande}
+                                                            </span>
                                                         </div>
-                                                        <div className="border-t border-slate-100 my-0.5"></div>
+                                                        <div className="border-t border-slate-100 my-0.5" />
                                                         <div className="grid grid-cols-[auto_1fr] gap-2 items-center">
-                                                            <span className="text-[9px] text-slate-500 font-medium">Écart</span>
-                                                            <span className={`text-[10px] font-bold text-right ${isDeficit ? 'text-rose-600' : 'text-emerald-600'}`}>
-                                                                {ecart > 0 ? '+' : ''}{ecart}
+                                                            <span className="text-[9px] text-slate-500 font-medium">
+                                                                Écart
+                                                            </span>
+                                                            <span
+                                                                className={`text-[10px] font-bold text-right ${isDeficit ? "text-rose-600" : "text-emerald-600"
+                                                                    }`}
+                                                            >
+                                                                {ecart > 0 ? "+" : ""}
+                                                                {ecart}
                                                             </span>
                                                         </div>
                                                     </div>
@@ -1020,243 +1509,92 @@ TAWAZOON RH - Simulation Nationale
                             </MapContainer>
                         </div>
                     </motion.div>
-
-                    {/* Comparatif Actuel vs Calculé */}
-                    <motion.div variants={itemVariants} className={`${cardStyle} h-[300px]`}>
-                        <h3 className="font-semibold text-sm text-slate-800 mb-3 flex items-center gap-2">
-                            <BarChart3 size={16} className="text-[#005EA8]" />
-                            Comparatif Actuel vs Calculé
-                        </h3>
-                        <ReactECharts option={getBarOption(regionsData)} style={{ height: 250 }} opts={{ renderer: 'canvas' }} />
-                    </motion.div>
                 </div>
 
-                {/* COLONNE LATÉRALE DROITE (35%) - Insights + Donut + Actions */}
-                <div className="flex flex-col gap-3">
-
-                    {/* Insights Clés */}
-                    <motion.div variants={itemVariants} className={`${cardStyle} bg-gradient-to-br from-white to-blue-50/50`}>
+                {/* COLONNE DROITE (1/3) */}
+                <div className="flex flex-col">
+                    {/* Insights Clés — même hauteur */}
+                    <motion.div
+                        variants={itemVariants}
+                        className={`${cardStyle} bg-gradient-to-br from-white to-blue-50/50 h-[300px] flex flex-col`}
+                    >
                         <h3 className="font-semibold text-sm text-slate-800 mb-3 flex items-center gap-2">
                             <span className="bg-blue-100 text-[#005EA8] p-1 rounded">
                                 <FileText size={14} />
                             </span>
                             Insights Clés
                         </h3>
-                        <div className="space-y-1">
+
+                        {/* zone scroll si contenu > hauteur */}
+                        <div className="space-y-1 flex-1 overflow-auto pr-1">
                             {insights.map((insight, idx) => (
                                 <InsightTile key={idx} type={insight.type} text={insight.text} />
                             ))}
                         </div>
                     </motion.div>
-
-                    {/* Répartition Effectifs */}
-                    <motion.div variants={itemVariants} className={cardStyle}>
-                        <h3 className="font-semibold text-sm text-slate-800 mb-2">Répartition Effectifs</h3>
-                        <ReactECharts
-                            option={getPieOption(regionsData)}
-                            style={{ height: 280 }} // Augmenté pour éviter les conflits
-                            opts={{ renderer: 'canvas' }}
-                        />
-                    </motion.div>
-
-
                 </div>
             </div>
 
             {/* ========================================
-                ZONE 3 : DÉTAIL PAR DIRECTION (Grille)
+                ZONE KPI : KPI NATIONAUX (Déplacé en bas)
                 ======================================== */}
-            <motion.div variants={itemVariants} className={`${cardStyle} p-0 overflow-hidden mb-3`}>
-                <div className="p-3 border-b border-slate-100">
-                    <h3 className="font-semibold text-sm text-slate-800 flex items-center gap-2">
-                        <MapIcon size={16} className="text-[#005EA8]" />
-                        Répartition par Direction Régionale
-                    </h3>
-                </div>
-                <div className="p-3">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                        {regionsData.map((r) => {
-                            const ecart = r.etpRecommande - r.etpActuel;
-                            const isDeficit = ecart < 0;
-
-                            return (
-                                <div key={r.code} className="bg-slate-50 rounded-lg p-3 border border-slate-200 hover:shadow-md transition-all">
-                                    <div className="flex items-start justify-between mb-2">
-                                        <h4 className="font-semibold text-xs text-slate-800">{r.nom}</h4>
-                                        <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold ${isDeficit
-                                            ? 'bg-rose-100 text-rose-700'
-                                            : ecart === 0
-                                                ? 'bg-emerald-100 text-emerald-700'
-                                                : 'bg-amber-100 text-amber-700'
-                                            }`}>
-                                            {r.centres} centres
-                                            b        </span>
-                                    </div>
-
-                                    <div className="grid grid-cols-3 gap-2 text-center mb-2">
-                                        <div className="bg-white rounded p-2 border border-slate-100">
-                                            <div className="text-[9px] text-slate-500 font-semibold mb-0.5">Actuel</div>
-                                            <div className="text-sm font-bold text-slate-800">{r.etpActuel}</div>
-                                        </div>
-                                        <div className="bg-white rounded p-2 border border-slate-100">
-                                            <div className="text-[9px] text-slate-500 font-semibold mb-0.5">Calculé</div>
-                                            <div className="text-sm font-bold text-blue-600">{r.etpRecommande}</div>
-                                        </div>
-                                        <div className={`bg-white rounded p-2 border ${isDeficit ? 'border-rose-200' : 'border-emerald-200'}`}>
-                                            <div className="text-[9px] text-slate-500 font-semibold mb-0.5">Écart</div>
-                                            <div className={`text-sm font-bold ${isDeficit ? 'text-rose-600' : 'text-emerald-600'}`}>
-                                                {ecart > 0 ? '+' : ''}{ecart}
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex items-center gap-2">
-                                        <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
-                                            <div
-                                                className={`h-full ${r.tauxOccupation > 100 ? 'bg-rose-500' : 'bg-emerald-500'}`}
-                                                style={{ width: `${Math.min(r.tauxOccupation, 100)}%` }}
-                                            ></div>
-                                        </div>
-                                        <span className="text-[10px] font-bold text-slate-600 min-w-[40px] text-right">{r.tauxOccupation}%</span>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            </motion.div>
-
-            {/* --- DETAILED DATA TABLE --- */}
-            < motion.div variants={itemVariants} className={cardStyle} >
-                <div className="flex items-center gap-6 border-b border-slate-100 mb-0 pb-0">
-                    <button
-                        onClick={() => setActiveTab("directions")}
-                        className={`pb-4 px-2 text-sm font-bold border-b-2 transition-colors ${activeTab === 'directions' ? 'border-[#005EA8] text-[#005EA8]' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-                    >
-                        Détail par Direction
-                    </button>
-                    <button
-                        onClick={() => setActiveTab("activite")}
-                        className={`pb-4 px-2 text-sm font-bold border-b-2 transition-colors ${activeTab === 'activite' ? 'border-[#005EA8] text-[#005EA8]' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-                    >
-                        Détail par Activité
-                    </button>
-                </div>
-
-                <div className="pt-6 overflow-x-auto">
-                    {activeTab === "directions" ? (
-                        <table className="w-full text-sm text-left">
-                            <thead>
-                                <tr className="text-xs uppercase text-slate-400 font-bold border-b border-slate-100">
-                                    <th className="py-2 px-3">Direction / Entité</th>
-                                    <th className="py-2 px-3 text-center">Centres</th>
-                                    <th className="py-2 px-3 text-right">Effectif Actuel</th>
-                                    <th className="py-2 px-3 text-right">Calculé</th>
-                                    <th className="py-2 px-3 text-right">Écart</th>
-                                    <th className="py-2 px-3 text-right">Taux</th>
-                                    <th className="py-2 px-3 text-center">Statut</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-50">
-                                {regionsData.map((r, i) => (
-                                    <tr key={i} className="hover:bg-slate-50 transition-colors">
-                                        <td className="py-2 px-3 font-semibold text-slate-700">{r.nom}</td>
-                                        <td className="py-2 px-3 text-center text-slate-500">{r.centres}</td>
-                                        <td className="py-2 px-3 text-right font-medium">{r.etpActuel}</td>
-                                        <td className="py-2 px-3 text-right font-medium text-slate-600">{r.etpRecommande}</td>
-                                        <td className={`py-2 px-3 text-right font-bold ${r.etpRecommande - r.etpActuel < 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
-                                            {r.etpRecommande - r.etpActuel > 0 ? '+' : ''}{r.etpRecommande - r.etpActuel}
-                                        </td>
-                                        <td className="py-2 px-3 text-right text-slate-600">{r.tauxOccupation}%</td>
-                                        <td className="py-2 px-3 text-center">
-                                            <span className={`inline-block w-2.5 h-2.5 rounded-full ${r.etpRecommande - r.etpActuel < -10 ? 'bg-rose-500' : (Math.abs(r.etpRecommande - r.etpActuel) < 5 ? 'bg-emerald-500' : 'bg-amber-500')}`}></span>
-                                        </td>
-                                    </tr>
-                                ))}
-                                {/* Totals row */}
-                                <tr className="bg-slate-50/80 font-bold text-slate-800">
-                                    <td className="py-2.5 px-3">TOTAL NATIONAL</td>
-                                    <td className="py-2.5 px-3 text-center">-</td>
-                                    <td className="py-2.5 px-3 text-right">{kpisNationaux.etpActuelTotal}</td>
-                                    <td className="py-2.5 px-3 text-right">{kpisNationaux.etpRecommandeTotal}</td>
-                                    <td className="py-2.5 px-3 text-right">{kpisNationaux.surplusDeficit}</td>
-                                    <td className="py-2.5 px-3 text-right">-</td>
-                                    <td className="py-2.5 px-3"></td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    ) : (
-                        <table className="w-full text-sm text-left">
-                            <thead>
-                                <tr className="text-xs uppercase text-slate-400 font-bold border-b border-slate-100">
-                                    <th className="py-3 px-4">Type d'Activité</th>
-                                    <th className="py-3 px-4 text-right">Volume Quotidien</th>
-                                    <th className="py-3 px-4 text-right">Poids Relatif (Est.)</th>
-                                    <th className="py-3 px-4 text-right">ETP Équivalents</th>
-                                    <th className="py-3 px-4 text-right">Part du Total</th>
-                                    <th className="py-3 px-4 text-center">Tendance</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-50">
-                                {activityData.map((act, i) => (
-                                    <tr key={i} className="hover:bg-slate-50 transition-colors">
-                                        <td className="py-3 px-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className={`p-2 rounded-lg ${act.bg}`}>
-                                                    <act.icon size={16} className={act.color} />
-                                                </div>
-                                                <span className="font-semibold text-slate-700">{act.name}</span>
-                                            </div>
-                                        </td>
-                                        <td className="py-3 px-4 text-right font-mono text-slate-600">
-                                            {act.volume.toLocaleString()}
-                                        </td>
-                                        <td className="py-3 px-4 text-right text-slate-500">
-                                            {act.weight} min/u
-                                        </td>
-                                        <td className="py-3 px-4 text-right font-bold text-slate-800">
-                                            {act.etp}
-                                        </td>
-                                        <td className="py-3 px-4 text-right text-slate-600">
-                                            {act.share}%
-                                        </td>
-                                        <td className="py-3 px-4 text-center">
-                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-50 text-green-700">
-                                                <TrendingUp size={10} className="mr-1" /> Stable
-                                            </span>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                            <tfoot className="bg-slate-50 border-t border-slate-200">
-                                <tr>
-                                    <td className="py-3 px-4 font-bold text-slate-800">TOTAL</td>
-                                    <td className="py-3 px-4 text-right font-bold text-slate-800">-</td>
-                                    <td className="py-3 px-4 text-right font-bold text-slate-800">-</td>
-                                    <td className="py-3 px-4 text-right font-bold text-[#005EA8]">
-                                        {activityData.reduce((acc, curr) => acc + curr.etp, 0)}
-                                    </td>
-                                    <td className="py-3 px-4 text-right font-bold text-slate-800">100%</td>
-                                    <td></td>
-                                </tr>
-                            </tfoot>
-                        </table>
-                    )}
-
-
-                    <div className="mt-4 flex justify-end">
-                        <button className="flex items-center gap-2 text-sm font-semibold text-[#005EA8] hover:underline">
-                            Voir le détail complet des centres <ArrowRight size={14} />
-                        </button>
-                    </div>
-                </div>
-            </motion.div >
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 mb-3 mt-3">
+                <motion.div variants={itemVariants} className="h-full">
+                    <KpiCard
+                        title="Effectif Actuel"
+                        value={fmtInt(kpisNationaux.etpActuelTotal)}
+                        icon={Users}
+                        color="blue"
+                        tooltip="Total des effectifs (ETP) actuellement en poste dans toutes les directions régionales."
+                    />
+                </motion.div>
+                <motion.div variants={itemVariants} className="h-full">
+                    <KpiCard
+                        title="Effectif Calculé"
+                        value={fmtInt(kpisNationaux.fte_calcule)}
+                        icon={Calculator}
+                        color="blue"
+                        tooltip="Besoin théorique en ETP calculé par le moteur de simulation."
+                    />
+                </motion.div>
+                <motion.div variants={itemVariants} className="h-full">
+                    <KpiCard
+                        title="Écart Global"
+                        value={kpisNationaux.surplusDeficit > 0 ? `+${fmtInt(kpisNationaux.surplusDeficit)}` : fmtInt(kpisNationaux.surplusDeficit)}
+                        icon={AlertTriangle}
+                        color={kpisNationaux.surplusDeficit < 0 ? "red" : "orange"}
+                        tooltip="Différence entre l'effectif actuel et le calculé. Négatif = déficit."
+                    />
+                </motion.div>
+            </div>
 
             <ImportModal
                 isOpen={isImportOpen}
                 onClose={() => setIsImportOpen(false)}
                 onValidate={handleImportValidate}
             />
+
+            {/* Modal Détail Postes */}
+            {detailCentre && (() => {
+                // 🆕 CORRECTION (Step 467): Utiliser les postes stockés directement dans le centre
+                const centrePostes = detailCentre.postes || [];
+
+                console.log("🔍 [MODAL DEBUG] detailCentre:", detailCentre);
+                console.log("🔍 [MODAL DEBUG] Postes du centre:", centrePostes.length);
+
+                if (centrePostes.length > 0) {
+                    console.log("  ✅ Exemple de poste:", centrePostes[0]);
+                }
+
+                return (
+                    <DirectionPostesModal
+                        open={!!detailCentre}
+                        onClose={() => setDetailCentre(null)}
+                        centre={detailCentre}
+                        postes={centrePostes}
+                    />
+                );
+            })()}
         </motion.div >
     );
 }

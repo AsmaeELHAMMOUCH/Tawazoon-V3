@@ -38,6 +38,30 @@ class VolumeMatriciel(BaseModel):
     segment_id: int  # 1=GLOBAL, 2=PART, 3=PRO, 4=DIST, 5=AXES, 6=DÉPÔT, 7=RÉCUP
     volume: float = 0
 
+class CentreParams(BaseModel):
+    productivite: Optional[float] = None
+    temps_mort: Optional[float] = None
+    coeff_circ: Optional[float] = None
+    coeff_geo: Optional[float] = None
+    capacite_nette: Optional[float] = None
+    colis_amana_par_sac: Optional[float] = None
+    ed_percent: Optional[float] = None
+    pct_axes_arr: Optional[float] = None
+    pct_axes_dep: Optional[float] = None
+    pct_collecte: Optional[float] = None
+    pct_retour: Optional[float] = None
+    courriers_co_par_sac: Optional[float] = None
+    courriers_cr_par_sac: Optional[float] = None
+    cr_par_caisson: Optional[float] = None
+
+class CentreSimulationData(BaseModel):
+    """
+    Données complètes pour la simulation d'un centre (Volumes + Paramètres)
+    """
+    centre_id: Optional[int] = None
+    centre_label: str
+    volumes: List[VolumeMatriciel] 
+    params: Optional[CentreParams] = None
 
 class GlobalParams(BaseModel):
     productivite: float = Field(100.0, ge=1, le=200)
@@ -119,6 +143,11 @@ class NationalSimRequest(BaseModel):
     heures_par_jour: float = 8.0
     year: Optional[int] = 2024
     scenario: Optional[str] = "Standard" # "Standard" or "Optimisé"
+    
+    # 🆕 Support Data-Driven (Import Excel)
+    mode: Optional[str] = "database" # "database" ou "data_driven"
+    centres_data: Optional[List[CentreSimulationData]] = []
+    global_params: Optional[GlobalParams] = None
 
 class NationalKPIs(BaseModel):
     etpActuelTotal: float
@@ -138,7 +167,33 @@ class NationalRegionStats(BaseModel):
     tauxOccupation: float = 0
     lat: float = 0.0
     lng: float = 0.0
+    # Breakdown
+    etpActuelMoi: Optional[float] = 0.0
+    etpActuelMod: Optional[float] = 0.0
+    etpActuelAps: Optional[float] = 0.0
+
+class NationalCentreStats(BaseModel):
+    id: int
+    nom: str
+    direction_id: int
+    direction_label: str
+    typologie: str = "N/A"
+    etp_actuel: float = 0.0
+    etp_calcule: float = 0.0
+    heures_calculees: float = 0.0
+    ecart: float = 0.0
+
+class NationalPosteStats(BaseModel):
+    poste_label: str
+    type_poste: str = "MOD"
+    centre_id: Optional[int] = None
+    nom_centre: Optional[str] = None
+    etp_actuel: float = 0.0
+    etp_calcule: float = 0.0
+    ecart: float = 0.0
 
 class NationalSimResponse(BaseModel):
     kpisNationaux: NationalKPIs
     regionsData: List[NationalRegionStats]
+    centres: Optional[List[NationalCentreStats]] = []
+    postes: Optional[List[NationalPosteStats]] = []

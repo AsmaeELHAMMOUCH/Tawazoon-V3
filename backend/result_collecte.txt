@@ -1,0 +1,49 @@
+--- Recherche Tâches COLLECTE ---
+ID: 4416
+Nom: Confirmation réception scan (masse) - Saisie excel - Création FIM - Saisie Un
+CP ID: 8259
+Produit: None
+Famille UO: None
+Base Calcul: None
+------------------------------
+ID: 6799
+Nom: Confirmation réception scan (masse)
+CP ID: 7858
+Produit: Colis
+Famille UO: Collecte
+Base Calcul: 100
+------------------------------
+ID: 7387
+Nom: Confirmation réception scan (masse) Amana
+CP ID: 7963
+Produit: AMANA Dépôt
+Famille UO: Collecte
+Base Calcul: 100
+------------------------------
+ID: 11677
+Nom: Confirmation réception scan (masse) AMANA Dépôt
+CP ID: 7390
+Produit: AMANA Dépôt
+Famille UO: Collecte
+Base Calcul: 100
+------------------------------
+ID: 6803
+Nom: Taxation : Saisie excel - Création FIM - Saisie
+Produit: Colis
+Famille UO: Collecte
+------------------------------
+ID: 7389
+Nom: Taxation : Saisie excel - Création FIM - Saisie Amana
+Produit: AMANA Dépôt
+Famille UO: Collecte
+------------------------------
+ID: 11686
+Nom: Taxation : Saisie excel - Création FIM - Saisie AMANA Dépôt
+Produit: AMANA Dépôt
+Famille UO: Collecte
+------------------------------
+ID: 13036
+Nom: Taxation : Saisie excel - Création FIM - Saisie colis
+Produit: AMANA Dépôt
+Famille UO: Collecte
+------------------------------

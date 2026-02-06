@@ -17,7 +17,7 @@ const floatIcon = {
 
 export function EmptyStateDirty({ onSimuler, disabled }) {
   return (
-    <div className="h-[320px] grid place-items-center bg-gradient-to-br from-slate-50 to-white">
+    <div className="h-full grid place-items-center bg-gradient-to-br from-slate-50 to-white">
       <motion.div
         initial={fadeCard.initial}
         animate={fadeCard.animate}

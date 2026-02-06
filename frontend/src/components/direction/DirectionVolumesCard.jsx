@@ -50,181 +50,169 @@ export const ImportModal = ({ isOpen, onClose, onValidate }) => {
             try {
                 const bstr = evt.target.result;
                 const wb = XLSX.read(bstr, { type: "binary" });
-                const wsname = wb.SheetNames[0];
-                const ws = wb.Sheets[wsname];
 
-                // Lire toutes les données brutes (array of arrays)
-                const rawData = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+                let centersFound = [];
+                const fluxMap = { "AMANA": 1, "CO": 2, "CR": 3, "E-BARKIA": 4, "LRH": 5 };
 
-                // Trouver tous les centres dans le fichier
-                const centres = [];
-                let currentCentre = null;
-
-                // Mapping des flux et segments
-                const fluxMap = {
-                    "Amana": 1,
-                    "CO": 2,
-                    "CR": 3,
-                    "E-Barkia": 4,
-                    "LRH": 5
+                // MAPPING DES PARAMÈTRES (Libellé Excel -> Clé Simulation)
+                const paramMap = {
+                    "Productivité": "productivite",
+                    "Temps Mort": "temps_mort",
+                    "Compl. Circulaire": "coeff_circ",
+                    "Compl. Géographique": "coeff_geo",
+                    "Capacité Nette": "capacite_nette",
+                    "Nb Colis/Sac": "colis_amana_par_sac",
+                    "% En Dehors": "ed_percent",
+                    "% Axes Arrivée": "pct_axes_arr",
+                    "% Axes Départ": "pct_axes_dep",
+                    "% Collecte": "pct_collecte",
+                    "% Retour": "pct_retour",
+                    "Nb CO/Sac": "courriers_co_par_sac",
+                    "Nb CR/Sac": "courriers_cr_par_sac",
+                    "CR/Caisson": "cr_par_caisson"
                 };
 
-                const segmentMap = {
-                    "GLOBAL": 1,
-                    "PART.": 2,
-                    "PRO": 3,
-                    "DIST.": 4,
-                    "AXES": 5,
-                    "DÉPÔT": 6,
-                    "RÉCUP.": 7
-                };
+                wb.SheetNames.forEach(sheetName => {
+                    if (sheetName === "Guide") return; // Ignorer feuille guide
 
-                // Parcourir le fichier pour trouver les centres
-                for (let i = 0; i < rawData.length; i++) {
-                    const row = rawData[i];
+                    const ws = wb.Sheets[sheetName];
+                    const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+                    if (!data || data.length === 0) return;
 
-                    // Détecter un nouveau centre
-                    if (row[0] && row[0].toString().includes("Nom du Centre")) {
-                        // Sauvegarder le centre précédent si existe
-                        if (currentCentre && currentCentre.volumes.length > 0) {
-                            centres.push(currentCentre);
+                    let currentCentre = null;
+                    let lastSection = ""; // 'A'=Arr, 'B'=Guichet, 'C'=Dep, 'D'=Params
+
+                    // Helper Nettoyage
+                    const cleanVal = (v) => {
+                        if (typeof v === 'number') return v;
+                        if (!v) return 0;
+                        const s = String(v).replace(/\s/g, '').replace(',', '.').replace('%', '');
+                        return parseFloat(s) || 0;
+                    };
+
+                    for (let i = 0; i < data.length; i++) {
+                        const row = data[i];
+                        const cell0 = String(row[0] || "").trim();
+                        const cell0Upper = cell0.toUpperCase();
+
+                        // 1. DÉTECTION NOUVEAU CENTRE
+                        // Regex pour détecter "Nom du Centre" ou "Centre" de manière souple
+                        const isCentreHeader = /^(nom\s*du\s*centre|centre)\s*[:]/i.test(cell0);
+
+                        if (isCentreHeader || (cell0Upper.startsWith("CENTRE") && !sheetName.includes("Import"))) {
+                            // Sauvegarde du précédent
+                            if (currentCentre) centersFound.push(currentCentre);
+
+                            let rawName = cell0.replace(/^(nom\s*du\s*centre|centre)\s*[:]/i, "").trim();
+
+                            // Si le nom est dans la colonne suivante (B)
+                            if ((!rawName || rawName === "") && row[1]) {
+                                rawName = String(row[1]).trim();
+                            }
+
+                            let cid = null;
+                            let cname = rawName;
+
+                            // Extraction ID améliorée : Cherche "(ID: 123)" ou "ID:123" ou just "123" à la fin si format strict
+                            const idMatch = rawName.match(/\(ID:\s*(\d+)\)/i);
+                            if (idMatch) {
+                                cid = parseInt(idMatch[1], 10);
+                                cname = rawName.replace(idMatch[0], "").trim();
+                            }
+
+                            currentCentre = { centre_id: cid, nom_centre: cname || "Centre Inconnu", volumes: [], params: {} };
+                            lastSection = "";
+                            continue;
                         }
 
-                        // Créer un nouveau centre
-                        currentCentre = {
-                            nom_centre: row[1] || "",
-                            volumes: [],
-                            startRow: i
-                        };
-                    }
+                        // Fallback: Si pas de "Nom du Centre" mais structure flux, on crée un container basé sur le nom de l'onglet
+                        if (!currentCentre && (fluxMap[cell0Upper] || /FLUX\s*ARRIV(E|É)E/i.test(cell0))) {
+                            // Essayer de récupérer l'ID depuis le nom de l'onglet genre "Rabat (ID: 12)"
+                            let sheetCid = null;
+                            let sheetCname = sheetName;
+                            const sheetIdMatch = sheetName.match(/\(ID:\s*(\d+)\)/i);
+                            if (sheetIdMatch) {
+                                sheetCid = parseInt(sheetIdMatch[1], 10);
+                                sheetCname = sheetName.replace(sheetIdMatch[0], "").trim();
+                            }
+                            currentCentre = { centre_id: sheetCid, nom_centre: sheetCname, volumes: [], params: {} };
+                        }
 
-                    // Si on a un centre en cours, parser les sections
-                    if (currentCentre) {
-                        // FLUX ARRIVÉE
-                        if (row[0] && row[0].toString().includes("FLUX ARRIVÉE")) {
-                            const headerRow = rawData[i + 1];
+                        if (!currentCentre) continue;
 
-                            // Lire les 5 lignes de flux
-                            for (let j = 0; j < 5; j++) {
-                                const fluxRowIdx = i + 2 + j;
-                                if (fluxRowIdx >= rawData.length) break;
+                        // 2. DÉTECTION SECTIONS (Insensible à la casse et accents)
+                        if (/FLUX\s*ARRIV(E|É)E/i.test(cell0)) { lastSection = 'A'; continue; }
+                        if (/GUICHET/i.test(cell0)) { lastSection = 'B'; continue; }
+                        if (/FLUX\s*D(E|É)PART/i.test(cell0)) { lastSection = 'C'; continue; }
+                        if (/PARAM(E|È)TRE/i.test(cell0)) { lastSection = 'D'; continue; }
 
-                                const fluxRow = rawData[fluxRowIdx];
-                                const fluxName = fluxRow[0];
-                                const fluxId = fluxMap[fluxName];
+                        // 3. PARSING FLUX (A ou C)
+                        const fluxId = fluxMap[cell0Upper];
+                        if (fluxId) {
+                            // Lecture des 5 segments (Colonnes B à F -> indices 1 à 5)
+                            const vals = [1, 2, 3, 4, 5].map(idx => cleanVal(row[idx]));
+                            const hasVal = vals.some(v => v > 0);
 
-                                if (fluxId) {
-                                    // Lire les 5 segments
-                                    for (let k = 1; k <= 5; k++) {
-                                        const volume = parseFloat(fluxRow[k]) || 0;
-                                        if (volume > 0) {
-                                            const segmentName = headerRow[k];
-                                            const segmentId = segmentMap[segmentName];
+                            if (hasVal) {
+                                if (lastSection === 'C') {
+                                    // Section C: Flux Départ (Valeurs en 1-5)
+                                    vals.forEach((v, idx) => {
+                                        if (v > 0) currentCentre.volumes.push({ flux_id: fluxId, sens_id: 3, segment_id: idx + 1, volume: v });
+                                    });
+                                } else {
+                                    // Section A ou Format Wide: Flux Arrivée (Valeurs en 1-5)
+                                    vals.forEach((v, idx) => {
+                                        if (v > 0) currentCentre.volumes.push({ flux_id: fluxId, sens_id: 1, segment_id: idx + 1, volume: v });
+                                    });
 
-                                            if (segmentId) {
-                                                currentCentre.volumes.push({
-                                                    flux_id: fluxId,
-                                                    sens_id: 1, // Arrivée
-                                                    segment_id: segmentId,
-                                                    volume: volume
-                                                });
-                                            }
-                                        }
+                                    // Si Format Wide (Colonne 8-12 pour Départ)
+                                    if (lastSection !== 'A' && lastSection !== 'C') {
+                                        [8, 9, 10, 11, 12].forEach((colIdx, segIdx) => {
+                                            const v = cleanVal(row[colIdx]);
+                                            if (v > 0) currentCentre.volumes.push({ flux_id: fluxId, sens_id: 3, segment_id: segIdx + 1, volume: v });
+                                        });
                                     }
                                 }
                             }
+
+                            // Si Format Wide (Guichet sur la ligne du flux?) -> rare mais possible
+                            // Ici on ignore pour éviter doublons avec Section B
+                            continue;
                         }
 
-                        // GUICHET
-                        if (row[0] && row[0].toString().includes("GUICHET") && !row[0].toString().includes("FLUX")) {
-                            const valueRow = rawData[i + 2];
-                            if (valueRow) {
-                                // DÉPÔT
-                                const depotVolume = parseFloat(valueRow[1]) || 0;
-                                if (depotVolume > 0) {
-                                    currentCentre.volumes.push({
-                                        flux_id: null,
-                                        sens_id: 2, // Guichet
-                                        segment_id: 6, // DÉPÔT
-                                        volume: depotVolume
-                                    });
-                                }
-
-                                // RÉCUP.
-                                const recupVolume = parseFloat(valueRow[2]) || 0;
-                                if (recupVolume > 0) {
-                                    currentCentre.volumes.push({
-                                        flux_id: null,
-                                        sens_id: 2, // Guichet
-                                        segment_id: 7, // RÉCUP.
-                                        volume: recupVolume
-                                    });
-                                }
-                            }
+                        // 4. PARSING GUICHET (Section B, ligne "Volume")
+                        if (lastSection === 'B' && cell0 === "Volume") {
+                            const dep = cleanVal(row[1]);
+                            const rec = cleanVal(row[2]);
+                            if (dep > 0) currentCentre.volumes.push({ sens_id: 2, segment_id: 6, volume: dep });
+                            if (rec > 0) currentCentre.volumes.push({ sens_id: 2, segment_id: 7, volume: rec });
+                            continue;
                         }
 
-                        // FLUX DÉPART
-                        if (row[0] && row[0].toString().includes("FLUX DÉPART")) {
-                            const headerRow = rawData[i + 1];
-
-                            // Lire les 5 lignes de flux
-                            for (let j = 0; j < 5; j++) {
-                                const fluxRowIdx = i + 2 + j;
-                                if (fluxRowIdx >= rawData.length) break;
-
-                                const fluxRow = rawData[fluxRowIdx];
-                                const fluxName = fluxRow[0];
-                                const fluxId = fluxMap[fluxName];
-
-                                if (fluxId) {
-                                    // Lire les 5 segments
-                                    for (let k = 1; k <= 5; k++) {
-                                        const volume = parseFloat(fluxRow[k]) || 0;
-                                        if (volume > 0) {
-                                            const segmentName = headerRow[k];
-                                            const segmentId = segmentMap[segmentName];
-
-                                            if (segmentId) {
-                                                currentCentre.volumes.push({
-                                                    flux_id: fluxId,
-                                                    sens_id: 3, // Départ
-                                                    segment_id: segmentId,
-                                                    volume: volume
-                                                });
-                                            }
-                                        }
-                                    }
-                                }
-                            }
+                        // 5. PARSING PARAMÈTRES (Section D ou Lignes isolées)
+                        const pKey = Object.keys(paramMap).find(k => cell0.startsWith(k));
+                        if (pKey) {
+                            const val = cleanVal(row[1]);
+                            currentCentre.params[paramMap[pKey]] = val;
                         }
                     }
-                }
 
-                // Ajouter le dernier centre
-                if (currentCentre && currentCentre.volumes.length > 0) {
-                    centres.push(currentCentre);
-                }
+                    // Push le dernier
+                    if (currentCentre) centersFound.push(currentCentre);
+                });
 
-                // Validation
-                if (centres.length === 0) {
-                    setErrors(["Aucun centre trouvé dans le fichier"]);
-                    return;
-                }
-
-                // Vérifier que tous les centres ont un nom
-                const centresSansNom = centres.filter(c => !c.nom_centre);
-                if (centresSansNom.length > 0) {
-                    setErrors(["Certains centres n'ont pas de nom"]);
+                if (centersFound.length === 0) {
+                    setErrors(["Aucun centre ou donnée valide trouvé."]);
                     return;
                 }
 
                 setErrors([]);
-                setFileData(centres);
+                setFileData(centersFound);
                 setStep(2);
 
             } catch (err) {
-                console.error("Erreur de lecture:", err);
-                setErrors(["Erreur de lecture du fichier Excel. Vérifiez le format."]);
+                console.error("Erreur Import:", err);
+                setErrors(["Erreur de lecture du fichier Excel."]);
             }
         };
         reader.readAsBinaryString(file);
@@ -289,19 +277,22 @@ export const ImportModal = ({ isOpen, onClose, onValidate }) => {
 
                     {step === 2 && (
                         <div className="w-full space-y-3">
-                            <div className="bg-emerald-50 border border-emerald-100 rounded-md p-2 flex items-start gap-2">
-                                <CheckCircle2 size={16} className="text-emerald-600 mt-0.5" />
-                                <div className="flex-1">
-                                    <p className="text-[11px] font-bold text-emerald-800">Prêt à importer</p>
-                                    <div className="text-[10px] text-emerald-700 mt-1 space-y-1">
-                                        <p><strong>{fileData.length}</strong> centre(s) détecté(s)</p>
-                                        {fileData.map((centre, idx) => (
-                                            <div key={idx} className="pl-2 border-l-2 border-emerald-200">
-                                                <p><strong>{centre.nom_centre}</strong></p>
-                                                <p className="text-[9px]">{centre.volumes?.length || 0} volumes</p>
-                                            </div>
-                                        ))}
+                            <div className="bg-emerald-50 border border-emerald-100 rounded-md p-2 flex flex-col gap-2">
+                                <div className="flex items-center gap-2 border-b border-emerald-200/50 pb-2">
+                                    <CheckCircle2 size={16} className="text-emerald-600" />
+                                    <div className="flex-1">
+                                        <p className="text-[11px] font-bold text-emerald-800">Prêt à importer</p>
+                                        <p className="text-[9px] text-emerald-600 font-medium">{fileData.length} centre(s) détecté(s)</p>
                                     </div>
+                                </div>
+
+                                <div className="max-h-[240px] overflow-y-auto pr-1 space-y-1 custom-scrollbar">
+                                    {fileData.map((centre, idx) => (
+                                        <div key={idx} className="pl-2 border-l-2 border-emerald-300 py-1 bg-white/40 rounded-r hover:bg-emerald-100/40 transition-colors">
+                                            <p className="text-[10px] font-bold text-slate-700 truncate">{centre.nom_centre}</p>
+                                            <p className="text-[9px] text-slate-500">{centre.volumes?.length || 0} volumes extraits</p>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                             <div className="flex justify-between gap-2 mt-4">
@@ -358,7 +349,7 @@ export default function DirectionVolumesCard({
                 }
 
                 templateData.push([`=== CENTRE ${index + 1} ===`]);
-                templateData.push(["Nom du Centre:", centre.label || centre.nom || ""]);
+                templateData.push(["Nom du Centre:", `${centre.label || centre.nom || ""} (ID: ${centre.id})`]);
                 templateData.push([]);
 
                 // SECTION A : FLUX ARRIVÉE

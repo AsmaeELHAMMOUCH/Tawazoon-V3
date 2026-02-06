@@ -61,6 +61,8 @@ def calculer_simulation(
     heures_net_input: Optional[float] = None,
     idle_minutes: Optional[float] = None,  # 🔹 marge d'inactivité (min/jour)
     *,
+    taux_complexite: float = 1.0,
+    nature_geo: float = 1.0,
     volumes_annuels: Optional[Dict[str, float]] = None,
     volumes_mensuels: Optional[Dict[str, float]] = None,
 ) -> SimulationResponse:
@@ -77,6 +79,9 @@ def calculer_simulation(
     - idle_minutes (marge d'inactivité, en minutes/jour) :
         * converti en heures
         * soustrait des heures nettes théoriques
+        
+    - taux_complexite / nature_geo :
+        * Multiplicateurs appliqués aux tâches de "Distribution"
     """
 
     volumes_obj = _coerce_volumes(volumes)
@@ -88,6 +93,8 @@ def calculer_simulation(
     print(f"   courriers_par_sac: {volumes_obj.courriers_par_sac}", flush=True)
     print(f"   sacs (fournis): {getattr(volumes_obj, 'sacs', 'ABSENT')}", flush=True)
     print(f"   ed_percent (obj): {getattr(volumes_obj, 'ed_percent', 'ABSENT')}", flush=True)
+    print(f"   taux_complexite: {taux_complexite}", flush=True)
+    print(f"   nature_geo: {nature_geo}", flush=True)
     print(f"   volumes_annuels: {volumes_annuels}", flush=True)
     print("=" * 80, flush=True)
     
@@ -403,6 +410,16 @@ def calculer_simulation(
 
         minutes_cumulees = moyenne_min * volume_jour
         heures_calculees = minutes_cumulees / 60.0
+
+        # 🆕 Apply complexity to Distribution tasks
+        famille = (t.get("famille_uo") or "").lower()
+        # ⚠️ Match "distribution" broadly (Distribution, Dist locale, etc.)
+        if "distribution" in famille:
+             facteur = float(taux_complexite) * float(nature_geo)
+             if facteur != 1.0:
+                 print(f"   ⚖️ COMPLEXITÉ APPLIQUÉE: {nom} ({famille}) x{facteur:.2f}", flush=True)
+                 heures_calculees *= facteur
+
         total_heures_acc += heures_calculees
 
         # Vue Centre : centre_poste_id ONLY

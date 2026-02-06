@@ -1,7 +1,7 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, memo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Cell } from 'recharts';
 
-export default function DirectionOverviewChart({ centres = [] }) {
+function DirectionOverviewChart({ centres = [] }) {
     const data = useMemo(() => {
         // Sort centres by absolute gap magnitude to show most critical ones
         // We take top 10 for readability
@@ -86,3 +86,5 @@ export default function DirectionOverviewChart({ centres = [] }) {
         </div>
     );
 }
+
+export default memo(DirectionOverviewChart);

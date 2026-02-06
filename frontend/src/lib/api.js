@@ -114,8 +114,14 @@ function normalizeCentres(payload) {
     id: c.id ?? c.centre_id ?? c.code ?? i,
     label: c.label ?? c.name ?? c.nom ?? c.nom_centre ?? String(c.id ?? c.centre_id ?? c.code ?? i),
     region_id: c.region_id ?? null,
+    direction_id: c.direction_id ?? null, // ✅ NEW FIELD
+    categorie_id: c.categorie_id ?? null,
     categorie_id: c.categorie_id ?? null,
     id_categorisation: c.id_categorisation ?? c.categorie_id ?? null,
+    categorisation_label: c.categorisation_label ?? null, // ✅ NEW FIELD
+    t_aps: Number(c.t_aps ?? c.t_aps_global ?? c.aps_legacy ?? c.T_APS ?? c.aps ?? 0),
+    aps: Number(c.aps ?? c.t_aps ?? c.t_aps_global ?? c.aps_legacy ?? c.T_APS ?? 0),
+    cas: (c.cas !== null && c.cas !== undefined) ? Number(c.cas) : null,
   }));
 }
 
@@ -130,6 +136,8 @@ function normalizePostes(payload) {
     label: p.label ?? p.name ?? p.nom ?? p.nom_poste ?? String(p.id ?? p.poste_id ?? p.code ?? i),
     centre_id: p.centre_id ?? null,
     centre_poste_id: p.centre_poste_id ?? null,
+    effectif_actuel: Number(p.effectif_actuel ?? p.effectif ?? 0),
+    type_poste: p.type_poste ?? null,
   }));
 }
 
@@ -150,9 +158,19 @@ function normalizeTaches(payload) {
       famille: t.famille_uo ?? t.famille ?? "",
       etat: t.etat ?? "A", // ✅ Par défaut Actif
       phase: t.phase ?? t.ph ?? t.etape ?? null,
+      produit: t.produit ?? "",
+      base_calcul: t.base_calcul ?? null,
+      nom_poste: t.nom_poste ?? t.poste_label ?? null, // ✅ Ajout du nom du poste
+      type_poste: t.type_poste ?? null, // ✅ Type de poste
       unit: cleanUnit, // ✅ Unité nettoyée
       avg_sec: t.avg_sec ?? (t.moyenne_min ? t.moyenne_min * 60 : 0),
+      // Pass through raw DB values for precision display
+      moyenne_min: t.moyenne_min ?? 0,
+      min_min: t.min_min ?? null,
+      min_sec: t.min_sec ?? t.moy_sec ?? null,
+      moy_sec: t.moy_sec ?? t.min_sec ?? null, // ✅ Capture moy_sec correctly
       centre_poste_id: t.centre_poste_id ?? null,
+      ordre: t.ordre ?? null, // ✅ Ordre d'affichage
     };
   });
 }
@@ -225,7 +243,7 @@ export const api = {
     if (regionId) params.append("region_id", regionId);
 
     const query = params.toString() ? `?${params.toString()}` : "";
-    const data = await http(`/postes/${query}`);
+    const data = await http(`/postes${query}`);
     const out = normalizePostes(data);
     console.debug("postes(api): raw=", data, " normalized=", out);
     return out;
@@ -624,8 +642,44 @@ export const api = {
   },
 
   /**
+   * Taches Management
+   */
+  createTache: (data) => http('/taches', { method: 'POST', body: data }),
+  updateTache: (id, data) => http(`/taches/${id}`, { method: 'PUT', body: data }),
+  deleteTache: (id) => http(`/taches/${id}`, { method: 'DELETE' }),
+  deleteTachesByCentre: (centreId) => http(`/taches/centre/${centreId}`, { method: 'DELETE' }),
+  
+  importTaches: async (centreId, file, posteId = null) => {
+    const t = getToken();
+    const headers = {};
+    if (t) headers.Authorization = `Bearer ${t}`;
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    let url = `${API_BASE}/taches/import/${centreId}`;
+    if (posteId) url += `?poste_id=${posteId}`;
+    
+    const res = await fetch(url, {
+         method: 'POST',
+         headers, 
+         body: formData
+    });
+    
+    if (!res.ok) {
+         const txt = await res.text();
+         throw new Error(txt || "Import Failed");
+    }
+    return await res.json();
+  },
+
+  /**
    * Health check
    */
+  updateCentreDetail: async (centreId, payload) => {
+    return await http(`/builder/update/${centreId}`, { method: 'PUT', body: payload });
+  },
+
   ping: async () => {
     return await http("/ping");
   },

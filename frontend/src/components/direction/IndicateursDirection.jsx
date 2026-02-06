@@ -1,5 +1,4 @@
-"use client";
-import React from "react";
+import React, { memo } from "react";
 import {
   Users,
   Calculator,
@@ -15,7 +14,7 @@ import {
  * Composant KPICard harmonisé avec la page Direction V2
  * Style: Compact Premium
  */
-const KPICard = ({ title, value, icon: Icon, trend, trendValue, colorClass, delay }) => (
+const KPICard = memo(({ title, value, icon: Icon, trend, trendValue, colorClass, delay }) => (
   <div
     className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition-all duration-300 transform hover:-translate-y-0.5 relative overflow-hidden group h-full flex flex-col items-center justify-center text-center"
     style={{ animationDelay: `${delay}ms` }}
@@ -42,9 +41,9 @@ const KPICard = ({ title, value, icon: Icon, trend, trendValue, colorClass, dela
       </div>
     </div>
   </div>
-);
+));
 
-export default function IndicateursDirection({ currentDir, kpis, fmt }) {
+function IndicateursDirection({ currentDir, kpis, fmt }) {
   // Calculs KPIs
   const delta = kpis?.delta ?? 0;
   const fteTotal = kpis?.fte ?? 0;
@@ -58,7 +57,7 @@ export default function IndicateursDirection({ currentDir, kpis, fmt }) {
 
       {/* 1. CENTRES */}
       <KPICard
-        title="Centres Gérés Par la Direction"
+        title={currentDir?.label ? `Centres : ${currentDir.label}` : "Centres Gérés"}
         value={fmt(kpis.centers)}
         icon={LayoutDashboard}
         colorClass="text-slate-600"
@@ -97,3 +96,5 @@ export default function IndicateursDirection({ currentDir, kpis, fmt }) {
     </div>
   );
 }
+
+export default memo(IndicateursDirection);

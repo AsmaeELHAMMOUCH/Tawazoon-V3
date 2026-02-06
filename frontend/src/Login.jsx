@@ -21,9 +21,11 @@ function Stat({ number, label }) {
 /* ---------------------- CARROUSEL ECRANS ---------------------- */
 function ScreensCarousel() {
   const slides = [
-    { src: "/national.png", caption: "Vue Globale Nationale" },
-    { src: "/national1.png", caption: "Simulation par région" },
-    { src: "/centre.png", caption: "Pilotage Opérationnel RH" },
+    { src: "/NATIONALE.jpg", caption: "Vue Globale Nationale" },
+    { src: "/CARTEKPI.jpg", caption: "Tableau de Bord KPI" },
+    { src: "/categorisation.jpg", caption: "Catégorisation des Centres" },
+    { src: "/organigrame.png", caption: "Organigramme & Structure" },
+    { src: "/volume_cards.jpg", caption: "Gestion des Volumes" },
   ];
   const [index, setIndex] = useState(0);
 
@@ -37,7 +39,7 @@ function ScreensCarousel() {
   const current = slides[index];
 
   return (
-    <div className="relative flex flex-col items-center justify-center w-full max-w-4xl mx-auto">
+    <div className="relative flex flex-col items-center justify-center w-full max-w-full mx-auto">
       {/* halo doux autour du carrousel */}
       <div className="absolute inset-0 -z-10 rounded-[2rem] bg-[#00bfff]/10 blur-[100px] opacity-60" />
 
@@ -112,7 +114,7 @@ export default function Login({ onLogin }) {
         localStorage.removeItem("remember_email");
       }
       onLogin?.();
-      navigate("/app/actuel/menu", { replace: true });
+      navigate("/menu-principal", { replace: true });
     } catch (err) {
       setError(err?.message || "Erreur de connexion");
     } finally {
@@ -145,34 +147,19 @@ export default function Login({ onLogin }) {
             className="absolute inset-0 w-full h-full  opacity-60"
           />
           {/* Overlay */}
-          <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black/70" />
+          <div className="absolute inset-0 bg-white/30" />
           {/* Contenu du formulaire */}
-          <div className="relative z-10 w-full max-w-md h-full flex flex-col justify-center">
-            {/* Logo section */}
-            <div className="flex flex-col items-center justify-center mb-8">
-              <div className="w-32 h-32 bg-white/10 rounded-lg flex items-center justify-center shadow-md mb-6 border border-white/20">
-                <img
-                  src={tawazoonLogo}
-                  alt="Logo TAWAZOON RH"
-                  className="w-24 h-24 object-contain rounded"
-                />
-              </div>
-              <h1 className="text-xl font-semibold bg-gradient-to-r from-[#0077b6] to-[#48cae4] bg-clip-text text-transparent text-center">
-                TAWAZOON RH
-              </h1>
-              <p className="text-[#48cae4] text-center text-sm mt-1">
-                Simulation & Dimensionnement
-              </p>
-            </div>
+          <div className="relative z-10 w-full max-w-md mx-auto flex flex-col justify-center">
+
 
             {/* Login form */}
-            <div className="w-full bg-white/5 border border-white/10 rounded-2xl p-6 md:p-8 backdrop-blur-xl shadow-[0_10px_40px_rgba(0,0,0,0.5)]">
+            <div className="w-full bg-white/80 border border-white/50 rounded-2xl p-6 md:p-8 backdrop-blur-xl shadow-2xl">
               <form onSubmit={handleSubmit} className="space-y-6">
                 {/* Email field */}
                 <div className="space-y-2">
                   <label
                     htmlFor="email"
-                    className="text-white font-medium text-sm"
+                    className="text-slate-700 font-medium text-sm"
                   >
                     Adresse email
                   </label>
@@ -185,7 +172,7 @@ export default function Login({ onLogin }) {
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     required
-                    className="h-12 w-full rounded-xl border border-white/20 bg-white/10 px-4 text-sm text-white placeholder-white/70 focus:outline-none focus:ring-2 focus:ring-[#00bfff] focus:border-[#00bfff]"
+                    className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#00bfff] focus:border-[#00bfff]"
                   />
                 </div>
 
@@ -193,7 +180,7 @@ export default function Login({ onLogin }) {
                 <div className="space-y-2">
                   <label
                     htmlFor="password"
-                    className="text-white font-medium text-sm"
+                    className="text-slate-700 font-medium text-sm"
                   >
                     Mot de passe
                   </label>
@@ -206,7 +193,7 @@ export default function Login({ onLogin }) {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required
-                      className="h-12 w-full rounded-xl border border-white/20 bg-white/10 px-4 pr-12 text-sm text-white placeholder-white/70 focus:outline-none focus:ring-2 focus:ring-[#00bfff] focus:border-[#00bfff]"
+                      className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 pr-12 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#00bfff] focus:border-[#00bfff]"
                     />
                     <button
                       type="button"
@@ -215,7 +202,7 @@ export default function Login({ onLogin }) {
                           ? "Masquer le mot de passe"
                           : "Afficher le mot de passe"
                       }
-                      className="absolute right-2 top-2.5 text-white/70 p-2 rounded-md hover:bg-white/10"
+                      className="absolute right-2 top-2.5 text-slate-600 p-2 rounded-md hover:bg-slate-100"
                       onClick={() => setShowPass((s) => !s)}
                     >
                       {showPass ? (
@@ -229,7 +216,7 @@ export default function Login({ onLogin }) {
 
                 {/* Remember me and forgot password */}
                 <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
-                  <label className="flex items-center gap-2 text-white/90">
+                  <label className="flex items-center gap-2 text-slate-700">
                     <input
                       type="checkbox"
                       checked={remember}
@@ -240,7 +227,7 @@ export default function Login({ onLogin }) {
                   </label>
                   <button
                     type="button"
-                    className="font-medium text-[#48cae4] hover:text-white"
+                    className="font-medium text-[#0077b6] hover:text-[#48cae4]"
                     onClick={() =>
                       alert("Veuillez contacter votre administrateur.")
                     }
@@ -346,71 +333,24 @@ export default function Login({ onLogin }) {
         >
           {/* Content wrapper - centered and responsive */}
           <div className="w-full h-full max-w-7xl mx-auto flex flex-col justify-between">
-            {/* Header */}
-            <div className="flex items-center gap-4">
-              <div className="w-28 h-28 bg-white/10 rounded-lg flex items-center justify-center shadow-[0_10px_40px_rgba(0,0,0,0.4)] border border-white/20">
-                <img
-                  src={tawazoonLogo}
-                  alt="Tawazoon RH"
-                  className="w-20 h-20 object-contain"
-                />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-[#0077b6] to-[#48cae4] bg-clip-text text-transparent leading-tight">
-                  TAWAZOON RH
-                </h1>
-                <p className="text-[#48cae4] text-sm">
-                  Simulation & Dimensionnement
-                </p>
-              </div>
-            </div>
+
 
             {/* Main content - centered */}
-            <div className="flex flex-col items-center justify-center flex-grow gap-6 text-center max-w-4xl mx-auto">
+            <div className="flex flex-col items-center justify-start flex-grow gap-2 text-center w-full mx-auto pt-10">
               <div className="space-y-8 text-center">
-                <h2 className="text-2xl md:text-3xl lg:text-4xl font-extrabold bg-gradient-to-r from-[#5EA9DD] to-[#9EE7FF] bg-clip-text text-transparent leading-[1.1] tracking-tight drop-shadow-[0_4px_12px_rgba(0,0,0,0.3)]">
-                  Optimisez vos ressources humaines<br className="hidden md:block" /> avec précision
-                </h2>
-
-                <p className="text-[#BEE9FF] text-lg md:text-xl leading-relaxed max-w-3xl mx-auto font-medium drop-shadow-[0_2px_6px_rgba(0,0,0,0.3)]">
+                <h2 className="text-base md:text-lg lg:text-xl font-extrabold bg-gradient-to-r from-[#5EA9DD] to-[#9EE7FF] bg-clip-text text-transparent leading-[1.3] tracking-tight drop-shadow-[0_4px_12px_rgba(0,0,0,0.3)] max-w-4xl mx-auto py-2">
                   Simulez, analysez et dimensionnez vos effectifs<br className="hidden md:block" />
                   pour une gestion RH efficace et stratégique.
-                </p>
+                </h2>
               </div>
 
               {/* Carrousel - responsive width */}
               <ScreensCarousel />
 
-              {/* Demo preview - added to match the screenshot */}
-              <div className="w-full max-w-3xl mx-auto rounded-xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.6)] border border-white/10 max-h-[35vh] flex items-start">
-                <img
-                  src="/demo-preview.png"
-                  alt="Aperçu de l'application"
-                  className="w-full h-auto object-cover object-top"
-                />
-              </div>
+
             </div>
 
-            {/* Stats and footer */}
-            <div className="flex flex-col items-center gap-6">
-              <div className="flex items-center justify-center gap-12">
-                <Stat number="98%" label="Précision" />
-                <div className="w-px h-12 bg-white/30" />
-                <Stat number="24/7" label="Support" />
-              </div>
 
-              <div className="flex items-center gap-3">
-                <img
-                  src={logoAlmav}
-                  alt="ALMAV Logo"
-                  className="w-8 h-8 object-contain opacity-90"
-                  style={{ backgroundColor: "rgba(255, 255, 255, 0.4)", borderRadius: "50%" }}
-                />
-                <p className="text-[#48cae4] text-sm">
-                  Powered by <span className="font-semibold">ALMAV GROUP</span>
-                </p>
-              </div>
-            </div>
           </div>
         </div>
       </div>

@@ -44,9 +44,10 @@ class Centre(Base):
     label = Column(String, nullable=False)
 
     region_id = Column(Integer, ForeignKey("dbo.regions.id"), nullable=False)
+    direction_id = Column(Integer, nullable=True) # Added missing column
     categorie_id = Column(Integer, ForeignKey("dbo.categories.id"), nullable=True)
     id_categorisation = Column(Integer, nullable=True) # Pour la catégorisation (Classe A, B, C...)
-    t_aps = Column(Float, name="T_APS", nullable=True, default=0.0)
+    t_aps = Column(Float, name="APS", nullable=True, default=0.0)
 
     region = relationship("Region", back_populates="centres")
     categorie = relationship("Categorie", back_populates="centres")
@@ -76,7 +77,7 @@ class CentrePoste(Base):
 
     centre = relationship("Centre", back_populates="centre_postes")
     poste = relationship("Poste", back_populates="centre_postes")
-    taches = relationship("Tache", back_populates="centre_poste")
+    taches = relationship("Tache", back_populates="centre_poste", cascade="all, delete-orphan")
 
 
 class Tache(Base):
@@ -96,14 +97,17 @@ class Tache(Base):
     phase = Column(String, nullable=True)
     unite_mesure = Column(String, nullable=False)
     etat = Column(String, nullable=True)  # 🆕 AJOUT: État de la tâche (ex: 'NA' pour non active)
-
+    ordre = Column(Integer, nullable=True) # 🆕 AJOUT: Ordre d'affichage
+    
     min_min = Column(Integer, nullable=True)
-    min_sec = Column(Integer, nullable=True)
+    moy_sec = Column(Float, nullable=True) # Renamed/Added per user request
     max_min = Column(Integer, nullable=True)
     max_sec = Column(Integer, nullable=True)
+
+ 
     
     # 🆕 Nouveau champ pour la logique ED / Sac
-    base_calcul = Column(Integer, nullable=True)
+    base_calcul = Column(Float, nullable=True)
     
     # 🆕 Champ produit pour la règle 2064
     produit = Column(String, nullable=True)

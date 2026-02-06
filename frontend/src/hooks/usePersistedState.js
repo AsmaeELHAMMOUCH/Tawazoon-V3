@@ -54,10 +54,21 @@ export function useSimulationParams() {
   // 🆕 Axes vs Distribution (pourcentages UI 0-100)
   const [pctAxesArrivee, setPctAxesArrivee] = usePersistedState('sim_pctAxesArrivee', 40);
   const [pctAxesDepart, setPctAxesDepart] = usePersistedState('sim_pctAxesDepart', 30);
+  
+  // 🆕 Collecte et Retour
+  const [pctCollecte, setPctCollecte] = usePersistedState('sim_pctCollecte', 5.0);
+
+  const [pctRetour, setPctRetour] = usePersistedState('sim_pctRetour', 0.0);
+  const [pctInternational, setPctInternational] = usePersistedState('sim_pctInternational', 0.0);
+  
+  // 🆕 Shift
+  const [shift, setShift] = usePersistedState('sim_shift', 1);
 
   // Helpers UI (sacs)
   const [nbrCoSac, setNbrCoSac] = usePersistedState('sim_nbrCoSac', 0);
   const [nbrCrSac, setNbrCrSac] = usePersistedState('sim_nbrCrSac', 0);
+  // 🆕 Helpers UI (caisson)
+  const [crParCaisson, setCrParCaisson] = usePersistedState('sim_crParCaisson', 500);
   
   // Volumes journaliers (legacy)
   const [sacs, setSacs] = usePersistedState('sim_sacs', 0);
@@ -98,10 +109,17 @@ export function useSimulationParams() {
     colisParCollecte, setColisParCollecte,
     nbrCoSac, setNbrCoSac,
     nbrCrSac, setNbrCrSac,
+    crParCaisson, setCrParCaisson,
     
     // 🆕 Axes
     pctAxesArrivee, setPctAxesArrivee,
     pctAxesDepart, setPctAxesDepart,
+
+    // 🆕 Collecte et Retour
+    pctCollecte, setPctCollecte,
+    pctRetour, setPctRetour,
+    pctInternational, setPctInternational,
+    shift, setShift,
     
     // Volumes journaliers
     sacs, setSacs,

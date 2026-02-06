@@ -19,6 +19,10 @@ import {
   ArrowLeftRight,
   Tag,
   History,
+  Building, // 🆕 Import
+  Layers, // 🆕 Import
+  UserRound, // 🆕 Import
+  HelpCircle, // 🆕 Import
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import tawazoonLogo from "@/assets/LOGO_Tawazoon_RH.png";
@@ -38,6 +42,7 @@ export default function Sidebar({
     showActuel: true,
     showRecommande: true,
     showVueGlobale: true,
+    showParametrage: false,
     showSimActuel: false,
     showSimRecommande: false,
   });
@@ -63,9 +68,9 @@ export default function Sidebar({
   const simulationItems = [
     { label: "Par Intervenant", slug: "", flux: "poste" },
     { label: "Par Centre", slug: "centre", flux: "centre" },
-    { label: "Par Direction", slug: "direction", flux: "direction" },
+    { label: "Par Région", slug: "direction", flux: "direction" },
+    { label: "National", slug: "national", flux: "national" },
     { label: "Niveau Siège", slug: "region", flux: "siege" },
-    { label: "Nationale", slug: "national", flux: "national" },
   ];
 
   const vueGlobaleSub = [
@@ -114,6 +119,7 @@ export default function Sidebar({
     icon: Icon,
     collapsed,
     menuPath,
+    noChevron = false,
   }) => {
     const styles = {
       actuel:
@@ -129,7 +135,7 @@ export default function Sidebar({
         <button
           onClick={() => {
             if (menuPath) handleNav(menuPath);
-            else toggle(showKey);
+            else if (showKey) toggle(showKey);
           }}
           className={cn(
             "w-full flex items-center justify-between rounded-lg overflow-hidden " +
@@ -139,7 +145,7 @@ export default function Sidebar({
             collapsed &&
             "justify-center px-0 py-1 aspect-square rounded-xl hover:scale-105 transition-transform duration-200"
           )}
-          aria-expanded={openSections[showKey]}
+          aria-expanded={showKey ? openSections[showKey] : undefined}
           title={collapsed ? title : undefined}
         >
           <div className={cn("flex items-center gap-1.5", collapsed && "gap-0")}>
@@ -156,11 +162,11 @@ export default function Sidebar({
             {!collapsed && <span>{title}</span>}
           </div>
 
-          {!collapsed && (
+          {!collapsed && !noChevron && (
             <span
               onClick={(e) => {
                 e.stopPropagation();
-                toggle(showKey);
+                if (showKey) toggle(showKey);
               }}
               role="button"
               tabIndex={0}
@@ -368,10 +374,88 @@ export default function Sidebar({
             </div>
           )}
         </div>
+
+        {/* 🔧 Paramétrage */}
+        <div>
+          <SectionHeader
+            variant="globale"
+            title="Paramétrage"
+            showKey="showParametrage"
+            icon={Settings}
+            collapsed={collapsed}
+          />
+
+          {!collapsed && openSections.showParametrage && (
+            <div className="relative ml-2 pl-2 mb-0.5">
+              <div className="absolute left-2 top-1.5 bottom-1.5 w-px bg-slate-200/80" />
+
+              <button
+                onClick={() => handleNav('/app/taches-manager')}
+                className={
+                  "relative w-full text-left rounded-md hover:bg-slate-100 text-gray-700 " +
+                  "pl-6 pr-2 py-[clamp(2px,0.25vw,4px)] " +
+                  "text-[clamp(9px,0.75vw,11px)] transition"
+                }
+              >
+                <span className="pointer-events-none absolute left-2 top-1.5 w-3 h-3 border-l border-t border-slate-200/80 rounded-tl" />
+                Gestion Tâches
+              </button>
+
+              <button
+                onClick={() => handleNav('/app/builder')}
+                className={
+                  "relative w-full text-left rounded-md hover:bg-slate-100 text-gray-700 " +
+                  "pl-6 pr-2 py-[clamp(2px,0.25vw,4px)] " +
+                  "text-[clamp(9px,0.75vw,11px)] transition"
+                }
+              >
+                <span className="pointer-events-none absolute left-2 top-1.5 w-3 h-3 border-l border-t border-slate-200/80 rounded-tl" />
+                Ajout Tâche
+              </button>
+
+              <button
+                onClick={() => handleNav('/app/postes-manager')}
+                className={
+                  "relative w-full text-left rounded-md hover:bg-slate-100 text-gray-700 " +
+                  "pl-6 pr-2 py-[clamp(2px,0.25vw,4px)] " +
+                  "text-[clamp(9px,0.75vw,11px)] transition"
+                }
+              >
+                <span className="pointer-events-none absolute left-2 top-1.5 w-3 h-3 border-l border-t border-slate-200/80 rounded-tl" />
+                Gestion Postes
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* 🆕 Sections Administratives (Extracted) */}
+        <div className="mt-2 space-y-1">
+          <SectionHeader
+            variant="globale"
+            title="Simulation nouvelle création"
+            icon={Building}
+            collapsed={collapsed}
+            menuPath="/app/creer-centre"
+            noChevron
+          />
+
+        </div>
       </nav>
 
       {/* BAS DE BARRE */}
       <div className="border-t border-slate-200 p-1.5 mt-auto space-y-0.5">
+        <button
+          onClick={() => handleNav("/app/glossary")}
+          className={cn(
+            "w-full flex items-center gap-2 rounded-lg font-medium text-slate-700 hover:bg-slate-100 transition-all",
+            "text-[clamp(9px,0.75vw,11px)]",
+            collapsed ? "px-1.5 py-1 justify-center" : "px-2 py-1"
+          )}
+        >
+          <HelpCircle className="w-3.5 h-3.5 text-blue-600" />
+          {!collapsed && <span>Légende / Glossaire</span>}
+        </button>
+
         <button
           className={cn(
             "w-full flex items-center gap-2 rounded-lg font-medium text-slate-700 hover:bg-slate-100 transition-all",

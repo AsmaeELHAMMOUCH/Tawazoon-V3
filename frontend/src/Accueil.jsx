@@ -21,6 +21,11 @@ import {
   Clock,
   BookOpen,
   Workflow,
+  Target,
+  Tag,
+  Gauge,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import Company from "./components/Company"; // Ajustez le chemin selon votre structure
 import tawazoonLogo from "@/assets/LOGO_Tawazoon_RH.png";
@@ -114,17 +119,16 @@ export default function Accueil() {
       {/* =======================================================
           SECTION QUI SOMMES-NOUS
       ======================================================= */}
-      <Company />
+      <div id="about">
+        <Company />
+      </div>
 
       {/* =======================================================
           SECTION FAQ
       ======================================================= */}
       <FaqSection />
 
-      {/* =======================================================
-          SECTION CTA FINAL
-      ======================================================= */}
-      <FinalCtaSection />
+
 
       {/* =======================================================
           FOOTER
@@ -135,97 +139,96 @@ export default function Accueil() {
 }
 
 // Composant Header
+// Composant Header
 function Header({ navItems, menuOpen, setMenuOpen }) {
   return (
-    <header className="absolute top-4 left-0 right-0 z-50 flex justify-center px-4 sm:px-8">
-      <div
-        className="w-full max-w-7xl flex items-center rounded-2xl border border-white/10
-        bg-white/[0.04] backdrop-blur-xl shadow-[0_30px_120px_-20px_rgba(0,0,0,0.8)]
-        px-4 sm:px-6 h-14 md:h-16 relative"
-      >
-        {/* Logo et texte */}
-        <div className="flex items-center gap-3 sm:gap-4">
-          <img
-            src={tawazoonLogo}
-            alt="Tawazoon RH"
-            className="h-16 sm:h-24 object-contain drop-shadow-[0_0_15px_rgba(0,212,255,0.7)]"
-          />
-          <div className="flex flex-col leading-tight">
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold bg-gradient-to-r from-[#0077b6] to-[#48cae4] bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(72,202,228,0.4)]">
-              TAWAZOON RH
-            </h1>
+    <header className="absolute top-6 left-0 right-0 z-50 flex items-center justify-between px-6 pointer-events-none">
 
-            <div className="text-[0.7rem] text-slate-400 sm:text-[0.8rem]">
-              Optimisation des effectifs
-            </div>
-          </div>
-        </div>
+      {/* 1. Logo Barid (Gauche) */}
+      <div className="pointer-events-auto flex items-center">
+        <img
+          src={logoBarid}
+          alt="Barid Al-Maghrib"
+          className="h-20 object-contain drop-shadow-md bg-white/90 rounded-lg px-2 py-1 shadow-sm"
+        />
+      </div>
 
-        {/* Navigation desktop */}
-        <nav className="hidden md:flex ml-8 lg:ml-12 gap-8 text-[0.9rem] text-slate-200">
+      {/* 2. Nav Centrée (Desktop uniquement) */}
+      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-auto hidden lg:block">
+        <nav className="flex items-center gap-10 text-[0.9rem] text-slate-800 font-medium bg-white/90 backdrop-blur-xl rounded-full px-16 py-4 border border-white/40 shadow-xl">
           {navItems.map((item) => (
             <a
               key={item.href}
               href={item.href}
-              className="hover:text-white transition-colors flex items-center gap-1 px-3 py-2 rounded-lg hover:bg-white/10"
+              className="hover:text-cyan-600 transition-colors px-2 py-1 relative group"
             >
-              <span>{item.label}</span>
+              {item.label}
+              <span className="absolute inset-x-0 bottom-0 h-0.5 bg-cyan-600 scale-x-0 group-hover:scale-x-100 transition-transform origin-left" />
             </a>
           ))}
         </nav>
-        {/* Menu mobile */}
-        <div className="ml-auto flex items-center gap-3">
+      </div>
+
+      {/* 3. Logo Almav + Menu Mobile (Droite) */}
+      <div className="pointer-events-auto flex items-center gap-4">
+        {/* Logo Almav */}
+        <img
+          src={logoAlmav}
+          alt="Almav"
+          className="h-18 object-contain drop-shadow-md hidden lg:block bg-white/90 rounded-lg px-2 py-1 shadow-sm"
+        />
+
+        {/* Bouton Menu Mobile */}
+        <div className="lg:hidden pointer-events-auto">
           <button
-            className="md:hidden inline-flex items-center justify-center rounded-lg border border-white/20
-  w-12 h-12 text-slate-200 hover:bg-white/10 transition"
+            className="inline-flex items-center justify-center rounded-lg border border-slate-200 w-12 h-12 bg-white/90 text-slate-800 hover:bg-white transition shadow-md backdrop-blur-md"
             onClick={() => setMenuOpen((o) => !o)}
             aria-label="Menu"
           >
-            {menuOpen ? (
-              <X className="w-6 h-6" />
-            ) : (
-              <Menu className="w-6 h-6" />
-            )}
+            {menuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
           </button>
         </div>
+      </div>
 
-        {/* Menu mobile déroulant */}
-        {menuOpen && (
-          <div className="fixed top-0 left-0 right-0 bottom-0 z-50 bg-black/50 flex items-start justify-center pt-20 px-4">
-            <div
-              className="w-full max-w-md rounded-2xl border border-white/30 bg-white/100 backdrop-blur-md
-      shadow-[0_30px_120px_-20px_rgba(0,0,0,0.9)] p-6 flex flex-col gap-4 text-[1rem] text-slate-800"
-            >
+      {/* 4. Menu Mobile (Overlay Fullscreen) */}
+      {menuOpen && (
+        <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex justify-end pointer-events-auto">
+          <div className="w-full max-w-sm h-full bg-white p-6 flex flex-col gap-6 shadow-2xl animate-in slide-in-from-right duration-300">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-4">
+              <span className="text-xl font-bold text-slate-800">Menu</span>
+              <button
+                onClick={() => setMenuOpen(false)}
+                className="p-2 text-slate-500 hover:text-red-500 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-2">
               {navItems.map((item) => (
                 <a
                   key={item.href}
                   href={item.href}
-                  className="flex items-center justify-between py-3 px-4 rounded-lg
-          text-slate-900 hover:text-cyan-600 hover:bg-gray-100 border border-transparent
-          hover:border-cyan-200 transition-colors"
+                  className="text-lg font-medium text-slate-800 py-3 px-2 rounded-lg hover:bg-slate-50 hover:text-cyan-600 transition-colors"
                   onClick={() => setMenuOpen(false)}
                 >
-                  <span className="text-[1.1rem] font-medium">
-                    {item.label}
-                  </span>
-                  <span className="text-[1rem] text-cyan-600">→</span>
+                  {item.label}
                 </a>
               ))}
-              <div className="border-t border-gray-300 my-3" />
+            </div>
+
+            <div className="mt-auto border-t border-slate-100 pt-6">
               <a
                 href="/login"
-                className="w-full inline-flex items-center justify-center text-[1.1rem] font-medium
-  bg-gradient-to-r from-blue-600 to-cyan-500 text-white rounded-lg
-  px-4 py-2.5 shadow-md hover:shadow-lg transition-shadow"
-                onClick={() => setMenuOpen(false)}
+                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-cyan-500 text-white text-lg font-bold py-4 rounded-xl shadow-lg hover:shadow-xl transition-all"
               >
                 Se connecter
-                <ArrowRight className="h-4 w-4 ml-1.5" />
+                <ArrowRight className="w-5 h-5" />
               </a>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </header>
   );
 }
@@ -239,7 +242,7 @@ function HeroSection() {
       style={{ backgroundImage: "url('/img/bg-barid-esign.jpg')" }}
     >
       {/* Couche transparente */}
-      <div className="absolute inset-0 bg-black/60"></div>
+      <div className="absolute inset-0 bg-white/30"></div>
 
       {/* Background glow */}
       <div
@@ -264,37 +267,78 @@ function HeroSection() {
       </div>
 
       {/* Contenu de la section Accueil */}
-      <div className="relative z-10 mx-auto flex max-w-7xl flex-col gap-24 px-4 pb-32 pt-24 sm:px-6 lg:px-8 lg:pt-32">
-        <div className="grid grid-cols-1 items-start gap-10 lg:grid-cols-2">
-          {/* Colonne GAUCHE */}
-          <LeftColumn />
+      <div className="relative z-10 mx-auto flex max-w-7xl flex-col min-h-screen pt-32 pb-10 justify-center px-4 sm:px-6 lg:px-8">
+        <div className="flex flex-col items-center justify-center px-8 pb-8 pt-0 w-full max-w-lg bg-white/80 backdrop-blur-md rounded-3xl shadow-[0_30px_120px_rgba(0,192,255,0.15)] border border-white/50 text-center gap-0 mt-auto mb-auto">
 
-          {/* Colonne DROITE */}
-          <RightColumn />
+          {/* Logo */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.15 }}
+            className="flex items-center justify-center w-full -mt-8"
+          >
+            <img
+              src={tawazoonLogo}
+              alt="Tawazoon RH"
+              className="w-[80%] max-w-[420px] object-contain drop-shadow-[0_0_40px_rgba(72,202,228,0.8)]"
+            />
+          </motion.div>
+
+          {/* Texte et Bouton */}
+          <div className="flex flex-col gap-4 w-full justify-center items-center -mt-6">
+            {/* Baseline */}
+            <motion.p
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.05 }}
+              className="font-bold tracking-wide leading-snug"
+            >
+              <span className="text-sm sm:text-base lg:text-lg bg-gradient-to-r from-[#0077b6] via-[#48cae4] to-[#0077b6] bg-clip-text text-transparent animate-gradient-x drop-shadow-[0_0_20px_rgba(72,202,228,0.6)]">
+                Pilotez vos effectifs avec précision
+              </span>
+            </motion.p>
+
+            {/* Description */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.45, delay: 0.15 }}
+              className="text-[0.65rem] leading-relaxed sm:text-[0.75rem] lg:text-xs flex flex-col gap-1"
+            >
+              <span className="font-bold block bg-gradient-to-r from-[#0077b6] via-[#48cae4] to-[#0077b6] bg-clip-text text-transparent">L’intelligence du dimensionnement.</span>
+              <span className="bg-gradient-to-r from-[#0077b6] via-[#48cae4] to-[#0077b6] bg-clip-text text-transparent">Des effectifs calculés sur la base de données mesurables.</span>
+            </motion.div>
+
+
+          </div>
         </div>
+
+        {/* Bouton - Hors du conteneur */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, delay: 0.3 }}
+          className="flex justify-center w-full -mt-12"
+        >
+          <a
+            href="/login"
+            className="group inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#0077b6] to-[#48cae4] px-8 py-3 text-sm font-semibold text-white shadow-[0_10px_40px_rgba(72,202,228,0.4)] hover:shadow-[0_10px_50px_rgba(72,202,228,0.6)] hover:scale-105 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/60"
+          >
+            Se Connecter
+            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+          </a>
+        </motion.div>
       </div>
     </section>
   );
 }
 
 // Composant LeftColumn
+// Composant LeftColumn
+// Composant LeftColumn
 function LeftColumn() {
   return (
-    <div className="flex flex-col gap-6 max-w-xl">
-      {/* Badge sécurité */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
-        className="mt-3 inline-flex items-center gap-2 w-fit rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[0.7rem] text-slate-200 backdrop-blur-md shadow-[0_10px_40px_rgba(0,0,0,0.6)]"
-        style={{
-          background: "linear-gradient(135deg, #0077b6 0%, #48cae4 100%)",
-          backdropFilter: "blur(8px)",
-        }}
-      >
-        <Shield className="h-3.5 w-3.5 text-white" />
-        <span>Données sécurisées & centralisées</span>
-      </motion.div>
+    <div className="flex flex-col gap-2 w-full max-w-xs bg-white/80 backdrop-blur-md rounded-2xl p-4 shadow-xl border border-white/50 justify-center items-center text-center">
 
       {/* Baseline / tagline */}
       <motion.p
@@ -303,122 +347,20 @@ function LeftColumn() {
         transition={{ duration: 0.4, delay: 0.05 }}
         className="font-bold tracking-wide leading-snug"
       >
-        <span className="text-2xl sm:text-4xl bg-gradient-to-r from-[#0077b6] via-[#48cae4] to-[#0077b6] bg-clip-text text-transparent animate-gradient-x drop-shadow-[0_0_20px_rgba(72,202,228,0.6)]">
-          Simulation RH multi-centres • Pilotage opérationnel
+        <span className="text-sm sm:text-base lg:text-lg bg-gradient-to-r from-[#0077b6] via-[#48cae4] to-[#0077b6] bg-clip-text text-transparent animate-gradient-x drop-shadow-[0_0_20px_rgba(72,202,228,0.6)]">
+          Pilotez vos effectifs avec précision
         </span>
       </motion.p>
 
-      {/* Titre */}
-      <motion.h1
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.45, delay: 0.1 }}
-        className="text-3xl font-semibold leading-[1.15] text-white sm:text-4xl lg:text-5xl"
-      >
-        Optimisez vos effectifs
-        <br />
-        <span className="bg-gradient-to-r from-cyan-300 via-blue-400 to-white bg-clip-text text-transparent"></span>
-      </motion.h1>
-
       {/* Description */}
-      <motion.p
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45, delay: 0.15 }}
-        className="text-lg leading-relaxed text-slate-300 sm:text-xl lg:text-2xl"
+        className="text-[0.65rem] leading-relaxed sm:text-[0.75rem] lg:text-xs flex flex-col gap-1"
       >
-        Votre simulateur RH analyse les volumes, la productivité et les tâches
-        critiques pour recommander l’effectif idéal par centre, par poste et par
-        activité. Fini les estimations au feeling — prenez des décisions basées
-        sur des données opérationnelles.
-      </motion.p>
-
-      {/* CTAs */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.45, delay: 0.2 }}
-        className="flex flex-col gap-3 sm:flex-row sm:items-center"
-      >
-        {/* Bouton Se Connecter — même gradient que le badge */}
-        <a
-          href="/login"
-          className="group inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-[#0077b6] to-[#48cae4] px-5 py-3 text-base font-semibold text-white shadow-[0_10px_40px_rgba(72,202,228,0.4)] hover:shadow-[0_10px_50px_rgba(72,202,228,0.6)] transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/60"
-        >
-          Se Connecter
-          <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-        </a>
-
-        {/* Bouton Voir un exemple — compact aussi */}
-        <a
-          href="#demo"
-          className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/15 bg-white/5 px-5 py-3 text-base font-semibold text-white backdrop-blur-md shadow-[0_10px_40px_rgba(0,0,0,0.6)] hover:bg-white/10 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-white/40"
-        >
-          Voir un exemple
-          <ChevronRight className="h-4 w-4" />
-        </a>
-      </motion.div>
-
-      {/* Garanties */}
-      <motion.ul
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.45, delay: 0.25 }}
-        className="mt-5 flex flex-wrap items-center justify-center gap-3 text-sm text-slate-200"
-      >
-        <li className="flex  gap-2">
-          <CheckCircle2 className="h-5 w-5 text-[#48cae4] drop-shadow-[0_0_6px_rgba(72,202,228,0.5)]" />
-          Sans tableur complexe
-        </li>
-
-        <li className="flex items-center gap-2">
-          <CheckCircle2 className="h-5 w-5 text-[#48cae4] drop-shadow-[0_0_6px_rgba(72,202,228,0.5)]" />
-          Projection FTE exacte
-        </li>
-
-        <li className="flex items-center gap-2">
-          <CheckCircle2 className="h-5 w-5 text-[#48cae4] drop-shadow-[0_0_6px_rgba(72,202,228,0.5)]" />
-          Compatible multi-centres
-        </li>
-      </motion.ul>
-
-      {/* Partenaires / logos */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.45, delay: 0.3 }}
-        className="mt-21 flex w-full justify-center"
-      >
-        <div
-          className="w-full max-w-[700px] sm:max-w-[900px] rounded-xl border border-white/10 bg-white/[0.04] backdrop-blur-xl
-    shadow-[0_30px_120px_rgba(0,0,0,0.8)] p-5 flex flex-col items-center"
-        >
-          <div className="flex flex-wrap items-center justify-center gap-14 sm:gap-20">
-            {/* ALMAV */}
-            <div className="flex flex-col items-center gap-2">
-              <img
-                src={logoAlmav}
-                alt="ALMAV"
-                className="h-12 sm:h-14 object-contain drop-shadow-[0_0_25px_rgba(255,0,0,0.6)]"
-              />
-              <span className="text-[0.7rem] text-slate-400 uppercase tracking-wide">
-                ALMAV
-              </span>
-            </div>
-
-            {/* BARID AL-MAGHRIB */}
-            <div className="flex flex-col items-center gap-2">
-              <img
-                src={logoBarid}
-                alt="Groupe Barid Al-Maghrib"
-                className="h-12 sm:h-14 object-contain bg-white rounded-md p-1 drop-shadow-[0_0_25px_rgba(0,102,255,0.6)]"
-              />
-              <span className="text-[0.7rem] text-slate-400 uppercase tracking-wide text-center">
-                Barid Al-Maghrib
-              </span>
-            </div>
-          </div>
-        </div>
+        <span className="font-bold mt-1 block bg-gradient-to-r from-[#0077b6] via-[#48cae4] to-[#0077b6] bg-clip-text text-transparent">L’intelligence du dimensionnement.</span>
+        <span className="bg-gradient-to-r from-[#0077b6] via-[#48cae4] to-[#0077b6] bg-clip-text text-transparent">Des effectifs calculés sur la base de données mesurables.</span>
       </motion.div>
     </div>
   );
@@ -436,114 +378,112 @@ function RightColumn() {
         mx-auto
         flex
         w-full
-        max-w-[900px]      /* <= ICI on élargit */
         flex-col
         gap-4
         rounded-2xl
         border border-white/10
-        bg-white/[0.03]
-        p-5 pb-4
-        backdrop-blur-xl
+        bg-white/80
+        p-6
         shadow-[0_30px_120px_rgba(0,192,255,0.15)]
       "
     >
-      {/* KPIs */}
-      <div className="grid w-full grid-cols-3 gap-4 text-center">
-        <div className="rounded-xl border border-white/10 bg-white/[0.07] p-4 text-slate-200 shadow-inner shadow-white/5">
-          <div className="text-[0.8rem] text-slate-400">Effectif actuel</div>
-
-        </div>
-
-        <div className="rounded-xl border border-white/10 bg-white/[0.07] p-4 text-slate-200 shadow-inner shadow-white/5">
-          <div className="text-[0.8rem] text-slate-400">Recommandé</div>
-
-        </div>
-
-        <div className="rounded-xl border border-white/10 bg-white/[0.07] p-4 text-slate-200 shadow-inner shadow-white/5">
-          <div className="text-[0.8rem] text-slate-400">Écart global</div>
-
-        </div>
+      <div className="flex items-center justify-center w-full h-full">
+        <img
+          src={tawazoonLogo}
+          alt="Tawazoon RH"
+          className="w-[80%] max-w-[420px] object-contain drop-shadow-[0_0_40px_rgba(72,202,228,0.8)]"
+        />
       </div>
-
-      {/* Graph 1 */}
-      <ChartMock title="FTE Actuel" />
-
-      {/* Graph 2 */}
-      <ChartMock title="Temps par Tache" />
     </motion.div>
   );
 }
 // Composant FeaturesSection
 function FeaturesSection() {
-  // Bloc 1 : Outils de pilotage / avantages
+  // Fonctionnalités principales de TAWAZOON RH
   const features = [
     {
-      icon: <Users className="h-5 w-5 text-[#00bfff]" />,
-      label: "Dimensionnement par poste",
-      value: "Poste par poste",
-      desc: "Identifiez précisément les sur-effectifs et les besoins en ressources.",
-    },
-    {
-      icon: <BarChart3 className="h-5 w-5 text-[#00bfff]" />,
-      label: "Analyse de productivité",
-      value: "Heures réelles",
-      desc: "Basée sur les durées unitaires d'activité et les volumes traités.",
-    },
-    {
-      icon: <Shield className="h-5 w-5 text-[#00bfff]" />,
-      label: "Traçabilité",
-      value: "Audit-ready",
-      desc: "Justifiez chaque recommandation avec des calculs clairs et vérifiables.",
+      icon: <Target className="h-5 w-5 text-[#00bfff]" />,
+      label: "De la réalité terrain à l'effectif cible",
+      desc: (
+        <>
+          TAWAZOON RH calcule la charge réelle, la convertit en ETP et détermine les besoins en effectifs par métier et par site.
+          Des décisions directement reliées à la réalité des opérations.
+        </>
+      ),
     },
     {
       icon: <CheckCircle2 className="h-5 w-5 text-[#00bfff]" />,
-      label: "Décision rapide",
-      value: "-30% de temps",
-      desc: "Finis les allers-retours avec des tableaux Excel complexes.",
+      label: "Des normes réalistes, ancrées dans les pratiques réelles",
+      desc: (
+        <>
+          Des normes construites à partir d’observations réelles et de chronométrages terrain,
+          garantissant des résultats crédibles et applicables.
+        </>
+      ),
     },
     {
-      icon: <PiggyBank className="h-5 w-5 text-[#00bfff]" />,
-      label: "Économies Budgétaires",
-      desc: "Estimations précises des gains potentiels",
-    },
-    {
-      icon: <TrendingUp className="h-5 w-5 text-[#00bfff]" />,
-      label: "Comparatif Positions",
-      desc: "Vue d'ensemble des écarts par centre",
-    },
-  ];
-
-  // Bloc 3 : Résultats de simulation
-  const simulationResults = [
-    {
-      icon: <ClipboardList className="h-5 w-5 text-[#00bfff]" />,
-      label: "Normes de dimensionnement",
-      desc: "Standards par activité et centre",
-    },
-    {
-      icon: <Clock className="h-5 w-5 text-[#00bfff]" />,
-      label: "Chronogramme de Traitement",
-      desc: "Temps unitaire par tâche détaillé",
-    },
-    {
-      icon: <BookOpen className="h-5 w-5 text-[#00bfff]" />,
-      label: "Référentiel",
-      desc: "Base documentaire complète",
-    },
-    {
-      icon: <Workflow className="h-5 w-5 text-[#00bfff]" />,
-      label: "Schéma Process",
-      desc: "Cartographie des flux opérationnels",
-    },
-    {
-      icon: <Layers className="h-5 w-5 text-[#00bfff]" />,
-      label: "Analyse Multi-niveaux",
-      desc: "Du global au détail par poste",
+      icon: <Gauge className="h-5 w-5 text-[#00bfff]" />,
+      label: "Prise en compte de la capacité productive réelle",
+      desc: (
+        <>
+          Prise en compte des horaires, temps non productifs et contraintes opérationnelles
+          pour des résultats homogènes et comparables entre sites
+        </>
+      ),
     },
     {
       icon: <GitBranch className="h-5 w-5 text-[#00bfff]" />,
-      label: "Scénarios Comparatifs",
-      desc: "Simulation de plusieurs hypothèses",
+      label: "Simulez, comparez, arbitrez",
+      desc: (
+        <>
+          Comparez la situation actuelle, la consolidation et l’optimisation pour éclairer vos arbitrages RH.
+        </>
+      ),
+    },
+    {
+      icon: <Tag className="h-5 w-5 text-[#00bfff]" />,
+      label: "Catégorisation administrative automatique des sites",
+      desc: (
+        <>
+          Classement objectif des sites selon volumes, activités et effectifs.
+        </>
+      ),
+    },
+    {
+      icon: <Workflow className="h-5 w-5 text-[#00bfff]" />,
+      label: "Organigrammes générés automatiquement",
+      desc: (
+        <>
+          Génération d’organigrammes cibles par site, structurés par métier et par niveau.
+        </>
+      ),
+    },
+    {
+      icon: <BarChart3 className="h-5 w-5 text-[#00bfff]" />,
+      label: "Une vision consolidée à l'échelle du réseau",
+      desc: (
+        <>
+          Analyse par site, par métier et consolidée à l’échelle du réseau.
+        </>
+      ),
+    },
+    {
+      icon: <Shield className="h-5 w-5 text-[#00bfff]" />,
+      label: "Un outil audit-ready et durable",
+      desc: (
+        <>
+          Résultats traçables, explicables et auditables.
+        </>
+      ),
+    },
+    {
+      icon: <Gauge className="h-5 w-5 text-[#00bfff]" />,
+      label: "Un véritable outil de pilotage",
+      desc: (
+        <>
+          Un outil d’aide à la décision, pas un SIRH, au service de la performance et de la maîtrise des effectifs.
+        </>
+      ),
     },
   ];
 
@@ -554,10 +494,12 @@ function FeaturesSection() {
         aria-hidden
         className="pointer-events-none absolute inset-0 -z-20 overflow-hidden"
       >
-        <div className="absolute inset-0 bg-gradient-to-b from-black/95 via-slate-950/98 to-black" />
-        <div className="absolute -left-40 top-20 h-[28rem] w-[28rem] rounded-full bg-[#00bfff]/15 blur-[120px]" />
-        <div className="absolute -right-40 top-60 h-[28rem] w-[28rem] rounded-full bg-[#00bfff]/15 blur-[120px]" />
-        <div className="absolute inset-0 opacity-[0.07] [background-image:radial-gradient(circle_at_1px_1px,#ffffff_1px,transparent_0)] [background-size:24px_24px]" />
+        <img
+          src="/barid.png"
+          alt="Background"
+          className="absolute inset-0 h-full w-full object-cover opacity-40"
+        />
+
       </div>
 
       {/* Contenu */}
@@ -570,24 +512,18 @@ function FeaturesSection() {
           transition={{ duration: 0.5 }}
           className="mb-10 text-center"
         >
-          <h2 className="text-2xl font-bold text-white sm:text-3xl mb-4">
-            Fonctionnalités
+          <h2 className="text-2xl font-bold text-slate-800 sm:text-3xl mb-4">
+            Fonctionnalités Principales
           </h2>
-          <p className="text-base text-slate-400 max-w-2xl mx-auto">
-            Des outils complets pour piloter vos effectifs avec précision
-          </p>
+
         </motion.div>
 
         {/* ===================== */}
-        {/* Bloc : Vos Outils de Pilotage */}
+        {/* Fonctionnalités principales */}
         {/* ===================== */}
         <div className="mb-10">
-          <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-3">
-            <span className="h-1 w-12 bg-gradient-to-r from-[#00bfff] to-[#00ccff] rounded-full"></span>
-            Vos Outils de Pilotage
-          </h3>
-          {/* Grille 1 : features */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 justify-items-center gap-6 xl:gap-8 mb-8">
+          {/* Grille des fonctionnalités */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 justify-items-center gap-4 xl:gap-6 mb-8">
             {features.map((item, i) => (
               <motion.div
                 key={`feature-${i}`}
@@ -595,25 +531,20 @@ function FeaturesSection() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.5, delay: 0.1 * i }}
-                className="group rounded-xl border border-white/10 bg-white/[0.03] p-5 text-left
-                           backdrop-blur-xl shadow-[0_10px_40px_rgba(0,0,0,0.5)]
-                           hover:bg-white/[0.05] hover:border-[#00bfff]/30 transition-all duration-300
-                           w-full h-[150px] flex flex-col"
+                className="group rounded-xl border border-slate-200 bg-white p-4 text-center
+                           backdrop-blur-xl shadow-sm
+                           hover:shadow-md hover:border-[#00bfff]/30 transition-all duration-300
+                           w-full h-auto flex flex-col items-center"
               >
-                <div className="mb-3 flex items-center gap-3">
-                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-[#00bfff]/10 to-[#00ccff]/10 shadow-inner shadow-white/5 group-hover:from-[#00bfff]/20 group-hover:to-[#00ccff]/20 transition-all">
+                <div className="mb-2 flex flex-col items-center gap-2 w-full">
+                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-[#00bfff]/10 to-[#00ccff]/10 shadow-inner group-hover:from-[#00bfff]/20 group-hover:to-[#00ccff]/20 transition-all shrink-0">
                     {item.icon}
                   </span>
-                  <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+                  <h4 className="text-xs font-bold text-slate-800 leading-tight w-full">
                     {item.label}
-                  </span>
+                  </h4>
                 </div>
-                {item.value && (
-                  <div className="text-lg font-semibold text-white mb-2">
-                    {item.value}
-                  </div>
-                )}
-                <div className="text-xs text-slate-400 leading-relaxed flex-grow">
+                <div className="text-[0.7rem] text-slate-600 leading-relaxed flex-grow">
                   {item.desc}
                 </div>
               </motion.div>
@@ -621,47 +552,7 @@ function FeaturesSection() {
           </div>
         </div>
 
-        {/* Bloc : Résultats de la Simulation */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5 }}
-        >
-          <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-3">
-            <span className="h-1 w-12 bg-gradient-to-r from-[#00bfff] to-[#00ccff] rounded-full"></span>
-            Résultats de la Simulation
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 justify-items-center gap-6 xl:gap-8">
-            {simulationResults.map((item, i) => (
-              <motion.div
-                key={`simulation-${i}`}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.5, delay: 0.1 * i }}
-                className="group rounded-xl border border-white/10 bg-white/[0.03] backdrop-blur-xl
-                           shadow-[0_10px_40px_rgba(0,0,0,0.5)] p-5
-                           hover:bg-white/[0.05] hover:border-[#00bfff]/30 transition-all duration-300
-                           w-full h-[150px] flex flex-col"
-              >
-                <div className="flex items-start gap-3 mb-3">
-                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-[#00bfff]/10 to-[#00ccff]/10 shadow-inner shadow-white/5 shrink-0 group-hover:from-[#00bfff]/20 group-hover:to-[#00ccff]/20 transition-all">
-                    {item.icon}
-                  </span>
-                  <div className="flex flex-col">
-                    <div className="text-sm font-semibold text-white mb-1">
-                      {item.label}
-                    </div>
-                    <div className="text-xs text-slate-400 leading-relaxed">
-                      {item.desc}
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </motion.div>
+
       </div>
     </section>
   );
@@ -670,79 +561,199 @@ function FeaturesSection() {
 
 // Composant FaqSection
 // Composant FaqSection
+// Composant FaqItem pour l'accordéon
+const FaqItem = ({ question, answer }) => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      className="group h-full min-h-[5.5rem] rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm transition-all duration-300 hover:shadow-md hover:border-[#00bfff]/30 flex flex-col"
+    >
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex w-full flex-grow items-center justify-between p-4 text-left focus:outline-none cursor-pointer select-none"
+      >
+        <span className="text-slate-900 font-bold text-xs pr-4 group-hover:text-[#00bfff] transition-colors leading-tight">
+          {question}
+        </span>
+        {isOpen ? (
+          <ChevronUp className="h-4 w-4 text-[#00bfff] flex-shrink-0" />
+        ) : (
+          <ChevronDown className="h-4 w-4 text-slate-400 group-hover:text-[#00bfff] flex-shrink-0 transition-colors" />
+        )}
+      </button>
+      {isOpen && (
+        <div className="px-4 pb-4 pt-0">
+          <div className="text-[0.65rem] text-slate-600 leading-normal border-t border-slate-100 pt-2">
+            {answer}
+          </div>
+        </div>
+      )}
+    </motion.div>
+  );
+};
+
+// Composant FaqSection
 function FaqSection() {
   const faqs = [
     {
-      question: "Comment est calculé l’effectif recommandé ?",
-      answer:
-        "On prend tes volumes réels (sacs, colis, opérations), les temps unitaires d’exécution par tâche, la productivité cible et le temps net dispo par ressource. On en déduit l’ETP nécessaire par poste et par centre.",
+      question: "Sur quoi reposent les calculs de TAWAZOON RH ?",
+      answer: (
+        <>
+          Les calculs reposent sur une chaîne causale claire et traçable :<br />
+          volumes d’activité observés, temps unitaires issus des pratiques réelles, charge de travail et capacité productive.<br />
+          Chaque résultat est objectivé et justifiable.
+        </>
+      ),
     },
     {
-      question: "Est-ce que c’est auditable ?",
-      answer:
-        "Oui. Chaque recommandation vient avec le détail des tâches, volumes et temps. Tu peux défendre face à la direction ou à un audit qualité.",
+      question: "TAWAZOON RH utilise-t-il des ratios standards ou historiques ?",
+      answer: (
+        <>
+          Non. TAWAZOON RH ne s’appuie pas sur des ratios génériques ni sur des effectifs hérités.<br />
+          Le dimensionnement est fondé sur la charge réelle de travail, observée et mesurée sur le terrain.
+        </>
+      ),
     },
     {
-      question: "On peut l’utiliser pour plusieurs centres ?",
-      answer:
-        "Oui. Le modèle supporte multi-centres et multi-activités, avec comparaison d’écart entre l’effectif actuel et l’effectif cible.",
+      question: "Les résultats sont-ils auditables et défendables ?",
+      answer: (
+        <>
+          Oui. Tous les résultats produits par TAWAZOON RH sont traçables, explicables et auditables.<br />
+          Les données sources, hypothèses et paramètres de calcul sont documentés et historisés.
+        </>
+      ),
+    },
+    {
+      question: "L’outil est-il adapté aux organisations multi-sites et multi-métiers ?",
+      answer: (
+        <>
+          Oui. TAWAZOON RH est conçu pour des organisations complexes, multi-sites et multi-métiers.<br />
+          Il permet une analyse par site, par métier, avec une consolidation globale à l’échelle du réseau.
+        </>
+      ),
+    },
+    {
+      question: "Peut-on simuler plusieurs scénarios sans modifier les données de référence ?",
+      answer: (
+        <>
+          Oui. L’outil permet de construire et comparer plusieurs scénarios (organisationnels, productivité, optimisation)<br />
+          sans altérer le socle méthodologique ni les données de référence.
+        </>
+      ),
+    },
+    {
+      question: "Comment TAWAZOON RH catégorise-t-il les sites ?",
+      answer: (
+        <>
+          La catégorie administrative de chaque site est calculée automatiquement à partir de critères objectifs :<br />
+          volumes traités, activités réalisées et effectifs nécessaires.<br />
+          La catégorisation est homogène, reproductible et comparable entre sites.
+        </>
+      ),
+    },
+    {
+      question: "TAWAZOON RH remplace-t-il un SIRH ?",
+      answer: (
+        <>
+          Non. TAWAZOON RH ne remplace pas un SIRH.<br />
+          Il complète les systèmes existants en apportant une capacité d’aide à la décision dédiée au dimensionnement et au pilotage des effectifs.
+        </>
+      ),
+    },
+    {
+      question: "L’outil peut-il évoluer dans le temps ?",
+      answer: (
+        <>
+          Oui. TAWAZOON RH est conçu pour être pérenne et évolutif.<br />
+          Les volumes, paramètres et hypothèses peuvent être actualisés pour accompagner les évolutions de l’activité et des organisations.
+        </>
+      ),
+    },
+    {
+      question: "Comment réalise-t-on une simulation dans TAWAZOON RH ?",
+      answer: (
+        <>
+          Une simulation se déroule en quelques étapes simples et structurées :<br /><br />
+          <strong>1. Introduction des volumes d’activité</strong><br />
+          L’utilisateur renseigne les volumes à traiter par activité et par site.<br /><br />
+          <strong>2. Définition des paramètres de productivité</strong><br />
+          Le taux de productivité et les temps non productifs (temps morts, contraintes opérationnelles) sont définis ou ajustés selon le contexte étudié.<br /><br />
+          <strong>3. Choix de la typologie du centre</strong><br />
+          La typologie du site est sélectionnée afin d’appliquer les règles, normes et paramètres adaptés à son mode de fonctionnement.<br /><br />
+          <strong>4. Lancement de la simulation</strong><br />
+          TAWAZOON RH calcule automatiquement la charge de travail, la convertit en effectifs (ETP / FTE) et restitue les résultats comparatifs et scénarios associés.
+        </>
+      ),
+    },
+    {
+      question: "Peut-on lancer une simulation pour plusieurs centres en même temps ?",
+      answer: (
+        <>
+          Oui.<br />
+          TAWAZOON RH permet de lancer des simulations multi-centres en important les volumes via un fichier Excel, à l’aide d’un template standard fourni par l’outil.<br />
+          Une fois les volumes importés, TAWAZOON RH applique automatiquement les règles de dimensionnement, calcule les effectifs par centre et restitue une vision consolidée à l’échelle du réseau.
+        </>
+      ),
+    },
+    {
+      question: "Peut-on simuler un centre qui n’est pas encore créé ?",
+      answer: (
+        <>
+          Oui.<br />
+          TAWAZOON RH permet de réaliser des simulations pour des centres non encore existants, afin d’anticiper les besoins en effectifs avant leur ouverture.<br />
+          Grâce à un menu dédié, il suffit de :<br />
+          • renseigner le nom du centre,<br />
+          • sélectionner la typologie du centre,<br />
+          • introduire les volumes prévisionnels.<br />
+          TAWAZOON RH calcule alors automatiquement l’effectif requis, en cohérence avec les normes de dimensionnement et les paramètres de productivité.
+        </>
+      ),
     },
   ];
 
   return (
     <section
       id="faq"
-      className="relative w-full py-16"
+      className="relative w-full min-h-0 flex flex-col justify-center py-4"
     >
-      {/* Background (identique à FeaturesSection) */}
+      {/* Background Image */}
       <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 -z-20 overflow-hidden"
-      >
-        <div className="absolute inset-0 bg-gradient-to-b from-black/95 via-slate-950/98 to-black" />
-        <div className="absolute -left-40 top-20 h-[28rem] w-[28rem] rounded-full bg-[#00bfff]/15 blur-[120px]" />
-        <div className="absolute -right-40 top-60 h-[28rem] w-[28rem] rounded-full bg-[#00bfff]/15 blur-[120px]" />
-        <div className="absolute inset-0 opacity-[0.07] [background-image:radial-gradient(circle_at_1px_1px,#ffffff_1px,transparent_0)] [background-size:24px_24px]" />
-      </div>
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-80 pointer-events-none"
+        style={{ backgroundImage: "url('/bg-barid-esign.jpg')" }}
+      />
+      <div className="absolute inset-0 bg-white/60 pointer-events-none"></div>
 
       {/* Contenu */}
-      <div className="relative mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
+      <div className="relative mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
         {/* Titre global */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5 }}
-          className="mb-10 text-center"
+          className="mb-2 text-center"
         >
-          <h2 className="text-2xl font-bold text-white sm:text-3xl mb-4">
-            FAQ
-          </h2>
-          <p className="text-base text-slate-400 max-w-2xl mx-auto">
-            Réponses aux questions fréquentes
-          </p>
+          <div className="inline-block bg-black/60 backdrop-blur-sm rounded-2xl px-5 py-2 border border-white/10 shadow-lg">
+            <h2 className="text-lg font-bold text-white sm:text-xl mb-0.5 tracking-wide drop-shadow-md">
+              FAQ
+            </h2>
+            <p className="text-[0.65rem] font-medium text-slate-100 drop-shadow-md">
+              Réponses aux questions fréquentes
+            </p>
+          </div>
         </motion.div>
 
-        {/* Liste des FAQ */}
-        <div className="space-y-4">
+        {/* Liste des FAQ en grille pour compactage */}
+        {/* Liste des FAQ en deux colonnes */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           {faqs.map((faq, i) => (
-            <motion.div
-              key={`faq-${i}`}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: 0.1 * i }}
-              className="group rounded-xl border border-white/10 bg-white/[0.03] p-5 text-left
-                         backdrop-blur-xl shadow-[0_10px_40px_rgba(0,0,0,0.5)]
-                         hover:bg-white/[0.05] hover:border-[#00bfff]/30 transition-all duration-300"
-            >
-              <div className="text-white font-medium text-lg mb-3">
-                {faq.question}
-              </div>
-              <div className="text-sm text-slate-400 leading-relaxed">
-                {faq.answer}
-              </div>
-            </motion.div>
+            <div key={`faq-${i}`} className="w-full h-full">
+              <FaqItem question={faq.question} answer={faq.answer} />
+            </div>
           ))}
         </div>
       </div>
@@ -750,134 +761,61 @@ function FaqSection() {
   );
 }
 
-// Composant FinalCtaSection
-function FinalCtaSection() {
-  return (
-    <section className="relative w-full py-16">
-      {/* Background (identique aux autres sections) */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 -z-20 overflow-hidden"
-      >
-        <div className="absolute inset-0 bg-gradient-to-b from-black/95 via-slate-950/98 to-black" />
-        <div className="absolute -left-40 top-20 h-[28rem] w-[28rem] rounded-full bg-[#00bfff]/15 blur-[120px]" />
-        <div className="absolute -right-40 top-60 h-[28rem] w-[28rem] rounded-full bg-[#00bfff]/15 blur-[120px]" />
-        <div className="absolute inset-0 opacity-[0.07] [background-image:radial-gradient(circle_at_1px_1px,#ffffff_1px,transparent_0)] [background-size:24px_24px]" />
-      </div>
 
-      {/* Contenu */}
-      <div className="relative mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5 }}
-          className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] p-6 backdrop-blur-xl shadow-[0_10px_40px_rgba(0,0,0,0.5)] sm:p-8"
-        >
-          {/* Soft glow */}
-          <div
-            aria-hidden
-            className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-[#00bfff]/10 blur-[120px]"
-          />
-          <div
-            aria-hidden
-            className="absolute -bottom-24 -left-24 h-64 w-64 rounded-full bg-[#0077b6]/10 blur-[120px]"
-          />
-
-          <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-            <div className="max-w-xl">
-              <h2 className="text-2xl font-bold text-white sm:text-3xl mb-2">
-                Passe du feeling aux faits
-              </h2>
-              <p className="text-sm text-slate-300 leading-relaxed">
-                Rentre tes volumes. Lance la simulation. Obtiens l'effectif
-                recommandé. Défends ton besoin RH avec un argumentaire béton.
-              </p>
-            </div>
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <a
-                href="/app"
-                className="group inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#0077b6] to-[#48cae4] px-6 py-3 text-sm font-medium text-white shadow-[0_10px_40px_rgba(72,202,228,0.4)] hover:shadow-[0_10px_50px_rgba(72,202,228,0.6)] transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/60"
-              >
-                Lancer une simulation
-                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-              </a>
-              <a
-                href="#"
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.05] px-6 py-3 text-sm font-medium text-white backdrop-blur-md shadow-[0_10px_40px_rgba(0,0,0,0.5)] hover:bg-white/[0.08] transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-white/40"
-              >
-                Voir un exemple PDF
-                <ChevronRight className="h-4 w-4" />
-              </a>
-            </div>
-          </div>
-        </motion.div>
-      </div>
-    </section>
-  );
-}
 
 // Composant Footer
 function Footer() {
   return (
-    <footer className="relative w-full border-t border-white/10 bg-slate-950/40 px-4 py-8 text-center text-slate-400 sm:px-6 lg:px-8">
-      {/* Background subtil */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
-      >
-        <div className="absolute inset-0 bg-gradient-to-b from-black/95 via-slate-950/98 to-black opacity-50" />
-        <div className="absolute inset-0 opacity-[0.03] [background-image:radial-gradient(circle_at_1px_1px,#ffffff_1px,transparent_0)] [background-size:24px_24px]" />
-      </div>
-
+    <footer className="relative w-full border-t border-slate-200 bg-white px-4 py-6 text-center text-slate-600 sm:px-6 lg:px-8">
       <div className="relative mx-auto max-w-7xl">
-        {/* Logo et informations */}
-        <div className="flex flex-col items-center gap-4 md:flex-row md:justify-between">
+        <div className="flex flex-col items-center gap-6 md:flex-row md:justify-between">
+
+          {/* Logo et informations */}
           <div className="flex items-center gap-3">
             <img
-              src="/Public/LOGO_Tawazoon_RH.png"
+              src={tawazoonLogo}
               alt="Tawazoon RH"
-              className="h-10 object-contain drop-shadow-[0_0_10px_rgba(0,212,255,0.5)]"
+              className="h-9 object-contain"
             />
             <div className="text-left">
-              <h3 className="text-lg font-bold bg-gradient-to-r from-[#0077b6] to-[#48cae4] bg-clip-text text-transparent">
+              <h3 className="text-base font-bold text-slate-900 leading-tight">
                 TAWAZOON RH
               </h3>
-              <p className="text-[0.8rem]">Optimisation des effectifs</p>
             </div>
           </div>
 
-          <div className="text-sm text-slate-400">
-            © {new Date().getFullYear()} ALMAV GROUP • Tous droits réservés.
+          {/* Liens utiles */}
+          <div className="flex flex-wrap justify-center gap-4 md:gap-8">
+            <a
+              href="#home"
+              className="text-slate-500 hover:text-[#00bfff] transition-colors text-sm font-medium"
+            >
+              Accueil
+            </a>
+            <a
+              href="#features"
+              className="text-slate-500 hover:text-[#00bfff] transition-colors text-sm font-medium"
+            >
+              Fonctionnalités
+            </a>
+            <a
+              href="#about"
+              className="text-slate-500 hover:text-[#00bfff] transition-colors text-sm font-medium"
+            >
+              Qui sommes-nous ?
+            </a>
+            <a
+              href="#faq"
+              className="text-slate-500 hover:text-[#00bfff] transition-colors text-sm font-medium"
+            >
+              FAQ
+            </a>
           </div>
-        </div>
 
-        {/* Liens utiles */}
-        <div className="mt-6 flex flex-col gap-4 sm:flex-row justify-center">
-          <a
-            href="#home"
-            className="text-slate-300 hover:text-white transition-colors text-sm"
-          >
-            Accueil
-          </a>
-          <a
-            href="#features"
-            className="text-slate-300 hover:text-white transition-colors text-sm"
-          >
-            Fonctionnalités
-          </a>
-          <a
-            href="#about"
-            className="text-slate-300 hover:text-white transition-colors text-sm"
-          >
-            Qui sommes-nous ?
-          </a>
-          <a
-            href="#faq"
-            className="text-slate-300 hover:text-white transition-colors text-sm"
-          >
-            FAQ
-          </a>
+          {/* Copyright */}
+          <div className="text-xs text-slate-400 whitespace-nowrap">
+            © {new Date().getFullYear()} ALMAV GROUP
+          </div>
         </div>
       </div>
     </footer>

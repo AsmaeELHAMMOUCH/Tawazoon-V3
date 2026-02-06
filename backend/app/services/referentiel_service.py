@@ -15,29 +15,35 @@ from app.core.cache import cache_referentiel, invalidate_cache
 logger = logging.getLogger(__name__)
 
 
-@cache_referentiel(ttl=7200)  # Cache 2h
+# @cache_referentiel(ttl=7200)  # Cache 2h - Temporairement désactivé pour debug
 def get_referentiel_taches(
     db: Session,
     centre_id: int,
-    poste_id: int
+    poste_id: Optional[int] = None
 ) -> List[Dict]:
     """
-    Récupère le référentiel des tâches pour un centre et un poste
+    Récupère le référentiel des tâches pour un centre et un poste (optionnel)
     avec mise en cache automatique
     
     Args:
         db: Session SQLAlchemy
         centre_id: ID du centre
-        poste_id: ID du poste
+        poste_id: ID du poste (optionnel)
         
     Returns:
         List[Dict]: Liste des tâches avec leurs détails
     """
     logger.info(f"📊 Chargement référentiel tâches (centre={centre_id}, poste={poste_id})")
     
-    sql = text("""
+    # Construction dynamique de la clause WHERE
+    where_clause = "WHERE cp.centre_id = :centre_id"
+    if poste_id is not None:
+        where_clause += " AND cp.poste_id = :poste_id"
+        
+    sql = text(f"""
         SELECT 
             t.id,
+            t.ordre,
             t.nom_tache,
             t.phase,
             t.unite_mesure,
@@ -46,16 +52,23 @@ def get_referentiel_taches(
             p.nom_poste,
             p.type_poste,
             cp.effectif_actuel
-        FROM dbo.taches t
-        JOIN dbo.centre_poste cp ON t.centre_poste_id = cp.id
-        JOIN dbo.postes p ON cp.poste_id = p.id
-        WHERE cp.centre_id = :centre_id 
-        AND cp.poste_id = :poste_id
-        ORDER BY t.phase, t.nom_tache
+        FROM dbo.taches t 
+        JOIN dbo.centre_postes cp ON cp.id = t.centre_poste_id
+        JOIN dbo.postes p ON p.id = cp.poste_id
+        {where_clause}
+        ORDER BY t.ordre ASC NULLS LAST, t.phase, t.nom_tache
     """)
     
-    result = db.execute(sql, {"centre_id": centre_id, "poste_id": poste_id})
+    params = {"centre_id": centre_id}
+    if poste_id is not None:
+        params["poste_id"] = poste_id
+
+    result = db.execute(sql, params)
     taches = [dict(row._mapping) for row in result]
+    
+    # 🔍 DEBUG: Vérifier l'ordre des tâches
+    if taches:
+        logger.info(f"🔍 Premières tâches (ordre): {[(t.get('nom_tache', 'N/A')[:30], t.get('ordre')) for t in taches[:5]]}")
     
     logger.info(f"✅ {len(taches)} tâches chargées")
     return taches
@@ -115,7 +128,7 @@ def get_postes_by_centre(db: Session, centre_id: int) -> List[Dict]:
             cp.effectif_actuel,
             cp.id as centre_poste_id
         FROM dbo.postes p
-        JOIN dbo.centre_poste cp ON p.id = cp.poste_id
+        JOIN dbo.centre_postes cp ON p.id = cp.poste_id
         WHERE cp.centre_id = :centre_id
         ORDER BY p.nom_poste
     """)
@@ -226,7 +239,7 @@ def get_direction_complete_data(db: Session, direction_id: int) -> Optional[Dict
                 p.nom_poste,
                 p.type_poste
             FROM dbo.centres c
-            JOIN dbo.centre_poste cp ON c.id = cp.centre_id
+            JOIN dbo.centre_postes cp ON c.id = cp.centre_id
             JOIN dbo.postes p ON cp.poste_id = p.id
             WHERE c.direction_id = :direction_id
         ),

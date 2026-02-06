@@ -56,7 +56,15 @@ import SimulationHistoryPage from "./pages/SimulationHistoryPage";
 // 🔹 IMPORTE TA PAGE MENU PARAMÉTRÉE
 import MenuAnalyseEffectifs from "./pages/SimulationMenu";
 import AlertsTestButton from "./components/alerts/AlertsTestButton";
+
 import CategorisationCentre from "./components/views/CategorisationCentre";
+import CentreBuilder from "./pages/CentreBuilder"; // 🆕 Page Builder (Créer Centre)
+import AjoutTache from "./pages/admin/AjoutTache"; // 🆕 Page Ajout Tâche
+import CentersTasksManager from "./pages/admin/CentersTasksManager"; // 🆕 Page gestion Tâches
+import PostesManager from "./pages/admin/PostesManager"; // 🆕 Page gestion Postes
+import Glossary from "./pages/help/Glossary"; // 🆕 Page Glossaire
+import MainMenu from "./pages/MainMenu"; // 🆕 Page Menu Principal
+import CentresUniques from "./pages/CentresUniques"; // 🆕 Page Centres Uniques
 
 // 🔹 NOUVELLE ARCHITECTURE DATA-DRIVEN - Intégrée directement dans SimulationEffectifs
 
@@ -169,6 +177,18 @@ export default function App() {
           }
         />
 
+        {/* Menu Principal (sans sidebar) */}
+        <Route
+          path="/menu-principal"
+          element={
+            <ProtectedRoute>
+              <RouteErrorBoundary>
+                <MainMenu />
+              </RouteErrorBoundary>
+            </ProtectedRoute>
+          }
+        />
+
         {/* Espace application PROTÉGÉ avec Sidebar */}
         <Route
           path="/app"
@@ -178,8 +198,8 @@ export default function App() {
             </ProtectedRoute>
           }
         >
-          {/* Redirection par défaut (choisis ce que tu veux ouvrir par défaut) */}
-          <Route index element={<Navigate to="vue-globale/menu" replace />} />
+          {/* Redirection vers le menu principal */}
+          <Route index element={<Navigate to="/menu-principal" replace />} />
 
           {/* ====== MENU PARAMÉTRÉ PAR SECTION ====== */}
           {/* /app/vue-globale/menu | /app/actuel/menu | /app/recommande/menu */}
@@ -208,6 +228,12 @@ export default function App() {
           <Route path="simulation/region" element={<RouteErrorBoundary><SimulationEffectifs /></RouteErrorBoundary>} />
           <Route path="simulation/national" element={<RouteErrorBoundary><SimulationEffectifs /></RouteErrorBoundary>} />
           <Route path="simulation/categorisation/:centreId" element={<RouteErrorBoundary><CategorisationCentre /></RouteErrorBoundary>} />
+          <Route path="creer-centre" element={<RouteErrorBoundary><CentreBuilder /></RouteErrorBoundary>} />
+          <Route path="centres-uniques" element={<RouteErrorBoundary><CentresUniques /></RouteErrorBoundary>} />
+          <Route path="builder" element={<RouteErrorBoundary><AjoutTache /></RouteErrorBoundary>} />
+          <Route path="taches-manager" element={<RouteErrorBoundary><CentersTasksManager /></RouteErrorBoundary>} />
+          <Route path="postes-manager" element={<RouteErrorBoundary><PostesManager /></RouteErrorBoundary>} />
+          <Route path="glossary" element={<RouteErrorBoundary><Glossary /></RouteErrorBoundary>} />
 
 
           {/* 404 dans /app */}
