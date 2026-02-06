@@ -4,10 +4,10 @@ from typing import Optional
 class Settings(BaseSettings):
     # Database
     DB_DRIVER: str = "ODBC Driver 17 for SQL Server"
-    DB_SERVER: str = "192.168.80.1,1433"
+    DB_SERVER: str = "BK-P-09\\ISRAA"
     DB_NAME: str = "simulateur"
-    DB_USER: str = "sa"
-    DB_PASSWORD: str = "Sql@123"
+    DB_USER: str = ""
+    DB_PASSWORD: str = ""
     
     # API
     API_V1_PREFIX: str = "/api"
@@ -23,8 +23,7 @@ class Settings(BaseSettings):
             f"DRIVER={self.DB_DRIVER};"
             f"SERVER={self.DB_SERVER};"
             f"DATABASE={self.DB_NAME};"
-            f"UID={self.DB_USER};"
-            f"PWD={self.DB_PASSWORD};"
+            f"Trusted_Connection=yes;" 
             f"TrustServerCertificate=yes;"  # Ajoute cela si tu utilises un certificat auto-signé
     )
 

@@ -14,6 +14,9 @@ import ChoixActivitePage from "./pages/ChoixActivitePage";
 import Sidebar from "./layout/Sidebar";
 import SimulationEffectifs from "./pages/Simulation";
 import SimulationDirectionV2 from "./pages/SimulationDirectionV2";
+import VueCCP from "./pages/VueCCP";
+import VueCNA from "./pages/VueCNA";
+import VueCCI from "./pages/VueCCI";
 
 // Simple error boundary to catch rendering errors in routes
 import React from "react";
@@ -201,6 +204,12 @@ export default function App() {
           <Route path="simulation/menu" element={<SimulationMenu />} />
           {/* Vue Simulation par défaut (poste) */}
           <Route path="simulation" element={<RouteErrorBoundary><SimulationEffectifs /></RouteErrorBoundary>} />
+          {/* Vue Simulation CCP (standalone route) */}
+          <Route path="simulation/ccp" element={<RouteErrorBoundary><VueCCP /></RouteErrorBoundary>} />
+          {/* Vue Simulation CNA (standalone route) */}
+          <Route path="simulation/cna" element={<RouteErrorBoundary><VueCNA /></RouteErrorBoundary>} />
+          {/* Vue Simulation CCI (standalone route) */}
+          <Route path="simulation/cci" element={<RouteErrorBoundary><VueCCI /></RouteErrorBoundary>} />
           {/* Variantes par flux (centre/direction/région/national) */}
           <Route path="simulation/centre" element={<RouteErrorBoundary><SimulationEffectifs /></RouteErrorBoundary>} />
           <Route path="simulation/direction" element={<RouteErrorBoundary><SimulationEffectifs /></RouteErrorBoundary>} />

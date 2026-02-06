@@ -60,6 +60,7 @@ export default function MenuAnalyseEffectifs() {
       items: [
         { icon: UserCog, title: "Simulation Par Intervenant", key: "simulation", flux: "poste" },
         { icon: ClipboardList, title: "Simulation Par Centre", key: "simulation", flux: "centre" },
+        { icon: Package, title: "Simulation CCI (1952)", key: "simulation-cci" },
         { icon: Building, title: "Simulation par Direction", key: "simulation", flux: "direction" },
         { icon: Users, title: "Simulation par Région", key: "simulation", flux: "regional" },
         { icon: Building, title: "Simulation Nationale", key: "simulation", flux: "national" },
@@ -111,6 +112,10 @@ export default function MenuAnalyseEffectifs() {
       };
       if (vueRoutes[item.key]) navigate(vueRoutes[item.key]);
       return;
+    }
+
+    if (item.key === "simulation-cci") {
+      return navigate("/app/simulation/cci");
     }
 
     if (item.key === "simulation") {

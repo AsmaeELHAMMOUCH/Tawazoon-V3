@@ -972,7 +972,7 @@ export default function VueCentre({
 
     // APS Cible (Calculé) doit être 0 (Objectif Zéro Intérim)
     const etpAPSMOD = 0;
-    const ecartAPS = effAPSMOD - etpAPSMOD;
+    const ecartAPS = etpAPSMOD - effAPSMOD; // ✅ Correction : Besoin (0) - Actuel (25) = -25 (Surplus)
 
     console.log("🔍 [DEBUG T_APS] apsGlobal (Number):", apsGlobal);
     console.log("🔍 [DEBUG T_APS] effAPSMOD:", effAPSMOD);

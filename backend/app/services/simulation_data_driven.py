@@ -1376,8 +1376,46 @@ def calculer_simulation_data_driven(
     
     centre_id = cp_obj.centre_id
     
+    # 🚨 INTERCEPTION CCI: Si Centre 1952, déléguer vers simulation_CCI.py
+    if str(centre_id) == "1952":
+        print("🚨 CENTRE CCI DÉTECTÉ (Poste) -> DÉLÉGATION VERS simulation_CCI.py")
+        from app.services.simulation_CCI import calculate_cci_simulation
+        from app.schemas.models import SimulationRequest, VolumesInput
+        
+        req = SimulationRequest(
+            centre_id=centre_id,
+            poste_id=cp_obj.poste_id,
+            productivite=productivite,
+            idle_minutes=idle_minutes,
+            volumes_ui=[v.dict() for v in volumes_ui.volumes_flux],
+            nbr_courrier_liasse=getattr(volumes_ui, 'nbr_courrier_liasse', 50.0),
+            pct_retour=getattr(volumes_ui, 'pct_retour', 0.0),
+            # CO/CR-specific parameters
+            courriers_co_par_sac=getattr(volumes_ui, 'courriers_co_par_sac', 2500.0),
+            courriers_cr_par_sac=getattr(volumes_ui, 'courriers_cr_par_sac', 500.0),
+            nb_courrier_liasse_co=getattr(volumes_ui, 'nb_courrier_liasse_co', 500.0),
+            nb_courrier_liasse_cr=getattr(volumes_ui, 'nb_courrier_liasse_cr', 500.0),
+            pct_retour_co=getattr(volumes_ui, 'pct_retour_co', 1.0),
+            pct_retour_cr=getattr(volumes_ui, 'pct_retour_cr', 1.0),
+            annotes_co=getattr(volumes_ui, 'annotes_co', 0.0),
+            annotes_cr=getattr(volumes_ui, 'annotes_cr', 0.0),
+            pct_reclam_co=getattr(volumes_ui, 'pct_reclam_co', 0.0),
+            pct_reclam_cr=getattr(volumes_ui, 'pct_reclam_cr', 0.0),
+            courriers_par_sac=getattr(volumes_ui, 'courriers_par_sac', 4500.0),
+            colis_amana_par_sac=getattr(volumes_ui, 'colis_amana_par_sac', 5.0),
+            annotes=getattr(volumes_ui, 'annotes', 0.0),
+            pct_reclamation=getattr(volumes_ui, 'pct_reclamation', 0.0)
+        )
+        req.volumes = VolumesInput(
+            sacs=0, colis=0,
+            courriers_par_sac=getattr(volumes_ui, 'courriers_par_sac', 4500.0),
+            colis_amana_par_sac=getattr(volumes_ui, 'colis_amana_par_sac', 5.0)
+        )
+        return calculate_cci_simulation(db, req)
+    
     # 1. Init Context
     ctx = VolumeContext(volumes_ui, centre_id=centre_id, db=db)
+
     
     # 2. Get Tasks
     taches = db.query(Tache).filter(
@@ -1495,6 +1533,43 @@ def calculer_simulation_centre_data_driven(
     poste_id_filter: int = None
 ) -> SimulationResponse:
     print(f"--- SIMULATION CENTRE (Clean Engine) ID={centre_id} ---")
+
+    # 🚨 INTERCEPTION CCI: Si Centre 1952, déléguer vers simulation_CCI.py
+    if str(centre_id) == "1952":
+        print("🚨 CENTRE CCI DÉTECTÉ (Centre) -> DÉLÉGATION VERS simulation_CCI.py")
+        from app.services.simulation_CCI import calculate_cci_simulation
+        from app.schemas.models import SimulationRequest, VolumesInput
+        
+        req = SimulationRequest(
+            centre_id=centre_id,
+            poste_id=poste_id_filter,  # None pour tout le centre
+            productivite=productivite,
+            idle_minutes=idle_minutes,
+            volumes_ui=[v.dict() for v in volumes_ui.volumes_flux],
+            nbr_courrier_liasse=getattr(volumes_ui, 'nbr_courrier_liasse', 50.0),
+            pct_retour=getattr(volumes_ui, 'pct_retour', 0.0),
+            # CO/CR-specific parameters
+            courriers_co_par_sac=getattr(volumes_ui, 'courriers_co_par_sac', 2500.0),
+            courriers_cr_par_sac=getattr(volumes_ui, 'courriers_cr_par_sac', 500.0),
+            nb_courrier_liasse_co=getattr(volumes_ui, 'nb_courrier_liasse_co', 500.0),
+            nb_courrier_liasse_cr=getattr(volumes_ui, 'nb_courrier_liasse_cr', 500.0),
+            pct_retour_co=getattr(volumes_ui, 'pct_retour_co', 1.0),
+            pct_retour_cr=getattr(volumes_ui, 'pct_retour_cr', 1.0),
+            annotes_co=getattr(volumes_ui, 'annotes_co', 0.0),
+            annotes_cr=getattr(volumes_ui, 'annotes_cr', 0.0),
+            pct_reclam_co=getattr(volumes_ui, 'pct_reclam_co', 0.0),
+            pct_reclam_cr=getattr(volumes_ui, 'pct_reclam_cr', 0.0),
+            courriers_par_sac=getattr(volumes_ui, 'courriers_par_sac', 4500.0),
+            colis_amana_par_sac=getattr(volumes_ui, 'colis_amana_par_sac', 5.0),
+            annotes=getattr(volumes_ui, 'annotes', 0.0),
+            pct_reclamation=getattr(volumes_ui, 'pct_reclamation', 0.0)
+        )
+        req.volumes = VolumesInput(
+            sacs=0, colis=0,
+            courriers_par_sac=getattr(volumes_ui, 'courriers_par_sac', 4500.0),
+            colis_amana_par_sac=colis_amana_par_sac
+        )
+        return calculate_cci_simulation(db, req)
 
     # 1. Récupérer les postes du centre
     query = db.query(CentrePoste).filter(CentrePoste.centre_id == centre_id)

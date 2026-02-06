@@ -207,6 +207,24 @@ export default function VueIntervenant({
   // 🆕 Paramètre Collecte
   const [pctCollecte, setPctCollecte] = useState(5.0);
 
+  // 🆕 Paramètres Spécifiques CASA CCI (ID 1952)
+  const [nbrCourrierLiasse, setNbrCourrierLiasse] = useState(0);
+  const [pctRetour, setPctRetour] = useState(0);
+  const [annotes, setAnnotes] = useState(0);
+  const [pctReclamation, setPctReclamation] = useState(0);
+
+  // 🆕 Variables spécifiques CO/CR (CASA CCI)
+  const [courriersCoParSac, setCourriersCoParSac] = useState(2500);
+  const [courriersCrParSac, setCourriersCrParSac] = useState(500);
+  const [nbrCourrierLiasseCo, setNbrCourrierLiasseCo] = useState(500);
+  const [nbrCourrierLiasseCr, setNbrCourrierLiasseCr] = useState(500);
+  const [pctRetourCo, setPctRetourCo] = useState(1);
+  const [pctRetourCr, setPctRetourCr] = useState(1);
+  const [annotesCo, setAnnotesCo] = useState(0);
+  const [annotesCr, setAnnotesCr] = useState(0);
+  const [pctReclamCo, setPctReclamCo] = useState(0);
+  const [pctReclamCr, setPctReclamCr] = useState(0);
+
   // ✅ OPTIMISATION : Debounce des valeurs pour éviter les recalculs excessifs
   const debouncedColis = useDebouncedValue(colis, 300);
   const debouncedCourrierOrdinaire = useDebouncedValue(courrierOrdinaire, 300);
@@ -335,11 +353,15 @@ export default function VueIntervenant({
     annualIfAllowed("amana") > 0 ||
     (parseNonNeg(colis) ?? 0) > 0;
 
+  // 🆕 Create index using composite key: task name + famille_uo
+  // This handles duplicate task names with different famille_uo values
   const resIndex = new Map(
-    (resultats || []).map((r) => [
-      String((r.task || r.nom_tache || "").trim().toLowerCase()),
-      r,
-    ])
+    (resultats || []).map((r) => {
+      const taskName = String((r.task || r.nom_tache || "")).trim().toLowerCase();
+      const familleUo = String(r.famille_uo || "").trim().toUpperCase();
+      const compositeKey = `${taskName}|${familleUo}`;
+      return [compositeKey, r];
+    })
   );
 
   function nombreUniteParUnite(unite, taskName, taskData = {}) {
@@ -454,7 +476,9 @@ export default function VueIntervenant({
   const mergedResults = useMemo(() => {
     const res = referentielFiltered.map((row, i) => {
       const taskName = String(row.t || "").trim();
-      const fromBack = resIndex.get(taskName.toLowerCase());
+      const familleUo = String(row.famille || "").trim().toUpperCase();
+      const compositeKey = `${taskName.toLowerCase()}|${familleUo}`;
+      const fromBack = resIndex.get(compositeKey);
       const moyenneMin = Number(row.m ?? 0);
 
       // Si le backend a déjà calculé les heures, on les préfère !
@@ -496,7 +520,38 @@ export default function VueIntervenant({
         _type_flux: row.type_flux,
         _fromBack: fromBack,
       };
-    }).filter(r => Number(r.heures || 0) > 0.001);
+    }); // No filter - show ALL tasks
+
+    // 🆕 Add tasks from backend that don't exist in referentiel
+    // This ensures all backend-calculated tasks appear in the UI
+    if (hasSimulated && (resultats || []).length > 0) {
+      const referentielCompositeKeys = new Set(
+        referentielFiltered.map(row => {
+          const taskName = String(row.t || "").trim().toLowerCase();
+          const familleUo = String(row.famille || "").trim().toUpperCase();
+          return `${taskName}|${familleUo}`;
+        })
+      );
+
+      (resultats || []).forEach((backTask) => {
+        const backTaskName = String((backTask.task || backTask.nom_tache || "")).trim().toLowerCase();
+        const backFamilleUo = String(backTask.famille_uo || "").trim().toUpperCase();
+        const backCompositeKey = `${backTaskName}|${backFamilleUo}`;
+
+        if (!referentielCompositeKeys.has(backCompositeKey)) {
+          res.push({
+            seq: res.length + 1,
+            task: backTask.task || backTask.nom_tache || "N/A",
+            formule: backTask.formule || "N/A",
+            nombre_Unite: Number(backTask.nombre_unite || backTask.nombre_Unite || 0),
+            heures: Number(backTask.heures || 0),
+            _u: backTask.unit || "N/A",
+            _type_flux: "Backend",
+            _fromBack: backTask,
+          });
+        }
+      });
+    }
 
     // 🆕 Fallback pour postes MOI (Structurels)
     // Si la simulation ne renvoie rien (car pas de tâches data-driven), on affiche un forfait
@@ -597,15 +652,23 @@ export default function VueIntervenant({
     }, 0);
   }, [postesOptions]);
 
+  // 🆕 Récupération des totaux globaux du backend (priorité au backend)
+  const totalMoiBackend = Number(totaux?.total_moi ?? totalMoiGlobal);
+  const totalApsBackend = Number(totaux?.total_aps ?? 0);
+
   // Actuel
   const effActuelMOD = isMOD ? effectifActuel : 0;
-  const effAPS = Number(selectedPosteObj?.effectif_aps || selectedPosteObj?.eff_aps || 0);
+  const effActuelTotal = effActuelMOD + totalMoiBackend + totalApsBackend; // 🆕 Total Actuel
 
   // Calculé
+  // Note: fteCalcAffiche est déjà le "Calculé" pour ce poste (si MOD)
   const etpCalcMOD = isMOD ? fteCalcAffiche : 0;
+  const etpCalcTotal = etpCalcMOD + totalMoiBackend + totalApsBackend; // 🆕 Total Calculé
 
   // Arrondi
   const etpArrMOD = isMOD ? fteArrondiAffiche : 0;
+  // Règle: L'arrondi se fait sur le TOTAL calculé, pas la somme des arrondis
+  const etpArrTotal = Math.round(etpCalcTotal);
 
   const formatSmallNumber = (v, d = 2) => Number(v || 0).toFixed(d).replace('.', ',');
 
@@ -613,18 +676,48 @@ export default function VueIntervenant({
     console.log("🖱️ [VueIntervenant] Click Simuler. State Taux:", tauxComplexite, "NatureGeo:", natureGeo);
     const ratioCollecte = Math.max(1, parseNonNeg(colisParCollecte) ?? 1);
 
+    // 🆕 Préparation des volumes UI (format plat flux/sens/segment)
+    const volumesUI = Array.isArray(volumesFluxGrid)
+      ? volumesFluxGrid.map(v => ({
+        flux: v.flux,
+        sens: v.sens,
+        segment: v.segment || "GLOBAL",
+        volume: Number(v.volume || 0)
+      }))
+      : [];
+
     onSimuler({
       colis_amana_par_sac: parseNonNeg(colisAmanaParSac) ?? 5,
       courriers_par_sac: parseNonNeg(courriersParSac) ?? 4500,
+      courriers_co_par_sac: 4500,
+      courriers_cr_par_sac: 500,
+      cr_par_caisson: 500,
       colis_par_collecte: ratioCollecte,
-      part_particuliers: partParticuliers,
-      taux_complexite: Number(tauxComplexite || 0),
+      taux_complexite: Number(tauxComplexite || 1),
       nature_geo: Number(natureGeo || 0),
       ed_percent: Number(edPercent || 0), // 🆕 % En dehors
       pct_collecte: Number(pctCollecte || 0), // 🆕 % Collecte
+      productivite: Number(productivite || 100), // 🆕 Productivité
+      temps_mort: Number(idleMinutes || 0), // 🆕 Temps mort
+      nbr_courrier_liasse: Number(nbrCourrierLiasse || 0), // 🆕 CCI param
+      pct_retour: Number(pctRetour || 0),
+
+      // 🆕 CO/CR-specific params (CASA CCI)
+      courriers_co_par_sac: Number(courriersCoParSac || 2500),
+      courriers_cr_par_sac: Number(courriersCrParSac || 500),
+      nb_courrier_liasse_co: Number(nbrCourrierLiasseCo || 500),
+      nb_courrier_liasse_cr: Number(nbrCourrierLiasseCr || 500),
+      pct_retour_co: Number(pctRetourCo || 1),
+      pct_retour_cr: Number(pctRetourCr || 1),
+      annotes_co: Number(annotesCo || 0),
+      annotes_cr: Number(annotesCr || 0),
+      pct_reclam_co: Number(pctReclamCo || 0),
+      pct_reclam_cr: Number(pctReclamCr || 0),
+
+      volumes_ui: volumesUI, // 🆕 Volumes Détaillés
       ...overrides
     });
-  }, [onSimuler, colisParCollecte, colisAmanaParSac, courriersParSac, partParticuliers, tauxComplexite, natureGeo, edPercent, pctCollecte]);
+  }, [onSimuler, colisParCollecte, colisAmanaParSac, courriersParSac, partParticuliers, tauxComplexite, natureGeo, edPercent, pctCollecte, productivite, idleMinutes, nbrCourrierLiasse, pctRetour, annotes, pctReclamation, courriersCoParSac, courriersCrParSac, nbrCourrierLiasseCo, nbrCourrierLiasseCr, pctRetourCo, pctRetourCr, annotesCo, annotesCr, pctReclamCo, pctReclamCr, volumesFluxGrid]);
 
   return (
     <div className="w-full flex flex-col gap-3 pb-16" style={{ zoom: "90%" }}>
@@ -876,6 +969,37 @@ export default function VueIntervenant({
           setNbrCoSac={setNbrCoSac}
           nbrCrSac={nbrCrSac}
           setNbrCrSac={setNbrCrSac}
+          // 🆕 Paramètres spécifiques CASA CCI
+          nbrCourrierLiasse={nbrCourrierLiasse}
+          setNbrCourrierLiasse={setNbrCourrierLiasse}
+          pctRetour={pctRetour}
+          setPctRetour={setPctRetour}
+          annotes={annotes}
+          setAnnotes={setAnnotes}
+          pctReclamation={pctReclamation}
+          setPctReclamation={setPctReclamation}
+
+          // 🆕 CO/CR-specific Props (CASA CCI)
+          courriersCoParSac={courriersCoParSac}
+          setCourriersCoParSac={setCourriersCoParSac}
+          courriersCrParSac={courriersCrParSac}
+          setCourriersCrParSac={setCourriersCrParSac}
+          nbrCourrierLiasseCo={nbrCourrierLiasseCo}
+          setNbrCourrierLiasseCo={setNbrCourrierLiasseCo}
+          nbrCourrierLiasseCr={nbrCourrierLiasseCr}
+          setNbrCourrierLiasseCr={setNbrCourrierLiasseCr}
+          pctRetourCo={pctRetourCo}
+          setPctRetourCo={setPctRetourCo}
+          pctRetourCr={pctRetourCr}
+          setPctRetourCr={setPctRetourCr}
+          annotesCo={annotesCo}
+          setAnnotesCo={setAnnotesCo}
+          annotesCr={annotesCr}
+          setAnnotesCr={setAnnotesCr}
+          pctReclamCo={pctReclamCo}
+          setPctReclamCo={setPctReclamCo}
+          pctReclamCr={pctReclamCr}
+          setPctReclamCr={setPctReclamCr}
           colisParCollecte={colisParCollecte}
           setColisParCollecte={setColisParCollecte}
           parseNonNeg={parseNonNeg}
@@ -947,7 +1071,7 @@ export default function VueIntervenant({
                       { key: 't', label: 'Tâche', align: 'left', ellipsis: true },
                       ...(hasPhase ? [{ key: 'ph', label: 'Phase', align: 'left', width: '100px', ellipsis: true }] : []),
                       { key: 'u', label: 'Unité', align: 'left', width: '140px', ellipsis: true },
-                      { key: 'm', label: 'Moy. (min)', align: 'right', width: '80px', render: (val) => Number(val || 0).toFixed(2) }
+                      { key: 'm', label: 'Moy. (min)', align: 'right', width: '80px', render: (val) => Number(val || 0).toFixed(String(centre) === "1952" ? 5 : 2) }
                     ]}
                     data={referentielFiltered.map((r, i) => ({
                       seq: i + 1,
@@ -1123,8 +1247,11 @@ export default function VueIntervenant({
                 Synthèse des Résultats
               </h3>
             </div>
+            {/* 🔍 DEBUG APS */}
+            {console.log("🔍 [VueIntervenant] Totaux received:", totaux)}
+            {console.log("🔍 [VueIntervenant] APS Value:", totaux?.postes?.[0]?.effectif_aps)}
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Charge Totale */}
               <div className="relative overflow-hidden rounded-2xl border border-white/50 bg-white/55 backdrop-blur-xl p-2.5 min-h-[90px] pb-3 ring-1 ring-slate-200 shadow-sm flex flex-col items-center justify-center transition-all hover:ring-blue-200">
                 <div className="text-[11px] font-semibold text-slate-600 mb-1">Charge Totale</div>
@@ -1138,16 +1265,16 @@ export default function VueIntervenant({
                 icon={Calculator}
                 tone="blue"
                 emphasize
-                total={formatSmallNumber(fteCalcAffiche)}
+                total={formatSmallNumber(etpCalcTotal)}
                 toggleable={false}
                 customFooter={
                   <EffectifFooter
                     totalLabel="Statutaire"
-                    totalValue={formatSmallNumber((isMOD ? fteCalcAffiche : 0) + totalMoiGlobal, 2)}
+                    totalValue={formatSmallNumber(etpCalcTotal, 2)}
                     modValue={formatSmallNumber(etpCalcMOD, 2)}
-                    moiValue={formatSmallNumber(totalMoiGlobal, 0)}
+                    moiValue={formatSmallNumber(totalMoiBackend, 0)}
                     apsLabel="APS"
-                    apsValue={"--"}
+                    apsValue={totalApsBackend}
                   />
                 }
               />
@@ -1158,16 +1285,36 @@ export default function VueIntervenant({
                 icon={CheckCircle2}
                 tone="amber"
                 emphasize
-                total={fteArrondiAffiche}
+                total={etpArrTotal}
                 toggleable={false}
                 customFooter={
                   <EffectifFooter
-                    totalLabel="Statutaire"
-                    totalValue={Math.round((isMOD ? fteArrondiAffiche : 0) + totalMoiGlobal)}
+                    totalLabel="Arrondi"
+                    totalValue={etpArrTotal}
                     modValue={etpArrMOD}
-                    moiValue={formatSmallNumber(totalMoiGlobal, 0)}
+                    moiValue={formatSmallNumber(totalMoiBackend, 0)}
                     apsLabel="APS"
-                    apsValue={"--"}
+                    apsValue={totalApsBackend}
+                  />
+                }
+              />
+
+              {/* 4️⃣ Effectif Actuel (Nouveau) */}
+              <KPICardGlass
+                label="Effectif Actuel"
+                icon={UserRound}
+                tone="slate"
+                emphasize
+                total={formatSmallNumber(effActuelTotal, 0)}
+                toggleable={false}
+                customFooter={
+                  <EffectifFooter
+                    totalLabel="Actuel"
+                    totalValue={formatSmallNumber(effActuelTotal, 0)}
+                    modValue={formatSmallNumber(effActuelMOD, 0)}
+                    moiValue={formatSmallNumber(totalMoiBackend, 0)}
+                    apsLabel="APS"
+                    apsValue={totalApsBackend}
                   />
                 }
               />

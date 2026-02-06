@@ -46,7 +46,8 @@ class Centre(Base):
     region_id = Column(Integer, ForeignKey("dbo.regions.id"), nullable=False)
     categorie_id = Column(Integer, ForeignKey("dbo.categories.id"), nullable=True)
     id_categorisation = Column(Integer, nullable=True) # Pour la catégorisation (Classe A, B, C...)
-    t_aps = Column(Float, name="T_APS", nullable=True, default=0.0)
+    t_aps = Column(Float, name="APS", nullable=True, default=0.0)
+    # Note: DB has both APS and T_APS columns. APS contains the correct value (e.g. 25).
 
     region = relationship("Region", back_populates="centres")
     categorie = relationship("Categorie", back_populates="centres")

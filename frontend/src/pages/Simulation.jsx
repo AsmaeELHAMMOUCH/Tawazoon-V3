@@ -1290,7 +1290,7 @@ const ComparatifRegional = () => {
 };
 
 /* ---------------- PAGE PRINCIPALE ---------------- */
-export default function SimulationEffectifs() {
+export default function SimulationEffectifs({ initialActiveFlux, viewMode } = {}) {
   const location = useLocation();
 
   // UI state
@@ -1298,6 +1298,7 @@ export default function SimulationEffectifs() {
   const [refDisplay, setRefDisplay] = useState("tableau");
   const [mode, setMode] = useState("actuel");
   const [activeFlux, setActiveFlux] = useState(() => {
+    if (initialActiveFlux) return initialActiveFlux;
     const fromQuery = new URLSearchParams(location.search).get("flux");
     const fromState = (location.state || {}).flux;
     return fromState || fromQuery || "national";
@@ -1343,6 +1344,12 @@ export default function SimulationEffectifs() {
     pctAxesArrivee, setPctAxesArrivee,
     pctAxesDepart, setPctAxesDepart,
   } = useSimulationParams();
+
+  // CCI route: force centre 1952 by default
+  useEffect(() => {
+    if (viewMode !== "cci") return;
+    if (String(centre || "") !== "1952") setCentre("1952");
+  }, [viewMode, centre, setCentre]);
 
   const [categorie, setCategorie] = useState("Activité Postale");
   const [heuresNet, setHeuresNet] = useState(8);
@@ -1743,11 +1750,7 @@ export default function SimulationEffectifs() {
           );
           if (!selectedRegion) return;
           const data = await api.centres(selectedRegion.id);
-          console.log("🔍 [DEBUG API CENTRES] Données reçues:", data);
-          if (data && data.length > 0) {
-            console.log("🔍 [DEBUG API CENTRES] Premier centre:", data[0]);
-            console.log("🔍 [DEBUG API CENTRES] Champs du premier centre:", Object.keys(data[0]));
-          }
+
           if (!cancelled) setCentres(Array.isArray(data) ? data : []);
         } catch (e) {
           if (!cancelled) setCentres([]);
@@ -1864,7 +1867,7 @@ export default function SimulationEffectifs() {
                   t: displayName, // ✅ Nom avec produit si nécessaire
                   ph: r.phase || r.ph || r.etape || "N/A",
                   u: r.unit || r.unite_mesure || r.unite || "N/A",
-                  m: +minutes.toFixed(2), // ✅ nombre
+                  m: String(centre) === "1952" ? +minutes.toFixed(5) : +minutes.toFixed(2), // ✅ nombre
                   produit: produit, // ✅ Conserver produit original
                   base_calcul: r.base_calcul || 100 // ✅ Conserver base
                 };
@@ -1960,9 +1963,32 @@ export default function SimulationEffectifs() {
         taux_complexite: overrides.taux_complexite !== undefined ? Number(overrides.taux_complexite) : Number(tauxComplexite || 1),
         nature_geo: overrides.nature_geo !== undefined ? Number(overrides.nature_geo) : Number(natureGeo || 1),
 
+        // 🆕 Paramètres CCI
+        nbr_courrier_liasse: overrides.nbr_courrier_liasse !== undefined ? Number(overrides.nbr_courrier_liasse) : 50,
+        pct_retour: overrides.pct_retour !== undefined ? Number(overrides.pct_retour) : 0,
+
+        // 🆕 Paramètres Spécifiques CO/CR 
+        nb_courrier_liasse_co: overrides.nb_courrier_liasse_co !== undefined ? Number(overrides.nb_courrier_liasse_co) : 500,
+        nb_courrier_liasse_cr: overrides.nb_courrier_liasse_cr !== undefined ? Number(overrides.nb_courrier_liasse_cr) : 500,
+        courriers_co_par_sac: overrides.courriers_co_par_sac !== undefined ? Number(overrides.courriers_co_par_sac) : 2500,
+        courriers_cr_par_sac: overrides.courriers_cr_par_sac !== undefined ? Number(overrides.courriers_cr_par_sac) : 500,
+        pct_retour_co: overrides.pct_retour_co !== undefined ? Number(overrides.pct_retour_co) : 0,
+        pct_retour_cr: overrides.pct_retour_cr !== undefined ? Number(overrides.pct_retour_cr) : 0,
+        annotes_co: overrides.annotes_co !== undefined ? Number(overrides.annotes_co) : 0,
+        annotes_cr: overrides.annotes_cr !== undefined ? Number(overrides.annotes_cr) : 0,
+        pct_reclam_co: overrides.pct_reclam_co !== undefined ? Number(overrides.pct_reclam_co) : 0,
+        pct_reclam_cr: overrides.pct_reclam_cr !== undefined ? Number(overrides.pct_reclam_cr) : 0,
+
+        // 🆕 Legacy / missing mappings
+        courriers_par_sac: overrides.courriers_par_sac !== undefined ? Number(overrides.courriers_par_sac) : 4500,
+        colis_amana_par_sac: overrides.colis_amana_par_sac !== undefined ? Number(overrides.colis_amana_par_sac) : 5,
+        annotes: overrides.annotes !== undefined ? Number(overrides.annotes) : 0,
+        pct_reclamation: overrides.pct_reclamation !== undefined ? Number(overrides.pct_reclamation) : 0,
+
         nb_jours_ouvres_an: 264,
         volumes_flux: volumes_flux // ✅ AJOUT : Nécessaire pour le contexte par famille
       };
+
 
       // Injection des granularités (si saisies dans le tableau)
       volumes_flux.forEach(v => {
@@ -2007,6 +2033,9 @@ export default function SimulationEffectifs() {
           fte_calcule: res.fte_calcule ?? 0,
           fte_arrondi: res.fte_arrondi ?? 0,
           heures_net: res.heures_net_jour ?? heures_net_calculees,
+          postes: res.postes, // ✅ Passer les postes (Data-Driven)
+          total_moi: res.total_moi || 0, // 🆕 Global pour calculs
+          total_aps: res.total_aps || 0, // 🆕 Global pour calculs
         };
 
         // 🔌 ADAPTATEUR: Convertir la réponse Data-Driven vers le format attendu par VueCentre (qui attend 'postes' array)
@@ -2097,13 +2126,6 @@ export default function SimulationEffectifs() {
         setTotaux(tot);
         setHasSimulated(true);
         setSimDirty(false);
-
-        // Logs détaillés par tâche
-        console.group(`📝 Détails des calculs par tâche (${details_taches.length} tâches)`);
-        details_taches.forEach(t => {
-          console.log(`- ${t.task.padEnd(40)} | Volume: ${String(t.nombre_unite).padStart(8)} | Heures: ${t.heures.toFixed(3)}h`);
-        });
-        console.groupEnd();
 
         setLoading((l) => ({ ...l, simulation: false }));
         return;
@@ -2196,8 +2218,6 @@ export default function SimulationEffectifs() {
       let res;
 
       if (activeFlux === 'centre') {
-        // Vue Centre: utiliser l'endpoint /vue-centre-optimisee
-        console.log("📍 Appel endpoint: /vue-centre-optimisee");
         res = await api.vueCentreOptimisee(payload);
 
         // Normalisation des résultats pour VueCentre
@@ -2229,6 +2249,9 @@ export default function SimulationEffectifs() {
             fte_calcule: res.fte_calcule ?? 0,
             fte_arrondi: res.fte_arrondi ?? 0,
             heures_net: res.heures_net_jour ?? heures_net_calculees,
+            postes: res.postes, // ✅ Passer les postes pour afficher APS
+            total_moi: res.total_moi || 0, // 🆕 Global pour calculs
+            total_aps: res.total_aps || 0, // 🆕 Global pour calculs
           }
           : null;
 
@@ -2264,13 +2287,16 @@ export default function SimulationEffectifs() {
   /* ---------- Render ---------- */
   return (
     <main className="min-h-screen bg-slate-50">
-      <div className="sticky top-0 z-30 bg-transparent w-full">
-        <div className="px-0">
-          <FluxNavbar activeFlux={activeFlux} onFluxChange={setActiveFlux} />
-        </div>
-      </div>
-
-      <HeaderSimulation mode={mode} setMode={setMode} scope={activeFlux} />
+      {viewMode !== "cci" && (
+        <>
+          <div className="sticky top-0 z-30 bg-transparent w-full">
+            <div className="px-0">
+              <FluxNavbar activeFlux={activeFlux} onFluxChange={setActiveFlux} />
+            </div>
+          </div>
+          <HeaderSimulation mode={mode} setMode={setMode} scope={activeFlux} />
+        </>
+      )}
 
       <div className="w-full px-2 pt-2 pb-4 space-y-2 -mt-1">
         {activeFlux === "national" && (
@@ -2368,81 +2394,144 @@ export default function SimulationEffectifs() {
 
         {/* Vue par Poste */}
         {activeFlux === "poste" && (
-          <VueIntervenant
-            regions={regions}
-            centres={centres}
-            postesOptions={postesList}
-            loading={loading}
-            region={region}
-            setRegion={setRegion}
-            centre={centre}
-            setCentre={setCentre}
-            centreCategorie={centreCategorie}
-            poste={poste}
-            setPoste={setPoste}
-            sacs={sacs}
-            setSacs={setSacs}
-            colis={colis}
-            setColis={setColis}
-            colisParCollecte={colisParCollecte}
-            setColisParCollecte={setColisParCollecte}
-            courrier={courrier}
-            setCourrier={setCourrier}
-            ebarkia={ebarkia}
-            setEbarkia={setEbarkia}
-            lrh={lrh}
-            setLrh={setLrh}
-            courrierOrdinaire={courrierOrdinaire}
-            setCourrierOrdinaire={setCourrierOrdinaire}
-            courrierRecommande={courrierRecommande}
-            setCourrierRecommande={setCourrierRecommande}
-            amana={amana}
-            setAmana={setAmana}
-            scelle={scelle}
-            setScelle={setScelle}
-            colisAmanaParSac={colisAmanaParSac}
-            setColisAmanaParSac={setColisAmanaParSac}
-            courriersParSac={courriersParSac}
-            setCourriersParSac={setCourriersParSac}
-            productivite={productivite}
-            setProductivite={setProductivite}
-            idleMinutes={idleMinutes}
-            setIdleMinutes={setIdleMinutes}
-            heuresNet={heuresNet}
-            setHeuresNet={setHeuresNet}
-            onSimuler={handleSimulerIntervenant}
-            display={display}
-            setDisplay={setDisplay}
-            refDisplay={refDisplay}
-            setRefDisplay={setRefDisplay}
-            hasPhase={hasPhase}
-            referentiel={referentiel}
-            resultats={tasks} // VueIntervenant attend un tableau
-            totaux={totaux}
-            hasSimulated={hasSimulated}
-            simDirty={simDirty}
-            Card={Card}
-            Field={Field}
-            Input={Input}
-            Select={Select}
-            Segmented={Segmented}
-            EmptyStateFirstRun={EmptyStateFirstRun}
-            EmptyStateDirty={EmptyStateDirty}
-            GraphReferentiel={GraphReferentiel}
-            GraphResultats={GraphResultats}
-            volumesFluxGrid={volumesFluxGrid}
-            setVolumesFluxGrid={setVolumesFluxGrid}
-            edPercent={edPercent}
-            setEdPercent={setEdPercent}
-            nbrCoSac={nbrCoSac}
-            setNbrCoSac={setNbrCoSac}
-            nbrCrSac={nbrCrSac}
-            setNbrCrSac={setNbrCrSac}
-            pctAxesArrivee={pctAxesArrivee}
-            setPctAxesArrivee={setPctAxesArrivee}
-            pctAxesDepart={pctAxesDepart}
-            setPctAxesDepart={setPctAxesDepart}
-          />
+          (viewMode === "cci" ? (
+            <VueIntervenantCCI
+              postesOptions={postesList}
+              loading={loading}
+              centre={centre}
+              centreCategorie={centreCategorie}
+              poste={poste}
+              setPoste={setPoste}
+              courrierOrdinaire={courrierOrdinaire}
+              setCourrierOrdinaire={setCourrierOrdinaire}
+              courrierRecommande={courrierRecommande}
+              setCourrierRecommande={setCourrierRecommande}
+              ebarkia={ebarkia}
+              setEbarkia={setEbarkia}
+              lrh={lrh}
+              setLrh={setLrh}
+              amana={amana}
+              setAmana={setAmana}
+              colis={colis}
+              colisParCollecte={colisParCollecte}
+              colisAmanaParSac={colisAmanaParSac}
+              courriersParSac={courriersParSac}
+              productivite={productivite}
+              setProductivite={setProductivite}
+              idleMinutes={idleMinutes}
+              setIdleMinutes={setIdleMinutes}
+              heuresNet={heuresNet}
+              setHeuresNet={setHeuresNet}
+              onSimuler={handleSimulerIntervenant}
+              simDirty={simDirty}
+              Card={Card}
+              Field={Field}
+              Input={Input}
+              Select={Select}
+              Segmented={Segmented}
+              EmptyStateFirstRun={EmptyStateFirstRun}
+              EmptyStateDirty={EmptyStateDirty}
+              GraphReferentiel={GraphReferentiel}
+              GraphResultats={GraphResultats}
+              volumesFluxGrid={volumesFluxGrid}
+              setVolumesFluxGrid={setVolumesFluxGrid}
+              edPercent={edPercent}
+              setEdPercent={setEdPercent}
+              nbrCoSac={nbrCoSac}
+              setNbrCoSac={setNbrCoSac}
+              nbrCrSac={nbrCrSac}
+              setNbrCrSac={setNbrCrSac}
+              pctAxesArrivee={pctAxesArrivee}
+              setPctAxesArrivee={setPctAxesArrivee}
+              pctAxesDepart={pctAxesDepart}
+              setPctAxesDepart={setPctAxesDepart}
+              referentiel={referentiel}
+              resultats={tasks}
+              totaux={totaux}
+              hasSimulated={hasSimulated}
+              display={display}
+              setDisplay={setDisplay}
+              refDisplay={refDisplay}
+              setRefDisplay={setRefDisplay}
+              hasPhase={hasPhase}
+            />
+          ) : (
+            <VueIntervenant
+              regions={regions}
+              centres={centres}
+              postesOptions={postesList}
+              loading={loading}
+              region={region}
+              setRegion={setRegion}
+              centre={centre}
+              setCentre={setCentre}
+              centreCategorie={centreCategorie}
+              poste={poste}
+              setPoste={setPoste}
+              sacs={sacs}
+              setSacs={setSacs}
+              colis={colis}
+              setColis={setColis}
+              colisParCollecte={colisParCollecte}
+              setColisParCollecte={setColisParCollecte}
+              courrier={courrier}
+              setCourrier={setCourrier}
+              ebarkia={ebarkia}
+              setEbarkia={setEbarkia}
+              lrh={lrh}
+              setLrh={setLrh}
+              courrierOrdinaire={courrierOrdinaire}
+              setCourrierOrdinaire={setCourrierOrdinaire}
+              courrierRecommande={courrierRecommande}
+              setCourrierRecommande={setCourrierRecommande}
+              amana={amana}
+              setAmana={setAmana}
+              scelle={scelle}
+              setScelle={setScelle}
+              colisAmanaParSac={colisAmanaParSac}
+              setColisAmanaParSac={setColisAmanaParSac}
+              courriersParSac={courriersParSac}
+              setCourriersParSac={setCourriersParSac}
+              productivite={productivite}
+              setProductivite={setProductivite}
+              idleMinutes={idleMinutes}
+              setIdleMinutes={setIdleMinutes}
+              heuresNet={heuresNet}
+              setHeuresNet={setHeuresNet}
+              onSimuler={handleSimulerIntervenant}
+              display={display}
+              setDisplay={setDisplay}
+              refDisplay={refDisplay}
+              setRefDisplay={setRefDisplay}
+              hasPhase={hasPhase}
+              referentiel={referentiel}
+              resultats={tasks} // VueIntervenant attend un tableau
+              totaux={totaux}
+              hasSimulated={hasSimulated}
+              simDirty={simDirty}
+              Card={Card}
+              Field={Field}
+              Input={Input}
+              Select={Select}
+              Segmented={Segmented}
+              EmptyStateFirstRun={EmptyStateFirstRun}
+              EmptyStateDirty={EmptyStateDirty}
+              GraphReferentiel={GraphReferentiel}
+              GraphResultats={GraphResultats}
+              volumesFluxGrid={volumesFluxGrid}
+              setVolumesFluxGrid={setVolumesFluxGrid}
+              edPercent={edPercent}
+              setEdPercent={setEdPercent}
+              nbrCoSac={nbrCoSac}
+              setNbrCoSac={setNbrCoSac}
+              nbrCrSac={nbrCrSac}
+              setNbrCrSac={setNbrCrSac}
+              pctAxesArrivee={pctAxesArrivee}
+              setPctAxesArrivee={setPctAxesArrivee}
+              pctAxesDepart={pctAxesDepart}
+              setPctAxesDepart={setPctAxesDepart}
+            />
+          ))
         )}
 
         {(activeFlux === "centre" || activeFlux === "poste") && (
