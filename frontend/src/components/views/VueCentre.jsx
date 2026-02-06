@@ -69,25 +69,7 @@ const formatSmallNumber = (value, decimals = 2) => {
 
 /** Mode d’activation des flux selon catégorie */
 const getEffectiveFluxMode = (categorie, key) => {
-  const cat = String(categorie || "")
-    .trim()
-    .toUpperCase();
-
-  // 🐛 DEBUG: Afficher la catégorie pour diagnostic
-  console.log(`🔍 getEffectiveFluxMode - categorie: "${categorie}" -> cat: "${cat}", key: "${key}"`);
-
-  if (cat === "CM") {
-    return key === "amana" ? "input" : "na";
-  }
-  if (cat === "CTD - CENTRE DE TRAITEMENT ET DISTRIBUTION") return "input";
-  if (cat === "CD") return "input";
-  if (cat === "CCC") return "input"; // 🆕 Tous les champs activés pour CCC
-  if (cat === "CENTRE UNIQUE") return "input"; // 🆕 Tous les champs activés pour Centre Unique
-  if (cat === "AM- AGENCE MESSAGERIE") {
-    return key === "amana" ? "input" : "na";
-  }
-  if (key === "amana") return "input";
-  return "na";
+  return "input";
 };
 
 /* ===================== Compact mode ===================== */
@@ -401,6 +383,12 @@ const KPICardGlass = ({
           <div className="flex justify-center gap-3 mt-0.5 text-[10px] font-medium text-slate-600">
             {MOD !== undefined && (
               <div>
+                {/* Tag Cas Spécial ajouté */}
+                {showSpecialTag && (
+                  <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[9px] font-bold mr-2">
+                    Cas Spécial {casValue ? `: ${casValue}` : ""}
+                  </span>
+                )}
                 {leftLabel}: {MOD}
               </div>
             )}
@@ -429,6 +417,9 @@ const EffectifFooter = ({
   moiValue,
   apsLabel,
   apsValue,
+  showSpecialTag = false,
+  casValue,
+  besoinAPS
 }) => (
   <div className="text-[10px] text-slate-600 space-y-1.5">
     {/* 1️⃣ Ligne Statutaire */}
@@ -451,13 +442,26 @@ const EffectifFooter = ({
       )}
     </div>
 
-    {/* 3️⃣ Ligne APS */}
-    <div className="flex flex-wrap items-center justify-center gap-2 rounded-full bg-emerald-50/70 px-2 py-1">
-      <span className="font-semibold text-emerald-800">{apsLabel}</span>
-      <span className="px-2 py-0.5 rounded-full bg-white/90 text-emerald-700 font-semibold shadow-sm">
-        Total APS : {apsValue}
-      </span>
-    </div>
+    {/* 3️⃣ Ligne APS (Uniquement si valeur > 0 ou explicitement demandé) */}
+    {(apsValue > 0 || apsLabel) && (
+      <div className="flex flex-wrap items-center justify-center gap-2 rounded-full bg-emerald-50/70 px-2 py-1">
+        <span className="font-semibold text-emerald-800">{apsLabel || "APS"}</span>
+        <span className="px-2 py-0.5 rounded-full bg-white/90 text-emerald-700 font-semibold shadow-sm">
+          Total APS : {apsValue}
+        </span>
+      </div>
+    )}
+
+
+
+    {/* 5️⃣ Ligne Spéciale */}
+    {showSpecialTag && (
+      <div className="flex justify-center mt-1">
+        <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-[9px] font-bold border border-amber-200">
+          Cas Spécial {casValue ? `: ${casValue}` : ""}
+        </span>
+      </div>
+    )}
   </div>
 );
 
@@ -514,16 +518,33 @@ export default function VueCentre({
   // New persist props
   volumesFluxGrid = null,
   setVolumesFluxGrid = () => { },
+  tauxComplexite = 1,
+  setTauxComplexite = () => { },
+  natureGeo = 1,
+  setNatureGeo = () => { },
+  pctCollecte = 0,
+  setPctCollecte = () => { },
+  pctRetour = 0,
+  setPctRetour = () => { },
+  shift = 1,
+  setShift = () => { },
   nbrCoSac = 0,
   setNbrCoSac = () => { },
   nbrCrSac = 0,
   setNbrCrSac = () => { },
+  crParCaisson = 500,
+  setCrParCaisson = () => { },
+  pctInternational = 0,
+  setPctInternational = () => { },
   EmptyStateFirstRun = () => null,
   EmptyStateDirty = () => null,
   Card,
   Field,
   Input,
   Select,
+  categories = [],
+  selectedTypology = "",
+  setSelectedTypology = () => { },
 }) {
   // 🔄 Lecture des données de replay depuis location.state
   const location = useLocation();
@@ -580,14 +601,19 @@ export default function VueCentre({
   }, [replayData]);
 
   // 👁️ affichage détails tables
+  /* const [showDetailsModal, setShowDetailsModal] = useState(false); */
+  const [activeModal, setActiveModal] = useState(null); // 'ACTUEL', 'CALC'
+  const showDetailsModal = activeModal !== null;
+  const setShowDetailsModal = (val) => !val && setActiveModal(null); // Compatibilité ancienne API
+
   const [showMODDetails, setShowMODDetails] = useState(false);
   const [showMOIDetails, setShowMOIDetails] = useState(false);
-  const [showDetailsModal, setShowDetailsModal] = useState(false);
 
 
 
-  const [tauxComplexite, setTauxComplexite] = useState(1);
-  const [natureGeo, setNatureGeo] = useState(1);
+
+  // const [tauxComplexite, setTauxComplexite] = useState(1);
+  // const [natureGeo, setNatureGeo] = useState(1);
 
   const baseHeuresNet = useMemo(() => {
     const hTheo = Number(heuresNet || 0);
@@ -604,6 +630,10 @@ export default function VueCentre({
     return Number(centre) || null;
   }, [centre]);
 
+  // --- TEST MODE LOGIC ---
+  // --- Corrected Logic ---
+
+  // Resolve centre object
   const centreObj = useMemo(() => {
     if (!centre) return null;
     if (typeof centre === "object") return centre;
@@ -613,6 +643,10 @@ export default function VueCentre({
       ) || null
     );
   }, [centre, centres]);
+
+  const isTestMode = useMemo(() => {
+    return (resultats?.centre_label || "").toLowerCase().includes("test");
+  }, [resultats]);
 
   useEffect(() => {
     if (centreObj) console.log("🔍 [VueCentre] Centre Loaded:", centreObj);
@@ -627,6 +661,38 @@ export default function VueCentre({
 
   // 🐛 DEBUG: Afficher la catégorie effective
   console.log("🔍 [VueCentre] effectiveCentreCategorie:", effectiveCentreCategorie);
+
+  const calculateVolFromGrid = () => {
+    if (volumesFluxGrid && volumesFluxGrid.length > 0) {
+      const getSum = (tag) => {
+        return volumesFluxGrid
+          .filter((row) => {
+            const f = (row.flux || "").toLowerCase();
+            return f === tag || (tag === "ebarkia" && f === "eb");
+          })
+          .reduce((acc, cur) => acc + (Number(cur.volume) || 0), 0);
+      };
+      return {
+        cOrd: getSum("co"),
+        cReco: getSum("cr"),
+        amana: getSum("amana"),
+        eBarkia: getSum("ebarkia"),
+        lrh: getSum("lrh"),
+        sacs: Number(sacs || 0),
+        colis: Number(colis || 0),
+      };
+    }
+    // Fallback
+    return {
+      cOrd: Number(cOrd || 0),
+      cReco: Number(cReco || 0),
+      amana: Number(amana || 0),
+      eBarkia: Number(eBarkia || 0),
+      lrh: Number(lrh || 0),
+      sacs: Number(sacs || 0),
+      colis: Number(colis || 0),
+    };
+  };
 
   const splitFlux = (total) => {
     const v = Number(total ?? 0);
@@ -883,7 +949,7 @@ export default function VueCentre({
       totalsMOD: {
         effectif: totalEffectifMOD,
         etpCalcule: totalETPCalculeMOD,
-        etpArrondi: Math.round(totalETPCalculeMOD), // � Top-Down: Arrondi du total (RÉFÉRENCE pour KPI)
+        etpArrondi: Math.round(totalETPCalculeMOD), //  Top-Down: Arrondi du total (RÉFÉRENCE pour KPI)
         ecart: Math.round(totalETPCalculeMOD) - totalEffectifMOD,
         heures: totalHeuresMOD,
         effectifStatutaire: totalStatutMOD,
@@ -914,69 +980,62 @@ export default function VueCentre({
     const etpCalcMOI = totalsMOI.etpCalcule ?? 0;
     const etpCalc = etpCalcMOD + etpCalcMOI;
 
-    const etpArrMOD = totalsMOD.etpArrondi ?? 0;
-    const etpArrMOI = totalsMOI.etpArrondi ?? 1; // ✅ Utilise la valeur forcée (1)
-    const etpArr = etpArrMOD + etpArrMOI; // 🎯 Total arrondi (MOD+MOI) = même valeur que modal
-
-    // const ecart déplacé plus bas pour inclure APS
-
     const effStatMOD = totalsMOD.effectifStatutaire ?? 0;
 
     // ✅ APS : Priorité à la valeur globale T_APS du centre (Database)
-    // On utilise t_aps_global (alias explicite backend) en priorité, puis fallback
     const valAPS = (centreObj && (centreObj.t_aps_global ?? centreObj.aps_legacy ?? centreObj.T_APS ?? centreObj.t_aps));
-
-    // 🐛 DEBUG: Afficher toutes les valeurs possibles pour T_APS
-    console.log("🔍 [DEBUG T_APS] centreObj:", centreObj);
-    console.log("🔍 [DEBUG T_APS] t_aps_global:", centreObj?.t_aps_global);
-    console.log("🔍 [DEBUG T_APS] valAPS finale:", valAPS);
 
     // 🆕 WORKAROUND TEMPORAIRE: Mapping hardcodé pour centres spécifiques
     const T_APS_MAPPING = {
       1913: 2,  // AGENCE MESSAGERIE FES
       2102: 7,  // KENITRA CENTRE MESSAGERIE
       2075: 12, // CM MARRAKECH
-      2064: 0,// OUARZAZAT
-      2108: 0,// RABAT CD AL IRFAN
-      1942: 7,//Bandong
-      1952: 25,//CCI
-
+      2064: 0,  // OUARZAZAT
+      2108: 0,  // RABAT CD AL IRFAN
+      1942: 7,  // Bandong
+      1952: 25, // CCI
     };
 
     const centreId = centreObj?.id;
     const apsFromMapping = centreId ? T_APS_MAPPING[centreId] : null;
+    const finalAPS = apsFromMapping ?? valAPS;
 
-    // Utiliser le mapping si valAPS est null/undefined
-    const finalAPS = apsFromMapping ?? valAPS; // Priorité au mapping si présent
-
-    console.log("🔍 [DEBUG T_APS] Centre ID:", centreId);
-    console.log("🔍 [DEBUG T_APS] APS from mapping:", apsFromMapping);
-    console.log("🔍 [DEBUG T_APS] Final APS:", finalAPS);
-
-    let apsGlobal = (finalAPS !== undefined && finalAPS !== null)
-      ? Number(finalAPS)
-      : null;
-
-    // 🆕 Sauvegarder la valeur brute pour affichage dans la carte Ecart
-    const apsBrut = apsGlobal;
-
+    let apsGlobal = (finalAPS !== undefined && finalAPS !== null) ? Number(finalAPS) : null;
     const effAPSMOD = apsGlobal !== null ? apsGlobal : (totalsMOD.effectifAPS ?? 0);
 
-    // Ecarts MOD/MOI : Arrondi - Actuel (Besoin vs Réalité)
-    const ecartMOD = etpArrMOD - effMOD;
-    const ecartMOI = etpArrMOI - effMOI;
+    // ✅ NOUVELLE LOGIQUE D'ARRONDI (Demande User)
+    // MOD_arrondi = round(MOD_calculé)
+    let etpArrMOD = Math.round(etpCalcMOD);
 
-    // Ecart Global = Arrondi - Actuel (Strictement carte 3 - carte 1)
+    // ⚠️ CORRECTIF : MOI Arrondi doit refléter l'Effectif Actuel (Structurel) et non le calculé
+    const etpArrMOI = effMOI > 0 ? effMOI : Math.round(etpCalcMOI);
+
+    // --- EVALUATION PROTECTION / OVERRIDE (Alignement VueIntervenant) ---
+    const statutaireCalcInit = etpArrMOD + etpArrMOI;
+    const statutaireActuel = effStatMOD + effMOI;
+    const apsTheorique = Math.max(0, statutaireCalcInit - statutaireActuel);
+    const totalCalcInit = statutaireCalcInit + apsTheorique;
+    const totalActuel = effMOD + effMOI + effAPSMOD;
+
+    let etpAPSMOD = apsTheorique;
+
+    // Si le besoin calculé total est inférieur à l'actuel -> On Override pour protéger (Afficher Actuel)
+    if (totalCalcInit < totalActuel) {
+      etpArrMOD = effMOD;
+      // MOI reste effMOI
+      etpAPSMOD = effAPSMOD;
+    }
+
+    const etpArr = etpArrMOD + etpArrMOI + etpAPSMOD; // Total Arrondi Final (Incluant APS)
+
+    // Recalcul des écarts (basé sur l'arrondi potentiellement surchargé)
     const effActuelTotal = effMOD + effMOI + effAPSMOD;
-    const ecart = etpArr - effActuelTotal;
+    const ecart = effActuelTotal - etpArr;
+    const ecartMOD = effMOD - etpArrMOD;
+    const ecartMOI = effMOI - etpArrMOI;
 
-    // APS Cible (Calculé) doit être 0 (Objectif Zéro Intérim)
-    const etpAPSMOD = 0;
+    // Écart APS (toujours 0 car on vise 0 APS)
     const ecartAPS = effAPSMOD - etpAPSMOD;
-
-    console.log("🔍 [DEBUG T_APS] apsGlobal (Number):", apsGlobal);
-    console.log("🔍 [DEBUG T_APS] effAPSMOD:", effAPSMOD);
-    console.log("🔍 [DEBUG T_APS] etpAPSMOD:", etpAPSMOD);
 
     return {
       effMOD,
@@ -993,11 +1052,9 @@ export default function VueCentre({
       effAPSMOD,
       ecartMOD,
       ecartMOI,
-      ecartMOI,
-      etpAPSMOD,
+      etpAPSMOD, // APS calculé selon nouvelle règle
       ecartAPS,
-      // 🆕 Ajouté pour affichage carte Ecart
-      apsBrut: apsBrut ?? 0,
+      apsBrut: apsGlobal ?? 0,
     };
   }, [totalsMOD, totalsMOI, centreObj]);
   const formatSigned = (n) => {
@@ -1021,7 +1078,10 @@ export default function VueCentre({
     emptyLabel = "Aucune donnée",
     hasAPS = true,
     fullPrecision = false,
+    showActuel = true, // 🆕 Prop pour masquer/afficher Actuel
   }) => {
+    // 🆕 Override hasAPS if test mode
+    hasAPS = isTestMode ? false : hasAPS;
     // ✅ 1) Normaliser les lignes : si poste_label est vide,
     //    on reprend le poste_label de la ligne précédente
     const normalizedRows = (rows || []).reduce((acc, row, idx) => {
@@ -1053,7 +1113,7 @@ export default function VueCentre({
     const displayDec = (v) => {
       const n = Number(v ?? 0);
       if (!Number.isFinite(n) || n === 0) return "";
-      if (fullPrecision) return String(n).replace('.', ',');
+      if (fullPrecision) return formatSmallNumber(n, 2);
       return formatSmallNumber(n);
     };
     const displayArrondi = (v) => {
@@ -1114,99 +1174,98 @@ export default function VueCentre({
     const finalTotals = totals || aggregatedTotals;
 
     return (
-      <div className="overflow-x-auto rounded-2xl border border-white/60 bg-white/70 backdrop-blur shadow-[0_10px_30px_-12px_rgba(15,23,42,0.45)]">
-        <table className="min-w-[920px] w-full text-[11px]">
+      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <table className="min-w-[920px] w-full text-[11px] border-collapse">
           {/* ===== En-têtes ===== */}
-          <thead className="bg-slate-50/90 sticky top-0 z-10 backdrop-blur-sm">
-            <tr className="text-left text-slate-600 border-b border-slate-100">
-              <th rowSpan={2} className="px-4 py-1.5 text-[10px] font-semibold">
+          <thead className="bg-slate-50 sticky top-0 z-10">
+            <tr className="text-left text-slate-700 border-b border-slate-200">
+              <th rowSpan={2} className="px-4 py-2 font-bold border-r border-slate-200">
                 Position
               </th>
-              <th rowSpan={2} className="px-4 py-1.5 text-[10px] font-semibold">
-                Intitulé Poste RH
-              </th>
+
               <th
                 rowSpan={2}
-                className="px-3 py-1.5 text-[10px] font-semibold text-center"
+                className="px-3 py-2 font-bold text-center border-r border-slate-200"
               >
                 Type
               </th>
 
-              <th
-                colSpan={hasAPS ? 2 : 2}
-                className="px-2 py-1.5 text-[10px] font-semibold text-center border-l border-slate-100"
-              >
-                Effectif actuel
-              </th>
+              {!isTestMode && showActuel && (
+                <th
+                  colSpan={hasAPS ? 2 : 1}
+                  className="px-2 py-2 font-bold text-center border-r border-slate-200 bg-slate-100/50"
+                >
+                  Effectif actuel
+                </th>
+              )}
 
               {showCalc && (
                 <>
-                  {showPreciseCalc && (
+                  <th
+                    colSpan={showPreciseCalc ? 2 : 1}
+                    className="px-2 py-2 font-bold text-center border-r border-slate-200 bg-blue-50/30"
+                  >
+                    Effectif calculé
+                  </th>
+                  {!isTestMode && (
                     <th
-                      className="px-2 py-1.5 text-[10px] font-semibold text-center border-l border-slate-100"
+                      rowSpan={2}
+                      className="px-3 py-2 font-bold text-right border-r border-slate-200"
                     >
-                      Effectif calculé
+                      Écart
                     </th>
                   )}
-                  <th
-                    rowSpan={2}
-                    className="px-2 py-1.5 text-[10px] font-semibold text-center border-l border-slate-100 text-amber-600 bg-amber-50/30"
-                  >
-                    Arrondi
-                  </th>
-                  <th
-                    rowSpan={2}
-                    className="px-3 py-1.5 text-[10px] font-semibold text-right"
-                  >
-                    Écart
-                  </th>
                 </>
               )}
 
               {showHours && (
                 <th
                   rowSpan={2}
-                  className="px-3 py-1.5 text-[10px] font-semibold text-right"
+                  className="px-3 py-2 font-bold text-right"
                 >
                   Total heures
                 </th>
               )}
             </tr>
 
-            <tr className="text-slate-500 border-b border-slate-100">
-              {/* Effectif actuel */}
-              <th className="px-2 py-1 text-right text-[10px] font-medium border-l border-slate-100">
-                Statutaire
-              </th>
-              {hasAPS && (
-                <th className="px-2 py-1 text-right text-[10px] font-medium">
-                  APS
-                </th>
+            <tr className="text-slate-600 border-b border-slate-200">
+              {/* Effectif actuel - Sub-headers */}
+              {!isTestMode && showActuel && (
+                <>
+                  <th className="px-2 py-1 text-center font-semibold border-r border-slate-200 bg-slate-100/50">
+                    Statutaire
+                  </th>
+                  {hasAPS && (
+                    <th className="px-2 py-1 text-center font-semibold border-r border-slate-200 bg-slate-100/50">
+                      APS
+                    </th>
+                  )}
+                </>
               )}
 
-              {/* Effectif calculé */}
+              {/* Effectif calculé - Sub-headers */}
               {showCalc && (
                 <>
                   {showPreciseCalc && (
-                    <th className="px-2 py-1 text-center text-[10px] font-medium border-l border-slate-100">
+                    <th className="px-2 py-1 text-center font-semibold border-r border-slate-200 bg-blue-50/30">
                       Statutaire
                     </th>
                   )}
-                  {/* APS Calculé Masqué */}
-                  {/* Effectif calculé Arrondi SUPPRIMÉ */}
-
+                  <th className="px-2 py-1 text-center font-semibold text-amber-700 bg-amber-50 border-r border-slate-200">
+                    Arrondi
+                  </th>
                 </>
               )}
             </tr>
           </thead>
 
           {/* ===== Lignes ===== */}
-          <tbody className="divide-y divide-slate-50">
+          <tbody className="divide-y divide-slate-200">
             {groupedRows.length === 0 ? (
               <tr>
                 <td
                   colSpan={20}
-                  className="px-4 py-4 text-center text-slate-500"
+                  className="px-4 py-8 text-center text-slate-500 italic"
                 >
                   {emptyLabel}
                 </td>
@@ -1214,60 +1273,48 @@ export default function VueCentre({
             ) : (
               groupedRows.map((group) =>
                 group.equivalents.map((equivalent, eqIndex) => {
-                  const effStat = equivalent.effectif_statutaire ?? 0; // Ensure 0 if null for math
+                  const effStat = equivalent.effectif_statutaire ?? 0;
                   const effAPS = equivalent.effectif_aps ?? "";
 
                   const calcStat = equivalent.etp_calcule ?? 0;
                   const calcAPS = equivalent.etp_aps ?? 0;
 
-                  // 🆕 Calcul Ecart : Actuel - Arrondi (Cohérence avec la demande user)
                   const cibleArrondi = equivalent.etp_arrondi ?? Math.round(calcStat);
-                  const ecart = cibleArrondi - effStat;
-
-                  const arrondi = equivalent.etp_calcule ?? calcStat + calcAPS; // Use EXACT value
-
+                  const ecart = (effStat + (Number(effAPS) || 0)) - cibleArrondi;
 
                   const ecartColor =
                     ecart < 0
-                      ? "text-emerald-600"
+                      ? "text-emerald-700 bg-emerald-50"
                       : ecart > 0
-                        ? "text-rose-600"
-                        : "text-slate-600";
+                        ? "text-rose-700 bg-rose-50"
+                        : "text-slate-500";
+
+                  // Highlight écart cell slightly if non-zero
+                  const ecartCellClass = Number(ecart || 0) !== 0 ? ecartColor : "";
 
                   const hasEcart = Number(ecart || 0) !== 0;
 
                   return (
                     <tr
                       key={`${group.mainPost}-${eqIndex}`}
-                      className="hover:bg-slate-50/80 transition-colors even:bg-slate-50/40"
+                      className="hover:bg-slate-50 transition-colors"
                     >
                       {/* Position */}
                       <td
-                        className={`px-4 py-2 align-top text-[11px] font-semibold text-slate-900 ${eqIndex === 0
-                          ? "bg-slate-50/70"
-                          : "bg-slate-50/40"
+                        className={`px-4 py-2 align-top font-medium text-slate-900 border-r border-slate-200 ${eqIndex === 0
+                          ? "bg-white"
+                          : "bg-slate-50/30"
                           }`}
                       >
                         {group.mainPost}
                       </td>
 
-                      {/* Intitulé RH */}
-                      <td
-                        className={`px-4 py-1.5 ${eqIndex === 0
-                          ? "text-slate-800 font-medium"
-                          : "text-slate-600 pl-6"
-                          }`}
-                      >
-                        {equivalent.intitule_rh || equivalent.equivalent}
-                      </td>
-
                       {/* Type */}
-                      <td className="px-3 py-1.5 text-center">
+                      <td className="px-3 py-1.5 text-center border-r border-slate-200">
                         <span
-                          className={`inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[9px] font-semibold ${(equivalent.type_poste || "").toUpperCase() ===
-                            "MOD"
-                            ? "bg-blue-100 text-[#005EA8]"
-                            : "bg-fuchsia-100 text-fuchsia-800"
+                          className={`inline-flex items-center justify-center rounded px-2 py-0.5 text-[10px] font-bold tracking-wide uppercase shadow-sm border ${(equivalent.type_poste || "").toUpperCase() === "MOD"
+                            ? "bg-blue-50 text-blue-700 border-blue-100"
+                            : "bg-fuchsia-50 text-fuchsia-700 border-fuchsia-100"
                             }`}
                         >
                           {equivalent.type_poste || "MOD"}
@@ -1275,44 +1322,50 @@ export default function VueCentre({
                       </td>
 
                       {/* Effectif actuel */}
-                      <td className="px-2 py-1.5 text-right font-mono tabular-nums">
-                        {eqIndex === 0 ? displayInt(effStat) : 0}
-                      </td>
-                      {hasAPS && (
-                        <td className="px-2 py-1.5 text-right font-mono tabular-nums">
-                          {eqIndex === 0 ? displayInt(effAPS) : 0}
-                        </td>
+                      {!isTestMode && showActuel && (
+                        <>
+                          <td className="px-2 py-1.5 text-center font-mono tabular-nums border-r border-slate-200 bg-slate-50/30">
+                            {eqIndex === 0 ? displayInt(effStat) : 0}
+                          </td>
+                          {hasAPS && (
+                            <td className="px-2 py-1.5 text-center font-mono tabular-nums border-r border-slate-200 bg-slate-50/30">
+                              {eqIndex === 0 ? displayInt(effAPS) : 0}
+                            </td>
+                          )}
+                        </>
                       )}
 
                       {/* Effectif calculé */}
                       {showCalc && (
                         <>
                           {showPreciseCalc && (
-                            <td className="px-2 py-1.5 text-center font-mono tabular-nums text-[#005EA8]">
+                            <td className="px-2 py-1.5 text-center font-mono tabular-nums text-blue-700 border-r border-slate-200 font-medium">
                               {eqIndex === 0 ? displayDec(calcStat) : 0}
                             </td>
                           )}
-                          {/* APS Calculé Masqué */}
-                          <td className="px-2 py-1.5 text-center font-mono tabular-nums text-amber-700 font-bold bg-amber-50/20">
-                            {eqIndex === 0 ? displayArrondi(equivalent.etp_arrondi) : 0}
+                          {/* Arrondi */}
+                          <td className="px-2 py-1.5 text-center font-mono tabular-nums text-amber-800 font-bold bg-amber-50/50 border-r border-slate-200 text-xs">
+                            {eqIndex === 0
+                              ? (equivalent.type_poste === 'MOI' ? '-' : displayArrondi(equivalent.etp_arrondi))
+                              : 0}
                           </td>
-                          {/* Écart */}
 
-                          <td className="px-3 py-1.5 text-right font-mono tabular-nums">
-                            {hasEcart && (
-                              <span
-                                className={`text-[11px] font-semibold ${ecartColor}`}
-                              >
-                                {ecart > 0 ? `+${Math.round(ecart)}` : Math.round(ecart)}
-                              </span>
-                            )}
-                          </td>
+                          {/* Écart */}
+                          {!isTestMode && (
+                            <td className={`px-3 py-1.5 text-right font-mono tabular-nums font-bold border-r border-slate-200 ${ecartCellClass}`}>
+                              {hasEcart && (
+                                <span>
+                                  {ecart > 0 ? `+${Math.round(ecart)}` : Math.round(ecart)}
+                                </span>
+                              )}
+                            </td>
+                          )}
                         </>
                       )}
 
                       {/* Heures */}
                       {showHours && (
-                        <td className="px-3 py-1.5 text-right font-mono tabular-nums text-slate-600">
+                        <td className="px-3 py-1.5 text-right font-mono tabular-nums text-slate-500 text-[10px]">
                           {eqIndex === 0
                             ? formatNumber(equivalent.total_heures)
                             : 0}
@@ -1324,62 +1377,108 @@ export default function VueCentre({
               )
             )}
 
-            {/* ===== Ligne TOTAL ===== */}
-            {finalTotals && groupedRows.length > 0 && (
-              <tr className="border-t-2 border-slate-200 bg-white/95">
+            {/* ===== Ligne APS (avant TOTAL) ===== */}
+            {finalTotals && groupedRows.length > 0 && !isTestMode && (
+              <tr className="bg-blue-50 border-t-2 border-blue-100 font-semibold text-blue-900">
                 <td
-                  className="px-4 py-1.5 text-[11px] font-bold text-slate-900"
-                  colSpan={3}
+                  colSpan={2}
+                  className="px-3 py-2 text-left text-xs uppercase tracking-wider border-r border-blue-100"
                 >
-                  TOTAL
+                  APS Global
                 </td>
 
-                {/* 🔹 Effectif actuel total */}
-                <td className="px-2 py-1.5 text-right font-mono tabular-nums font-semibold">
-                  {finalTotals.effectifStatutaire ?? finalTotals.effectif ?? ""}
-                </td>
-
-                {hasAPS && (
-                  <td className="px-2 py-1.5 text-right font-mono tabular-nums font-semibold">
-                    {finalTotals.effectifAPS ?? 0}
-                  </td>
+                {/* APS Actuel */}
+                {!isTestMode && showActuel && (
+                  <>
+                    <td className="px-2 py-1.5 text-center border-r border-blue-100">-</td>
+                    {hasAPS && (
+                      <td className="px-2 py-1.5 text-center border-r border-blue-100">
+                        {finalTotals.effectifAPS ?? 0}
+                      </td>
+                    )}
+                  </>
                 )}
 
+                {/* APS Calculé */}
                 {showCalc && (
                   <>
                     {showPreciseCalc && (
-                      <td className="px-2 py-1.5 text-center font-mono tabular-nums font-semibold">
-                        {displayDec(
-                          finalTotals.etpCalcule ?? finalTotals.etpStatutaire ?? 0
-                        )}
-                      </td>
+                      <td className="px-2 py-1.5 text-center border-r border-blue-100">-</td>
                     )}
+                    {/* Arrondi APS */}
+                    <td className="px-2 py-1.5 text-center border-r border-blue-100">-</td>
 
-                    {/* APS Calculé Masqué */}
-                    <td className="px-2 py-1.5 text-center font-mono tabular-nums font-bold text-amber-700 bg-amber-50/20">
-                      {finalTotals.etpArrondi ?? 0}
-                    </td>
-
-
-
-                    <td
-                      className={`px-3 py-1.5 text-right font-mono tabular-nums font-bold ${finalTotals.ecart < 0
-                        ? "text-emerald-600"
-                        : finalTotals.ecart > 0
-                          ? "text-rose-600"
-                          : "text-slate-700"
-                        }`}
-                    >
-                      {finalTotals.ecart > 0
-                        ? `+${Math.round(finalTotals.ecart)}`
-                        : Math.round(finalTotals.ecart)}
-                    </td>
+                    {!isTestMode && (
+                      <td className="px-3 py-1.5 text-center border-r border-blue-100">-</td>
+                    )}
                   </>
                 )}
 
                 {showHours && (
-                  <td className="px-3 py-1.5 text-right font-mono tabular-nums font-bold text-slate-900">
-                    {formatNumber(finalTotals.heures)}
+                  <td className="px-3 py-1.5 text-right font-mono">-</td>
+                )}
+              </tr>
+            )}
+
+            {/* ===== Ligne TOTAL ===== */}
+            {finalTotals && groupedRows.length > 0 && (
+              <tr className="bg-slate-100 font-bold border-t-2 border-slate-300 text-slate-900">
+                <td
+                  colSpan={2}
+                  className="px-4 py-3 text-left uppercase tracking-wider text-xs border-r border-slate-300"
+                >
+                  Total Général
+                </td>
+
+                {/* 🔹 Effectif actuel total */}
+                {!isTestMode && showActuel && (
+                  <>
+                    <td className="px-2 py-2 text-center font-mono tabular-nums border-r border-slate-300 text-xs">
+                      {finalTotals.effectifStatutaire ?? finalTotals.effectif ?? ""}
+                    </td>
+
+                    {hasAPS && (
+                      <td className="px-2 py-2 text-center font-mono tabular-nums border-r border-slate-300 text-xs">
+                        {finalTotals.effectifAPS ?? 0}
+                      </td>
+                    )}
+                  </>
+                )}
+
+                {/* 🔹 Effectif calculé total */}
+                {showCalc && (
+                  <>
+                    {showPreciseCalc && (
+                      <td className="px-2 py-2 text-center font-mono tabular-nums text-blue-800 border-r border-slate-300 text-xs">
+                        {displayDec(finalTotals.etpStatutaire ?? finalTotals.etp_calcule)}
+                      </td>
+                    )}
+
+                    <td className="px-2 py-2 text-center font-mono tabular-nums bg-amber-100/50 text-amber-900 border-r border-slate-300 text-sm">
+                      {finalTotals.etpArrondi ?? finalTotals.etp_arrondi}
+                    </td>
+
+                    {!isTestMode && (
+                      <td
+                        className={`px-3 py-2 text-right font-mono tabular-nums border-r border-slate-300 text-sm ${finalTotals.ecart < 0
+                          ? "text-emerald-700"
+                          : finalTotals.ecart > 0
+                            ? "text-rose-700"
+                            : "text-slate-700"
+                          }`}
+                      >
+                        {finalTotals.ecart > 0
+                          ? `+${Math.round(finalTotals.ecart)}`
+                          : Math.round(finalTotals.ecart)}
+                      </td>
+                    )}
+                  </>
+                )}
+
+                {/* 🔹 Total heures */}
+                {showHours && (
+                  <td className="px-3 py-2 text-right font-mono tabular-nums text-slate-800 text-xs">
+                    {formatNumber(finalTotals.heures || finalTotals.total_heures)}
                   </td>
                 )}
               </tr>
@@ -1389,6 +1488,63 @@ export default function VueCentre({
       </div>
     );
   };
+
+  /* ===================== Override Logic Effectif Calculé (Cas A) ===================== */
+  const effActuelStatutaire = (kpi.effStatMOD || 0) + (kpi.effMOI || 0);
+  const effCalculeGlobal = (kpi.etpCalcMOD || 0) + (kpi.effMOI || 0); // Statutaire Calculé (Calculé MOD + MOI Actuel/Cible)
+
+  const needOverrideCentre = !isTestMode && (effCalculeGlobal > effActuelStatutaire); // Besoin > Actuel
+
+  // 1️⃣ Variables pour Effectif Calculé
+  // Footer Breakdown Logic
+  const dispCalcMOD_Centre = needOverrideCentre ? kpi.effStatMOD : kpi.etpCalcMOD;
+  const dispCalcMOI_Centre = kpi.effMOI; // MOI Target = MOI Actuel
+
+  // Footer Statutaire Total: somme affichée (Step 90) -> Si override, c'est l'actuel
+  const dispCalcStatutaireTotal_Centre = dispCalcMOD_Centre + dispCalcMOI_Centre;
+
+  // Footer APS: Effectif Calculé Réellement - Statutaire Calculé (Affiché) (Step 129)
+  const dispCalcAPS_Centre = Math.max(0, effCalculeGlobal - dispCalcStatutaireTotal_Centre);
+
+  // Main Total Calculé: DOIT ÊTRE LA VALEUR RÉELLE CALCULÉE (Step 54)
+  // "Dans la carte effectif calculé total met la meme valeur que statutaire calculé"
+  const dispMainTotalCalcul_Centre = effCalculeGlobal;
+
+
+  // 2️⃣ Variables pour Effectif Arrondi
+  // Footer Statutaire Total: Arrondi du Statutaire Calculé RÉEL (Step 48)
+  const dispArrStatutaireTotal_Centre = Math.round(effCalculeGlobal);
+
+  // Footer APS: Arrondi de l'APS affiché dans la carte Calculé (Step 113)
+  const dispArrAPSTotal_Centre = Math.round(dispCalcAPS_Centre);
+
+  // Breakdown Arrondi (pour Ecart MOD)
+  // Si override, on aligne l'arrondi MOD affiché sur l'actuel, sinon arrondi standard
+  const dispArrMOD_Centre = needOverrideCentre ? kpi.effStatMOD : kpi.etpArrMOD;
+  const dispArrMOI_Centre = kpi.effMOI;
+
+  // Main Total Arrondi: Arrondi du Statutaire Calculé RÉEL (Step 65)
+  const dispMainTotalArrondi_Centre = Math.round(effCalculeGlobal);
+
+
+  // 3️⃣ Variables pour Écart Total
+  // Main Total Ecart: Effectif Actuel Total - Effectif Arrondi Affiché (Step 80)
+  // Actuel Total = effActuelStatutaire + (kpi.effAPSMOD || 0)
+  // Arrondi Affiché = dispMainTotalArrondi_Centre
+  const dispEcartTotal_Centre = (effActuelStatutaire + (kpi.effAPSMOD || 0)) - dispMainTotalArrondi_Centre;
+
+  // Footer Ecarts
+  // Ecart Statutaire: Actuel Statutaire - Arrondi Statutaire (Step 75)
+  const dispEcartStatutaire_Centre = effActuelStatutaire - dispArrStatutaireTotal_Centre;
+
+  // Ecart MOD: MOD Actuel - MOD Arrondi Affiché (Step 85)
+  const dispEcartMOD_Centre = kpi.effStatMOD - dispArrMOD_Centre;
+
+  // Ecart MOI
+  const dispEcartMOI_Centre = kpi.effMOI - dispArrMOI_Centre; // 0
+
+  // Ecart APS: Actuel APS - Arrondi APS (Step 70 implicit)
+  const dispEcartAPS_Centre = (kpi.effAPSMOD || 0) - dispArrAPSTotal_Centre;
 
   /* ===================== Rendu ===================== */
   return (
@@ -1418,6 +1574,34 @@ export default function VueCentre({
                 {(regions || []).map((r) => (
                   <option key={r.id} value={r.id}>
                     {r.label || r.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="w-px h-6 bg-slate-200 hidden md:block" />
+
+
+          {/* 🆕 Sélecteur Typologie */}
+          <div className="flex items-center gap-1.5 min-w-[140px] flex-1">
+            <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
+              <Tag className="w-3 h-3" />
+            </div>
+            <div className="flex flex-col w-full">
+              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                Typologie
+              </label>
+              <select
+                className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer w-full truncate text-left disabled:opacity-50"
+                value={selectedTypology ?? ""}
+                onChange={(e) => setSelectedTypology(e.target.value)}
+                disabled={!region}
+              >
+                <option value="">Toutes</option>
+                {(categories || []).map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.label}
                   </option>
                 ))}
               </select>
@@ -1558,15 +1742,7 @@ export default function VueCentre({
                     state: {
                       simulationResults,  // ✅ Send simulation results
                       centreInfo: enrichedCentreInfo, // ✅ Include categorisation label
-                      volumes: {
-                        cOrd,
-                        cReco,
-                        amana,
-                        eBarkia,
-                        lrh,
-                        sacs,
-                        colis
-                      }
+                      volumes: calculateVolFromGrid()
                     }
                   });
                 }}
@@ -1639,6 +1815,8 @@ export default function VueCentre({
 
             <div className="w-px h-6 bg-slate-200 hidden md:block" />
 
+
+
             {/* Complexité Circulation */}
             <div className="flex items-center gap-1.5 min-w-[90px] flex-1">
               <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
@@ -1653,17 +1831,15 @@ export default function VueCentre({
                   onChange={(e) => setTauxComplexite(Number(e.target.value))}
                   className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full text-center cursor-pointer"
                 >
+                  <option value="0.5">0.5</option>
+                  <option value="0.75">0.75</option>
                   <option value="1">1</option>
-                  <option value="1.25">1.25</option>
-                  <option value="1.5">1.5</option>
                 </select>
               </div>
             </div>
 
-            <div className="w-px h-6 bg-slate-200 hidden md:block" />
-
-            {/* Complexité Géo */}
-            <div className="flex items-center gap-1.5 min-w-[90px] flex-1">
+            {/* Compl. Géo */}
+            <div className="flex items-center gap-1.5 min-w-[90px] flex-1 border-l border-slate-200 pl-4">
               <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
                 <MapPin className="w-3 h-3" />
               </div>
@@ -1671,13 +1847,32 @@ export default function VueCentre({
                 <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
                   Compl. Géo
                 </label>
-                <select
+                <input
+                  type="text"
                   value={natureGeo}
-                  onChange={(e) => setNatureGeo(Number(e.target.value))}
+                  onChange={(e) => setNatureGeo(parseNonNeg(e.target.value) ?? 0)}
+                  className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full text-center"
+                />
+              </div>
+            </div>
+
+            {/* Shift */}
+            <div className="flex items-center gap-1.5 min-w-[90px] flex-1 border-l border-slate-200 pl-4">
+              <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
+                <Clock className="w-3 h-3" />
+              </div>
+              <div className="flex flex-col w-full">
+                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                  Shift
+                </label>
+                <select
+                  value={shift}
+                  onChange={(e) => setShift(Number(e.target.value))}
                   className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full text-center cursor-pointer"
                 >
                   <option value="1">1</option>
-                  <option value="1.5">1.5</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
                 </select>
               </div>
             </div>
@@ -1685,7 +1880,7 @@ export default function VueCentre({
             <div className="w-px h-6 bg-slate-200 hidden md:block" />
 
             {/* Capacité Nette */}
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 min-w-[90px] flex-1">
               <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
                 <Clock className="w-3 h-3" />
               </div>
@@ -1693,242 +1888,316 @@ export default function VueCentre({
                 <label className="text-[9px] font-bold text-[#005EA8] uppercase tracking-wider">
                   Capacité Nette
                 </label>
-                <span className="text-xs font-bold text-[#005EA8]">
-                  {formatNumber(baseHeuresNet)} h
-                </span>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-lg font-extrabold text-slate-800 tracking-tight">
+                    {(() => {
+                      // Recalcul local pour affichage fiable (Prod + Idle)
+                      const p = Number(productivite ?? 100) / 100;
+                      const idleH = Number(idleMinutes || 0) / 60;
+                      const base = 8;
+                      const productive = base * p;
+                      const net = Math.max(0, productive - idleH);
+
+                      const h = Math.floor(net);
+                      const m = Math.round((net - h) * 60);
+                      return `${h}h ${String(m).padStart(2, "0")}`;
+                    })()}
+                  </span>
+                  <span className="text-[9px] font-semibold text-slate-500">h/j</span>
+                </div>
               </div>
             </div>
-
           </div>
         </div>
       </div>
 
-      {/* 🔢 Paramètres de volume */}
-      <VolumeParamsCard
-        UI={UI}
-        Card={Card}
-        Field={Field}
-        Input={Input}
-        centre={centreObj}
-        centreCategorie={effectiveCentreCategorie}
-        loading={loading}
-        courrierOrdinaire={cOrd}
-        setCourrierOrdinaire={setCOrd}
-        courrierRecommande={cReco}
-        setCourrierRecommande={setCReco}
-        ebarkia={eBarkia}
-        setEbarkia={setEBarkia}
-        lrh={lrh}
-        setLrh={setLrh}
-        amana={amana}
-        setAmana={setAmana}
-        colisAmanaParSac={colisAmanaParSac}
-        setColisAmanaParSac={setColisAmanaParSac}
-        courriersParSac={courriersParSac}
-        setCourriersParSac={setCourriersParSac}
-        colis={colis}
-        setColis={setColis}
-        colisParCollecte={colisParCollecte}
-        setColisParCollecte={setColisParCollecte}
-        parseNonNeg={parseNonNeg}
-        toInput={toInput}
-        monthly={monthly}
-        formatInt={formatInt}
-        splitFlux={splitFlux}
-        partParticuliers={partParticuliers}
-        setPartParticuliers={setPartParticuliers}
-        partProfessionnels={partProfessionnels}
-        getEffectiveFluxMode={getEffectiveFluxMode}
-        heures={baseHeuresNet}
-        tempsMortMinutes={idleMinutes}
-        onSimuler={handleSimuler}
-        // 🆕 Persistance Globale
-        volumesFluxGrid={volumesFluxGrid}
-        setVolumesFluxGrid={setVolumesFluxGrid}
-        nbrCoSac={nbrCoSac}
-        setNbrCoSac={setNbrCoSac}
-        nbrCrSac={nbrCrSac}
-        setNbrCrSac={setNbrCrSac}
-        edPercent={edPercent}
-        setEdPercent={setEdPercent}
-      />
+      {/* 🔹 Paramètres & Grille des Volumes */}
+      <div className="w-full">
+        <VolumeParamsCard
+          Card={Card}
+          Field={Field}
+          Input={Input}
+          volumesFluxGrid={volumesFluxGrid}
+          setVolumesFluxGrid={setVolumesFluxGrid}
+          nbrCoSac={nbrCoSac}
+          setNbrCoSac={setNbrCoSac}
+          nbrCrSac={nbrCrSac}
+          setNbrCrSac={setNbrCrSac}
+          crParCaisson={crParCaisson}
+          setCrParCaisson={setCrParCaisson}
+          edPercent={edPercent}
+          setEdPercent={setEdPercent}
+          pctInternational={pctInternational}
+          setPctInternational={setPctInternational}
+          colisAmanaParSac={colisAmanaParSac}
+          setColisAmanaParSac={setColisAmanaParSac}
+          readOnly={false}
+          showSacsInputs={true}
+          parseNonNeg={parseNonNeg}
+          toInput={toInput}
+          monthly={monthly}
+          formatInt={formatInt}
+          splitFlux={splitFlux}
+          partParticuliers={partParticuliers}
+          setPartParticuliers={setPartParticuliers}
+          partProfessionnels={partProfessionnels}
+          getEffectiveFluxMode={getEffectiveFluxMode}
+          // Shared Params
+          tauxComplexite={tauxComplexite}
+          setTauxComplexite={setTauxComplexite}
+          natureGeo={natureGeo}
+          setNatureGeo={setNatureGeo}
+          // Axes
+          pctAxesArrivee={pctAxesArrivee}
+          setPctAxesArrivee={setPctAxesArrivee}
+          pctAxesDepart={pctAxesDepart}
+          setPctAxesDepart={setPctAxesDepart}
+          // Collecte & Retour
+          pctCollecte={pctCollecte}
+          setPctCollecte={setPctCollecte}
+          pctRetour={pctRetour}
+          setPctRetour={setPctRetour}
+          disabledAxes={
+            (effectiveCentreCategorie || "").startsWith("AM") ||
+            (centreObj?.type_site || "").startsWith("AM") ||
+            (centreObj?.typologie || "").startsWith("AM")
+          }
+        />
+      </div>
 
       {/* Résultats */}
-      {!hasSimulated ? (
-        <Card title="Résultats de Simulation">
-          <EmptyStateFirstRun onSimuler={handleSimuler} disabled={!centre} />
-        </Card>
-      ) : simDirty ? (
-        <Card title="Résultats de Simulation">
-          <EmptyStateDirty onSimuler={handleSimuler} />
-        </Card>
-      ) : resultats && (
-        <Card
-          title={`Résultats pour : ${resultats.centre_label}`}
-          className="bg-gradient-to-r from-sky-50/60 to-cyan-50/60"
-          headerRight={
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setShowDetailsModal(true)}
-                className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-1 shadow-sm hover:bg-blue-100"
-              >
-                <Eye className="w-3 h-3 text-blue-600" />
-                <span className="text-[10px] sm:text-xs font-semibold text-blue-700">Vue Détaillée</span>
-              </button>
-              <div className="w-px h-4 bg-slate-300 mx-1"></div>
-              <button
-                type="button"
-                onClick={() => setShowMODDetails((v) => !v)}
-                className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white/80 px-2 py-1 shadow-sm hover:bg-slate-50"
-              >
-                {showMODDetails ? (
-                  <EyeOff className="w-3 h-3 text-slate-500" />
-                ) : (
-                  <Eye className="w-3 h-3 text-slate-500" />
-                )}
-                <span className="text-[10px] sm:text-xs">
-                  Détails Positions MOD
-                </span>
-              </button>
+      {
+        !hasSimulated ? (
+          <Card title="Résultats de Simulation">
+            <EmptyStateFirstRun onSimuler={handleSimuler} disabled={!centre} />
+          </Card>
+        ) : simDirty ? (
+          <Card title="Résultats de Simulation">
+            <EmptyStateDirty onSimuler={handleSimuler} />
+          </Card>
+        ) : resultats && (
+          <Card
+            title={`Résultats pour : ${resultats.centre_label}`}
+            className="bg-gradient-to-r from-sky-50/60 to-cyan-50/60"
+            headerRight={
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowDetailsModal(true)}
+                  className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-1 shadow-sm hover:bg-blue-100"
+                >
+                  <Eye className="w-3 h-3 text-blue-600" />
+                  <span className="text-[10px] sm:text-xs font-semibold text-blue-700">Vue Détaillée</span>
+                </button>
+                <div className="w-px h-4 bg-slate-300 mx-1"></div>
+                <button
+                  type="button"
+                  onClick={() => setShowMODDetails((v) => !v)}
+                  className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white/80 px-2 py-1 shadow-sm hover:bg-slate-50"
+                >
+                  {showMODDetails ? (
+                    <EyeOff className="w-3 h-3 text-slate-500" />
+                  ) : (
+                    <Eye className="w-3 h-3 text-slate-500" />
+                  )}
+                  <span className="text-[10px] sm:text-xs">
+                    Détails Positions MOD
+                  </span>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => setShowMOIDetails((v) => !v)}
-                className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white/80 px-2 py-1 shadow-sm hover:bg-slate-50"
-              >
-                {showMOIDetails ? (
-                  <EyeOff className="w-3 h-3 text-slate-500" />
-                ) : (
-                  <Eye className="w-3 h-3 text-slate-500" />
-                )}
-                <span className="text-[10px] sm:text-xs">MOI / Autres</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setShowMOIDetails((v) => !v)}
+                  className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white/80 px-2 py-1 shadow-sm hover:bg-slate-50"
+                >
+                  {showMOIDetails ? (
+                    <EyeOff className="w-3 h-3 text-slate-500" />
+                  ) : (
+                    <Eye className="w-3 h-3 text-slate-500" />
+                  )}
+                  <span className="text-[10px] sm:text-xs">MOI / Autres</span>
+                </button>
 
-              <div className="w-px h-4 bg-slate-300 mx-1"></div>
+                <div className="w-px h-4 bg-slate-300 mx-1"></div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  const simulationResults = {
-                    postes: resultats.postes,
-                    total_heures: resultats.total_heures,
-                    total_etp_calcule: resultats.total_etp_calcule,
-                    total_etp_arrondi: kpi.etpArr,
-                    total_ecart: kpi.ecart,
-                    acheminement_score: 0 // Par defaut, à affiner si les inputs Axes sont dispos
-                  };
-
-                  navigate(`/app/simulation/categorisation/${centre}`, {
-                    state: {
-                      simulationResults,
-                      centreInfo: centreObj,
-                      volumes: {
-                        cOrd, cReco, amana, eBarkia, lrh, sacs: 0, colis
+                <button
+                  type="button"
+                  onClick={() => {
+                    const calculateVolFromGrid = () => {
+                      if (volumesFluxGrid && volumesFluxGrid.length > 0) {
+                        const getSum = (tag) => {
+                          return volumesFluxGrid
+                            .filter((row) => {
+                              const f = (row.flux || "").toLowerCase();
+                              return f === tag || (tag === "ebarkia" && f === "eb");
+                            })
+                            .reduce((acc, cur) => acc + (Number(cur.volume) || 0), 0);
+                        };
+                        return {
+                          cOrd: getSum("co"),
+                          cReco: getSum("cr"),
+                          amana: getSum("amana"),
+                          eBarkia: getSum("ebarkia"),
+                          lrh: getSum("lrh"),
+                          sacs: Number(sacs || 0),
+                          colis: Number(colis || 0),
+                        };
                       }
+                      // Fallback
+                      return {
+                        cOrd: Number(cOrd || 0),
+                        cReco: Number(cReco || 0),
+                        amana: Number(amana || 0),
+                        eBarkia: Number(eBarkia || 0),
+                        lrh: Number(lrh || 0),
+                        sacs: Number(sacs || 0),
+                        colis: Number(colis || 0),
+                      };
+                    };
+
+                    const simulationResults = {
+                      postes: resultats.postes,
+                      total_heures: resultats.total_heures,
+                      total_etp_calcule: resultats.total_etp_calcule,
+                      total_etp_arrondi: kpi.etpArr,
+                      total_ecart: kpi.ecart,
+                      acheminement_score: 0
+                    };
+
+                    navigate(`/app/simulation/categorisation/${centre}`, {
+                      state: {
+                        simulationResults,
+                        centreInfo: centreObj,
+                        volumes: calculateVolFromGrid()
+                      }
+                    });
+                  }}
+                  className="inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-2 py-1 shadow-sm hover:bg-indigo-100 transition-colors"
+                  title="Accéder à la catégorisation"
+                >
+                  <Sliders className="w-3 h-3 text-indigo-600" />
+                  <span className="text-[10px] sm:text-xs font-semibold text-indigo-700">Catégorisation</span>
+                </button>
+              </div>
+            }
+          >
+            {/* 👉 La grille qui contient les 4 cartes KPI */}
+            <div className={`grid grid-cols-1 md:grid-cols-2 ${isTestMode ? 'lg:grid-cols-2' : 'lg:grid-cols-4'} gap-4`}>
+              {/* 1️⃣ Effectif actuel */}
+              {
+                !isTestMode && (
+                  <KPICardGlass
+                    label="Effectif actuel"
+                    icon={UserRound}
+                    tone="slate"
+                    emphasize
+                    total={totalGlobal}
+                    toggleable
+                    onToggle={() => setActiveModal('ACTUEL')}
+                    isOpen={activeModal === 'ACTUEL'}
+                    customFooter={
+                      <EffectifFooter
+                        totalLabel="Statutaire"
+                        totalValue={kpi.effStatMOD + kpi.effMOI}
+                        modValue={kpi.effStatMOD}
+                        moiValue={kpi.effMOI}
+                        apsLabel="APS"
+                        apsValue={kpi.effAPSMOD}
+                        showSpecialTag={Boolean(centreObj?.cas)}
+                        casValue={centreObj?.cas}
+
+                      />
                     }
-                  });
-                }}
-                className="inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-2 py-1 shadow-sm hover:bg-indigo-100 transition-colors"
-                title="Accéder à la catégorisation"
-              >
-                <Sliders className="w-3 h-3 text-indigo-600" />
-                <span className="text-[10px] sm:text-xs font-semibold text-indigo-700">Catégorisation</span>
-              </button>
-            </div>
-          }
-        >
-          {/* 👉 La grille qui contient les 4 cartes KPI */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* 1️⃣ Effectif actuel */}
-            <KPICardGlass
-              label="Effectif actuel"
-              icon={UserRound}
-              tone="slate"
-              emphasize
-              total={totalGlobal}
-              toggleable
-              onToggle={() => setShowDetailsModal(true)}
-              isOpen={showDetailsModal}
-              customFooter={
-                <EffectifFooter
-                  totalLabel="Total"
-                  totalValue={kpi.effStatMOD + kpi.effMOI + kpi.effAPSMOD}
-                  modValue={kpi.effStatMOD}
-                  moiValue={kpi.effMOI}
-                  apsLabel="APS"
-                  apsValue={kpi.effAPSMOD}
-                />
+                  />
+                )
               }
-            />
 
-            {/* 2️⃣ Effectif Calculé (Charge) */}
-            <KPICardGlass
-              label="Effectif Calculé"
-              icon={Calculator}
-              tone="blue"
-              emphasize
-              total={formatSmallNumber((kpi.etpCalcMOD || 0) + (kpi.effMOI || 0), 2)}
-              toggleable
-              onToggle={() => setShowDetailsModal(true)}
-              isOpen={showDetailsModal}
-              customFooter={
-                <EffectifFooter
-                  totalLabel="Statutaire"
-                  totalValue={formatSmallNumber((kpi.etpCalcMOD || 0) + (kpi.effMOI || 0), 2)}
-                  modValue={formatSmallNumber(kpi.etpCalcMOD, 2)}
-                  moiValue={formatSmallNumber(kpi.effMOI, 0)}
-                  apsLabel="APS"
-                  apsValue={kpi.etpAPSMOD}
-                />
+              {/* 2️⃣ Effectif Calculé (Charge) */}
+              <KPICardGlass
+                label="Effectif Calculé"
+                icon={Calculator}
+                tone="blue"
+                emphasize
+                // Main Total: Calculé Réel sans override (Step 54)
+                total={formatSmallNumber(dispMainTotalCalcul_Centre, 2)}
+                toggleable
+                onToggle={() => setActiveModal('CALC')}
+                isOpen={activeModal === 'CALC'}
+                customFooter={
+                  <EffectifFooter
+                    totalLabel="Statutaire"
+                    // Footer Total: Somme affichée (Step 90)
+                    totalValue={formatSmallNumber(dispCalcStatutaireTotal_Centre, 2)}
+                    modValue={formatSmallNumber(dispCalcMOD_Centre, 2)}
+                    moiValue={formatSmallNumber(dispCalcMOI_Centre, 0)}
+                    apsLabel={isTestMode ? null : "APS"}
+                    // Footer APS: 0 si override (Step 94)
+                    apsValue={isTestMode ? 0 : formatSmallNumber(dispCalcAPS_Centre, 2)}
+                  />
+                }
+              />
+
+              {/* 3️⃣ Effectif Cible (Arrondi) */}
+              <KPICardGlass
+                label="Effectif Arrondi"
+                icon={CheckCircle2}
+                tone="amber"
+                emphasize
+                // Main Total: Arrondi Calculé Réel (Step 65)
+                total={dispMainTotalArrondi_Centre}
+                toggleable
+                onToggle={() => setActiveModal('CALC')} // Arrondi partage la même vue que Calculé
+                isOpen={activeModal === 'CALC'}
+                customFooter={
+                  <EffectifFooter
+                    totalLabel="Statutaire"
+                    // Footer Total: Arrondi Stautaire Réel (Step 48)
+                    totalValue={dispArrStatutaireTotal_Centre}
+                    modValue={dispArrMOD_Centre}
+                    moiValue={dispArrMOI_Centre}
+                    // Footer APS: Arrondi APS Réel (Step 60)
+                    apsLabel={isTestMode ? null : "APS"}
+                    apsValue={isTestMode ? 0 : formatSmallNumber(dispArrAPSTotal_Centre, 0)}
+                  />
+                }
+              />
+
+
+              {/* 4️⃣ Écart Total */}
+              {
+                !isTestMode && (
+                  <KPICardGlass
+                    label="Écart Total"
+                    icon={dispEcartTotal_Centre < 0 ? TrendingDown : TrendingUp}
+                    tone={dispEcartTotal_Centre < 0 ? "red" : "green"}
+                    // Main Total: Actuel - Arrondi (Step 80)
+                    total={
+                      <>
+                        {formatSmallNumber(dispEcartTotal_Centre, 0)}
+                        <span className="text-[12px] font-normal ml-1 opacity-80">
+                          ({dispEcartTotal_Centre > 0 ? "Surplus" : dispEcartTotal_Centre < 0 ? "Besoin" : "Équilibre"})
+                        </span>
+                      </>
+                    }
+                    customFooter={
+                      <EffectifFooter
+                        totalLabel="Écart Statutaire"
+                        // Footer Ecarts: Strict difference (Steps 75, 85)
+                        totalValue={dispEcartStatutaire_Centre}
+                        modValue={dispEcartMOD_Centre}
+                        moiValue={formatSmallNumber(dispEcartMOI_Centre, 0)}
+                        apsLabel="APS"
+                        apsValue={formatSmallNumber(dispEcartAPS_Centre, 0)}
+                      />
+                    }
+                  />
+                )
               }
-            />
 
-            {/* 3️⃣ Effectif Cible (Arrondi) */}
-            <KPICardGlass
-              label="Effectif Arrondi"
-              icon={CheckCircle2}
-              tone="amber"
-              emphasize
-              total={kpi.etpArr}
-              toggleable
-              onToggle={() => setShowDetailsModal(true)}
-              isOpen={showDetailsModal}
-              customFooter={
-                <EffectifFooter
-                  totalLabel="Statutaire"
-                  totalValue={Math.round(kpi.etpCalc)}
-                  modValue={kpi.etpArrMOD}
-                  moiValue={kpi.etpArrMOI}
-                  // moiValue non passé pour ne pas l'afficher (structurel uniquement)
-                  apsLabel="APS"
-                  apsValue={kpi.etpAPSMOD}
-                />
-
-              }
-            />
-
-            {/* 4️⃣ Écart Total */}
-            <KPICardGlass
-              label="Écart Total"
-              icon={kpi.ecart < 0 ? TrendingDown : TrendingUp}
-              tone={kpi.ecart > 0 ? "red" : kpi.ecart < 0 ? "green" : "slate"}
-              emphasize
-              total={formatSigned(kpi.ecart)}
-              customFooter={
-                <EffectifFooter
-                  totalLabel="Écart global"
-                  totalValue={formatSigned(kpi.ecart)}
-                  modValue={formatSigned(kpi.ecartMOD)}
-                  moiValue={Math.round(kpi.ecartMOI)}
-                  apsLabel={`APS`}
-                  apsValue={formatSigned(kpi.ecartAPS)}
-                />
-              }
-            />
-          </div>
-        </Card>
-      )}
+            </div >
+          </Card >
+        )
+      }
 
       {/* 🏷️ SECTION SCORING & CATEGORISATION (Couche 2) */}
       {/* {resultats && (
@@ -1992,75 +2261,79 @@ export default function VueCentre({
         )
       }
       {/* 🔹 MODAL DETAILS */}
-      {showDetailsModal && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-xl shadow-2xl max-w-7xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200">
+      {
+        showDetailsModal && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white rounded-xl shadow-2xl max-w-7xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200">
 
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <Building className="w-5 h-5 text-blue-600" />
+              {/* Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <Building className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-800">Détails des Postes</h3>
+                    <p className="text-xs text-slate-500">Vue complète des effectifs calculés</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-lg font-bold text-slate-800">Détails des Postes</h3>
-                  <p className="text-xs text-slate-500">Vue complète des effectifs calculés</p>
-                </div>
+                <button
+                  onClick={() => setShowDetailsModal(false)}
+                  className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-slate-600"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
-              <button
-                onClick={() => setShowDetailsModal(false)}
-                className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-slate-600"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
 
-            {/* Content */}
-            <div className="flex-1 overflow-auto p-6 bg-slate-50/30 space-y-8">
-              <section>
-                <h4 className="flex items-center gap-2 font-bold mb-4 text-slate-800 text-sm uppercase tracking-wide">
-                  <span className="w-1.5 h-1.5 rounded-full bg-slate-600"></span>
-                  Tous les postes (MOD + MOI) ({rowsMOD.length + rowsMOI.length})
-                </h4>
-                <Table
-                  rows={[...rowsMOD, ...rowsMOI]}
-                  showCalc
-                  showPreciseCalc={true}
-                  fullPrecision={true}
-                  hasAPS
-                  showHours={false}
-                  totals={{
-                    // 🆕 On repasse les totaux calculés (Réels) car la somme visuelle (Structurelle) serait fausse (9.62 vs 8.67)
-                    effectifStatutaire: (totalsMOD.effectifStatutaire || 0) + (totalsMOI.effectifStatutaire || 0),
-                    effectifAPS: kpi.apsBrut,
-                    etpStatutaire: (totalsMOD.etpStatutaire || 0) + (totalsMOI.effectifStatutaire || 0), // MOI Statutaire = Actuel
-                    // TOTAL ETP CALCULE = MOD (8.62) + MOI Réel (0.05) = 8.67
-                    etpCalcule: (totalsMOD.etpCalcule || 0) + (totalsMOI.etpCalcule || 0),
-                    etpArrondi: [...rowsMOD, ...rowsMOI].reduce((acc, r) => acc + (r.etp_arrondi || 0), 0),
-                    // Ecart = Somme des écarts individuels (Arrondi - Actuel par ligne)
-                    ecart: [...rowsMOD, ...rowsMOI].reduce((acc, r) => {
-                      const effStat = r.effectif_statutaire ?? 0;
-                      const cibleArrondi = r.etp_arrondi ?? 0;
-                      return acc + (cibleArrondi - effStat);
-                    }, 0),
-                    heures: (totalsMOD.heures || 0) + (totalsMOI.heures || 0),
-                  }}
-                />
-              </section>
-            </div>
+              {/* Content */}
+              <div className="flex-1 overflow-auto p-6 bg-slate-50/30 space-y-8">
+                <section>
+                  <h4 className="flex items-center gap-2 font-bold mb-4 text-slate-800 text-sm uppercase tracking-wide">
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-600"></span>
+                    Tous les postes (MOD + MOI) ({rowsMOD.length + rowsMOI.length})
+                  </h4>
+                  <Table
+                    rows={[...rowsMOD, ...rowsMOI]}
+                    showActuel={true} // TOUJOURS afficher Actuel (Demandé pour le modal CALCULÉ aussi)
+                    showCalc={activeModal === 'CALC'}     // Afficher Calculé seulement si modal CALC
+                    showPreciseCalc={true}
+                    fullPrecision={true}
+                    hasAPS={activeModal === 'ACTUEL' || (kpi.apsBrut > 0)}
+                    showHours={false}
+                    totals={{
+                      // Calculate totals directly from rows
+                      effectifStatutaire: (kpi.effStatMOD || 0) + (kpi.effMOI || 0),
+                      effectifAPS: kpi.apsBrut,
+                      etpStatutaire: [...rowsMOD, ...rowsMOI].reduce((acc, r) => acc + (r.etp_statutaire || r.etp_calcule || 0), 0),
+                      // TOTAL ETP CALCULE = MOD uniquement
+                      etpCalcule: [...rowsMOD].reduce((acc, r) => acc + (r.etp_calcule || 0), 0),
+                      etpArrondi: [...rowsMOD].reduce((acc, r) => acc + (r.etp_arrondi || 0), 0),
+                      // Ecart = Somme des écarts individuels MOD (Arrondi - Actuel par ligne)
+                      ecart: [...rowsMOD].reduce((acc, r) => {
+                        const effStat = r.effectif_statutaire ?? 0;
+                        const effAPS = r.effectif_aps ?? 0;
+                        const cibleArrondi = r.etp_arrondi ?? 0;
+                        return acc + ((effStat + (Number(effAPS) || 0)) - cibleArrondi);
+                      }, 0),
+                      heures: [...rowsMOD, ...rowsMOI].reduce((acc, r) => acc + (r.heures || 0), 0),
+                    }}
+                  />
+                </section>
+              </div>
 
-            {/* Footer */}
-            <div className="px-6 py-3 bg-white border-t border-slate-100 flex justify-end">
-              <button
-                onClick={() => setShowDetailsModal(false)}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-lg text-sm transition-colors"
-              >
-                Fermer
-              </button>
+              {/* Footer */}
+              <div className="px-6 py-3 bg-white border-t border-slate-100 flex justify-end">
+                <button
+                  onClick={() => setShowDetailsModal(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-lg text-sm transition-colors"
+                >
+                  Fermer
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )
+      }
+    </div >
   );
 }

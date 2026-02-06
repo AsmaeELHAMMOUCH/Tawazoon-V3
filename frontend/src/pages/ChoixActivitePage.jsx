@@ -67,7 +67,7 @@ const ChoixActivite = () => {
       .toUpperCase();
 
     if (POSTAL_CODES.has(codeUpper) || nameNorm.includes("POSTAL")) {
-      navigate("/app/simulation");
+      navigate("/menu-principal");
       return;
     }
 

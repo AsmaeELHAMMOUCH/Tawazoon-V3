@@ -1,10 +1,10 @@
-select * from centres where label LIKE ('AIN HAROUDA CELLULE DE DISTRIBUTION%')
+select * from centres where label LIKE ('%ouar%')
 SELECT
 cp.id,
     cp.centre_id,
     cp.poste_id,
     p.label,
-	 SUM(cp.effectif_actuel) AS effectif_actuel_total,
+	SUM(cp.effectif_actuel) AS effectif_actuel_total,
     p.intitule_rh,
     p.label_norm,
     p.type_poste
@@ -12,7 +12,7 @@ cp.id,
 FROM centre_postes cp
 JOIN postes p
     ON cp.poste_id = p.id
-WHERE cp.centre_id = 1952
+WHERE cp.centre_id = 2064
 GROUP BY
 cp.id,
     cp.centre_id,

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { normalizeCentre } from "../utils/formatters"; // Correct import path
 
 export function useDirectionData(api) {
@@ -182,6 +182,57 @@ export function useDirectionData(api) {
     }
   }, [api, fetchConsolidation]);
 
+  // 5. Inject Global Simulation Results
+  const injectSimulationResults = useCallback((dirId, globalResults) => {
+    setSelectedDirection(dirId);
+    
+    // Check if we have data for this direction in the global results
+    // globalResults structure expected: { directions: [{ direction_id, centres: [...] }], ... }
+    const dirData = globalResults?.directions?.find(d => String(d.direction_id) === String(dirId));
+
+    if (dirData && dirData.centres) {
+        // Map backend centre structure to frontend state
+        const normalized = dirData.centres.map(c => ({
+            ...c, // 1. Keep raw backend props (inputs, volumes if present)
+            ...normalizeCentre(c), // 2. Normalize basic props (id, label)
+            // 3. Explicitly map simulation metrics (ensure priority)
+            etp_calcule: c.etp_calcule,
+            etp_actuel: c.etp_actuel,
+            ecart: c.ecart,
+            heures: c.heures_totales || c.heures_calc,
+            categorie: c.categorie,
+            details_postes: c.details_postes
+        }));
+
+        setCentres(normalized);
+
+        // Update Consolidation (KPIs for this direction)
+        const totals = {
+            etp_total: dirData.etp_actuel || normalized.reduce((s, c) => s + (c.etp_actuel || 0), 0),
+            etp_requis: dirData.etp_total || normalized.reduce((s, c) => s + (c.etp_calcule || 0), 0),
+            ecart: dirData.etp_total - dirData.etp_actuel,
+            nb_centres: normalized.length
+        };
+
+        setConsolidation({
+            rows: [], // Rows generated from centres list usually, or empty if we rely on table
+            totals
+        });
+        
+        setError(null);
+    } else {
+        // Fallback if data missing (fetch normally)
+        selectDirection(dirId);
+    }
+  }, [selectDirection]);
+
+  const actions = useMemo(() => ({
+    selectDirection,
+    runSimulation,
+    fetchConsolidation,
+    injectSimulationResults
+  }), [selectDirection, runSimulation, fetchConsolidation, injectSimulationResults]);
+
   return {
     directions,
     selectedDirection,
@@ -189,10 +240,6 @@ export function useDirectionData(api) {
     consolidation,
     loading,
     error,
-    actions: {
-      selectDirection,
-      runSimulation,
-      fetchConsolidation
-    }
+    actions
   };
 }

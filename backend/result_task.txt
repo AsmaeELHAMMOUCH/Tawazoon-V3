@@ -1,0 +1,8 @@
+--- START ---
+--- Recherche de la tâche 'Rapprochement' pour le CP 8367 ---
+Aucune tâche trouvée pour ce CP. Recherche globale (limit 5)...
+Found global: ID=287 CP=365 Name=rapprochement dépôt entre physique et BD31
+Found global: ID=288 CP=365 Name=rapprochement marche ordinaire entre physique et part 115
+Found global: ID=297 CP=366 Name=Rapprochement entre la feuille101 et le contenu du sac
+Found global: ID=4413 CP=8261 Name=rapprochement dépôt entre physique et BD "131" et1 115
+Found global: ID=5045 CP=8248 Name=Rapprochement entre physique et Documents

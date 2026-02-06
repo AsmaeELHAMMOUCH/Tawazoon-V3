@@ -30,16 +30,16 @@ const fluxOptions = [
     icon: Building2,
   },
   {
-    id: "siege",
-    label: "Niveau Siège",
-    labelMobile: "Siège",
-    icon: MapPin,
-  },
-  {
     id: "national",
     label: "Niveau National",
     labelMobile: "National",
     icon: Globe,
+  },
+  {
+    id: "siege",
+    label: "Niveau Siège",
+    labelMobile: "Siège",
+    icon: MapPin,
   },
 ];
 

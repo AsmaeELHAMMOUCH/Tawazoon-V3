@@ -13,7 +13,7 @@
  */
 
 import React, { memo } from 'react';
-import { Table as TableIcon, BarChart3, HelpCircle } from 'lucide-react';
+import { Table as TableIcon, BarChart3, HelpCircle, Download } from 'lucide-react';
 import Tooltip from '../ui/Tooltip';
 
 const EnterpriseTable = memo(({
@@ -27,8 +27,155 @@ const EnterpriseTable = memo(({
     height = 380,
     onViewChange,
     currentView = 'table',
-    showViewToggle = true
+    showViewToggle = true,
+    enableExport = false
 }) => {
+    const handleExport = async () => {
+        if (!data || data.length === 0) return;
+
+        try {
+            // Dynamically import ExcelJS to avoid large bundle size if not used
+            const ExcelJSModule = await import('exceljs');
+            const ExcelJS = ExcelJSModule.default || ExcelJSModule;
+            const FileSaverModule = await import('file-saver');
+            const saveAs = FileSaverModule.saveAs || FileSaverModule.default;
+
+            if (!ExcelJS || !saveAs) {
+                throw new Error("Impossible de charger les librairies d'export.");
+            }
+
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet(title || 'Données');
+
+            // --- 1. Gestion des Logos ---
+
+            // Logo Gauche : Barid Al Maghrib
+            try {
+                const logoBarid = '/BaridLogo.png';
+                const resp1 = await fetch(logoBarid);
+                if (resp1.ok) {
+                    const buff1 = await resp1.blob().then(b => b.arrayBuffer());
+                    const id1 = workbook.addImage({ buffer: buff1, extension: 'png' });
+                    worksheet.addImage(id1, {
+                        tl: { col: 0, row: 0 },
+                        ext: { width: 100, height: 50 },
+                        editAs: 'oneCell'
+                    });
+                }
+            } catch (e) {
+                console.warn("Err Logo Barid", e);
+            }
+
+            // Logo Droite : Almav
+            try {
+                const logoAlmav = '/almavlogo.png';
+                const resp2 = await fetch(logoAlmav);
+                if (resp2.ok) {
+                    const buff2 = await resp2.blob().then(b => b.arrayBuffer());
+                    const id2 = workbook.addImage({ buffer: buff2, extension: 'png' });
+
+                    const lastColIdx = Math.max(columns.length - 1, 4);
+                    worksheet.addImage(id2, {
+                        tl: { col: lastColIdx, row: 0 },
+                        ext: { width: 100, height: 50 },
+                        editAs: 'oneCell'
+                    });
+                }
+            } catch (e) {
+                console.warn("Err Logo Almav", e);
+            }
+
+            // --- 2. Titre et Informations ---
+            worksheet.mergeCells('B2:E2');
+            const titleCell = worksheet.getCell('B2');
+
+            // Helper to ensure primitive content
+            const getSafeText = (val) => {
+                if (val === null || val === undefined) return "";
+                if (typeof val === 'string' || typeof val === 'number') return val;
+                return ""; // Ignore React Elements/Objects in Excel Header
+            };
+
+            titleCell.value = (getSafeText(title) || 'EXPORT DONNÉES').toString().toUpperCase();
+            titleCell.font = { name: 'Arial', size: 14, bold: true, color: { argb: 'FF005EA8' } };
+            titleCell.alignment = { vertical: 'middle', horizontal: 'left' };
+
+            const safeSubtitle = getSafeText(subtitle);
+            if (safeSubtitle) {
+                worksheet.mergeCells('B3:E3');
+                const subCell = worksheet.getCell('B3');
+                subCell.value = safeSubtitle;
+                subCell.font = { name: 'Arial', size: 10, italic: true, color: { argb: 'FF555555' } };
+            }
+
+            const daeRequest = "Demandé le : " + new Date().toLocaleString();
+            worksheet.getCell('B4').value = daeRequest;
+            worksheet.getCell('B4').font = { size: 9, color: { argb: 'FF888888' } };
+            // --- 3. En-têtes de Colonnes (Ligne 6) ---
+            const headerRowIdx = 6;
+            const headerRow = worksheet.getRow(headerRowIdx);
+
+            columns.forEach((col, idx) => {
+                const cell = headerRow.getCell(idx + 1);
+                cell.value = col.label;
+                cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+                cell.fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: { argb: 'FF005EA8' } // Bleu Barid
+                };
+                cell.alignment = { vertical: 'middle', horizontal: col.align || 'left' };
+                cell.border = {
+                    top: { style: 'thin' },
+                    left: { style: 'thin' },
+                    bottom: { style: 'thin' },
+                    right: { style: 'thin' }
+                };
+
+                // Largeur de colonne approximative
+                const colWidth = col.width ? parseInt(col.width) / 7 : 15; // Conversion approx px -> chars
+                worksheet.getColumn(idx + 1).width = Math.max(colWidth, 15);
+            });
+            headerRow.height = 25;
+
+            // --- 4. Données ---
+            data.forEach((row, rIdx) => {
+                const currentRow = worksheet.getRow(headerRowIdx + 1 + rIdx);
+                columns.forEach((col, cIdx) => {
+                    const cell = currentRow.getCell(cIdx + 1);
+                    let val = row[col.key];
+
+                    // Formattage spécial
+                    if (col.exportFormat) {
+                        val = col.exportFormat(val, row);
+                    }
+
+                    cell.value = val;
+                    cell.alignment = { vertical: 'middle', horizontal: col.align || 'left' };
+                    cell.border = {
+                        top: { style: 'thin', color: { argb: 'FFEEEEEE' } },
+                        left: { style: 'thin', color: { argb: 'FFEEEEEE' } },
+                        bottom: { style: 'thin', color: { argb: 'FFEEEEEE' } },
+                        right: { style: 'thin', color: { argb: 'FFEEEEEE' } }
+                    };
+
+                    // Format numérique Excel si besoin
+                    if (typeof val === 'number') {
+                        cell.numFmt = '#,##0.00';
+                    }
+                });
+            });
+
+            // --- 5. Génération et Téléchargement ---
+            const buffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            saveAs(blob, `${title || 'export'}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+
+        } catch (error) {
+            console.error("Erreur lors de l'export Excel:", error);
+            alert("Une erreur est survenue lors de la génération de l'Excel: " + error.message);
+        }
+    };
 
     return (
         <div className="bg-white rounded border border-slate-200 overflow-hidden flex flex-col" style={{ height }}>
@@ -49,36 +196,49 @@ const EnterpriseTable = memo(({
                     )}
                 </div>
 
-                {showViewToggle && (
-                    <div className="flex rounded border border-slate-300 overflow-hidden">
+                <div className="flex items-center gap-2">
+                    {enableExport && (
                         <button
-                            onClick={() => onViewChange?.('table')}
-                            className={`
-                px-2 py-1 text-[10px] font-medium transition-colors flex items-center gap-1
-                ${currentView === 'table'
-                                    ? 'bg-[#005EA8] text-white'
-                                    : 'bg-white text-slate-600 hover:bg-slate-50'
-                                }
-              `}
+                            onClick={handleExport}
+                            className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-medium text-slate-600 bg-white border border-slate-300 rounded hover:bg-slate-50 transition-colors"
+                            title="Exporter en CSV"
                         >
-                            <TableIcon className="w-3 h-3" />
-                            Tableau
+                            <Download className="w-3 h-3" />
+                            Export
                         </button>
-                        <button
-                            onClick={() => onViewChange?.('graph')}
-                            className={`
-                px-2 py-1 text-[10px] font-medium transition-colors flex items-center gap-1 border-l border-slate-300
-                ${currentView === 'graph'
-                                    ? 'bg-[#005EA8] text-white'
-                                    : 'bg-white text-slate-600 hover:bg-slate-50'
-                                }
-              `}
-                        >
-                            <BarChart3 className="w-3 h-3" />
-                            Graphe
-                        </button>
-                    </div>
-                )}
+                    )}
+
+                    {showViewToggle && (
+                        <div className="flex rounded border border-slate-300 overflow-hidden">
+                            <button
+                                onClick={() => onViewChange?.('table')}
+                                className={`
+                    px-2 py-1 text-[10px] font-medium transition-colors flex items-center gap-1
+                    ${currentView === 'table'
+                                        ? 'bg-[#005EA8] text-white'
+                                        : 'bg-white text-slate-600 hover:bg-slate-50'
+                                    }
+                  `}
+                            >
+                                <TableIcon className="w-3 h-3" />
+                                Tableau
+                            </button>
+                            <button
+                                onClick={() => onViewChange?.('graph')}
+                                className={`
+                    px-2 py-1 text-[10px] font-medium transition-colors flex items-center gap-1 border-l border-slate-300
+                    ${currentView === 'graph'
+                                        ? 'bg-[#005EA8] text-white'
+                                        : 'bg-white text-slate-600 hover:bg-slate-50'
+                                    }
+                  `}
+                            >
+                                <BarChart3 className="w-3 h-3" />
+                                Graphe
+                            </button>
+                        </div>
+                    )}
+                </div>
             </div>
 
             {/* Table Container */}

@@ -1,6 +1,7 @@
-"use client";
 import React, { useMemo } from "react";
 import { motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
+import { PlusCircle } from "lucide-react";
 
 const SCOPE_LABEL = {
   poste: "Par Intervenant",
@@ -15,12 +16,14 @@ const scopeToLabel = (s) =>
 
 export default function HeaderSimulation({ mode, setMode, scope }) {
   const scopeLabel = useMemo(() => scopeToLabel(scope), [scope]);
+  const navigate = useNavigate();
 
   return (
     <div className="relative bg-white rounded-2xl shadow-md px-3 py-2 md:py-1.5 border border-slate-200">
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between w-full gap-3 md:gap-0">
         {/* TITRE compact */}
         <div className="flex flex-col justify-center min-w-0 w-full md:w-auto">
+          {/* ... existing title ... */}
           <div className="flex items-center gap-2">
             <div className="w-1 h-6 bg-[#005EA8] rounded-full shrink-0" />
             <motion.h1
@@ -33,6 +36,8 @@ export default function HeaderSimulation({ mode, setMode, scope }) {
               Simulation des Effectifs –{" "}
               <span className="text-[#005EA8] font-bold block md:inline">{scopeLabel}</span>
             </motion.h1>
+            {/* 🆕 Bouton Create Centre */}
+
           </div>
 
           <p className="text-[10px] text-slate-500 ml-3 mt-0.5 font-medium leading-tight">

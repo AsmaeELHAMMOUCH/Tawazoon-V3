@@ -5,7 +5,7 @@
  * - Version "Pro" & Refondue
  */
 "use client";
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useDirectionData } from "../../hooks/useDirectionData";
 import { useSimulation } from "../../context/SimulationContext";
 import {
@@ -24,7 +24,6 @@ import DirectionCentresTable from "../direction/DirectionCentresTable";
 import DirectionDonutsRow from "../direction/DirectionDonutsRow";
 import DirectionConsolideTable from "../direction/DirectionConsolideTable";
 import DirectionPostesModal from "../direction/DirectionPostesModal";
-import DirectionOverviewChart from "../direction/DirectionOverviewChart";
 import { normalizePoste, fmt } from "../../utils/formatters";
 
 // ---------- Helpers ----------
@@ -38,7 +37,7 @@ const toNumber = (v, fallback = 0) => {
 
 const normKey = (k) => String(k || "").toLowerCase().trim();
 
-export default function VueDirection({ api }) {
+export default function VueDirection({ api, initialDirectionId, globalSimulationState }) {
   // 1. Data Hook
   const {
     directions,
@@ -49,6 +48,8 @@ export default function VueDirection({ api }) {
     error,
     actions
   } = useDirectionData(api);
+
+  // ... (rest of the state definition kept as is in next lines)
 
   // 2. Local State
   const [params, setParams] = useState({
@@ -72,8 +73,22 @@ export default function VueDirection({ api }) {
   const [lastVolumes, setLastVolumes] = useState([]);
   const [simMode, setSimMode] = useState("database");
 
+  // 🆕 Handle Initial Navigation & Global State Injection
+  useEffect(() => {
+    if (initialDirectionId && initialDirectionId !== selectedDirection && actions) {
+      if (globalSimulationState && actions.injectSimulationResults) {
+        // We have global simulation results, use them
+        console.log("Injecting global simulation results for direction:", initialDirectionId);
+        actions.injectSimulationResults(initialDirectionId, globalSimulationState);
+      } else if (actions.selectDirection) {
+        // Standard fetch
+        actions.selectDirection(initialDirectionId);
+      }
+    }
+  }, [initialDirectionId, selectedDirection, actions, globalSimulationState]);
+
   // 3. Handlers
-  const handleDownloadTemplate = () => {
+  const handleDownloadTemplate = useCallback(() => {
     try {
       // Debug: Vérifier les centres disponibles
       console.log("Centres disponibles:", centres);
@@ -93,7 +108,6 @@ export default function VueDirection({ api }) {
 
       // Ajouter chaque centre
       centres.forEach((centre, index) => {
-        console.log(`Centre ${index + 1}:`, centre.label || centre.nom);
         if (index > 0) {
           templateData.push([]);
           templateData.push([]);
@@ -181,31 +195,14 @@ export default function VueDirection({ api }) {
         [],
         ["2. STRUCTURE DES DONNÉES"],
         ["", "Pour chaque centre, 3 sections :"],
-        [],
-        ["A) FLUX ARRIVÉE", "Matrice 5 flux × 5 segments"],
-        ["", "  Flux : Amana, CO, CR, E-Barkia, LRH"],
-        ["", "  Segments : GLOBAL, PART., PRO, DIST., AXES"],
-        [],
-        ["B) GUICHET", "2 opérations uniquement"],
-        ["", "  - DÉPÔT : Volume des dépôts"],
-        ["", "  - RÉCUP. : Volume des récupérations"],
-        [],
-        ["C) FLUX DÉPART", "Même matrice que Flux Arrivée"],
-        ["", "  Flux : Amana, CO, CR, E-Barkia, LRH"],
-        ["", "  Segments : GLOBAL, PART., PRO, DIST., AXES"],
+        ["", "A) FLUX ARRIVÉE"],
+        ["", "B) GUICHET"],
+        ["", "C) FLUX DÉPART"],
         [],
         ["3. RÈGLES DE SAISIE"],
         ["", "✓ NE PAS modifier les noms de centres"],
         ["", "✓ Saisir uniquement des nombres entiers ou décimaux"],
         ["", "✓ Laisser vide si volume = 0"],
-        ["", "✓ Ne pas modifier la structure du tableau"],
-        [],
-        ["4. MAPPING DES SEGMENTS"],
-        ["GLOBAL", "Volume global non segmenté"],
-        ["PART.", "Segment Particuliers"],
-        ["PRO", "Segment Professionnels"],
-        ["DIST.", "Segment Distribution"],
-        ["AXES", "Segment Axes stratégiques"],
       ];
 
       const wsGuide = XLSX.utils.aoa_to_sheet(guideData);
@@ -222,16 +219,16 @@ export default function VueDirection({ api }) {
     } catch (error) {
       console.error('Erreur lors de la génération du template:', error);
     }
-  };
+  }, [centres, selectedDirection, directions]);
 
-  const handleSelectDirection = (id) => {
+  const handleSelectDirection = useCallback((id) => {
     actions.selectDirection(id);
     initializedRef.current = false;
     setLastVolumes([]);
     setSimMode("database");
-  };
+  }, [actions]);
 
-  const runSim = async (modeOverride = null, volumesOverride = null) => {
+  const runSim = useCallback(async (modeOverride = null, volumesOverride = null) => {
     if (!selectedDirection) return;
 
     const activeMode = modeOverride || simMode;
@@ -260,23 +257,19 @@ export default function VueDirection({ api }) {
     console.log("Payload envoyé au backend:", payload);
 
     await actions.runSimulation(payload);
-  };
+  }, [selectedDirection, simMode, lastVolumes, params, actions]);
 
   useEffect(() => {
     if (selectedDirection && !loading.centres && !initializedRef.current) {
       runSim("database", []);
       initializedRef.current = true;
     }
-  }, [selectedDirection, loading.centres]);
+  }, [selectedDirection, loading.centres, runSim]);
 
-  useEffect(() => {
-    setParams(prev => ({
-      ...prev,
-      heuresParJour: parseFloat((8 * (prev.productivite / 100)).toFixed(2))
-    }));
-  }, [params.productivite]);
+  // REMOVED CASCADING EFFECT for productivite -> heuresParJour
+  // Now handled in onChange
 
-  const handleManualSimulate = async (importedData) => {
+  const handleManualSimulate = useCallback(async (importedData) => {
     if (!selectedDirection) {
       alert("Veuillez sélectionner une Direction d'abord.");
       return;
@@ -294,7 +287,6 @@ export default function VueDirection({ api }) {
           ebarkia: 0,
           lrh: 0,
           amana: 0,
-          // Paramètres de conversion avec valeurs par défaut
           colis_amana_par_sac: 5,
           courriers_par_sac: 4500,
           colis_par_collecte: 1
@@ -335,7 +327,7 @@ export default function VueDirection({ api }) {
           } else if (key.includes("amana") && !key.includes("sac")) {
             v.amana = toNumber(val, 0);
           }
-          // Paramètres de conversion
+          // Paramètres
           else if (key.includes("colis") && key.includes("amana") && key.includes("sac")) {
             v.colis_amana_par_sac = toNumber(val, 5);
           } else if (key.includes("courrier") && key.includes("sac")) {
@@ -347,13 +339,10 @@ export default function VueDirection({ api }) {
 
         if (!v.centre_label && row?.label) v.centre_label = String(row.label).trim();
 
-        // --- IMPROVED MATCHING LOGIC ---
-        // Try to find the centre_id from the existing centres list if not already present
         if (!v.centre_id && v.centre_label && centres && centres.length > 0) {
           const normalizedImport = String(v.centre_label).toLowerCase().replace(/\s+/g, "");
           const match = centres.find(c => {
             const normalizedDb = String(c.label).toLowerCase().replace(/\s+/g, "");
-            // Exact match after normalization or "includes" if significant length
             return normalizedDb === normalizedImport || (normalizedDb.includes(normalizedImport) && normalizedImport.length > 5);
           });
           if (match) {
@@ -367,22 +356,19 @@ export default function VueDirection({ api }) {
 
     await runSim("actuel", volumes);
     initializedRef.current = true;
-  };
+  }, [selectedDirection, centres, runSim]);
 
-  const openDetail = async (centre) => {
+  const openDetail = useCallback(async (centre) => {
     setSelectedCentre(centre);
     setDetailModalOpen(true);
     setCentrePostes([]);
 
-    // CAS 1: Résultat de simulation disponible (prioritaire)
     if (centre.details_postes && centre.details_postes.length > 0) {
-      // On utilise directement les données calculées
       setCentrePostes(centre.details_postes);
       setLoadingPostes(false);
       return;
     }
 
-    // CAS 2: Données statiques BDD (si pas de sim)
     setLoadingPostes(true);
     try {
       if (typeof api.postesByCentre === "function") {
@@ -394,9 +380,9 @@ export default function VueDirection({ api }) {
     } finally {
       setLoadingPostes(false);
     }
-  };
+  }, [api]);
 
-  const handleExportPDF = async () => {
+  const handleExportPDF = useCallback(async () => {
     const element = document.getElementById("official-report-area");
     if (!element) return;
     const originalPos = element.style.position;
@@ -430,23 +416,25 @@ export default function VueDirection({ api }) {
       element.style.position = originalPos;
       element.style.zIndex = originalZ;
     }
-  };
+  }, [selectedDirection]);
 
-  const currentDirLabel = directions.find(d => String(d.id) === String(selectedDirection))?.label;
+  const currentDirLabel = useMemo(() =>
+    directions.find(d => String(d.id) === String(selectedDirection))?.label,
+    [directions, selectedDirection]);
 
-  // Force local computation to ensure consistency (Delta = Target - Actual)
-  const computedFte = centres ? centres.reduce((a, b) => a + (b.fte_actuel || 0), 0) : 0;
-  const computedEtp = centres ? centres.reduce((a, b) => a + (b.etp_calcule || 0), 0) : 0;
-
-  const kpis = {
-    centers: centres ? centres.length : 0,
-    fte: computedFte,
-    etp: computedEtp,
-    delta: computedEtp - computedFte // Consistent math
-  };
+  const kpis = useMemo(() => {
+    const computedFte = centres ? centres.reduce((a, b) => a + (b.fte_actuel || 0), 0) : 0;
+    const computedEtp = centres ? centres.reduce((a, b) => a + (b.etp_calcule || 0), 0) : 0;
+    return {
+      centers: centres ? centres.length : 0,
+      fte: computedFte,
+      etp: computedEtp,
+      delta: computedEtp - computedFte
+    };
+  }, [centres]);
 
   // --- NEW SCENARIO HANDLER ---
-  const handleScenarioApply = async (factor) => {
+  const handleScenarioApply = useCallback(async (factor) => {
     if (!lastVolumes || lastVolumes.length === 0) {
       alert("Veuillez d'abord importer des volumes ou sélectionner une direction pour activer la projection.");
       return;
@@ -466,10 +454,10 @@ export default function VueDirection({ api }) {
 
     // Run simulation with scenario
     await runSim("scenario", projectedVolumes);
-  };
+  }, [lastVolumes, runSim]);
   // -----------------------------
 
-  const handleShare = (type) => {
+  const handleShare = useCallback((type) => {
     // 1. WhatsApp Executive Format (Decision Oriented)
     if (type === 'whatsapp') {
       const gap = kpis.delta;
@@ -550,7 +538,42 @@ Application Tawazoon RH`;
     const subject = encodeURIComponent(`Arbitrage RH : ${currentDirLabel || 'Direction'}`);
     window.open(`mailto:?subject=${subject}&body=${encodeURIComponent(emailBody)}`);
     setShareOpen(false);
-  };
+  }, [kpis, centres, currentDirLabel]); // Dep array updated using memoized values
+
+  // 4. Memoized Actions
+  const headerActions = useMemo(() => (
+    <div className="flex items-center gap-2">
+      <button
+        onClick={handleExportPDF}
+        className="px-2 py-1 text-[10px] font-bold rounded border border-slate-200 text-slate-600 bg-slate-50 hover:bg-white hover:text-red-700 hover:border-red-200 flex items-center gap-1.5 transition-all"
+      >
+        <FileText size={12} /> Export PDF
+      </button>
+
+      {/* Share Button & Dropdown */}
+      <div className="relative">
+        <button
+          onClick={() => setShareOpen(!shareOpen)}
+          className={`px-2 py-1 text-[10px] font-bold rounded border transition-all flex items-center gap-1.5 ${shareOpen ? 'bg-[#005EA8] text-white border-[#005EA8]' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-white hover:text-[#005EA8]'}`}
+        >
+          <Share2 size={12} />
+        </button>
+        {shareOpen && (
+          <div className="absolute top-full right-0 mt-1 w-48 bg-white rounded-lg shadow-xl border border-slate-100 py-1 animate-in fade-in slide-in-from-top-2 z-[9999]">
+            <div className="px-3 py-1.5 border-b border-slate-50 mb-1">
+              <span className="text-[9px] uppercase font-bold text-slate-400 tracking-widest">Partager</span>
+            </div>
+            <button onClick={() => handleShare('email')} className="w-full text-left px-3 py-2 text-[10px] font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2">
+              <Mail size={12} className="text-blue-600" /> Par Email
+            </button>
+            <button onClick={() => handleShare('whatsapp')} className="w-full text-left px-3 py-2 text-[10px] font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2">
+              <MessageCircle size={12} className="text-green-600" /> Par WhatsApp
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  ), [handleExportPDF, shareOpen, handleShare]);
 
   return (
     <div className="min-h-screen bg-slate-50/50 pb-8 animate-in fade-in duration-300 font-sans" style={{ zoom: "90%" }}>
@@ -615,114 +638,6 @@ Application Tawazoon RH`;
           /* --- DASHBOARD CONTENT --- */
           <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
 
-
-            {/* 2. CRITICAL SECTION : SELECTOR + PARAMS GRID (50/50 Layout like VueCentre) */}
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-2 sticky top-[60px] z-30">
-
-              {/* LEFT: PERIMETER SELECTOR */}
-              <div className="bg-white border border-slate-200 rounded-xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] p-2 flex flex-col justify-center h-full animate-in slide-in-from-left-4 duration-500">
-                <div className="flex items-center gap-2 mb-3 border-b border-slate-50 pb-2">
-                  <div className="p-1.5 bg-blue-50 text-[#005EA8] rounded-lg">
-                    <Building2 size={16} strokeWidth={2.5} />
-                  </div>
-                  <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Périmètre / Direction</h3>
-                </div>
-
-                <div className="flex items-center gap-2 w-full">
-                  <div className="relative group flex-1">
-                    <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 shadow-inner group-hover:bg-white group-hover:shadow-md group-hover:border-blue-300 transition-all">
-                      <select
-                        className="appearance-none bg-transparent font-bold text-slate-800 text-sm xl:text-base w-full outline-none cursor-pointer"
-                        value={selectedDirection || ""}
-                        onChange={(e) => handleSelectDirection(e.target.value)}
-                      >
-                        {directions.map(d => <option key={d.id} value={d.id}>{d.label}</option>)}
-                      </select>
-                      <ChevronDown size={18} className="text-slate-400 pointer-events-none group-hover:text-[#005EA8] transition-colors" />
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={handleDownloadTemplate}
-                    className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-600 hover:text-[#005EA8] hover:border-blue-300 hover:bg-white transition-all shadow-sm"
-                    title="Télécharger le modèle Excel"
-                  >
-                    <FileSpreadsheet size={16} strokeWidth={2} />
-                    <span className="text-xs font-bold">Modèle</span>
-                  </button>
-
-                  <button
-                    onClick={() => setImportModalOpen(true)}
-                    className="flex items-center gap-2 px-3 py-2 bg-[#005EA8] border border-[#005EA8] rounded-lg text-white hover:bg-[#004e8a] transition-all shadow-md active:scale-95"
-                    title="Importer un fichier de volumes"
-                  >
-                    <UploadCloud size={16} strokeWidth={2} />
-                    <span className="text-xs font-bold">Importer</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* RIGHT: SIMULATION PARAMS */}
-              <div className="bg-white border border-slate-200 rounded-xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] p-2 h-full flex flex-col justify-center animate-in slide-in-from-right-4 duration-500">
-                <div className="flex items-center justify-between mb-3 border-b border-slate-50 pb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="p-1.5 bg-blue-50 text-[#005EA8] rounded-lg">
-                      <Sliders size={16} strokeWidth={2.5} />
-                    </div>
-                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Simulation</h3>
-                  </div>
-                  <div className="flex items-center gap-2 bg-blue-50 px-2 py-1 rounded text-[#005EA8]">
-                    <span className="text-[10px] font-bold uppercase tracking-wider">Capacité Nette</span>
-                    <span className="font-mono text-sm font-bold">
-                      {(() => {
-                        const h = 8;
-                        const idleH = (params.idleMinutes || 0) / 60;
-                        const prod = (params.productivite || 100) / 100;
-                        const net = Math.max(0, (h - idleH) * prod);
-                        return net.toFixed(2).replace('.', ',');
-                      })()} h
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-4">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 flex-1">
-                    {/* Prod */}
-                    <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded px-2 py-1.5 overflow-hidden">
-                      <span className="text-[10px] font-bold text-slate-400">PROD</span>
-                      <input type="number" className="w-full bg-transparent font-mono text-xs font-bold text-center outline-none" value={params.productivite} onChange={e => setParams(p => ({ ...p, productivite: parseFloat(e.target.value) }))} />
-                      <span className="text-[10px] text-slate-400">%</span>
-                    </div>
-                    {/* Tps Mort */}
-                    <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded px-2 py-1.5 overflow-hidden">
-                      <span className="text-[10px] font-bold text-slate-400">MORT</span>
-                      <input type="number" className="w-full bg-transparent font-mono text-xs font-bold text-center outline-none" value={params.idleMinutes} onChange={e => setParams(p => ({ ...p, idleMinutes: parseFloat(e.target.value) }))} />
-                      <span className="text-[10px] text-slate-400">m</span>
-                    </div>
-                    {/* Circ */}
-                    <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded px-2 py-1.5 overflow-hidden">
-                      <span className="text-[10px] font-bold text-slate-400">CIRC</span>
-                      <input type="number" step="0.1" className="w-full bg-transparent font-mono text-xs font-bold text-center outline-none" value={params.tauxComplexite} onChange={e => setParams(p => ({ ...p, tauxComplexite: parseFloat(e.target.value) }))} />
-                    </div>
-                    {/* Geo */}
-                    <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded px-2 py-1.5 overflow-hidden">
-                      <span className="text-[10px] font-bold text-slate-400">GEO</span>
-                      <input type="number" step="0.1" className="w-full bg-transparent font-mono text-xs font-bold text-center outline-none" value={params.natureGeo} onChange={e => setParams(p => ({ ...p, natureGeo: parseFloat(e.target.value) }))} />
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => runSim()}
-                    className="bg-[#005EA8] hover:bg-[#004e8a] text-white p-2.5 rounded-lg shadow-sm transition-all active:scale-95 group shrink-0"
-                    title="Lancer la simulation"
-                  >
-                    <Play size={18} fill="currentColor" className="group-hover:translate-x-0.5 transition-transform" />
-                  </button>
-                </div>
-              </div>
-
-            </div>
-
             {/* KPI Section */}
             <div className="-mt-2">
               <IndicateursDirection currentDir={{ label: currentDirLabel }} kpis={kpis} fmt={fmt} />
@@ -731,54 +646,12 @@ Application Tawazoon RH`;
             <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
 
               {/* Main Table Area */}
-              <div className="xl:col-span-8 flex flex-col gap-4">
-                {kpis.etp === 0 && (
-                  <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs p-3 rounded-lg flex items-start gap-2 shadow-sm">
-                    <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-                    <div>
-                      <strong className="block mb-0.5">Données manquantes</strong>
-                      L'ETP Calculé est de 0. Veuillez importer un fichier de volumes pour générer une simulation pertinente.
-                    </div>
-                  </div>
-                )}
-
+              <div className="xl:col-span-12 flex flex-col gap-4">
                 <DirectionCentresTable
                   centres={centres}
                   loading={loading.centres || loading.sim}
                   onOpenDetail={openDetail}
-                  headerActions={
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={handleExportPDF}
-                        className="px-2 py-1 text-[10px] font-bold rounded border border-slate-200 text-slate-600 bg-slate-50 hover:bg-white hover:text-red-700 hover:border-red-200 flex items-center gap-1.5 transition-all"
-                      >
-                        <FileText size={12} /> Export PDF
-                      </button>
-
-                      {/* Share Button & Dropdown */}
-                      <div className="relative">
-                        <button
-                          onClick={() => setShareOpen(!shareOpen)}
-                          className={`px-2 py-1 text-[10px] font-bold rounded border transition-all flex items-center gap-1.5 ${shareOpen ? 'bg-[#005EA8] text-white border-[#005EA8]' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-white hover:text-[#005EA8]'}`}
-                        >
-                          <Share2 size={12} />
-                        </button>
-                        {shareOpen && (
-                          <div className="absolute top-full right-0 mt-1 w-48 bg-white rounded-lg shadow-xl border border-slate-100 py-1 animate-in fade-in slide-in-from-top-2 z-[9999]">
-                            <div className="px-3 py-1.5 border-b border-slate-50 mb-1">
-                              <span className="text-[9px] uppercase font-bold text-slate-400 tracking-widest">Partager</span>
-                            </div>
-                            <button onClick={() => handleShare('email')} className="w-full text-left px-3 py-2 text-[10px] font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2">
-                              <Mail size={12} className="text-blue-600" /> Par Email
-                            </button>
-                            <button onClick={() => handleShare('whatsapp')} className="w-full text-left px-3 py-2 text-[10px] font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2">
-                              <MessageCircle size={12} className="text-green-600" /> Par WhatsApp
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  }
+                  headerActions={headerActions}
                 />
 
                 {consolidation.rows && consolidation.rows.length > 0 && (
@@ -788,15 +661,6 @@ Application Tawazoon RH`;
                     loading={loading.consolide}
                   />
                 )}
-              </div>
-
-              {/* Sidebar / Widgets */}
-              <div className="xl:col-span-4 space-y-4">
-                {/* 1. AI Smart Panel (Wow Effect) */}
-                <DirectionOverviewChart centres={centres} />
-
-
-
               </div>
             </div>
           </div>

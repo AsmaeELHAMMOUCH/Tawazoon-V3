@@ -3,7 +3,7 @@ import os
 sys.path.append(os.getcwd())
 
 from app.core.db import SessionLocal
-from app.models.db_models import Tache
+from app.models.db_models import Tache, CentrePoste
 
 def check_product():
     db = SessionLocal()
@@ -13,8 +13,13 @@ def check_product():
         task = db.query(Tache).filter(Tache.id == 12677).first()
         
         if task:
+            # Récupérer le poste
+            cp = db.query(CentrePoste).filter(CentrePoste.id == task.centre_poste_id).first()
+            poste_label = cp.poste.label if cp and cp.poste else "Inconnu"
+            
             output.append(f"ID: {task.id}")
             output.append(f"Nom: '{task.nom_tache}'")
+            output.append(f"CentrePoste ID: {task.centre_poste_id} ({poste_label})")
             output.append(f"Produit RAW: '{task.produit}'")
             output.append(f"Produit UPPER: '{str(task.produit).strip().upper()}'")
             output.append(f"Unité: '{task.unite_mesure}'")

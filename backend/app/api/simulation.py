@@ -202,6 +202,10 @@ def simulate_effectifs(request: SimulationRequest, db: Session = Depends(get_db)
         print("="*80 + "\n", flush=True)
 
         print(f"🔄 [BACKEND - STEP 2] Appel du moteur de calcul...", flush=True)
+        # Extract complexity from annual volumes (V2 standard)
+        t_complexite = float(va_dict.get("taux_complexite", 1.0))
+        n_geo = float(va_dict.get("nature_geo", 1.0))
+
         # 4) calcul
         resultat = calculer_simulation(
             taches=taches_finales,
@@ -210,6 +214,8 @@ def simulate_effectifs(request: SimulationRequest, db: Session = Depends(get_db)
             heures_net_input=request.heures_net,
             volumes_annuels=va_dict,
             volumes_mensuels=None,
+            taux_complexite=t_complexite,
+            nature_geo=n_geo,
         )
         
         print(f"\n✅ [BACKEND - STEP 3] Calcul terminé:", flush=True)
@@ -219,63 +225,64 @@ def simulate_effectifs(request: SimulationRequest, db: Session = Depends(get_db)
         print("="*80 + "\n", flush=True)
         
         # 🆕 5) SAUVEGARDE AUTOMATIQUE DE LA SIMULATION
-        try:
-            from app.services.simulation_run import (
-                insert_simulation_run,
-                bulk_insert_volumes,
-                upsert_simulation_result
-            )
-            
-            # Préparer les volumes pour la sauvegarde
-            volumes_to_save = {}
-            unites_to_save = {}
-            
-            # Volumes journaliers
-            if request.volumes:
-                vol_dict = request.volumes.dict() if hasattr(request.volumes, 'dict') else dict(request.volumes)
-                for key, val in vol_dict.items():
-                    if val is not None and val != 0:
-                        volumes_to_save[key.upper()] = float(val)
-                        unites_to_save[key.upper()] = "jour"
-            
-            # Volumes annuels
-            if va_dict:
-                for key, val in va_dict.items():
-                    if val is not None and val != 0:
-                        volumes_to_save[key.upper()] = float(val)
-                        unites_to_save[key.upper()] = "an"
-            
-            # 1. Créer l'enregistrement de simulation
-            sim_id = insert_simulation_run(
-                db=db,
-                centre_id=request.centre_id,
-                productivite=request.productivite,
-                commentaire=getattr(request, 'commentaire', None),
-                user_id=getattr(request, 'user_id', None)
-            )
-            
-            # 2. Sauvegarder les volumes
-            if volumes_to_save:
-                bulk_insert_volumes(db, sim_id, volumes_to_save, unites_to_save)
-            
-            # 3. Sauvegarder les résultats
-            upsert_simulation_result(
-                db=db,
-                simulation_id=sim_id,
-                heures=resultat.total_heures or 0.0,
-                etp_calc=resultat.fte_calcule or 0.0,
-                etp_arr=resultat.fte_arrondi or 0
-            )
-            
-            db.commit()
-            print(f"✅ Simulation #{sim_id} sauvegardée avec succès", flush=True)
-            
-        except Exception as e:
-            print(f"⚠️  Erreur sauvegarde simulation: {e}", flush=True)
-            import traceback
-            print(traceback.format_exc(), flush=True)
-            # Ne pas bloquer la simulation si la sauvegarde échoue
-            db.rollback()
+        if not request.is_test:
+            try:
+                from app.services.simulation_run import (
+                    insert_simulation_run,
+                    bulk_insert_volumes,
+                    upsert_simulation_result
+                )
+                
+                # Préparer les volumes pour la sauvegarde
+                volumes_to_save = {}
+                unites_to_save = {}
+                
+                # Volumes journaliers
+                if request.volumes:
+                    vol_dict = request.volumes.dict() if hasattr(request.volumes, 'dict') else dict(request.volumes)
+                    for key, val in vol_dict.items():
+                        if val is not None and val != 0:
+                            volumes_to_save[key.upper()] = float(val)
+                            unites_to_save[key.upper()] = "jour"
+                
+                # Volumes annuels
+                if va_dict:
+                    for key, val in va_dict.items():
+                        if val is not None and val != 0:
+                            volumes_to_save[key.upper()] = float(val)
+                            unites_to_save[key.upper()] = "an"
+                
+                # 1. Créer l'enregistrement de simulation
+                sim_id = insert_simulation_run(
+                    db=db,
+                    centre_id=request.centre_id,
+                    productivite=request.productivite,
+                    commentaire=getattr(request, 'commentaire', None),
+                    user_id=getattr(request, 'user_id', None)
+                )
+                
+                # 2. Sauvegarder les volumes
+                if volumes_to_save:
+                    bulk_insert_volumes(db, sim_id, volumes_to_save, unites_to_save)
+                
+                # 3. Sauvegarder les résultats
+                upsert_simulation_result(
+                    db=db,
+                    simulation_id=sim_id,
+                    heures=resultat.total_heures or 0.0,
+                    etp_calc=resultat.fte_calcule or 0.0,
+                    etp_arr=resultat.fte_arrondi or 0
+                )
+                
+                db.commit()
+                print(f"✅ Simulation #{sim_id} sauvegardée avec succès", flush=True)
+                
+            except Exception as e:
+                print(f"⚠️  Erreur sauvegarde simulation: {e}", flush=True)
+                import traceback
+                print(traceback.format_exc(), flush=True)
+                # Ne pas bloquer la simulation si la sauvegarde échoue
+                db.rollback()
         
         return resultat
 
@@ -401,6 +408,10 @@ def simulate_vue_centre_optimisee(
         print(f"DEBUG vue-centre volumes_annuels (va_dict) = {va_dict}", flush=True)
         print(f"DEBUG vue-centre nb taches finales = {len(taches_finales)}", flush=True)
 
+        # Extract complexity from annual volumes (V2 standard)
+        t_complexite = float(va_dict.get("taux_complexite", 1.0))
+        n_geo = float(va_dict.get("nature_geo", 1.0))
+
         # 4) calcul
         sim_result: SimulationResponse = calculer_simulation(
             taches=taches_finales,
@@ -410,6 +421,8 @@ def simulate_vue_centre_optimisee(
             idle_minutes=getattr(request, "idle_minutes", 0.0),
             volumes_annuels=va_dict,
             volumes_mensuels=None,
+            taux_complexite=t_complexite,
+            nature_geo=n_geo,
         )
 
         heures_par_poste = sim_result.heures_par_poste or {}
@@ -460,63 +473,64 @@ def simulate_vue_centre_optimisee(
         total_ecart = total_etp_arrondi - total_effectif_actuel
 
         # 🆕 6) SAUVEGARDE AUTOMATIQUE DE LA SIMULATION
-        try:
-            from app.services.simulation_run import (
-                insert_simulation_run,
-                bulk_insert_volumes,
-                upsert_simulation_result
-            )
-            
-            # Préparer les volumes pour la sauvegarde
-            volumes_to_save = {}
-            unites_to_save = {}
-            
-            # Volumes journaliers
-            if request.volumes:
-                vol_dict = request.volumes.dict() if hasattr(request.volumes, 'dict') else dict(request.volumes)
-                for key, val in vol_dict.items():
-                    if val is not None and val != 0:
-                        volumes_to_save[key.upper()] = float(val)
-                        unites_to_save[key.upper()] = "jour"
-            
-            # Volumes annuels
-            if va_dict:
-                for key, val in va_dict.items():
-                    if val is not None and val != 0:
-                        volumes_to_save[key.upper()] = float(val)
-                        unites_to_save[key.upper()] = "an"
-            
-            # 1. Créer l'enregistrement de simulation
-            sim_id = insert_simulation_run(
-                db=db,
-                centre_id=request.centre_id,
-                productivite=request.productivite,
-                commentaire=getattr(request, 'commentaire', None),
-                user_id=getattr(request, 'user_id', None)
-            )
-            
-            # 2. Sauvegarder les volumes
-            if volumes_to_save:
-                bulk_insert_volumes(db, sim_id, volumes_to_save, unites_to_save)
-            
-            # 3. Sauvegarder les résultats
-            upsert_simulation_result(
-                db=db,
-                simulation_id=sim_id,
-                heures=total_heures,
-                etp_calc=total_etp_calcule,
-                etp_arr=total_etp_arrondi
-            )
-            
-            db.commit()
-            print(f"✅ Simulation Vue Centre #{sim_id} sauvegardée avec succès", flush=True)
-            
-        except Exception as e:
-            print(f"⚠️  Erreur sauvegarde simulation Vue Centre: {e}", flush=True)
-            import traceback
-            print(traceback.format_exc(), flush=True)
-            # Ne pas bloquer la simulation si la sauvegarde échoue
-            db.rollback()
+        if not request.is_test:
+            try:
+                from app.services.simulation_run import (
+                    insert_simulation_run,
+                    bulk_insert_volumes,
+                    upsert_simulation_result
+                )
+                
+                # Préparer les volumes pour la sauvegarde
+                volumes_to_save = {}
+                unites_to_save = {}
+                
+                # Volumes journaliers
+                if request.volumes:
+                    vol_dict = request.volumes.dict() if hasattr(request.volumes, 'dict') else dict(request.volumes)
+                    for key, val in vol_dict.items():
+                        if val is not None and val != 0:
+                            volumes_to_save[key.upper()] = float(val)
+                            unites_to_save[key.upper()] = "jour"
+                
+                # Volumes annuels
+                if va_dict:
+                    for key, val in va_dict.items():
+                        if val is not None and val != 0:
+                            volumes_to_save[key.upper()] = float(val)
+                            unites_to_save[key.upper()] = "an"
+                
+                # 1. Créer l'enregistrement de simulation
+                sim_id = insert_simulation_run(
+                    db=db,
+                    centre_id=request.centre_id,
+                    productivite=request.productivite,
+                    commentaire=getattr(request, 'commentaire', None),
+                    user_id=getattr(request, 'user_id', None)
+                )
+                
+                # 2. Sauvegarder les volumes
+                if volumes_to_save:
+                    bulk_insert_volumes(db, sim_id, volumes_to_save, unites_to_save)
+                
+                # 3. Sauvegarder les résultats
+                upsert_simulation_result(
+                    db=db,
+                    simulation_id=sim_id,
+                    heures=total_heures,
+                    etp_calc=total_etp_calcule,
+                    etp_arr=total_etp_arrondi
+                )
+                
+                db.commit()
+                print(f"✅ Simulation Vue Centre #{sim_id} sauvegardée avec succès", flush=True)
+                
+            except Exception as e:
+                print(f"⚠️  Erreur sauvegarde simulation Vue Centre: {e}", flush=True)
+                import traceback
+                print(traceback.format_exc(), flush=True)
+                # Ne pas bloquer la simulation si la sauvegarde échoue
+                db.rollback()
 
         return {
             "centre_id": request.centre_id,

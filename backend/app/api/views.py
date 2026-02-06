@@ -24,6 +24,7 @@ class VueIntervenantResponse(BaseModel):
     """Réponse complète pour la vue Intervenant"""
     centre_id: int
     centre_label: str
+    cas: Optional[float] = None
     postes: list[PosteETP]
     total_etp_calcule: float
     total_etp_arrondi: int
@@ -63,7 +64,7 @@ def get_vue_intervenant(
     try:
         # 1️⃣ Récupérer les infos du centre
         centre_row = db.execute(
-            text("SELECT id, label FROM dbo.centres WHERE id = :centre_id"),
+            text("SELECT id, label, CAST(cas AS FLOAT) as cas FROM dbo.centres WHERE id = :centre_id"),
             {"centre_id": centre_id}
         ).mappings().first()
         
@@ -71,6 +72,7 @@ def get_vue_intervenant(
             raise HTTPException(status_code=404, detail=f"Centre {centre_id} introuvable")
         
         centre_label = centre_row["label"]
+        cas_val = float(centre_row["cas"]) if centre_row["cas"] is not None else None
         
         # 2️⃣ Récupérer tous les postes du centre avec effectifs actuels
         postes_rows = db.execute(text("""
@@ -90,6 +92,7 @@ def get_vue_intervenant(
             return VueIntervenantResponse(
                 centre_id=centre_id,
                 centre_label=centre_label,
+                cas=cas_val,
                 postes=[],
                 total_etp_calcule=0.0,
                 total_etp_arrondi=0,
@@ -126,12 +129,17 @@ def get_vue_intervenant(
                     t.phase,
                     t.unite_mesure,
                     t.moyenne_min,
+                    t.min_min,
+                    t.moy_sec,
+                    t.ordre,
+                    t.base_calcul,
+                    t.produit,
                     t.centre_poste_id
                 FROM dbo.taches t
                 INNER JOIN dbo.centre_postes cp ON cp.id = t.centre_poste_id
                 WHERE cp.centre_id = :centre_id 
                   AND cp.poste_id = :poste_id
-                ORDER BY t.nom_tache
+                ORDER BY t.ordre, t.nom_tache
             """), {
                 "centre_id": centre_id,
                 "poste_id": poste_id
@@ -178,6 +186,7 @@ def get_vue_intervenant(
         return VueIntervenantResponse(
             centre_id=centre_id,
             centre_label=centre_label,
+            cas=cas_val,
             postes=postes_etp,
             total_etp_calcule=round(total_etp_calcule, 2),
             total_etp_arrondi=total_etp_arrondi,

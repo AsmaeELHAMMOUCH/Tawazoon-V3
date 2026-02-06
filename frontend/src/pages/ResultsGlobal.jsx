@@ -75,7 +75,7 @@ export default function ResultsGlobal() {
       dossiersJour: Number.isFinite(dossiersJour) ? Number(dossiersJour.toFixed(2)) : 0,
       heuresNetJour: Number.isFinite(heuresNetJour) ? Number(heuresNetJour.toFixed(2)) : 0,
     }));
-     
+
   }, [params.dossiersMois, params.productivite]);
 
   /* ——— Chargement des listes ——— */
@@ -87,7 +87,7 @@ export default function ResultsGlobal() {
         const raw = await r.json();
         const arr = (raw || []).map((v) => (typeof v === "string" ? { id: v, name: v } : v));
         setRegions(arr);
-      } catch {}
+      } catch { }
     })();
   }, []);
 
@@ -102,7 +102,7 @@ export default function ResultsGlobal() {
         setCategories(arr);
         setCentres([]);
         setFilters((f) => ({ ...f, categoryId: "", centreId: "" }));
-      } catch {}
+      } catch { }
     })();
   }, [filters.regionId]);
 
@@ -119,7 +119,7 @@ export default function ResultsGlobal() {
         const arr = (raw || []).map((c) => ({ id: String(c.id ?? c.value ?? ""), name: c.nom ?? c.name ?? "" }));
         setCentres(arr);
         setFilters((f) => ({ ...f, centreId: "" }));
-      } catch {}
+      } catch { }
     })();
   }, [filters.categoryId, filters.regionId]);
 
@@ -141,7 +141,7 @@ export default function ResultsGlobal() {
         } else {
           setRows([]);
         }
-      } catch {}
+      } catch { }
     })();
   }, [filters.centreId]);
 
@@ -235,7 +235,7 @@ export default function ResultsGlobal() {
           }));
         }
       }
-    } catch {}
+    } catch { }
     // Fallback : total depuis le détail si pas d’endpoint d’agrégat
     const t = (detailRows || rows).reduce(
       (a, r) => ({
@@ -307,7 +307,7 @@ export default function ResultsGlobal() {
   const titleChart =
     groupBy === "poste" ? "Comparaison des effectifs par Poste"
       : groupBy === "centre" ? "Comparaison des effectifs par Centre"
-      : "Comparaison des effectifs par Région";
+        : "Comparaison des effectifs par Région";
 
   /* ——— Rendu ——— */
   return (
@@ -321,7 +321,7 @@ export default function ResultsGlobal() {
           </div>
           <div className="flex flex-wrap items-center gap-2 md:justify-end">
             <label className="inline-flex items-center gap-2 text-xs text-slate-700">
-              <input type="checkbox" className="accent-primary" checked={onlyDiff} onChange={(e)=>setOnlyDiff(e.target.checked)} />
+              <input type="checkbox" className="accent-primary" checked={onlyDiff} onChange={(e) => setOnlyDiff(e.target.checked)} />
               Afficher seulement les écarts
             </label>
             <GroupBy value={groupBy} onChange={setGroupBy} />
@@ -331,17 +331,17 @@ export default function ResultsGlobal() {
 
         {/* Filtres (sans Poste) */}
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          <Select compact label="Région"  icon={MapPinIcon} value={filters.regionId}
-            onChange={(v)=>setFilters(f=>({...f, regionId:v, categoryId:"", centreId:""}))}
+          <Select compact label="Région" icon={MapPinIcon} value={filters.regionId}
+            onChange={(v) => setFilters(f => ({ ...f, regionId: v, categoryId: "", centreId: "" }))}
             options={regions} placeholder="Région" />
           <Select compact label="Catégorie" icon={TagIcon} value={filters.categoryId}
-            onChange={(v)=>setFilters(f=>({...f, categoryId:v, centreId:""}))}
+            onChange={(v) => setFilters(f => ({ ...f, categoryId: v, centreId: "" }))}
             options={categories} placeholder="Catégorie" disabled={!filters.regionId} />
           <Select compact label="Centre" icon={BuildingOfficeIcon} value={filters.centreId}
-            onChange={(v)=>setFilters(f=>({...f, centreId:v}))}
+            onChange={(v) => setFilters(f => ({ ...f, centreId: v }))}
             options={centres} placeholder="Centre" disabled={!filters.categoryId} />
           {/* Boutons graphe visibles seulement en mode Graphe */}
-          {view==="chart" && (
+          {view === "chart" && (
             <div className="ml-auto flex items-center gap-2">
               <ChartModeToggle value={chartMode} onChange={setChartMode} />
               <TargetToggle value={chartTarget} onChange={setChartTarget} />
@@ -364,15 +364,15 @@ export default function ResultsGlobal() {
         <h2 className="text-xs font-semibold text-slate-700 mb-2">Paramètres de Simulation</h2>
         <div className="flex flex-wrap items-center justify-start gap-3">
           <Param icon={ArchiveBoxIcon} label="Sacs/Jour" value={params.sacsJour}
-                 onChange={(v)=>setParams(p=>({...p, sacsJour:v}))} />
+            onChange={(v) => setParams(p => ({ ...p, sacsJour: v }))} />
           <Param icon={DocumentDuplicateIcon} label="Dossiers/Mois" value={params.dossiersMois}
-                 onChange={(v)=>setParams(p=>({...p, dossiersMois:v}))} />
+            onChange={(v) => setParams(p => ({ ...p, dossiersMois: v }))} />
           <Param icon={ChartBarIcon} label="Productivité (%)" value={params.productivite} suffix="%"
-                 onChange={(v)=>setParams(p=>({...p, productivite:v}))} />
+            onChange={(v) => setParams(p => ({ ...p, productivite: v }))} />
           <Param icon={DocumentTextIcon} label="Dossiers/Jour" value={params.dossiersJour} step={0.01}
-                 onChange={(v)=>setParams(p=>({...p, dossiersJour:v}))} />
+            onChange={(v) => setParams(p => ({ ...p, dossiersJour: v }))} />
           <Param icon={ClockIcon} label="Heures Net/Jour" value={params.heuresNetJour} step={0.01} suffix="h"
-                 onChange={(v)=>setParams(p=>({...p, heuresNetJour:v}))} />
+            onChange={(v) => setParams(p => ({ ...p, heuresNetJour: v }))} />
           <div className="ml-auto flex items-center gap-3">
             {loading && <div className="flex items-center gap-2 text-xs text-slate-500"><Spinner /> Calcul…</div>}
             {error && <div className="text-xs text-red-600">{error}</div>}
@@ -383,10 +383,10 @@ export default function ResultsGlobal() {
       {/* Vue Tableau / Graphe */}
       {view === "table" ? (
         groupBy === "poste" ? (
-          <TableBlock rows={rows.filter((r)=> (onlyDiff ? diffRow(r) : true))} totals={totals} />
+          <TableBlock rows={rows.filter((r) => (onlyDiff ? diffRow(r) : true))} totals={totals} />
         ) : (
           <AggregateTableBlock
-            rows={aggRows.filter((r)=> (onlyDiff ? diffAggRow(r) : true))}
+            rows={aggRows.filter((r) => (onlyDiff ? diffAggRow(r) : true))}
             totals={aggTotals}
             labelTitle={groupBy === "centre" ? "Centre" : "Région"}
             onRowClick={(r) => {
@@ -405,7 +405,7 @@ export default function ResultsGlobal() {
         )
       ) : (
         <ChartBlock
-          data={(onlyDiff ? chartData.filter((d)=>diffVals(d.Actuel, d.Calcule, d.Recommande)) : chartData)}
+          data={(onlyDiff ? chartData.filter((d) => diffVals(d.Actuel, d.Calcule, d.Recommande)) : chartData)}
           title={titleChart}
           mode={chartMode}
           target={chartTarget}
@@ -507,9 +507,9 @@ function AggregateTableBlock({ rows, totals, labelTitle, onRowClick }) {
               const ca = r.calcule - r.actuel, ra = r.recommande - r.actuel, rc = r.recommande - r.calcule;
               return (
                 <tr key={i}
-                    onClick={() => onRowClick && onRowClick(r)}
-                    className="odd:bg-white even:bg-slate-50 hover:bg-blue-50 transition-colors cursor-pointer"
-                    title="Cliquer pour détailler">
+                  onClick={() => onRowClick && onRowClick(r)}
+                  className="odd:bg-white even:bg-slate-50 hover:bg-blue-50 transition-colors cursor-pointer"
+                  title="Cliquer pour détailler">
                   <Td>{r.label}</Td>
                   <Td center>{r.actuel}</Td><Td center>{r.calcule}</Td><Td center>{r.recommande}</Td>
                   <Td center className={cls(ca)}>{ca}</Td><Td center className={cls(ra)}>{ra}</Td><Td center className={cls(rc)}>{rc}</Td>
@@ -558,7 +558,7 @@ function ChartBlock({ data, title, mode = "grouped", target = "recommande" }) {
     const tgtKey = target === "calcule" ? "Calcule" : "Recommande";
     return (data || []).map((d) => {
       const actuel = Number(d.Actuel || 0);
-      const cible  = Number(d[tgtKey] || 0);
+      const cible = Number(d[tgtKey] || 0);
       const manque = Math.max(0, cible - actuel);
       const surplus = Math.max(0, actuel - cible);
       return { label: d.label, Actuel: actuel, A_couvrir: manque, Surplus: surplus, Cible: cible };
@@ -603,12 +603,12 @@ function ChartBlock({ data, title, mode = "grouped", target = "recommande" }) {
 function Segment({ value, onChange }) {
   return (
     <div className="inline-flex items-center rounded-md border border-slate-300 overflow-hidden">
-      <button onClick={()=>onChange("table")}
-        className={`px-3 py-1.5 text-xs ${value==="table" ? "bg-primary text-white" : "bg-white text-slate-700 hover:bg-slate-50"}`}>
+      <button onClick={() => onChange("table")}
+        className={`px-3 py-1.5 text-xs ${value === "table" ? "bg-primary text-white" : "bg-white text-slate-700 hover:bg-slate-50"}`}>
         Tableau
       </button>
-      <button onClick={()=>onChange("chart")}
-        className={`px-3 py-1.5 text-xs border-l border-slate-300 ${value==="chart" ? "bg-primary text-white" : "bg-white text-slate-700 hover:bg-slate-50"}`}>
+      <button onClick={() => onChange("chart")}
+        className={`px-3 py-1.5 text-xs border-l border-slate-300 ${value === "chart" ? "bg-primary text-white" : "bg-white text-slate-700 hover:bg-slate-50"}`}>
         Graphe
       </button>
     </div>
@@ -621,7 +621,7 @@ function GroupBy({ value, onChange }) {
       <label className="text-xs font-medium text-slate-700 hidden md:block">Comparer par</label>
       <div className="relative">
         <AdjustmentsHorizontalIcon className="w-4 h-4 text-gray-400 absolute left-2 top-2 pointer-events-none" />
-        <select value={value} onChange={(e)=>onChange(e.target.value)} className="pl-7 pr-2 h-8 text-xs border rounded bg-white min-w-[9rem]">
+        <select value={value} onChange={(e) => onChange(e.target.value)} className="pl-7 pr-2 h-8 text-xs border rounded bg-white min-w-[9rem]">
           <option value="poste">Poste</option>
           <option value="centre">Centre</option>
           <option value="region">Région</option>
@@ -634,12 +634,12 @@ function GroupBy({ value, onChange }) {
 function ChartModeToggle({ value, onChange }) {
   return (
     <div className="inline-flex items-center rounded-md border border-slate-300 overflow-hidden">
-      <button onClick={()=>onChange("grouped")}
-        className={`px-2.5 py-1.5 text-xs ${value==="grouped" ? "bg-slate-800 text-white" : "bg-white text-slate-700 hover:bg-slate-50"}`}>
+      <button onClick={() => onChange("grouped")}
+        className={`px-2.5 py-1.5 text-xs ${value === "grouped" ? "bg-slate-800 text-white" : "bg-white text-slate-700 hover:bg-slate-50"}`}>
         Groupé
       </button>
-      <button onClick={()=>onChange("stacked")}
-        className={`px-2.5 py-1.5 text-xs border-l border-slate-300 ${value==="stacked" ? "bg-slate-800 text-white" : "bg-white text-slate-700 hover:bg-slate-50"}`}>
+      <button onClick={() => onChange("stacked")}
+        className={`px-2.5 py-1.5 text-xs border-l border-slate-300 ${value === "stacked" ? "bg-slate-800 text-white" : "bg-white text-slate-700 hover:bg-slate-50"}`}>
         Empilé
       </button>
     </div>
@@ -649,12 +649,12 @@ function ChartModeToggle({ value, onChange }) {
 function TargetToggle({ value, onChange }) {
   return (
     <div className="inline-flex items-center rounded-md border border-slate-300 overflow-hidden">
-      <button onClick={()=>onChange("recommande")}
-        className={`px-2.5 py-1.5 text-xs ${value==="recommande" ? "bg-primary text-white" : "bg-white text-slate-700 hover:bg-slate-50"}`}>
+      <button onClick={() => onChange("recommande")}
+        className={`px-2.5 py-1.5 text-xs ${value === "recommande" ? "bg-primary text-white" : "bg-white text-slate-700 hover:bg-slate-50"}`}>
         Cible: Recommandé
       </button>
-      <button onClick={()=>onChange("calcule")}
-        className={`px-2.5 py-1.5 text-xs border-l border-slate-300 ${value==="calcule" ? "bg-primary text-white" : "bg-white text-slate-700 hover:bg-slate-50"}`}>
+      <button onClick={() => onChange("calcule")}
+        className={`px-2.5 py-1.5 text-xs border-l border-slate-300 ${value === "calcule" ? "bg-primary text-white" : "bg-white text-slate-700 hover:bg-slate-50"}`}>
         Cible: Calculé
       </button>
     </div>
@@ -668,10 +668,10 @@ function Select({ label, icon: Icon, value, onChange, options, placeholder, disa
       <label className="text-xs font-medium text-slate-700 hidden md:block">{label}</label>
       <div className="relative">
         {Icon && <Icon className="w-4 h-4 text-gray-400 absolute left-2 top-2.5 pointer-events-none" />}
-        <select disabled={disabled} value={value} onChange={(e)=>onChange(e.target.value)}
+        <select disabled={disabled} value={value} onChange={(e) => onChange(e.target.value)}
           className={`pl-7 pr-2 ${base} border rounded ${disabled ? "bg-slate-100 text-slate-400" : "bg-white"} min-w-[9.5rem]`}>
           <option value="">{placeholder || "—"}</option>
-          {(options || []).map((o)=>(
+          {(options || []).map((o) => (
             <option key={o.id ?? o.value} value={o.id ?? o.value}>{o.name ?? o.label}</option>
           ))}
         </select>
@@ -687,7 +687,7 @@ function Param({ label, value, onChange, step, icon: Icon, suffix }) {
       <div className="relative">
         {Icon && <Icon className="w-4 h-4 text-gray-400 absolute left-2 top-2 pointer-events-none" />}
         {suffix && <span className="absolute right-2 top-1.5 text-[11px] text-slate-400 select-none">{suffix}</span>}
-        <input type="number" value={value} step={step || 1} onChange={(e)=>onChange(Number(e.target.value))}
+        <input type="number" value={value} step={step || 1} onChange={(e) => onChange(Number(e.target.value))}
           className={`w-28 h-8 border border-slate-300 rounded text-xs ${Icon ? "pl-7" : "pl-2"} ${suffix ? "pr-6" : "pr-2"} text-right`} />
       </div>
     </div>

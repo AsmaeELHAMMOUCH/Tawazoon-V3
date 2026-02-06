@@ -1,5 +1,6 @@
 ID: 12677
-Nom: 'ecriture n° dépêches (Caisson CR MED)'
+Nom: 'ecriture n° dépêches Caisson'
+CentrePoste ID: 8367 (CONTRÔLEUR)
 Produit RAW: 'CR MED'
 Produit UPPER: 'CR MED'
 Unité: 'Caisson'

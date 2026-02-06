@@ -20,6 +20,7 @@ import {
   UserRound,
   Calculator,
   TrendingUp,
+  TrendingDown,
   Eye,
   EyeOff,
 } from "lucide-react";
@@ -38,7 +39,7 @@ import EnterpriseTable from "../tables/EnterpriseTable";
 const KPICardGlass = ({
   label, MOD, MOI, extraLabel, extraValue, total, icon: Icon, tone = "blue",
   emphasize = false, leftLabel = "MOD", rightLabel = "MOI", children,
-  customFooter, toggleable = false, isOpen = false, onToggle,
+  customFooter, toggleable = false, isOpen = false, onToggle, casValue
 }) => {
   const T = {
     blue: { ring: "ring-blue-300/60", halo: "from-blue-400/25", text: "text-[#005EA8]", dot: "bg-[#005EA8]" },
@@ -70,6 +71,12 @@ const KPICardGlass = ({
         <div className="mt-1.5 border-t border-slate-100 pt-1">{children}</div>
       ) : ((MOD !== undefined || MOI !== undefined || extraValue !== undefined) && (
         <div className="flex justify-center gap-3 mt-0.5 text-[10px] font-medium text-slate-600">
+          {/* Tag Cas Spécial ajouté */}
+          {casValue && (
+            <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[9px] font-bold mr-2">
+              Cas Spécial : {casValue}
+            </span>
+          )}
           {MOD !== undefined && <div>{leftLabel}: {MOD}</div>}
           {MOI !== undefined && <div>{rightLabel}: {MOI}</div>}
           {extraValue !== undefined && extraLabel && <div>{extraLabel}: {extraValue}</div>}
@@ -79,22 +86,40 @@ const KPICardGlass = ({
   );
 };
 
-const EffectifFooter = ({ totalLabel, totalValue, modValue, moiValue, apsLabel, apsValue }) => (
+const EffectifFooter = ({ totalLabel, totalValue, modValue, moiValue, apsLabel, apsValue, showSpecialTag = false, casValue, besoinAPS }) => (
   <div className="text-[10px] text-slate-600 space-y-1.5">
     <div className="flex flex-wrap items-center justify-center gap-2 rounded-full bg-slate-50 px-2 py-1">
       <span className="font-semibold text-slate-700">{totalLabel}</span>
       <span className="px-2 py-0.5 rounded-full bg-white text-slate-800 font-semibold shadow-sm">Total : {totalValue}</span>
     </div>
     <div className="flex items-center justify-center gap-2">
-      <span className="px-1.5 py-0.5 rounded-full bg-blue-50 text-[#005EA8]">MOD : {modValue}</span>
+      <span className="px-1.5 py-0.5 rounded-full bg-blue-50 text-[#005EA8]">
+        MOD : {modValue}
+      </span>
       {moiValue !== undefined && moiValue !== null && (
         <span className="px-1.5 py-0.5 rounded-full bg-fuchsia-50 text-fuchsia-700">MOI : {moiValue}</span>
       )}
     </div>
-    <div className="flex flex-wrap items-center justify-center gap-2 rounded-full bg-emerald-50/70 px-2 py-1">
-      <span className="font-semibold text-emerald-800">{apsLabel}</span>
-      <span className="px-2 py-0.5 rounded-full bg-white/90 text-emerald-700 font-semibold shadow-sm">Total APS : {apsValue}</span>
-    </div>
+
+    {/* APS Ligne - Visible si value > 0 ou label présent */}
+    {(apsValue > 0 || apsLabel) && (
+      <div className="flex flex-wrap items-center justify-center gap-2 rounded-full bg-emerald-50/70 px-2 py-1">
+        <span className="font-semibold text-emerald-800">{apsLabel || "APS"}</span>
+        <span className="px-2 py-0.5 rounded-full bg-white/90 text-emerald-700 font-semibold shadow-sm">
+          Total APS : {apsValue}
+        </span>
+      </div>
+    )}
+
+
+
+    {showSpecialTag && (
+      <div className="flex justify-center mt-1">
+        <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-[9px] font-bold border border-amber-200">
+          Cas Spécial : {casValue}
+        </span>
+      </div>
+    )}
   </div>
 );
 import Tooltip from "../ui/Tooltip";
@@ -129,6 +154,7 @@ export default function VueIntervenant({
   setAmana,
   pctAxesArrivee, setPctAxesArrivee,
   pctAxesDepart, setPctAxesDepart,
+  pctInternational = 0, setPctInternational = () => { },
   productivite,
   setProductivite,
   heuresNet,
@@ -169,6 +195,21 @@ export default function VueIntervenant({
   setNbrCoSac = () => { },
   nbrCrSac = 0,
   setNbrCrSac = () => { },
+  crParCaisson = 500,
+  setCrParCaisson = () => { },
+  pctCollecte = 5.0,
+  setPctCollecte = () => { },
+  pctRetour = 0.0,
+  setPctRetour = () => { },
+  tauxComplexite = 1,
+  setTauxComplexite = () => { },
+  natureGeo = 1,
+  setNatureGeo = () => { },
+  shift = 1,
+  setShift = () => { },
+  categories = [],
+  selectedTypology = "",
+  setSelectedTypology = () => { },
 }) {
   const JOURS_OUVRES_AN = 264;
   const PAGE_SCALE = 0.8;
@@ -188,8 +229,8 @@ export default function VueIntervenant({
 
   // 🗑️ idleMinutes maintenant global
   // const [idleMinutes, setIdleMinutes] = useState(0);
-  const [tauxComplexite, setTauxComplexite] = useState(1);
-  const [natureGeo, setNatureGeo] = useState(1);
+  // const [tauxComplexite, setTauxComplexite] = useState(1);
+  // const [natureGeo, setNatureGeo] = useState(1);
   const [heuresBrutes, setHeuresBrutes] = useState(8.0); // avant temps mort
 
   // 🎨 UX : État pour afficher/masquer les détails
@@ -204,8 +245,10 @@ export default function VueIntervenant({
     return Array.from(s).sort();
   }, [referentiel]);
 
-  // 🆕 Paramètre Collecte
-  const [pctCollecte, setPctCollecte] = useState(5.0);
+  // 🆕 Paramètre Collecte (Local -> Global)
+  // const [pctCollecte, setPctCollecte] = useState(5.0);
+  // 🆕 Paramètre Retour (Local -> Global)
+  // const [pctRetour, setPctRetour] = useState(0.0);
 
   // ✅ OPTIMISATION : Debounce des valeurs pour éviter les recalculs excessifs
   const debouncedColis = useDebouncedValue(colis, 300);
@@ -271,36 +314,30 @@ export default function VueIntervenant({
   // 🔹 Capacité Nette (SANS REDUCTION PAR PRODUCTIVITE car déjà intégrée dans les charges tâches)
   useEffect(() => {
     const heuresBase = 8.0;
+    const p = Number(debouncedProductivite ?? 100) / 100; // 0..infinity
     const idleH = Number(debouncedIdleMinutes || 0) / 60;
 
-    // On ne multiplie plus par productivité ici ! 
-    // La productivité est appliquée tâche par tâche dans mergedResults.
-    const heuresNettes = Math.max(0, heuresBase - idleH);
+    // Formule demandée : La productivité augmente la capacité horaire apparente
+    // (8h * 120%) - 30min = 9.6h - 0.5h = 9.1h
+    const heuresProductives = heuresBase * (p > 0 ? p : 1);
+
+    const heuresNettes = Math.max(0, heuresProductives - idleH);
 
     setHeuresBrutes(heuresBase);
     setHeuresNet(heuresNettes.toFixed(2));
-  }, [debouncedIdleMinutes, setHeuresNet]);
+  }, [debouncedIdleMinutes, debouncedProductivite, setHeuresNet]);
 
   const posteValue = poste == null ? "" : String(poste);
 
-  const getEffectiveFluxMode = (categorie, key) => {
-    const cat = String(categorie || "")
-      .trim()
-      .toUpperCase();
+  // 🆕 Détection Typologie AM (Agence Messagerie) pour désactivation
+  const isAM = useMemo(() => {
+    const c = String(centreCategorie || "").toUpperCase();
+    return c.includes("AM") || c.includes("MESSAGERIE");
+  }, [centreCategorie]);
 
-    if (cat === "CM") {
-      return key === "amana" ? "input" : "na";
-    }
-    if (cat === "CTD - CENTRE DE TRAITEMENT ET DISTRIBUTION") return "input";
-    if (cat === "CD") return "input";
-    if (cat === "CCC") return "input"; // ✅ CCC : Tout est saisissable
-    if (cat === "CENTRE UNIQUE") return "input"; // 🆕 Centre Unique : Tout est saisissable
-    if (cat === "AM- AGENCE MESSAGERIE") {
-      return key === "amana" ? "input" : "na";
-    }
-    if (key === "amana") return "input";
-    if (key === "amana") return "input";
-    return "na";
+
+  const getEffectiveFluxMode = (categorie, key) => {
+    return "input";
   };
 
   // ✅ Vérifie si un poste spécifique est sélectionné (pas "__ALL__" ou vide)
@@ -335,12 +372,16 @@ export default function VueIntervenant({
     annualIfAllowed("amana") > 0 ||
     (parseNonNeg(colis) ?? 0) > 0;
 
-  const resIndex = new Map(
-    (resultats || []).map((r) => [
-      String((r.task || r.nom_tache || "").trim().toLowerCase()),
-      r,
-    ])
-  );
+  // ✅ Normalisation robuste pour le matching des noms de tâches
+  const normalizeKey = (str) => String(str || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase().replace(/\s+/g, " ");
+
+  const resIndex = new Map();
+  (resultats || []).forEach((r) => {
+    if (r.id) resIndex.set(String(r.id), r);
+    // Indexer aussi par nom normalisé pour le fallback
+    resIndex.set(normalizeKey(r.task || r.nom_tache), r);
+  });
+
 
   function nombreUniteParUnite(unite, taskName, taskData = {}) {
     if (!hasAnyVolume) {
@@ -444,17 +485,56 @@ export default function VueIntervenant({
   // 🔹 Filtrer le référentiel pour exclure les tâches avec moyenne_min = 0 ET filtrer par famille
   const referentielFiltered = useMemo(() => {
     return (referentiel || []).filter((row) => {
-      const hasMin = Number(row.m ?? 0) > 0;
+      // const hasMin = Number(row.m ?? 0) > 0; // 🗑️ On garde meme si 0 selon demande
       const matchFamille = !filterFamille || row.famille === filterFamille;
-      return hasMin && matchFamille;
+      return matchFamille;
     });
   }, [referentiel, filterFamille]);
+
+  const referentielDisplayData = useMemo(() => {
+    // DEBUG: Check order values
+    if (referentielFiltered.length > 0) {
+      console.log("🔍 [VueIntervenant] Referentiel Sample:", referentielFiltered.slice(0, 3).map(r => ({ t: r.t, ordre: r.ordre })));
+    }
+    const groups = new Map();
+    referentielFiltered.forEach((r) => {
+      // Clé de regroupement : Nom Tâche + Famille + Phase + Unité
+      // On groupe pour fusionner les responsables
+      const key = `${(r.t || "").trim()}|${r.famille || ""}|${r.ph || ""}|${r.u || ""}`;
+
+      if (!groups.has(key)) {
+        groups.set(key, { ...r, responsibles: [] });
+      }
+      const g = groups.get(key);
+      const resp = r.nom_poste || r.poste_label || r.poste || "-";
+
+      // Ajout unique du responsable
+      if (resp !== "-" && !g.responsibles.includes(resp)) {
+        g.responsibles.push(resp);
+      }
+    });
+
+    // DEBUG: Vérifier l'ordre AVANT le tri
+    const beforeSort = Array.from(groups.values());
+    console.log("🔍 [AVANT TRI] Premières tâches:", beforeSort.slice(0, 5).map(r => ({ t: r.t, ordre: r.ordre })));
+
+    // Trier par ordre croissant
+    const sorted = beforeSort.sort((a, b) => {
+      const orderA = a.ordre !== null && a.ordre !== undefined ? Number(a.ordre) : 999999;
+      const orderB = b.ordre !== null && b.ordre !== undefined ? Number(b.ordre) : 999999;
+      console.log(`Comparing: "${a.t?.substring(0, 20)}" (${orderA}) vs "${b.t?.substring(0, 20)}" (${orderB}) = ${orderA - orderB}`);
+      return orderA - orderB;
+    });
+
+    console.log("🔍 [APRÈS TRI] Premières tâches:", sorted.slice(0, 10).map(r => ({ t: r.t, ordre: r.ordre })));
+    return sorted;
+  }, [referentielFiltered]);
 
   // ✅ OPTIMISATION : Memoization des résultats fusionnés
   const mergedResults = useMemo(() => {
     const res = referentielFiltered.map((row, i) => {
-      const taskName = String(row.t || "").trim();
-      const fromBack = resIndex.get(taskName.toLowerCase());
+      const taskName = String(row.t || row.task || "").trim();
+      const fromBack = (row.id && resIndex.get(String(row.id))) || resIndex.get(normalizeKey(taskName));
       const moyenneMin = Number(row.m ?? 0);
 
       // Si le backend a déjà calculé les heures, on les préfère !
@@ -488,7 +568,7 @@ export default function VueIntervenant({
 
       return {
         seq: i + 1,
-        task: taskName || "N/A",
+        task: (taskName || "").replace(/\s*\([^)]*\)/g, "").trim(),
         formule: fromBack?.formule || "N/A",  // 🆕 Formule de calcul depuis le backend
         nombre_Unite: Number(nbJour || 0),
         heures: heuresLoc,
@@ -496,7 +576,7 @@ export default function VueIntervenant({
         _type_flux: row.type_flux,
         _fromBack: fromBack,
       };
-    }).filter(r => Number(r.heures || 0) > 0.001);
+    }).filter(r => Number(r.heures || 0) > 0.005);
 
     // 🆕 Fallback pour postes MOI (Structurels)
     // Si la simulation ne renvoie rien (car pas de tâches data-driven), on affiche un forfait
@@ -538,6 +618,27 @@ export default function VueIntervenant({
     return totalHeuresAffichees;
   }, [totalHeuresAffichees, totaux]);
 
+  // 🆕 Calcul du suffixe de titre (Poste ou Centre)
+  const titleSuffix = useMemo(() => {
+    // Recalcul local pour éviter ReferenceError sur selectedPosteObj
+    const locPoste = (postesOptions || []).find(p => String(p.id) === String(poste));
+
+    // Cas 1: Poste sélectionné (et pas "Tous")
+    // Note: "__ALL__" est often l'ID pour "Tous"
+    if (locPoste && String(locPoste.id) !== "__ALL__" && locPoste.label !== "Tous") {
+      return ` - ${locPoste.label || locPoste.name}`;
+    }
+    // Cas 2: "Tous" ou pas de poste -> Afficher le nom du centre
+    if (centres && centres.length > 0 && centre) {
+      const c = centres.find(ct => String(ct.id) === String(centre));
+      if (c) return ` - ${c.nom || c.label || c.name || "Centre"}`;
+    }
+    return "";
+  }, [postesOptions, poste, centres, centre]);
+
+  // 🆕 Détection Mode Test
+  const isTestMode = useMemo(() => String(titleSuffix || "").toLowerCase().includes("test"), [titleSuffix]);
+
   const baseHeuresNet = Number(heuresNet || 0);
 
   // ✅ OPTIMISATION : Memoization du calcul FTE
@@ -577,11 +678,22 @@ export default function VueIntervenant({
     const type = (p.type_poste || "").toUpperCase();
     const label = (p.poste_label || p.label || "").toUpperCase();
     const isKeyword = label.includes("RECEVEUR") ||
-      label.includes("CHEF DE CENTRE") ||
-      label.includes("CHEF ETABLISSEMENT") ||
+      label.includes("CHEF") ||
       label.includes("DIRECTEUR") ||
       label.includes("GERANT") ||
-      label.includes("RESPONSABLE");
+      label.includes("RESPONSABLE") ||
+      label.includes("ADJOINT") ||
+      label.includes("ASSISTANT") ||
+      label.includes("ADMIN") ||
+      label.includes("RH") ||
+      label.includes("RESSOURCES") ||
+      label.includes("SECRETAIRE") ||
+      label.includes("SUPPORT") ||
+      label.includes("QUALITE") ||
+      label.includes("PILOTE") ||
+      label.includes("COORDINATEUR") ||
+      label.includes("ENCADR") ||
+      label.includes("SUPERVISEUR");
 
     return type === "MOI" || type === "INDIRECT" || type === "STRUCTURE" || isKeyword || !!p.is_moi;
   };
@@ -591,21 +703,164 @@ export default function VueIntervenant({
 
   // 🆕 Calcul du MOI Global (Centre) - Demande Utilisateur : Afficher MOI comme page centre
   const totalMoiGlobal = useMemo(() => {
-    if (!postesOptions) return 0;
-    return postesOptions.reduce((acc, p) => {
-      return acc + (isMoiPoste(p) ? Number(p.effectif_actuel || 0) : 0);
+    if (!postesOptions || postesOptions.length === 0) return 0;
+
+    const total = postesOptions.reduce((acc, p) => {
+      const isM = isMoiPoste(p);
+      return acc + (isM ? Number(p.effectif_actuel || 0) : 0);
     }, 0);
+
+    // 🚨 ALIGNEMENT VUE CENTRE : Si le total est 0 (même si des postes MOI existent mais vides), on force 1
+    return total;
   }, [postesOptions]);
 
-  // Actuel
-  const effActuelMOD = isMOD ? effectifActuel : 0;
+  // 🆕 Calcul des totaux globaux du centre (pour affichage quand "Tous" est sélectionné)
+  const totalEffectifCentreStats = useMemo(() => {
+    if (!postesOptions || postesOptions.length === 0) return { total: 0, mod: 0, moi: 0 };
+    return postesOptions.reduce((acc, p) => {
+      const eff = Number(p.effectif_actuel || 0);
+      acc.total += eff;
+      if (isMoiPoste(p)) {
+        acc.moi += eff;
+      } else {
+        acc.mod += eff;
+      }
+      return acc;
+    }, { total: 0, mod: 0, moi: 0 });
+  }, [postesOptions]);
+
+  const isGlobalView = !poste || String(poste) === "__ALL__" || (selectedPosteObj && selectedPosteObj.label === "Tous");
+
   const effAPS = Number(selectedPosteObj?.effectif_aps || selectedPosteObj?.eff_aps || 0);
+  const selectedCentreWithAPS = centres ? centres.find(c => String(c.id) === String(centre)) : null;
+  // ✅ APS : Priorité à la valeur globale T_APS du centre (Database)
+  // ✅ APS : Valeur globale APS du centre (Database)
+  const apsGlobalCentre = selectedCentreWithAPS?.aps ? Number(selectedCentreWithAPS.aps) : 0;
+
+  // 🆕 Récupération du Cas Spécial
+  const casValue = selectedCentreWithAPS?.cas;
+
+  // 🆕 Logique d'affichage
+  const displayMOI = isGlobalView || !isMOD;
+
+  // Actuel
+  // Si Vue Globale : Total Centre (MOD + MOI + APS Global).
+  // Si Vue Poste : Juste le poste (MOD ou MOI) + son APS. Pas d'ajout du MOI Global.
+  const effActuelDisplay = isGlobalView
+    ? (totalEffectifCentreStats.mod + totalMoiGlobal + apsGlobalCentre)
+    : (effectifActuel + effAPS); // effectifActuel est celui du poste (MOD ou MOI)
+
+  const effActuelMOD = isGlobalView ? totalEffectifCentreStats.mod : (isMOD ? effectifActuel : 0);
+
+  // Valeur MOI à afficher dans le footer
+  // Si Global: Total MOI Centre.
+  // Si Poste MOI: Effectif du poste.
+  // Si Poste MOD: Null (caché).
+  const effActuelMOI_Footer = isGlobalView
+    ? totalMoiGlobal
+    : (isMOD ? null : effectifActuel);
+
+  const effAPS_Footer = isGlobalView ? apsGlobalCentre : effAPS;
 
   // Calculé
-  const etpCalcMOD = isMOD ? fteCalcAffiche : 0;
+  // Si Vue Poste, et MOD, on prend fteCalcAffiche.
+  // Si Vue Poste MOI ??? (Généralement pas simu, mais bon -> 1 ou effectifActuel)
+  // Exception spécifique: Gestionnaire clients en compte, CHEF DE CENTRE -> Calculé = 0
+  const excludedLabels = ["Gestionnaire clients en compte", "CHEF DE CENTRE"];
+  const currentLabel = (selectedPosteObj?.label || "").trim();
+  const isExcludedPoste = excludedLabels.some(x => x.toLowerCase() === currentLabel.toLowerCase());
+
+  const etpCalcDisplay = isGlobalView
+    ? (totaux?.total_heures ? totaux.fte_calcule : 0) // DataDriven result Global
+    : (isExcludedPoste ? 0 : fteCalcAffiche); // Pour un poste (0 si exclu)
+
+  const etpCalcMOD = etpCalcDisplay; // Alias pour compatibilité JSX existant
 
   // Arrondi
-  const etpArrMOD = isMOD ? fteArrondiAffiche : 0;
+  // Pour Global, on arrondit le total calculé (comme VueCentre)
+  const etpArrMOD = (isMOD && !isExcludedPoste) ? fteArrondiAffiche : 0;
+  const etpArrDisplay = isGlobalView ? (Math.round(etpCalcDisplay) + totalMoiGlobal) : etpArrMOD;
+
+  // 🆕 NOUVELLE RÈGLE APS
+  // StatutaireActuel = MOD_actuel + MOI_actuel
+  const statutaireActuel = effActuelMOD + (effActuelMOI_Footer || 0);
+
+  // StatutaireCalcule = MOD_calcule + MOI_calcule
+  // En vue globale: etpArrDisplay inclut déjà MOI, donc on utilise Math.round(etpCalcDisplay) + totalMoiGlobal
+  // En vue poste: etpArrMOD + MOI (qui est 0 pour MOD, effectifActuel pour MOI)
+  const statutaireCalcule = isGlobalView
+    ? Math.round(etpCalcDisplay) + totalMoiGlobal
+    : etpArrMOD + (isMOD ? 0 : effectifActuel);
+
+  // APS calculé = max(0, StatutaireCalcule - StatutaireActuel)
+  const apsCalcule = Math.max(0, statutaireCalcule - statutaireActuel);
+
+  // Ecart (Actuel - Arrondi) -> Surplus > 0, Besoin < 0, STATUTAIRE uniquement
+
+  // Ecart (Actuel Total - Arrondi) -> Surplus > 0, Besoin < 0, Incluant APS
+  // CORRECTION: Ecart = Actuel - (Calculé + Global MOI) pour être cohérent avec VueCentre
+  // Note: etpArrDisplay inclut déjà totalMoiGlobal si on est en vue globale
+  const ecartDisplay = effActuelDisplay - etpArrDisplay;
+
+  // --- Override Logic (Cas A: Besoin > Actuel) ---
+  const totalCalculated = isGlobalView
+    ? (etpCalcDisplay + totalMoiGlobal + apsCalcule)
+    : (fteCalcAffiche + apsCalcule);
+
+  const totalCurrentGlobal = isGlobalView
+    ? (effActuelMOD + (effActuelMOI_Footer ?? 0) + effAPS_Footer)
+    : (effActuelMOD + effAPS_Footer);
+
+  /* 
+   * ✅ LOGIQUE OVERRIDE (Step 804) - CORRECTION
+   * - Vue Globale ("ALL") :
+   *   Si Calculé < Actuel (Surplus/Protection) : On Override pour afficher l'Actuel (on ne licencie pas sur le papier).
+   *   Si Calculé > Actuel (Besoin) : On affiche le Calculé (Besoin de recrutement), comme VueCentre.
+   * - Vue Poste Spéficique : Pas d'override.
+   */
+  const needOverride = isGlobalView && (totalCalculated < totalCurrentGlobal);
+
+  // ✅ CIBLE MOI (Step 752): Global -> Total, Spécifique MOD -> 0, Spécifique MOI -> Valeur Footer
+  const targetMOI = isGlobalView ? totalMoiGlobal : (isMOD ? 0 : (effActuelMOI_Footer ?? 0));
+
+  // ✅ CIBLE APS (Step 766): Global -> Calculé, Spécifique -> 0
+  const targetAPS = isGlobalView ? apsCalcule : 0;
+
+  const dispCalcMOD = needOverride ? effActuelMOD : etpCalcMOD;
+  const dispCalcMOI = needOverride ? (effActuelMOI_Footer ?? 0) : targetMOI;
+  const dispCalcAPS = needOverride ? (totalCalculated - (dispCalcMOD + dispCalcMOI)) : targetAPS;
+  const dispCalcTotal = isGlobalView ? totalCalculated : (dispCalcMOD + dispCalcMOI + dispCalcAPS);
+
+  // --- Override Logic Arrondi (Derived from Calc Override) ---
+  const dispArrMOD = needOverride ? effActuelMOD : etpArrMOD;
+  // Note: For MOI, etpArrDisplay logic in standard mode was (Math.round(etpCalcDisplay) + totalMoiGlobal).
+  // Here we align with standard logic: if override, we force actual.
+  // Here we align with standard logic: if override, we force actual.
+  const dispArrMOI = needOverride ? (effActuelMOI_Footer ?? 0) : targetMOI;
+  const dispArrAPS = needOverride ? Math.round(dispCalcAPS) : Math.round(targetAPS);
+
+  // Total Arrondi = (Rounded MOD + MOI) + Rounded APS
+  // Standard mode total: (isGlobal ? Math.round(etpCalcDisplay + totalMoiGlobal + apsCalcule) : ...)
+  // Let's ensure consistency.
+  // If needOverride: Total = StatutaireActuel + Rounded(APS_Calculated)
+  const dispArrTotal = needOverride
+    ? (dispArrMOD + dispArrMOI + dispArrAPS)
+    : (isGlobalView
+      ? Math.round(etpCalcDisplay + totalMoiGlobal + apsCalcule)
+      : (dispArrMOD + dispArrMOI + dispArrAPS)); // ✅ Specific View: Sum components (excludes APS)
+
+  // --- Override Logic Ecart (Derived from Arrondi Override) ---
+  // Ecart = Actuel - Arrondi.
+  // Cas A (needOverride): Arrondi (Statutaire) is forced to Actuel. -> Ecart Statutaire = 0.
+  // Ecart APS = Actuel APS - Arrondi APS.
+
+  const targetActuelAPS = isGlobalView ? effAPS_Footer : 0;
+  const dispEcartMOD = needOverride ? (effActuelMOD - dispArrMOD) : (effActuelMOD - etpArrMOD);
+  const dispEcartMOI = needOverride ? ((effActuelMOI_Footer ?? 0) - dispArrMOI) : ((effActuelMOI_Footer ?? 0) - targetMOI);
+  const dispEcartAPS = needOverride ? (effAPS_Footer - dispArrAPS) : (targetActuelAPS - dispArrAPS);
+
+  const dispEcartStatutaire = dispEcartMOD + dispEcartMOI;
+  const dispEcartTotal = dispEcartStatutaire + dispEcartAPS;
 
   const formatSmallNumber = (v, d = 2) => Number(v || 0).toFixed(d).replace('.', ',');
 
@@ -622,9 +877,11 @@ export default function VueIntervenant({
       nature_geo: Number(natureGeo || 0),
       ed_percent: Number(edPercent || 0), // 🆕 % En dehors
       pct_collecte: Number(pctCollecte || 0), // 🆕 % Collecte
+      pct_retour: Number(pctRetour || 0), // 🆕 % Retour
+      pct_international: Number(pctInternational || 0), // 🆕 % International
       ...overrides
     });
-  }, [onSimuler, colisParCollecte, colisAmanaParSac, courriersParSac, partParticuliers, tauxComplexite, natureGeo, edPercent, pctCollecte]);
+  }, [onSimuler, colisParCollecte, colisAmanaParSac, courriersParSac, partParticuliers, tauxComplexite, natureGeo, edPercent, pctCollecte, pctRetour, pctInternational]);
 
   return (
     <div className="w-full flex flex-col gap-3 pb-16" style={{ zoom: "90%" }}>
@@ -650,6 +907,33 @@ export default function VueIntervenant({
                 {regions.map((r) => (
                   <option key={r.id} value={r.id}>
                     {r.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="w-px h-6 bg-slate-200 hidden md:block" />
+
+          {/* 🆕 Sélecteur Typologie */}
+          <div className="flex items-center gap-1.5 min-w-[140px] flex-1">
+            <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
+              <Tag className="w-3 h-3" />
+            </div>
+            <div className="flex flex-col w-full">
+              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                Typologie
+              </label>
+              <select
+                className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer w-full truncate text-left disabled:opacity-50"
+                value={selectedTypology ?? ""}
+                onChange={(e) => setSelectedTypology(e.target.value)}
+                disabled={!region}
+              >
+                <option value="">Toutes</option>
+                {(categories || []).map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.label}
                   </option>
                 ))}
               </select>
@@ -779,7 +1063,7 @@ export default function VueIntervenant({
             <div className="w-px h-6 bg-slate-200 hidden md:block" />
 
             {/* Complexité Circulation */}
-            <div className="flex items-center gap-1.5 min-w-[90px] flex-1">
+            <div className={`flex items-center gap-1.5 min-w-[90px] flex-1 ${isAM ? "opacity-40 grayscale pointer-events-none" : ""}`}>
               <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
                 <Sliders className="w-3 h-3" />
               </div>
@@ -788,12 +1072,15 @@ export default function VueIntervenant({
                   Compl. Circ.
                 </label>
                 <select
-                  value={tauxComplexite}
+                  value={isAM ? 1 : tauxComplexite}
+                  disabled={isAM}
                   onChange={(e) =>
                     setTauxComplexite(Number(e.target.value))
                   }
-                  className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full text-center cursor-pointer"
+                  className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full text-center cursor-pointer disabled:cursor-not-allowed"
                 >
+                  <option value="0.5">0.5</option>
+                  <option value="0.75">0.75</option>
                   <option value="1">1</option>
                   <option value="1.25">1.25</option>
                   <option value="1.5">1.5</option>
@@ -804,7 +1091,7 @@ export default function VueIntervenant({
             <div className="w-px h-6 bg-slate-200 hidden md:block" />
 
             {/* Complexité Géo */}
-            <div className="flex items-center gap-1.5 min-w-[90px] flex-1">
+            <div className={`flex items-center gap-1.5 min-w-[90px] flex-1 ${isAM ? "opacity-40 grayscale pointer-events-none" : ""}`}>
               <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
                 <MapPin className="w-3 h-3" />
               </div>
@@ -813,12 +1100,40 @@ export default function VueIntervenant({
                   Compl. Géo
                 </label>
                 <select
-                  value={natureGeo}
+                  value={isAM ? 1 : natureGeo}
+                  disabled={isAM}
                   onChange={(e) => setNatureGeo(Number(e.target.value))}
-                  className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full text-center cursor-pointer"
+                  className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full text-center cursor-pointer disabled:cursor-not-allowed"
+                >
+                  <option value="0.5">0.5</option>
+                  <option value="0.75">0.75</option>
+                  <option value="1">1</option>
+                  <option value="1.25">1.25</option>
+                  <option value="1.5">1.5</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="w-px h-6 bg-slate-200 hidden md:block" />
+
+            {/* Shift */}
+            <div className={`flex items-center gap-1.5 min-w-[90px] flex-1 ${isAM ? "opacity-40 grayscale pointer-events-none" : ""}`}>
+              <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
+                <Clock className="w-3 h-3" />
+              </div>
+              <div className="flex flex-col w-full">
+                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                  Shift
+                </label>
+                <select
+                  value={isAM ? 1 : shift}
+                  disabled={isAM}
+                  onChange={(e) => setShift(Number(e.target.value))}
+                  className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full text-center cursor-pointer disabled:cursor-not-allowed"
                 >
                   <option value="1">1</option>
-                  <option value="1.5">1.5</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
                 </select>
               </div>
             </div>
@@ -836,7 +1151,12 @@ export default function VueIntervenant({
                 </label>
                 <div className="flex items-baseline gap-1">
                   <span className="text-lg font-extrabold text-slate-800 tracking-tight">
-                    {Number(baseHeuresNet || 0).toFixed(2)}
+                    {(() => {
+                      const val = Number(baseHeuresNet || 0);
+                      const h = Math.floor(val);
+                      const m = Math.round((val - h) * 60);
+                      return `${h}h ${String(m).padStart(2, "0")}`;
+                    })()}
                   </span>
                   <span className="text-[9px] font-semibold text-slate-500">h/j</span>
                 </div>
@@ -876,6 +1196,8 @@ export default function VueIntervenant({
           setNbrCoSac={setNbrCoSac}
           nbrCrSac={nbrCrSac}
           setNbrCrSac={setNbrCrSac}
+          crParCaisson={crParCaisson}
+          setCrParCaisson={setCrParCaisson}
           colisParCollecte={colisParCollecte}
           setColisParCollecte={setColisParCollecte}
           parseNonNeg={parseNonNeg}
@@ -900,6 +1222,15 @@ export default function VueIntervenant({
           setPctAxesDepart={setPctAxesDepart}
           pctCollecte={pctCollecte}
           setPctCollecte={setPctCollecte}
+          pctRetour={pctRetour}
+          setPctRetour={setPctRetour}
+          pctInternational={pctInternational}
+          setPctInternational={setPctInternational}
+          disabledAxes={
+            (centreCategorie || "").startsWith("AM") ||
+            (selectedCentreWithAPS?.type_site || "").startsWith("AM") ||
+            (selectedCentreWithAPS?.typologie || "").startsWith("AM")
+          }
         />
 
         {/* Référentiel & résultats - Masquable */}
@@ -929,38 +1260,50 @@ export default function VueIntervenant({
               )}
             </div>
 
-            <div className="grid grid-cols-1 xl:grid-cols-[1fr_auto_1fr] gap-4 min-h-0 items-start">
-              {/* Référentiel */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 relative items-start">
               {/* Référentiel */}
               {refDisplay === "tableau" ? (
-                <div className="flex flex-col gap-2 w-full">
-                  {/* 🆕 Filtre Famille */}
-
-
+                <div className="bg-white rounded-l-lg p-1.5 min-h-[460px]">
                   <EnterpriseTable
                     title="Référentiel Temps"
-                    subtitle={filterFamille ? `Filtre: ${filterFamille}` : "Base de calcul"}
+                    subtitle={
+                      <div className="flex items-center gap-2">
+                        <span>{filterFamille ? `Filtre: ${filterFamille}` : "Base de calcul"}</span>
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200">
+                          {referentielDisplayData.length} tâche{referentielDisplayData.length > 1 ? 's' : ''}
+                        </span>
+                      </div>
+                    }
                     tooltip="Temps moyen nécessaire pour traiter une unité (colis, sac…)"
                     icon={Clock}
                     columns={[
+                      { key: 'p', label: 'Produit', align: 'left', width: '110px', ellipsis: true }, // ✅ Ajout colonne Produit
                       { key: 'f', label: 'Famille', align: 'left', width: '120px', ellipsis: true },
                       { key: 't', label: 'Tâche', align: 'left', ellipsis: true },
-                      ...(hasPhase ? [{ key: 'ph', label: 'Phase', align: 'left', width: '100px', ellipsis: true }] : []),
-                      { key: 'u', label: 'Unité', align: 'left', width: '140px', ellipsis: true },
-                      { key: 'm', label: 'Moy. (min)', align: 'right', width: '80px', render: (val) => Number(val || 0).toFixed(2) }
+
+                      { key: 'resp', label: 'Responsable 1', align: 'left', width: '130px', ellipsis: true }, // ✅ Nom du poste responsable (1)
+                      { key: 'resp2', label: 'Responsable 2', align: 'left', width: '130px', ellipsis: true }, // ✅ Responsable 2 (Placeholder)
+                      { key: 'u', label: 'Unité', align: 'left', width: '100px', ellipsis: true },
+                      { key: 's', label: 'Sec', align: 'right', width: '80px', render: (val) => Number(val || 0).toFixed(0) },
+                      { key: 'm', label: 'Min', align: 'right', width: '80px', render: (val) => Number(val || 0).toFixed(2) }
                     ]}
-                    data={referentielFiltered.map((r, i) => ({
-                      seq: i + 1,
-                      f: r.famille || "", // ✅ Mappage Famille
-                      t: r.t,
+                    data={referentielDisplayData.map((r, i) => ({
+                      seq: r.ordre || i + 1, // Utiliser l'ordre DB ou fallback sur séquentiel
+                      p: (r.produit || "").replace(/Arrivé|Arrive|Reçu|Recu|Dépôt|Dépot|Depot|MED/gi, "").trim(), // ✅ Clean Produit (sans Arrivé/Reçu/Dépôt/MED)
+                      f: r.famille || "",
+                      t: (r.t || "").replace(/\s*\([^)]*\)/g, "").trim(),
                       ph: r.ph && String(r.ph).trim().toLowerCase() !== "n/a" ? r.ph : "",
+                      resp: (r.responsibles?.[0] || "-").replace(/\s*\([^)]*\)/g, "").trim(), // ✅ Responsable 1
+                      resp2: (r.responsibles?.[1] || "-").replace(/\s*\([^)]*\)/g, "").trim(), // ✅ Responsable 2
                       u: r.u,
-                      m: r.m
+                      m: r.m,
+                      s: (Number(r.m) || 0) * 60
                     }))}
                     currentView="table"
                     onViewChange={(view) => setRefDisplay(view === 'table' ? 'tableau' : 'graphe')}
                     showViewToggle={true}
-                    height={380}
+                    enableExport={true} // ✅ Activation Export
+                    height={450}
                   />
                 </div>
               ) : (
@@ -984,7 +1327,7 @@ export default function VueIntervenant({
                   }
                   bodyClassName="!p-1"
                 >
-                  <div className="p-1.5 h-[380px]">
+                  <div className="p-1.5 h-[450px]">
                     <GraphReferentiel
                       referentiel={referentielFiltered}
                       loading={loading?.referentiel}
@@ -995,9 +1338,9 @@ export default function VueIntervenant({
               )}
 
               {/* Flèche de séparation - Visible uniquement sur grand écran */}
-              <div className="hidden xl:flex flex-col items-center justify-center py-12">
+              <div className="hidden lg:flex flex-col items-center justify-center absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 pointer-events-none">
                 <ArrowRight className="w-6 h-6 text-[#005EA8]" />
-                <span className="text-[10px] font-medium text-[#005EA8] mt-2">
+                <span className="text-[10px] font-medium text-[#005EA8] mt-2 bg-white/80 backdrop-blur px-1 rounded">
                   Calcul
                 </span>
               </div>
@@ -1047,13 +1390,13 @@ export default function VueIntervenant({
                     icon={CheckCircle2}
                     columns={[
                       { key: 'task', label: 'Tâche', align: 'left', ellipsis: true },
-                      { key: 'formule', label: 'Formule', align: 'left', ellipsis: true, width: '250px', render: (val) => <span className="text-[10px] text-slate-500 font-mono">{val || '-'}</span> },
+
                       { key: 'nombre_Unite', label: 'Unit. (/jour)', align: 'right', width: '100px', render: (val) => formatUnit(val) },
                       { key: 'heures', label: 'Heures', align: 'right', width: '80px', bold: true, render: (val) => Number(val || 0).toFixed(2) }
                     ]}
                     data={mergedResults}
                     footer={null}
-                    height={380}
+                    height={450}
                     currentView="table"
                     onViewChange={(view) => setDisplay(view === 'table' ? 'tableau' : 'graphe')}
                     showViewToggle={true}
@@ -1080,7 +1423,7 @@ export default function VueIntervenant({
                   }
                   bodyClassName="!p-1"
                 >
-                  <div className="p-1.5 h-[380px]">
+                  <div className="p-1.5 h-[450px]">
                     {loading?.simulation ? (
                       <div className="px-2 py-1 text-slate-500 text-[10px]">
                         Calcul en cours…
@@ -1120,17 +1463,40 @@ export default function VueIntervenant({
             <div className="flex items-center gap-2 mb-2">
               <Gauge className="w-4 h-4 text-[#005EA8]" />
               <h3 className="text-sm font-semibold text-[#005EA8]">
-                Synthèse des Résultats
+                Synthèse des Résultats {titleSuffix}
               </h3>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className={`grid grid-cols-1 md:grid-cols-3 ${isTestMode ? 'xl:grid-cols-3' : 'xl:grid-cols-5'} gap-4`}>
               {/* Charge Totale */}
               <div className="relative overflow-hidden rounded-2xl border border-white/50 bg-white/55 backdrop-blur-xl p-2.5 min-h-[90px] pb-3 ring-1 ring-slate-200 shadow-sm flex flex-col items-center justify-center transition-all hover:ring-blue-200">
-                <div className="text-[11px] font-semibold text-slate-600 mb-1">Charge Totale</div>
+                <div className="text-[11px] font-semibold text-slate-600 mb-1">Charge Totale MOD</div>
                 <div className="text-xl font-bold text-slate-800">{Number(totalHeuresFinal || 0).toFixed(2)}</div>
                 <div className="text-[10px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full mt-1">heures / jour</div>
               </div>
+
+              {/* 1️⃣ Effectif Actuel */}
+              {!isTestMode && (
+                <KPICardGlass
+                  icon={UserRound}
+                  tone="slate"
+                  emphasize
+                  label="Effectif Actuel"
+                  total={effActuelDisplay}
+                  toggleable={false}
+                  customFooter={
+                    <EffectifFooter
+                      totalLabel={isGlobalView ? "Statutaire" : "Total"}
+                      totalValue={effActuelMOD + (effActuelMOI_Footer || 0)}
+                      modValue={effActuelMOD}
+                      moiValue={effActuelMOI_Footer !== null ? formatSmallNumber(effActuelMOI_Footer, 0) : null}
+                      apsLabel={isGlobalView ? "APS" : null}
+                      apsValue={isGlobalView ? formatSmallNumber(effAPS_Footer, 0) : null}
+                      casValue={isGlobalView ? casValue : null}
+                    />
+                  }
+                />
+              )}
 
               {/* 2️⃣ Effectif Calculé (Besoin) */}
               <KPICardGlass
@@ -1138,17 +1504,52 @@ export default function VueIntervenant({
                 icon={Calculator}
                 tone="blue"
                 emphasize
-                total={formatSmallNumber(fteCalcAffiche)}
+                total={formatSmallNumber(etpCalcMOD + targetMOI)}
                 toggleable={false}
+
                 customFooter={
-                  <EffectifFooter
-                    totalLabel="Statutaire"
-                    totalValue={formatSmallNumber((isMOD ? fteCalcAffiche : 0) + totalMoiGlobal, 2)}
-                    modValue={formatSmallNumber(etpCalcMOD, 2)}
-                    moiValue={formatSmallNumber(totalMoiGlobal, 0)}
-                    apsLabel="APS"
-                    apsValue={"--"}
-                  />
+                  (() => {
+                    // 🆕 Règle Utilisateur (Step 26 "Non...") :
+                    // Si Statutaire Calculé < Statutaire Actuel => On affiche Actuel dans la décomposition.
+                    // Sinon on affiche le Réellement Calculé.
+
+                    // 1. Calcul du Statutaire Calculé (Total MOD + Total MOI)
+                    const statCalcMOD = etpCalcMOD;
+                    const statCalcMOI = targetMOI;
+                    const statCalcTotal = statCalcMOD + statCalcMOI;
+
+                    // 2. Calcul du Statutaire Actuel (Total MOD + Total MOI)
+                    const statActMOD = effActuelMOD;
+                    const statActMOI = effActuelMOI_Footer || 0;
+                    const statActTotal = statActMOD + statActMOI;
+
+                    // 3. Condition : Si Calculé > Actuel (Besoin Statutaire) -> Force Actuel pour le détail
+                    // "dans statutaire calculé met l effetif réelment calculé et pour MOD ET MOI met l actuel"
+                    const showActuel = !isTestMode && (statCalcTotal > statActTotal);
+
+                    // 4. Sélection des valeurs à afficher pour le détail
+                    const displayMOD = showActuel ? statActMOD : statCalcMOD;
+                    const displayMOI = showActuel ? statActMOI : statCalcMOI;
+
+                    // 🆕 Règle Utilisateur (Step 90) : Le total statutaire doit correspondre à la somme affichée (donc Actuel si override)
+                    const displayTotal = displayMOD + displayMOI;
+
+                    // 🆕 Règle Utilisateur (Step 122) : APS = Effectif Calculé Réellement - Statutaire Calculé (affiché)
+                    const realCalculatedTotal = etpCalcMOD + targetMOI;
+                    const displayAPS = Math.max(0, realCalculatedTotal - displayTotal);
+
+                    return (
+                      <EffectifFooter
+                        totalLabel={isGlobalView ? "Statutaire" : "Total"}
+                        totalValue={formatSmallNumber(displayTotal, 2)}
+                        modValue={formatSmallNumber(displayMOD, 2)}
+                        moiValue={formatSmallNumber(displayMOI, 0)}
+                        apsLabel={isGlobalView ? "APS" : null}
+                        apsValue={isGlobalView ? formatSmallNumber(displayAPS, 2) : null}
+                        casValue={isGlobalView ? casValue : null}
+                      />
+                    );
+                  })()
                 }
               />
 
@@ -1158,19 +1559,99 @@ export default function VueIntervenant({
                 icon={CheckCircle2}
                 tone="amber"
                 emphasize
-                total={fteArrondiAffiche}
+                total={Math.round(etpCalcMOD + targetMOI)}
                 toggleable={false}
                 customFooter={
-                  <EffectifFooter
-                    totalLabel="Statutaire"
-                    totalValue={Math.round((isMOD ? fteArrondiAffiche : 0) + totalMoiGlobal)}
-                    modValue={etpArrMOD}
-                    moiValue={formatSmallNumber(totalMoiGlobal, 0)}
-                    apsLabel="APS"
-                    apsValue={"--"}
-                  />
+                  (() => {
+                    // 🆕 Règle Utilisateur (Step 113) : Arrondi de l'APS affiché dans la carte calculé
+                    // Si Statutaire Calculé > Statutaire Actuel => APS affiché = Need - Actuel
+                    // Sinon (Surplus) => APS affiché = targetAPS (car displayTotal = Statutaire Calculé)
+
+                    const statCalc = etpCalcMOD + targetMOI;
+                    const statAct = effActuelMOD + (effActuelMOI_Footer || 0);
+                    const isOverride = !isTestMode && (statCalc > statAct);
+
+                    // APS Calculé dans la carte précédente
+                    // Si Override: APS = statCalc - statAct
+                    // Si Pas Override: APS = targetAPS
+                    const apsCalculeDisplay = isOverride ? (statCalc - statAct) : targetAPS;
+
+                    const apsArrondi = Math.round(apsCalculeDisplay);
+
+                    return (
+                      <EffectifFooter
+                        totalLabel={isGlobalView ? "Statutaire" : "Total"}
+                        totalValue={Math.round(etpCalcMOD + targetMOI)}
+                        modValue={dispArrMOD}
+                        moiValue={formatSmallNumber(dispArrMOI, 0)}
+                        apsLabel={isGlobalView ? "APS" : null}
+                        apsValue={isGlobalView ? formatSmallNumber(apsArrondi, 0) : null}
+                        casValue={isGlobalView ? casValue : null}
+                      />
+                    );
+                  })()
                 }
               />
+
+
+
+              {/* 4️⃣ Écart Total */}
+              {!isTestMode && (
+                <KPICardGlass
+                  label="Écart Total"
+                  icon={dispEcartTotal < 0 ? TrendingDown : TrendingUp}
+                  tone="slate"
+                  emphasize
+                  total={
+                    (() => {
+                      // 🆕 Règle Utilisateur (Step 80) : Total Ecart = Effectif Actuel - Effectif Arrondi (tel qu'affiché)
+                      // Effectif Arrondi affiché = Math.round(etpCalcMOD + targetMOI) (Step 65)
+                      // Effectif Actuel = effActuelDisplay
+
+                      const totalArrondiVisuel = Math.round(etpCalcMOD + targetMOI);
+                      const ecartVisuel = effActuelDisplay - totalArrondiVisuel;
+
+                      return (
+                        <>
+                          {formatSmallNumber(ecartVisuel, 0)}
+                          <span className="text-[12px] font-normal ml-1 opacity-80">
+                            ({ecartVisuel > 0 ? "Surplus" : ecartVisuel < 0 ? "Besoin" : "Équilibre"})
+                          </span>
+                        </>
+                      );
+                    })()
+                  }
+                  customFooter={
+                    (() => {
+                      // 🆕 Règle Utilisateur (Step 75) : Écart Statutaire = Actuel - Arrondi
+                      // Arrondi Statutaire (Base Calculé) = Math.round(Calculated MOD + MOI Cible)
+
+                      const statAct = effActuelMOD + (effActuelMOI_Footer || 0);
+                      const statArr = Math.round(etpCalcMOD + targetMOI);
+                      const gapStat = statAct - statArr;
+
+                      const apsAct = effAPS_Footer;
+                      const apsArr = Math.round(targetAPS);
+                      const gapAPS = apsAct - apsArr;
+
+                      // Détail (pour cohérence avec la formule globale)
+                      // 🆕 Règle Utilisateur (Step 85) : Ecart MOD = MOD Actuel - MOD Arrondi (affichés)
+                      const gapMOD = effActuelMOD - dispArrMOD;
+                      const gapMOI = (effActuelMOI_Footer || 0) - targetMOI;
+
+                      return (
+                        <EffectifFooter
+                          totalLabel="Écart Statutaire"
+                          totalValue={gapStat}
+                          modValue={gapMOD}
+                          moiValue={formatSmallNumber(gapMOI, 0)}
+                        // APS masqué
+                        />
+                      );
+                    })()
+                  }
+                />
+              )}
             </div>
           </div>
         )}

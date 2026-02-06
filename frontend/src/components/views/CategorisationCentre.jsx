@@ -145,7 +145,35 @@ export default function CategorisationCentre() {
     const navigate = useNavigate();
     const location = useLocation();
 
-    const { simulationData, centreInfo, volumes } = location.state || {};
+    const { simulationData, centreInfo: navCentreInfo, volumes } = location.state || {};
+    const [fetchedCentreInfo, setFetchedCentreInfo] = useState(null);
+
+    // On privilégie les données fraîches si disponibles
+    const centreInfo = fetchedCentreInfo || navCentreInfo;
+
+    // Fetch centre details if missing OR incomplete (missing class)
+    useEffect(() => {
+        const isInfoComplete = centreInfo && centreInfo.categorisation_label;
+
+        // On ne relance pas si on a déjà fait un fetch (fetchedCentreInfo exists) 
+        // sauf si le fetch a échoué (mais ici fetchedCentreInfo est null si fail/start)
+        // Simplification : si on n'a pas fetchedCentreInfo ET que l'info courante est incomplète => on fetch
+        if (!fetchedCentreInfo && !isInfoComplete && centreId) {
+            const loadCentre = async () => {
+                try {
+                    const list = await api.centres();
+                    const found = list.find(c => String(c.id) === String(centreId));
+                    if (found) {
+                        console.log("✅ Centre details fetched (fresh):", found);
+                        setFetchedCentreInfo(found);
+                    }
+                } catch (e) {
+                    console.error("Erreur chargement infos centre:", e);
+                }
+            };
+            loadCentre();
+        }
+    }, [centreId, fetchedCentreInfo, navCentreInfo]); // Deps secure specific vars
 
     // Initialisation des valeurs Boolean inputs
     const [values, setValues] = useState(() => {
@@ -527,7 +555,7 @@ export default function CategorisationCentre() {
         console.log("Save:", { centreId, scores, totalScore, classeCentre, matchedCat, postesToUpdate });
 
         if (matchedCat) {
-            if (window.confirm(`Confirmez-vous la sauvegarde ?\n\nClasse: ${classeCentre}\nScore: ${totalScore.toFixed(1)}\nPostes à mettre à jour: ${postesToUpdate.length}`)) {
+            if (window.confirm(`Confirmez-vous la sauvegarde ?\n\nCatégorie: ${classeCentre}\nScore: ${totalScore.toFixed(1)}\nPostes à mettre à jour: ${postesToUpdate.length}`)) {
                 try {
                     await api.updateCentreCategorisation(centreId, matchedCat.id, postesToUpdate);
                     alert(`Sauvegardé avec succès ! Les effectifs ont été mis à jour.`);
@@ -570,24 +598,7 @@ export default function CategorisationCentre() {
                             Évaluation du centre <span className="font-bold text-slate-700 bg-slate-200 px-1.5 rounded">#{centreId}</span>
                         </p>
                     </div>
-                    <div className="flex items-center gap-6">
-                        {/* Score Global */}
-                        <div className="hidden sm:flex flex-col items-end">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Score Global</span>
-                            <span className="text-3xl font-black text-slate-800 tracking-tight">{totalScore.toFixed(1)}</span>
-                        </div>
 
-                        {/* Classe Simulée */}
-                        <div className={`flex flex-col items-center justify-center px-5 py-2 rounded-2xl border-2 shadow-sm transition-all duration-300
-                            ${classeCentre === 'D' ? 'bg-purple-50 border-purple-100 text-purple-700' :
-                                classeCentre === 'C' ? 'bg-blue-50 border-blue-100 text-blue-700' :
-                                    classeCentre === 'B' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' :
-                                        'bg-slate-50 border-slate-100 text-slate-600'}
-                        `}>
-                            <span className="text-[9px] font-bold uppercase tracking-wider opacity-60 mb-0.5">Classe</span>
-                            <span className="text-3xl font-black leading-none">{classeCentre}</span>
-                        </div>
-                    </div>
                 </div>
             </div>
 
@@ -810,7 +821,7 @@ export default function CategorisationCentre() {
                                                 </div>
 
                                                 {/* LRH - Info only (not scored) */}
-                                                <div className="bg-slate-50/50 p-2 rounded-xl border border-slate-200 opacity-50">
+                                                <div className="bg-white p-2 rounded-xl border border-slate-200">
                                                     <div className="flex justify-between items-center mb-1">
                                                         <div className="flex items-center gap-1.5">
                                                             <div className="p-1 bg-slate-100 rounded text-slate-500"><CreditCard className="w-3 h-3" /></div>
@@ -818,12 +829,12 @@ export default function CategorisationCentre() {
                                                         </div>
                                                         <span className="text-[9px] text-slate-400 font-semibold">Info</span>
                                                     </div>
-                                                    <input type="number" className="w-full text-right bg-white border border-slate-200 rounded-lg px-2 py-1 font-mono text-xs font-medium outline-none"
-                                                        value={volumeInputs.lrh} onChange={e => handleVolumeChange('lrh', e.target.value)} disabled />
+                                                    <input type="number" className="w-full text-right bg-white border border-slate-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 rounded-lg px-2 py-1 font-mono text-xs font-medium outline-none transition-all"
+                                                        value={volumeInputs.lrh} onChange={e => handleVolumeChange('lrh', e.target.value)} />
                                                 </div>
 
                                                 {/* Sacs - Info only (not scored) */}
-                                                <div className="bg-slate-50/50 p-2 rounded-xl border border-slate-200 opacity-50">
+                                                <div className="bg-white p-2 rounded-xl border border-slate-200">
                                                     <div className="flex justify-between items-center mb-1">
                                                         <div className="flex items-center gap-1.5">
                                                             <div className="p-1 bg-slate-100 rounded text-slate-500"><Store className="w-3 h-3" /></div>
@@ -831,12 +842,12 @@ export default function CategorisationCentre() {
                                                         </div>
                                                         <span className="text-[9px] text-slate-400 font-semibold">Info</span>
                                                     </div>
-                                                    <input type="number" className="w-full text-right bg-white border border-slate-200 rounded-lg px-2 py-1 font-mono text-xs font-medium outline-none"
-                                                        value={volumeInputs.sacs} onChange={e => handleVolumeChange('sacs', e.target.value)} disabled />
+                                                    <input type="number" className="w-full text-right bg-white border border-slate-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 rounded-lg px-2 py-1 font-mono text-xs font-medium outline-none transition-all"
+                                                        value={volumeInputs.sacs} onChange={e => handleVolumeChange('sacs', e.target.value)} />
                                                 </div>
 
                                                 {/* Colis - Info only (not scored) */}
-                                                <div className="bg-slate-50/50 p-2 rounded-xl border border-slate-200 opacity-50">
+                                                <div className="bg-white p-2 rounded-xl border border-slate-200">
                                                     <div className="flex justify-between items-center mb-1">
                                                         <div className="flex items-center gap-1.5">
                                                             <div className="p-1 bg-slate-100 rounded text-slate-500"><Truck className="w-3 h-3" /></div>
@@ -844,8 +855,8 @@ export default function CategorisationCentre() {
                                                         </div>
                                                         <span className="text-[9px] text-slate-400 font-semibold">Info</span>
                                                     </div>
-                                                    <input type="number" className="w-full text-right bg-white border border-slate-200 rounded-lg px-2 py-1 font-mono text-xs font-medium outline-none"
-                                                        value={volumeInputs.colis} onChange={e => handleVolumeChange('colis', e.target.value)} disabled />
+                                                    <input type="number" className="w-full text-right bg-white border border-slate-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 rounded-lg px-2 py-1 font-mono text-xs font-medium outline-none transition-all"
+                                                        value={volumeInputs.colis} onChange={e => handleVolumeChange('colis', e.target.value)} />
                                                 </div>
                                             </div>
                                         </div>
@@ -1014,7 +1025,7 @@ export default function CategorisationCentre() {
                                             <Calculator className="w-2.5 h-2.5 text-white/90" />
                                             <span className="text-[8px] text-white/70 uppercase font-semibold tracking-wider">Nouveau</span>
                                         </div>
-                                        <span className="text-base font-black text-white tracking-tight">Classe {classeCentre}</span>
+                                        <span className="text-base font-black text-white tracking-tight">Catégorie {classeCentre}</span>
                                     </div>
                                 </div>
                             </div>

@@ -82,7 +82,10 @@ class VolumesUIInput(BaseModel):
     ed_percent: float = Field(default=0.0, description="% ED (En Dehors)")
     pct_collecte: float = Field(default=5.0, description="% Collecte")
     taux_complexite: float = Field(default=1.0, description="Coefficient Complexité Circulation (Facteur)")
+
     nature_geo: float = Field(default=1.0, description="Coefficient Complexité Géographique")
+    pct_retour: float = Field(default=0.0, description="% Retour (Retour info facteur etc.)")
+    pct_international: float = Field(default=0.0, description="% International")
     
     # Nombre de jours ouvrés par an (fixe, configurable)
     nb_jours_ouvres_an: int = Field(default=264, description="Nombre de jours ouvrés par an")

@@ -28,7 +28,7 @@ class VolumesAnnuels(BaseModel):
     ed_percent: Optional[float] = Field(0.0, ge=0, le=100)  # 0-100%
     
     # 🆕 Coefficients de complexité (envoyés par le frontend)
-    taux_complexite: float = Field(1.0, ge=1.0)
+    taux_complexite: float = Field(1.0, ge=0.5)
     nature_geo: float = Field(1.0, ge=1.0)
 
 class VolumeItem(BaseModel):
@@ -57,6 +57,7 @@ class SimulationRequest(BaseModel):
     volumes_details: Optional[List[VolumeItem]] = None
     
     idle_minutes: Optional[float] = 0.0
+    is_test: Optional[bool] = False
 
 class TacheDetail(BaseModel):
     id: Optional[int] = None  # 🆕 ID unique de la tâche pour matching précis

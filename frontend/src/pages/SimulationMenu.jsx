@@ -60,7 +60,7 @@ export default function MenuAnalyseEffectifs() {
       items: [
         { icon: UserCog, title: "Simulation Par Intervenant", key: "simulation", flux: "poste" },
         { icon: ClipboardList, title: "Simulation Par Centre", key: "simulation", flux: "centre" },
-        { icon: Building, title: "Simulation par Direction", key: "simulation", flux: "direction" },
+
         { icon: Users, title: "Simulation par Région", key: "simulation", flux: "regional" },
         { icon: Building, title: "Simulation Nationale", key: "simulation", flux: "national" },
         { icon: FileText, title: "Capacité Nominale", key: "capacite-nominale" },
@@ -77,7 +77,7 @@ export default function MenuAnalyseEffectifs() {
       items: [
         { icon: UserCog, title: "Simulation Par Intervenant", key: "simulation", flux: "poste" },
         { icon: ClipboardList, title: "Simulation Par Centre", key: "simulation", flux: "centre" },
-        { icon: Building, title: "Simulation par Direction", key: "simulation", flux: "direction" },
+
         { icon: Users, title: "Simulation par Région", key: "simulation", flux: "regional" },
         { icon: Building, title: "Simulation Nationale", key: "simulation", flux: "national" },
         { icon: FileText, title: "Capacité Nominale", key: "capacite-nominale" },
@@ -152,7 +152,7 @@ export default function MenuAnalyseEffectifs() {
         tabIndex={0}
         className={
           "group relative flex flex-col items-center justify-center text-center " +
-          (fixedWidth ? "w-[260px] md:w-[300px]" : "w-full") +
+          (fixedWidth ? "w-[250px] lg:w-[280px] xl:w-[300px]" : "w-full") +
           " rounded-2xl cursor-pointer bg-white/90 backdrop-blur-xl " +
           "border border-white/80 ring-1 ring-transparent " +
           "hover:ring-2 hover:ring-[#00C6FF]/80 hover:shadow-[0_20px_60px_rgba(0,123,255,0.25)] " +
@@ -332,7 +332,7 @@ export default function MenuAnalyseEffectifs() {
                   Simulations
                 </div>
                 <motion.div
-                  className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
+                  className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 max-w-full"
                   initial="hidden"
                   animate="visible"
                   variants={{
@@ -368,7 +368,7 @@ export default function MenuAnalyseEffectifs() {
                   Documents de process
                 </div>
                 <motion.div
-                  className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
+                  className="flex flex-wrap justify-center gap-6 max-w-[1050px] mx-auto"
                   initial="hidden"
                   animate="visible"
                   variants={{
@@ -388,7 +388,7 @@ export default function MenuAnalyseEffectifs() {
                         visible: { opacity: 1, y: 0, scale: 1 },
                       }}
                     >
-                      <Card item={item} />
+                      <Card item={item} fixedWidth />
                     </motion.div>
                   ))}
                 </motion.div>

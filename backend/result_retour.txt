@@ -1,0 +1,301 @@
+--- Recherche Tâches RETOUR Global ---
+ID: 28
+Nom: Retour contrôleur sur SI
+CP ID: 15
+Produit: None
+Famille UO: None
+------------------------------
+ID: 80
+Nom: Retour information recommandé
+CP ID: 88
+Produit: None
+Famille UO: None
+------------------------------
+ID: 101
+Nom: Retour contrôleur sur SI
+CP ID: 136
+Produit: None
+Famille UO: None
+------------------------------
+ID: 187
+Nom: Retour info sur SI (Colis)
+CP ID: 238
+Produit: None
+Famille UO: None
+------------------------------
+ID: 188
+Nom: Retour info sur SI (Courrier)
+CP ID: 238
+Produit: None
+Famille UO: None
+------------------------------
+ID: 224
+Nom: pré tri courriers (grand format,Retour,LIC.)
+CP ID: 213
+Produit: None
+Famille UO: None
+------------------------------
+ID: 235
+Nom: Tri retour courrier
+CP ID: 213
+Produit: None
+Famille UO: None
+------------------------------
+ID: 242
+Nom: Passation et pointage retour PP
+CP ID: 271
+Produit: None
+Famille UO: None
+------------------------------
+ID: 248
+Nom: Retour argent CBET
+CP ID: 275
+Produit: None
+Famille UO: None
+------------------------------
+ID: 255
+Nom: Retour info (Amana,LRH,E-barkia,Recommandé)
+CP ID: 290
+Produit: None
+Famille UO: None
+------------------------------
+ID: 269
+Nom: Edition DNL Vaguemestre : cachet retour
+CP ID: 320
+Produit: None
+Famille UO: None
+------------------------------
+ID: 272
+Nom: Retour contrôleur sur SI
+CP ID: 322
+Produit: None
+Famille UO: None
+------------------------------
+ID: 328
+Nom: Retour info facteur
+CP ID: 340
+Produit: None
+Famille UO: None
+------------------------------
+ID: 330
+Nom: Contrôle le retour des non distribués
+CP ID: 350
+Produit: None
+Famille UO: None
+------------------------------
+ID: 335
+Nom: Retour info e-barkia (J+1)
+CP ID: 393
+Produit: None
+Famille UO: None
+------------------------------
+ID: 354
+Nom: Retour info courriers et colis
+CP ID: 386
+Produit: None
+Famille UO: None
+------------------------------
+ID: 375
+Nom: Retour contrôleur sur SI
+CP ID: 420
+Produit: None
+Famille UO: None
+------------------------------
+ID: 384
+Nom: Retour info e-barkia/LRH
+CP ID: 451
+Produit: None
+Famille UO: None
+------------------------------
+ID: 396
+Nom: Retour info sur SI
+CP ID: 451
+Produit: None
+Famille UO: None
+------------------------------
+ID: 447
+Nom: scan retour vaguemestre
+CP ID: 498
+Produit: None
+Famille UO: None
+------------------------------
+ID: 486
+Nom: retour info sur SI
+CP ID: 529
+Produit: None
+Famille UO: None
+------------------------------
+ID: 490
+Nom: Affectation colis sans retour à la poste
+CP ID: 558
+Produit: None
+Famille UO: None
+------------------------------
+ID: 554
+Nom: Retour info facteur
+CP ID: 593
+Produit: None
+Famille UO: None
+------------------------------
+ID: 2249
+Nom: Barid pro :Scan DNL et retour info
+CP ID: 26
+Produit: None
+Famille UO: None
+------------------------------
+ID: 2402
+Nom: Retour contrôleur sur SI
+CP ID: 7722
+Produit: None
+Famille UO: None
+------------------------------
+ID: 2495
+Nom: Retour info e-barkia (J+1)
+CP ID: 8146
+Produit: None
+Famille UO: None
+------------------------------
+ID: 2496
+Nom: Retour info courriers et colis
+CP ID: 8146
+Produit: None
+Famille UO: None
+------------------------------
+ID: 4423
+Nom: contrôle retour des non distribués
+CP ID: 8262
+Produit: None
+Famille UO: None
+------------------------------
+ID: 4440
+Nom: retour info facteur
+CP ID: 7996
+Produit: None
+Famille UO: None
+------------------------------
+ID: 4852
+Nom: Scan DNL et retour info
+CP ID: 7866
+Produit: None
+Famille UO: None
+------------------------------
+ID: 5008
+Nom: Scan DNL et retour info
+CP ID: 8284
+Produit: None
+Famille UO: None
+------------------------------
+ID: 5124
+Nom: Scan retour vag Master
+CP ID: 8247
+Produit: None
+Famille UO: Guichet Pro
+------------------------------
+ID: 6759
+Nom: retour info facteur
+CP ID: 7860
+Produit: Colis
+Famille UO: Distribution Locale
+------------------------------
+ID: 6775
+Nom: retour info facteur
+CP ID: 7860
+Produit: CO
+Famille UO: Distribution Locale
+------------------------------
+ID: 6781
+Nom: retour info facteur
+CP ID: 7860
+Produit: CR
+Famille UO: Distribution Locale
+------------------------------
+ID: 6791
+Nom: Retour info e-barkia (J+1)
+CP ID: 7860
+Produit: E barkia
+Famille UO: Distribution Locale
+------------------------------
+ID: 6797
+Nom: Retour info LRH (J+1)
+CP ID: 7860
+Produit: LRH
+Famille UO: Distribution Locale
+------------------------------
+ID: 7271
+Nom: Retour info e-barkia (J+1)
+CP ID: 7962
+Produit: E barkia Arrivé
+Famille UO: Distribution Locale
+------------------------------
+ID: 7273
+Nom: Retour info facteur CO
+CP ID: 7962
+Produit: CO Arrivé
+Famille UO: Distribution Locale
+------------------------------
+ID: 7281
+Nom: Retour info facteur CR
+CP ID: 7962
+Produit: CR Arrivé
+Famille UO: Distribution Locale
+------------------------------
+ID: 7295
+Nom: Retour info LRH (J+1)
+CP ID: 7962
+Produit: LRH
+Famille UO: Distribution Locale
+------------------------------
+ID: 7386
+Nom: sacn retour vagumestre Barid Pro
+CP ID: 7963
+Produit: Barid Pro
+Famille UO: Guichet Pro
+------------------------------
+ID: 7454
+Nom: retour info facteur Amana
+CP ID: 8371
+Produit: AMANA Reçu
+Famille UO: Distribution Locale
+------------------------------
+ID: 7728
+Nom: retour info facteur
+CP ID: 7496
+Produit: None
+Famille UO: Distribution Locale
+------------------------------
+ID: 7745
+Nom: retour info facteur
+CP ID: 7497
+Produit: None
+Famille UO: Distribution Locale
+------------------------------
+ID: 7764
+Nom: retour info facteur
+CP ID: 7497
+Produit: None
+Famille UO: Distribution Locale
+------------------------------
+ID: 7774
+Nom: Contrôle Cabine Retour Info
+CP ID: 7495
+Produit: None
+Famille UO: Acticités Admin
+------------------------------
+ID: 7806
+Nom: retour info facteur
+CP ID: 7496
+Produit: AMANA Reçu
+Famille UO: Distribution Locale
+------------------------------
+ID: 7822
+Nom: retour info facteur
+CP ID: 7497
+Produit: CO Arrivé
+Famille UO: Distribution Locale
+------------------------------
+ID: 7841
+Nom: retour info facteur
+CP ID: 7497
+Produit: CR Arrivé
+Famille UO: Distribution Locale
+------------------------------

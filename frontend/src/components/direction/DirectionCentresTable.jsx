@@ -1,8 +1,8 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, memo } from "react";
 import { Search, ChevronLeft, ChevronRight, ArrowUpDown, Eye, AlertTriangle, CheckCircle2, TrendingUp, TrendingDown, UserPlus, Search as SearchIcon } from "lucide-react";
 import { fmt } from "../../utils/formatters";
 
-export default function DirectionCentresTable({ centres = [], loading, onOpenDetail, headerActions }) {
+function DirectionCentresTable({ centres = [], loading, onOpenDetail, headerActions }) {
     const [search, setSearch] = useState("");
     const [page, setPage] = useState(1);
     const pageSize = 20;
@@ -88,9 +88,6 @@ export default function DirectionCentresTable({ centres = [], loading, onOpenDet
                             <th className="px-2 py-1.5 cursor-pointer hover:text-[#005EA8] transition-colors text-left border-r border-slate-200/60" onClick={() => handleSort('label')}>
                                 <div className="flex items-center gap-1">Nom de Centre<SortIcon col="label" /></div>
                             </th>
-                            <th className="px-2 py-1.5 cursor-pointer hover:text-[#005EA8] transition-colors text-center w-36 border-r border-slate-200/60" onClick={() => handleSort('ratioLoad')} title="Taux d'adéquation = (Effectif Cible / Effectif Actuel) %. Si > 100% : Surcharge (Sous-effectif). Si < 100% : Sur-effectif.">
-                                <div className="flex items-center justify-center gap-1">Taux d'adéquation <SortIcon col="ratioLoad" /></div>
-                            </th>
                             <th className="px-2 py-1.5 text-center text-slate-500 font-semibold cursor-pointer hover:text-[#005EA8] border-r border-slate-200/60" onClick={() => handleSort('fte_actuel')}>
                                 <div className="flex items-center justify-center gap-1">Actuel <SortIcon col="fte_actuel" /></div>
                             </th>
@@ -110,7 +107,6 @@ export default function DirectionCentresTable({ centres = [], loading, onOpenDet
                             Array.from({ length: 5 }).map((_, i) => (
                                 <tr key={i} className="animate-pulse">
                                     <td className="px-2 py-1.5"><div className="h-4 bg-slate-50 rounded w-24"></div></td>
-                                    <td className="px-2 py-1.5"><div className="h-4 bg-slate-50 rounded w-20 mx-auto"></div></td>
                                     <td className="px-2 py-1.5"><div className="h-4 bg-slate-50 rounded w-8 mx-auto"></div></td>
                                     <td className="px-2 py-1.5"><div className="h-4 bg-slate-50 rounded w-8 mx-auto"></div></td>
                                     <td className="px-2 py-1.5"><div className="h-4 bg-slate-50 rounded w-8 mx-auto"></div></td>
@@ -119,7 +115,7 @@ export default function DirectionCentresTable({ centres = [], loading, onOpenDet
                             ))
                         ) : paginated.length === 0 ? (
                             <tr>
-                                <td colSpan="7" className="px-2 py-12 text-center text-slate-400 font-light">
+                                <td colSpan="5" className="px-2 py-12 text-center text-slate-400 font-light">
                                     Aucun résultat correspondant
                                 </td>
                             </tr>
@@ -167,13 +163,6 @@ export default function DirectionCentresTable({ centres = [], loading, onOpenDet
                                     <tr key={row.id} className="hover:bg-slate-50/80 transition-all group border-l-2 border-l-transparent hover:border-l-[#005EA8] border-b border-slate-50">
                                         <td className="px-2 py-1.5 font-medium text-slate-700 truncate max-w-[320px] border-r border-slate-50" title={row.label}>
                                             {row.label}
-                                        </td>
-
-                                        {/* Charge: Texte Coloré Simple */}
-                                        <td className="px-2 py-1.5 border-r border-slate-50 text-center">
-                                            <span className={`font-mono text-xs font-black tracking-tight ${decision.color.match(/text-[\w-]+/)[0]}`}>
-                                                {Math.round(ratioLoad)}%
-                                            </span>
                                         </td>
 
                                         <td className="px-2 py-1.5 text-center font-mono text-slate-500 border-r border-slate-50">{fmt(actuel)}</td>
@@ -230,3 +219,5 @@ export default function DirectionCentresTable({ centres = [], loading, onOpenDet
         </div>
     );
 }
+
+export default memo(DirectionCentresTable);

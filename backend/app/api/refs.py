@@ -238,21 +238,26 @@ def list_regions(db: Session = Depends(get_db)):
 @router.get("/centres")
 def list_centres(
     region_id: Optional[int] = Query(None),
+    categorie_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
 ):
     sql = """
         SELECT
           c.id,
-          CAST(c.T_APS AS FLOAT) AS t_aps_global,
-          CAST(c.APS AS FLOAT) AS aps_legacy, -- Au cas où T_APS est vide
+          CAST(c.cas AS FLOAT) AS cas,
+          CAST(c.APS AS FLOAT) AS aps, -- ✅ Renamed to matches DB column name expectation
+          CAST(c.APS AS FLOAT) AS aps_legacy, 
           c.label,
           c.region_id,
+          c.direction_id, -- ✅ Added direction_id
           c.categorie_id,
           c.id_categorisation AS id_categorisation,
+          cat.label AS categorisation_label, -- ✅ Ajout du label de catÃ©gorisation
           COALESCE(p.nb_postes, 0)      AS postes,
           COALESCE(p.type_agg, '')      AS type,
           COALESCE(f.fte_actuel, 0)     AS fte_actuel
         FROM dbo.centres c
+        LEFT JOIN dbo.Categorisation cat ON cat.id_categorisation = c.id_categorisation -- ✅ Join categorisation
         -- agrÃ©gats postes (nb + type_agg)
         LEFT JOIN (
           SELECT
@@ -275,25 +280,12 @@ def list_centres(
           GROUP BY cp.centre_id
         ) f ON f.centre_id = c.id
         WHERE (:region_id IS NULL OR c.region_id = :region_id)
+          AND (:categorie_id IS NULL OR c.categorie_id = :categorie_id)
         ORDER BY c.label
     """
-    rows = db.execute(text(sql), {"region_id": region_id}).mappings().all()
+    rows = db.execute(text(sql), {"region_id": region_id, "categorie_id": categorie_id}).mappings().all()
     
-    # 🐛 DEBUG: Vérifier le contenu de T_APS pour le premier centre
-    if rows:
-        first_c = rows[0]
-        print(f"🔍 [DEBUG API CENTRES] Premier centre: ID={first_c.get('id')}, Label={first_c.get('label')}")
-        print(f"   -> T_APS (brut): {first_c.get('T_APS')}")
-        print(f"   -> APS (brut): {first_c.get('APS')}")
-    else:
-        print("🔍 [DEBUG API CENTRES] Aucune donnée trouvée pour cette région.")
-
     result = [{**dict(r), "etp_calcule": None} for r in rows]
-    
-    # Vérifier le premier résultat
-    if result:
-        print(f"\n🔍 [DEBUG BACKEND] Premier centre dans result:")
-        print(f"   {result[0]}")
     
     return result
 
@@ -314,16 +306,19 @@ def list_postes(
         sql = """
             SELECT 
                 p.id,
-                cp.id AS centre_poste_id,
+                MAX(cp.id) AS centre_poste_id,
                 p.label,
                 p.type_poste,
-                COALESCE(cp.effectif_actuel, 0) AS effectif_actuel
+                SUM(COALESCE(cp.effectif_actuel, 0)) AS effectif_actuel
             FROM dbo.postes p
             INNER JOIN dbo.centre_postes cp ON cp.poste_id = p.id
             WHERE cp.centre_id = :centre_id
+            GROUP BY p.id, p.label, p.type_poste
             ORDER BY p.label
         """
         rows = db.execute(text(sql), {"centre_id": centre_id}).mappings().all()
+        print(f"DEBUG POSTES CENTRE {centre_id}: {[dict(r) for r in rows if r['centre_poste_id'] == 13627 or 'FACTEUR' in str(r['label'])]}") # Filtrer pour ne pas spammer
+
     else:
         sql = """
             SELECT 
@@ -387,11 +382,19 @@ def get_taches(
             t.phase,
             t.unite_mesure,
             t.moyenne_min,
+            t.min_min AS min_min,
+            t.moy_sec AS moy_sec, -- ✅ Corrected column name
+            t.moy_sec AS min_sec, -- ✅ Alias for compatibility
+            t.ordre,             -- ✅ Added missing column
             t.centre_poste_id,
             t.produit,
-            t.base_calcul
+            t.base_calcul,
+            p.label as poste_label,
+            p.label as nom_poste, -- ✅ Alias pour compatibilité frontend
+            p.type_poste -- ✅ Ajout type_poste
         FROM dbo.taches t
         INNER JOIN dbo.centre_postes cp ON cp.id = t.centre_poste_id
+        INNER JOIN dbo.postes p ON p.id = cp.poste_id
         WHERE cp.centre_id = :centre_id
     """
     params = {"centre_id": centre_id}
@@ -400,7 +403,12 @@ def get_taches(
         query += " AND cp.poste_id = :poste_id"
         params["poste_id"] = poste_id
 
+    query += " ORDER BY t.ordre ASC, t.id ASC"
+
     rows = db.execute(text(query), params).mappings().all()
+    if rows:
+        print(f"DEBUG TASKS KEYS: {rows[0].keys()}")
+        print(f"DEBUG TASK LABEL: {rows[0].get('poste_label')}")
     return [dict(r) for r in rows]
 
 @router.get("/consolide-postes")
