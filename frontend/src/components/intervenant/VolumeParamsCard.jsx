@@ -13,6 +13,7 @@ import {
   Lock,
   FileUp,
   Download,
+  Building, // 🆕 Import Building icon
 } from "lucide-react";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
@@ -127,6 +128,15 @@ export default function VolumeParamsCard({
   // 🆕 International
   pctInternational,
   setPctInternational,
+
+  // 🆕 National (nouveau paramètre)
+  pctNational,
+  setPctNational,
+
+  // 🆕 Marche Ordinaire
+  pctMarcheOrdinaire,
+  setPctMarcheOrdinaire,
+
 
   // 🆕 Disable Axes
   disabledAxes = false,
@@ -470,6 +480,8 @@ export default function VolumeParamsCard({
       colis_par_collecte: Number(colisParCollecte || 1),
       cr_par_caisson: Number(crParCaisson || 500), // 🆕 CR par caisson
       pct_retour: Number(pctRetour || 0), // 🆕 Paramètre % Retour
+      pct_international: Number(pctInternational || 0), // 🆕 International
+      pct_national: Number(pctNational || 0), // 🆕 National
 
       heures_net: hn,
       volumes_flux: buildVolumesFlux(), // Use the helper
@@ -943,7 +955,7 @@ export default function VolumeParamsCard({
       {/* 🟦 Paramètres Unités + État + Bouton - STICKY EN BAS */}
       <div className="sticky bottom-0 z-30 bg-white/95 backdrop-blur-md border border-slate-200/60 shadow-lg rounded-lg px-3 py-2 mt-3">
         <div className="flex flex-wrap items-center gap-3">
-          {/* Nb Colis/sac (AMANA) */}
+          {/* 1. Nb Colis/sac (AMANA) */}
           <div className="flex items-center gap-1.5 min-w-[140px] flex-1">
             <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${paramsDisabled ? "bg-slate-100 text-slate-400" : "bg-orange-50 text-orange-600"}`}>
               <Package className="w-3 h-3" />
@@ -969,7 +981,89 @@ export default function VolumeParamsCard({
 
           <div className="w-px h-6 bg-slate-200 hidden md:block" />
 
-          {/* 🆕 % En dehors (ED) */}
+          {/* 2. Nb CO/sac */}
+          <div className="flex items-center gap-1.5 min-w-[120px] flex-1">
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${paramsDisabled ? "bg-slate-100 text-slate-400" : "bg-blue-50 text-[#005EA8]"}`}>
+              <Mail className="w-3 h-3" />
+            </div>
+            <div className="flex flex-col w-full">
+              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                Nb CO/sac
+              </label>
+              <input
+                type="number"
+                min={0}
+                disabled={paramsDisabled}
+                value={nbrCoSac}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setNbrCoSac(val);
+                  const co = parseNonNeg(val) ?? 0;
+                  const cr = parseNonNeg(nbrCrSac) ?? 0;
+                  setCourriersParSac(co + cr);
+                }}
+                className={`text-xs font-semibold focus:outline-none w-full text-center ${paramsDisabled ? "bg-transparent text-slate-400 cursor-not-allowed" : "bg-transparent text-slate-800"}`}
+              />
+            </div>
+          </div>
+
+          <div className="w-px h-6 bg-slate-200 hidden md:block" />
+
+          {/* 3. Nb CR/sac */}
+          <div className="flex items-center gap-1.5 min-w-[120px] flex-1">
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${paramsDisabled ? "bg-slate-100 text-slate-400" : "bg-blue-50 text-[#005EA8]"}`}>
+              <Mail className="w-3 h-3" />
+            </div>
+            <div className="flex flex-col w-full">
+              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                Nb CR/sac
+              </label>
+              <input
+                type="number"
+                min={0}
+                disabled={paramsDisabled}
+                value={nbrCrSac}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setNbrCrSac(val);
+                  const co = parseNonNeg(nbrCoSac) ?? 0;
+                  const cr = parseNonNeg(val) ?? 0;
+                  setCourriersParSac(co + cr);
+                }}
+                className={`text-xs font-semibold focus:outline-none w-full text-center ${paramsDisabled ? "bg-transparent text-slate-400 cursor-not-allowed" : "bg-transparent text-slate-800"}`}
+              />
+            </div>
+          </div>
+
+          <div className="w-px h-6 bg-slate-200 hidden md:block" />
+
+          {/* 4. CR/caisson */}
+          <div className="flex items-center gap-1.5 min-w-[140px] flex-1">
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${paramsDisabled ? "bg-slate-100 text-slate-400" : "bg-purple-50 text-purple-600"}`}>
+              <Archive className="w-3 h-3" />
+            </div>
+            <div className="flex flex-col w-full">
+              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                CR/caisson
+              </label>
+              <input
+                type="number"
+                min={1}
+                disabled={paramsDisabled}
+                value={crParCaisson}
+                onChange={(e) =>
+                  setCrParCaisson(
+                    e.target.value === "" ? 500 : Number(e.target.value)
+                  )
+                }
+                className={`text-xs font-semibold focus:outline-none w-full text-center ${paramsDisabled ? "bg-transparent text-slate-400 cursor-not-allowed" : "bg-transparent text-slate-800"}`}
+              />
+            </div>
+          </div>
+
+          <div className="w-px h-6 bg-slate-200 hidden md:block" />
+
+          {/* 5. % En dehors (ED) */}
           <div className="flex items-center gap-1.5 min-w-[120px] flex-1">
             <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${paramsDisabled ? "bg-slate-100 text-slate-400" : "bg-red-50 text-red-600"}`} title="Pourcentage de colis traités hors sacs.">
               <Archive className="w-3 h-3" />
@@ -998,7 +1092,7 @@ export default function VolumeParamsCard({
 
           <div className="w-px h-6 bg-slate-200 hidden md:block" />
 
-          {/* 🆕 % Axes Arrivée */}
+          {/* 6. % Axes Arrivée */}
           <div className={`flex items-center gap-1.5 min-w-[120px] flex-1 transition-opacity ${disabledAxes ? "opacity-60 grayscale" : ""}`}>
             <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${(paramsDisabled || disabledAxes) ? "bg-slate-100 text-slate-400" : "bg-indigo-50 text-indigo-600"}`}>
               <ArrowDownRight className="w-3 h-3" />
@@ -1028,7 +1122,7 @@ export default function VolumeParamsCard({
 
           <div className="w-px h-6 bg-slate-200 hidden md:block" />
 
-          {/* 🆕 % Axes Départ */}
+          {/* 7. % Axes Départ */}
           <div className={`flex items-center gap-1.5 min-w-[120px] flex-1 transition-opacity ${disabledAxes ? "opacity-60 grayscale" : ""}`}>
             <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${(paramsDisabled || disabledAxes) ? "bg-slate-100 text-slate-400" : "bg-purple-50 text-purple-600"}`}>
               <ArrowUpRight className="w-3 h-3" />
@@ -1057,7 +1151,7 @@ export default function VolumeParamsCard({
 
           <div className="w-px h-6 bg-slate-200 hidden md:block" />
 
-          {/* 🆕 International % */}
+          {/* 8. International % */}
           <div className="flex items-center gap-1.5 min-w-[120px] flex-1">
             <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${paramsDisabled ? "bg-slate-100 text-slate-400" : "bg-cyan-50 text-cyan-600"}`}>
               <FileUp className="w-3 h-3" />
@@ -1086,7 +1180,68 @@ export default function VolumeParamsCard({
 
           <div className="w-px h-6 bg-slate-200 hidden md:block" />
 
-          {/* 🆕 % Collecte */}
+          {/* 9. % National */}
+          <div className="flex items-center gap-1.5 min-w-[120px] flex-1">
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${paramsDisabled ? "bg-slate-100 text-slate-400" : "bg-teal-50 text-teal-600"}`}>
+              <MapPin className="w-3 h-3" />
+            </div>
+            <div className="flex flex-col w-full">
+              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                % National
+              </label>
+              <div className="flex items-center">
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  disabled={paramsDisabled}
+                  value={pctNational}
+                  onChange={(e) => {
+                    const v = e.target.value === "" ? 0 : Math.min(100, Math.max(0, Number(e.target.value)));
+                    setPctNational && setPctNational(v);
+                  }}
+                  className={`text-xs font-semibold focus:outline-none w-full text-center rounded ${paramsDisabled ? "bg-slate-100 text-slate-400 cursor-not-allowed" : "bg-transparent text-teal-700"}`}
+                />
+                <span className="text-[10px] text-slate-400 font-bold">%</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="w-px h-6 bg-slate-200 hidden md:block" />
+
+          {/* 10. % Marche Ordinaire (Seulement si NON AM) */}
+          {!disabledAxes && ( // disabledAxes vaut true si AM -> Donc on affiche si !disabledAxes
+            <>
+              <div className="flex items-center gap-1.5 min-w-[120px] flex-1">
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${paramsDisabled ? "bg-slate-100 text-slate-400" : "bg-orange-50 text-orange-600"}`}>
+                  <Building className="w-3 h-3" />
+                </div>
+                <div className="flex flex-col w-full">
+                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                    % Marché Ord.
+                  </label>
+                  <div className="flex items-center">
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      disabled={paramsDisabled}
+                      value={pctMarcheOrdinaire}
+                      onChange={(e) => {
+                        const v = e.target.value === "" ? 0 : Math.min(100, Math.max(0, Number(e.target.value)));
+                        setPctMarcheOrdinaire && setPctMarcheOrdinaire(v);
+                      }}
+                      className={`text-xs font-semibold focus:outline-none w-full text-center rounded ${paramsDisabled ? "bg-slate-100 text-slate-400 cursor-not-allowed" : "bg-transparent text-slate-800"}`}
+                    />
+                    <span className="text-[10px] text-slate-400 font-bold">%</span>
+                  </div>
+                </div>
+              </div>
+              <div className="w-px h-6 bg-slate-200 hidden md:block" />
+            </>
+          )}
+
+          {/* 11. % Collecte */}
           <div className={`flex items-center gap-1.5 min-w-[120px] flex-1 transition-opacity ${disabledAxes ? "opacity-60 grayscale" : ""}`}>
             <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${(paramsDisabled || disabledAxes) ? "bg-slate-100 text-slate-400" : "bg-green-50 text-green-600"}`}>
               <Package className="w-3 h-3" />
@@ -1115,7 +1270,7 @@ export default function VolumeParamsCard({
 
           <div className="w-px h-6 bg-slate-200 hidden md:block" />
 
-          {/* 🆕 % Retour */}
+          {/* 12. % Retour */}
           <div className="flex items-center gap-1.5 min-w-[120px] flex-1">
             <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${paramsDisabled ? "bg-slate-100 text-slate-400" : "bg-indigo-50 text-indigo-600"}`}>
               <ArrowLeftRight className="w-3 h-3" />
@@ -1139,88 +1294,6 @@ export default function VolumeParamsCard({
                 />
                 <span className="text-[10px] text-slate-400 font-bold">%</span>
               </div>
-            </div>
-          </div>
-
-          <div className="w-px h-6 bg-slate-200 hidden md:block" />
-
-          {/* Nb CO/sac */}
-          <div className="flex items-center gap-1.5 min-w-[120px] flex-1">
-            <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${paramsDisabled ? "bg-slate-100 text-slate-400" : "bg-blue-50 text-[#005EA8]"}`}>
-              <Mail className="w-3 h-3" />
-            </div>
-            <div className="flex flex-col w-full">
-              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                Nb CO/sac
-              </label>
-              <input
-                type="number"
-                min={0}
-                disabled={paramsDisabled}
-                value={nbrCoSac}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setNbrCoSac(val);
-                  const co = parseNonNeg(val) ?? 0;
-                  const cr = parseNonNeg(nbrCrSac) ?? 0;
-                  setCourriersParSac(co + cr);
-                }}
-                className={`text-xs font-semibold focus:outline-none w-full text-center ${paramsDisabled ? "bg-transparent text-slate-400 cursor-not-allowed" : "bg-transparent text-slate-800"}`}
-              />
-            </div>
-          </div>
-
-          <div className="w-px h-6 bg-slate-200 hidden md:block" />
-
-          {/* Nb CR/sac */}
-          <div className="flex items-center gap-1.5 min-w-[120px] flex-1">
-            <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${paramsDisabled ? "bg-slate-100 text-slate-400" : "bg-blue-50 text-[#005EA8]"}`}>
-              <Mail className="w-3 h-3" />
-            </div>
-            <div className="flex flex-col w-full">
-              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                Nb CR/sac
-              </label>
-              <input
-                type="number"
-                min={0}
-                disabled={paramsDisabled}
-                value={nbrCrSac}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setNbrCrSac(val);
-                  const co = parseNonNeg(nbrCoSac) ?? 0;
-                  const cr = parseNonNeg(val) ?? 0;
-                  setCourriersParSac(co + cr);
-                }}
-                className={`text-xs font-semibold focus:outline-none w-full text-center ${paramsDisabled ? "bg-transparent text-slate-400 cursor-not-allowed" : "bg-transparent text-slate-800"}`}
-              />
-            </div>
-          </div>
-
-          <div className="w-px h-6 bg-slate-200 hidden md:block" />
-
-          {/* 🆕 CR par caisson */}
-          <div className="flex items-center gap-1.5 min-w-[140px] flex-1">
-            <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${paramsDisabled ? "bg-slate-100 text-slate-400" : "bg-purple-50 text-purple-600"}`}>
-              <Archive className="w-3 h-3" />
-            </div>
-            <div className="flex flex-col w-full">
-              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                CR/caisson
-              </label>
-              <input
-                type="number"
-                min={1}
-                disabled={paramsDisabled}
-                value={crParCaisson}
-                onChange={(e) =>
-                  setCrParCaisson(
-                    e.target.value === "" ? 500 : Number(e.target.value)
-                  )
-                }
-                className={`text-xs font-semibold focus:outline-none w-full text-center ${paramsDisabled ? "bg-transparent text-slate-400 cursor-not-allowed" : "bg-transparent text-slate-800"}`}
-              />
             </div>
           </div>
 

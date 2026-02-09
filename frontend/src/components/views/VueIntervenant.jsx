@@ -21,9 +21,13 @@ import {
   Calculator,
   TrendingUp,
   TrendingDown,
+  Users, // 🆕 Add Users
   Eye,
   EyeOff,
+  Upload,
 } from "lucide-react";
+
+import { api } from "../../lib/api";
 
 import { EmptyStateFirstRun } from "../states/EmptyStateFirstRun";
 import { EmptyStateDirty } from "../states/EmptyStateDirty";
@@ -34,6 +38,15 @@ import VolumeParamsCard from "../intervenant/VolumeParamsCard";
 import VirtualizedResultsTable from "../VirtualizedResultsTable";
 import ResultHeroCardCompact from "../results/ResultHeroCardCompact";
 import EnterpriseTable from "../tables/EnterpriseTable";
+import OrganizationalChart from "@/components/centres_uniq/OrganizationalChart"; // 🆕 Import Organigramme
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"; // 🆕 Import Dialog
+
 
 /* ===================== KPI COMPONENTS (COPIED FROM VUECENTRE) ===================== */
 const KPICardGlass = ({
@@ -144,11 +157,14 @@ export default function VueIntervenant({
   pctAxesArrivee, setPctAxesArrivee,
   pctAxesDepart, setPctAxesDepart,
   pctInternational = 0, setPctInternational = () => { },
+  pctNational = 0, setPctNational = () => { },
+  pctMarcheOrdinaire = 0, setPctMarcheOrdinaire = () => { },
   productivite,
   setProductivite,
   heuresNet,
   setHeuresNet,
   onSimuler,
+  onRefresh = () => { },
   display,
   setDisplay,
   refDisplay,
@@ -238,6 +254,47 @@ export default function VueIntervenant({
   // const [pctCollecte, setPctCollecte] = useState(5.0);
   // 🆕 Paramètre Retour (Local -> Global)
   // const [pctRetour, setPctRetour] = useState(0.0);
+
+  // State for Import
+  const [isImporting, setIsImporting] = useState(false);
+
+  const handleImportCanva = async () => {
+    if (!centre) return;
+
+    // Determine file based on Typology
+    const cat = String(centreCategorie || "").toUpperCase();
+    const isAmType = cat.includes("AM") || cat.includes("MESSAGERIE");
+    const fileName = isAmType ? "canva_CM_FES.xlsx" : "Canvas.xlsx";
+
+    if (!confirm(`Voulez-vous importer les tâches par défaut depuis le fichier ${fileName} ?\nCela ajoutera les tâches par défaut à ce centre.`)) return;
+
+    try {
+      setIsImporting(true);
+      // 1. Fetch from public folder
+      const response = await fetch(`/${fileName}`);
+      if (!response.ok) throw new Error(`Le fichier modèle '${fileName}' est introuvable sur le serveur.`);
+
+      const blob = await response.blob();
+      const file = new File([blob], fileName, { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+
+      // 2. Import via API
+      console.log(`Importing ${fileName} for centre:`, centre);
+      const res = await api.importTaches(centre, file);
+
+      if (res.status === 'imported') {
+        // alert(`Import réussi : ${res.count} tâches importées.`);
+        if (onRefresh) onRefresh();
+      } else {
+        throw new Error(res.message || "Erreur lors de l'import");
+      }
+
+    } catch (err) {
+      console.error(err);
+      alert("Erreur: " + err.message);
+    } finally {
+      setIsImporting(false);
+    }
+  };
 
   // ✅ OPTIMISATION : Debounce des valeurs pour éviter les recalculs excessifs
   const debouncedColis = useDebouncedValue(colis, 300);
@@ -1164,8 +1221,15 @@ export default function VueIntervenant({
           setPctCollecte={setPctCollecte}
           pctRetour={pctRetour}
           setPctRetour={setPctRetour}
+          // 🆕 International
           pctInternational={pctInternational}
           setPctInternational={setPctInternational}
+          // 🆕 National
+          pctNational={pctNational}
+          setPctNational={setPctNational}
+          // 🆕 Marche Ordinaire
+          pctMarcheOrdinaire={pctMarcheOrdinaire}
+          setPctMarcheOrdinaire={setPctMarcheOrdinaire}
           disabledAxes={
             (centreCategorie || "").startsWith("AM") ||
             (selectedCentreWithAPS?.type_site || "").startsWith("AM") ||
@@ -1203,50 +1267,81 @@ export default function VueIntervenant({
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 relative items-start">
               {/* Référentiel */}
               {refDisplay === "tableau" ? (
-                <div className="bg-white rounded-l-lg p-1.5 min-h-[460px]">
-                  <EnterpriseTable
-                    title="Référentiel Temps"
-                    subtitle={
-                      <div className="flex items-center gap-2">
-                        <span>{filterFamille ? `Filtre: ${filterFamille}` : "Base de calcul"}</span>
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200">
-                          {referentielDisplayData.length} tâche{referentielDisplayData.length > 1 ? 's' : ''}
-                        </span>
-                      </div>
-                    }
-                    tooltip="Temps moyen nécessaire pour traiter une unité (colis, sac…)"
-                    icon={Clock}
-                    columns={[
-                      { key: 'p', label: 'Produit', align: 'left', width: '110px', ellipsis: true }, // ✅ Ajout colonne Produit
-                      { key: 'f', label: 'Famille', align: 'left', width: '120px', ellipsis: true },
-                      { key: 't', label: 'Tâche', align: 'left', ellipsis: true },
+                referentiel.length === 0 && centre && !loading?.referentiel ? (
+                  <div className="bg-white rounded-l-lg p-6 min-h-[460px] flex flex-col items-center justify-center text-center border border-slate-200">
+                    <div className="mb-4 p-4 bg-slate-50 rounded-full">
+                      <Upload className="w-8 h-8 text-slate-400" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-slate-800 mb-2">Aucune tâche définie</h3>
+                    <p className="text-sm text-slate-500 mb-6 max-w-xs mx-auto">
+                      Ce centre ne contient aucune tâche dans la base de données.
+                    </p>
+                    <button
+                      onClick={handleImportCanva}
+                      disabled={isImporting}
+                      className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white transition-colors bg-[#005EA8] border border-transparent rounded-md shadow-sm hover:bg-[#004E8A] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed gap-2"
+                    >
+                      {isImporting ? (
+                        <>
+                          <span className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                          Importation...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-4 h-4" />
+                          Importer {isAM ? "Canva CM FES" : "Canvas"}
+                        </>
+                      )}
+                    </button>
+                    <p className="text-xs text-slate-400 mt-4">
+                      Charge le fichier '{isAM ? "canva_CM_FES.xlsx" : "Canvas.xlsx"}' depuis le dossier public
+                    </p>
+                  </div>
+                ) : (
+                  <div className="bg-white rounded-l-lg p-1.5 min-h-[460px]">
+                    <EnterpriseTable
+                      title="Référentiel Temps"
+                      subtitle={
+                        <div className="flex items-center gap-2">
+                          <span>{filterFamille ? `Filtre: ${filterFamille}` : "Base de calcul"}</span>
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200">
+                            {referentielDisplayData.length} tâche{referentielDisplayData.length > 1 ? 's' : ''}
+                          </span>
+                        </div>
+                      }
+                      tooltip="Temps moyen nécessaire pour traiter une unité (colis, sac…)"
+                      icon={Clock}
+                      columns={[
+                        { key: 'p', label: 'Produit', align: 'left', width: '110px', ellipsis: true }, // ✅ Ajout colonne Produit
+                        { key: 'f', label: 'Famille', align: 'left', width: '120px', ellipsis: true },
+                        { key: 't', label: 'Tâche', align: 'left', ellipsis: true },
 
-                      { key: 'resp', label: 'Responsable 1', align: 'left', width: '130px', ellipsis: true }, // ✅ Nom du poste responsable (1)
-                      { key: 'resp2', label: 'Responsable 2', align: 'left', width: '130px', ellipsis: true }, // ✅ Responsable 2 (Placeholder)
-                      { key: 'u', label: 'Unité', align: 'left', width: '100px', ellipsis: true },
-                      { key: 's', label: 'Sec', align: 'right', width: '80px', render: (val) => Number(val || 0).toFixed(0) },
-                      { key: 'm', label: 'Min', align: 'right', width: '80px', render: (val) => Number(val || 0).toFixed(2) }
-                    ]}
-                    data={referentielDisplayData.map((r, i) => ({
-                      seq: r.ordre || i + 1, // Utiliser l'ordre DB ou fallback sur séquentiel
-                      p: (r.produit || "").replace(/Arrivé|Arrive|Reçu|Recu|Dépôt|Dépot|Depot|MED/gi, "").trim(), // ✅ Clean Produit (sans Arrivé/Reçu/Dépôt/MED)
-                      f: r.famille || "",
-                      t: (r.t || "").replace(/\s*\([^)]*\)/g, "").trim(),
-                      ph: r.ph && String(r.ph).trim().toLowerCase() !== "n/a" ? r.ph : "",
-                      resp: (r.responsibles?.[0] || "-").replace(/\s*\([^)]*\)/g, "").trim(), // ✅ Responsable 1
-                      resp2: (r.responsibles?.[1] || "-").replace(/\s*\([^)]*\)/g, "").trim(), // ✅ Responsable 2
-                      u: r.u,
-                      m: r.m,
-                      s: (Number(r.m) || 0) * 60
-                    }))}
-                    currentView="table"
-                    onViewChange={(view) => setRefDisplay(view === 'table' ? 'tableau' : 'graphe')}
-                    showViewToggle={true}
-                    enableExport={true} // ✅ Activation Export
-                    height={450}
-                  />
-                </div>
-              ) : (
+                        { key: 'resp', label: 'Responsable 1', align: 'left', width: '130px', ellipsis: true }, // ✅ Nom du poste responsable (1)
+                        { key: 'resp2', label: 'Responsable 2', align: 'left', width: '130px', ellipsis: true }, // ✅ Responsable 2 (Placeholder)
+                        { key: 'u', label: 'Unité', align: 'left', width: '100px', ellipsis: true },
+                        { key: 's', label: 'Sec', align: 'right', width: '80px', render: (val) => Number(val || 0).toFixed(0) },
+                        { key: 'm', label: 'Min', align: 'right', width: '80px', render: (val) => Number(val || 0).toFixed(2) }
+                      ]}
+                      data={referentielDisplayData.map((r, i) => ({
+                        seq: r.ordre || i + 1, // Utiliser l'ordre DB ou fallback sur séquentiel
+                        p: (r.produit || "").replace(/Arrivé|Arrive|Reçu|Recu|Dépôt|Dépot|Depot|MED/gi, "").trim(), // ✅ Clean Produit (sans Arrivé/Reçu/Dépôt/MED)
+                        f: r.famille || "",
+                        t: (r.t || "").replace(/\s*\([^)]*\)/g, "").trim(),
+                        ph: r.ph && String(r.ph).trim().toLowerCase() !== "n/a" ? r.ph : "",
+                        resp: (r.responsibles?.[0] || "-").replace(/\s*\([^)]*\)/g, "").trim(), // ✅ Responsable 1
+                        resp2: (r.responsibles?.[1] || "-").replace(/\s*\([^)]*\)/g, "").trim(), // ✅ Responsable 2
+                        u: r.u,
+                        m: r.m,
+                        s: (Number(r.m) || 0) * 60
+                      }))}
+                      currentView="table"
+                      onViewChange={(view) => setRefDisplay(view === 'table' ? 'tableau' : 'graphe')}
+                      showViewToggle={true}
+                      enableExport={true} // ✅ Activation Export
+                      height={450}
+                    />
+                  </div>
+                )) : (
                 <Card
                   title={<span className="text-[11px] font-semibold">Référentiel Temps</span>}
                   actions={
@@ -1483,6 +1578,58 @@ export default function VueIntervenant({
                 />
               </KPICardGlass>
             </div>
+          </div>
+        )}
+
+        {/* 🆕 Organigramme Button & Dialog */}
+        {showDetails && hasSimulated && !poste && (
+          <div className="flex justify-center mt-2">
+            <Dialog>
+              <DialogTrigger asChild>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg shadow-sm text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-[#005EA8] transition-colors"
+                >
+                  <Users className="w-4 h-4" />
+                  Afficher l'Organigramme
+                </button>
+              </DialogTrigger>
+              <DialogContent className="w-[95vw] sm:max-w-[95vw] h-[75vh] flex flex-col overflow-hidden p-0 gap-0">
+                <DialogHeader className="p-6 pb-2 shrink-0">
+                  <DialogTitle className="flex items-center justify-between gap-2 pr-6">
+                    <div className="flex items-center gap-2">
+                      <Users className="w-5 h-5 text-[#005EA8]" />
+                      Organigramme du Centre {titleSuffix}
+                    </div>
+                    {/* Total ETP Badge */}
+                    <div className="flex items-center gap-2 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
+                      <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Centre</span>
+                      <span className="text-sm font-bold text-slate-900">
+                        {Math.round(kpiData.totalFinal)} ETP
+                      </span>
+                    </div>
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="flex-1 w-full min-h-0 relative bg-slate-50/30">
+                  <OrganizationalChart
+                    chefCentre={{
+                      name: (postesOptions || []).find(p => (p.label || "").toUpperCase().includes("CHEF"))?.label || "Chef de Centre",
+                      effectif: 1
+                    }}
+                    moiStaff={(postesOptions || []).filter(p => isMoiPoste(p) && !(p.label || "").toUpperCase().includes("CHEF")).map(p => ({
+                      name: p.label || p.nom_poste,
+                      effectif: Math.round(Number(p.effectif_actuel || 0)),
+                      type: p.type_poste
+                    }))}
+                    modStaff={(postesOptions || []).filter(p => !isMoiPoste(p)).map(p => ({
+                      name: p.label || p.nom_poste,
+                      effectif: Math.round((Number(p.effectif_actuel || 0) / (totalEffectifCentreStats.mod || 1)) * kpiData.targetFinalMOD), // Distribute calculated MOD
+                      heures: 0 // Placeholder
+                    })).filter(s => s.effectif > 0)}
+                  />
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
         )}
       </div>

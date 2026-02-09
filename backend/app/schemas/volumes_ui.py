@@ -89,6 +89,8 @@ class VolumesUIInput(BaseModel):
     nature_geo: float = Field(default=1.0, description="Coefficient Complexité Géographique")
     pct_retour: float = Field(default=0.0, description="% Retour (Retour info facteur etc.)")
     pct_international: float = Field(default=0.0, description="% International")
+    pct_national: float = Field(default=0.0, description="% National")
+    pct_marche_ordinaire: float = Field(default=0.0, description="% Marché Ordinaire (Non-AMANA)")
     
     # 🆕 Paramètres spécifiques CCI (Center ID 1952)
     # Single-value fields (backward compatibility for non-CCI centres)

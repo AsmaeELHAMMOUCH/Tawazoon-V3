@@ -1,0 +1,4 @@
+File: template_taches.xlsx
+Header: ['Ordre', 'seq', 'Produit', 'Famille UO', 'Taches', 'Unit? Mesure', 'base de calcul', 'Responsable 1', 'Responsable 2', 'min ', 'sec', 'ETAT']
+File: template_taches_am.xlsx
+Header: ['ordre', 'seq', 'Produit', 'Famille UO', 'taches', 'Unit? Mesure', 'base de calcul', 'Responsable 1', 'Responsable 2', 'En min ', 'En sec', 'ETAT']

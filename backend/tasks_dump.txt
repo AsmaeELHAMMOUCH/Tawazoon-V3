@@ -1,0 +1,207 @@
+TASK ID  | TASK NAME                      | PRODUIT              | UNITE      | POSTE LABEL               | TYPE  | ETAT    
+----------------------------------------------------------------------------------------------------------------------------------
+14107    | Taxation                       |                      | Courrier   | AGENT DE TAXATION         | MOD   |         
+14318    | Passation sur Registre         |                      | Courrier   | AGENT OPERATIONS          | MOD   |         
+14248    | Traitement sur la machine MAG  |                      | Courrier   | GUICHETIER                | MOD   |         
+14249    | Réception                      |                      | Courrier   | GUICHETIER                | MOD   |         
+14250    | Renseignement poids en manuel  |                      | Courrier   | GUICHETIER                | MOD   |         
+14251    | Saisie données sur SI COM      |                      | Courrier   | GUICHETIER                | MOD   |         
+14252    | Passation sur Registre         |                      | Courrier   | GUICHETIER                | MOD   |         
+14253    | sacn retour vagumestre         |                      | Courrier   | CONTRÔLEUR FACTURATION    | MOD   |         
+14105    | Expédition                     |                      | Courrier   | AGENT TRAITEMENT          | MOD   |         
+14106    | Edition PART                   |                      | Courrier   | AGENT TRAITEMENT          | MOD   |         
+14112    | Rapprochement entre physique e |  CR Arrivé           | Caisson    | AGENT TRAITEMENT          | MOD   |         
+14109    | Comptage Colis                 |  CR Arrivé           | Caisson    | AGENT TRAITEMENT          | MOD   |         
+14275    | chant et pointage              |  CR Arrivé           | Caisson    | MANUTENTIONNAIRE          | MOD   |         
+14315    | chant et pointage              |  CR Arrivé           | Courrier   | MANUTENTIONNAIRE          | MOD   |         
+14267    | Déchargement camion Principal  |  CR Arrivé           | Courrier   | MANUTENTIONNAIRE          | MOD   |         
+14268    | Déchargement camion Principal  |  CR Arrivé           | Caisson    | MANUTENTIONNAIRE          | MOD   |         
+14287    | Tri entre à distribuer  et à e |  CR Arrivé           | Caisson    | AGENT TRAITEMENT          | MOD   |         
+14282    | Déchargement Camions Axes      | AMANA Dépôt Axes     | Colis      | AGENT OPERATIONS          | MOD   |         
+14283    | Déchargement Camions Axes      | AMANA Dépôt Axes     | Sac        | AGENT OPERATIONS          | MOD   |         
+14284    | Chant et pointage              | AMANA Dépôt Axes     | Colis      | AGENT OPERATIONS          | MOD   |         
+14285    | Chant et pointage              | AMANA Dépôt Axes     | Sac        | AGENT OPERATIONS          | MOD   |         
+14168    | Ouverture sac                  | AMANA Dépôt Axes     | Sac        | AGENT OPERATIONS          | MOD   |         
+14170    | Comptage Colis                 | AMANA Dépôt Axes     | colis      | AGENT OPERATIONS          | MOD   |         
+14171    | Rapprochement entre physique e | AMANA Dépôt Axes     | colis      | AGENT OPERATIONS          | MOD   |         
+14174    | Scan & Réception SI            | AMANA Dépôt Axes     | colis      | AGENT OPERATIONS          | MOD   |         
+14176    | Tri par Destination            | AMANA Dépôt Axes     | colis      | AGENT OPERATIONS          | MOD   |         
+14254    | Confirmation réception  scan ( | AMANA Dépôt local    | colis      | AGENT OPERATIONS          | MOD   |         
+14255    | Confirmation réception  Saisie | AMANA Dépôt local    | colis      | AGENT OPERATIONS          | MOD   |         
+14256    | Taxation : Saisie excel - Créa | AMANA Dépôt local    | colis      | AGENT OPERATIONS          | MOD   |         
+14151    | ouverture Sac                  | AMANA Dépôt local    | Sac        | AGENT OPERATIONS          | MOD   |         
+14153    | Pesée                          | AMANA Dépôt local    | colis      | AGENT OPERATIONS          | MOD   |         
+14157    | correction et rajout poids     | AMANA Dépôt local    | colis      | AGENT OPERATIONS          | MOD   |         
+14159    | Confirmation réception  Saisie | AMANA Dépôt local    | colis      | AGENT OPERATIONS          | MOD   |         
+14161    | Confirmation réception  Créati | AMANA Dépôt local    | colis      | AGENT OPERATIONS          | MOD   |         
+14164    | Tri par Destination            | AMANA Dépôt local    | colis      | AGENT OPERATIONS          | MOD   |         
+14146    | Déchargement Camions Collecte  | AMANA Dépôt local    | Colis      | AGENT OPERATIONS          | MOD   |         
+14147    | Déchargement Camions Collecte  | AMANA Dépôt local    | Sac        | AGENT OPERATIONS          | MOD   |         
+14258    | Opération guichet : Dépôt      | AMANA Dépôt local    | colis      | GUICHETIER                | MOD   |         
+14313    | Opération guichet : Dépôt (int | AMANA Dépôt local    | colis      | GUICHETIER                | MOD   |         
+14204    | Remise avisés au guichet       | AMANA Dépôt local    | colis      | GUICHETIER                | MOD   |         
+14206    | Etat Levée                     | AMANA Dépôt local    | colis      | GUICHETIER                | MOD   |         
+14198    | Remise avisés au guichet       | AMANA Dépôt local    | colis      | AGENT TRAITEMENT          | MOD   |         
+14200    | Etat Levée                     | AMANA Dépôt local    | colis      | AGENT TRAITEMENT          | MOD   |         
+14297    | collecte colis                 | AMANA Dépôt local    | Colis      | FACTEUR COLLECTEUR        | MOD   |         
+14177    | contrôle                       | AMANA Dépôt total    | colis      | AGENT TRAITEMENT          | MOD   |         
+14178    | création dépeche               | AMANA Dépôt total    | colis      | AGENT TRAITEMENT          | MOD   |         
+14179    | classement en cabine instance  | AMANA Dépôt total    | colis      | AGENT TRAITEMENT          | MOD   |         
+14180    | mise en sac                    | AMANA Dépôt total    | colis      | AGENT TRAITEMENT          | MOD   |         
+14181    | fermeture sac                  | AMANA Dépôt total    | Sac        | AGENT TRAITEMENT          | MOD   |         
+14182    | numérotage                     | AMANA Dépôt total    | Sac        | AGENT TRAITEMENT          | MOD   |         
+14183    | ecriture n° dépêches           | AMANA Dépôt total    | Sac        | AGENT TRAITEMENT          | MOD   |         
+14184    | ecriture nbre colis à envoyer  | AMANA Dépôt total    | colis      | AGENT TRAITEMENT          | MOD   |         
+14185    | saisi sur excel                | AMANA Dépôt total    | colis      | AGENT TRAITEMENT          | MOD   |         
+14186    | saisi Sur SI                   | AMANA Dépôt total    | colis      | AGENT TRAITEMENT          | MOD   |         
+14187    | envoi vers application des par | AMANA Dépôt total    | colis      | AGENT TRAITEMENT          | MOD   |         
+14188    | impression manifeste 101       | AMANA Dépôt total    | colis      | AGENT TRAITEMENT          | MOD   |         
+14189    | Edition PART                   | AMANA Dépôt total    | colis      | AGENT TRAITEMENT          | MOD   |         
+14191    | contrôle                       | AMANA Dépôt total    | Sac        | AGENT TRAITEMENT          | MOD   |         
+14192    | impression borderau            | AMANA Dépôt total    | colis      | AGENT TRAITEMENT          | MOD   |         
+14193    | renseignement envoie sur regis | AMANA Dépôt total    | colis      | AGENT TRAITEMENT          | MOD   |         
+14194    | Expédition                     | AMANA Dépôt total    | colis      | AGENT TRAITEMENT          | MOD   |         
+14195    | préparation colis pour chargem | AMANA Dépôt total    | colis      | AGENT TRAITEMENT          | MOD   |         
+14196    | chargement départ              | AMANA Dépôt total    | colis      | AGENT TRAITEMENT          | MOD   |         
+14197    | chargement départ              | AMANA Dépôt total    | Sac        | AGENT TRAITEMENT          | MOD   |         
+14118    | préparation chargement camion  | AMANA Reçu Axes      | Colis      | AGENT OPERATIONS          | MOD   |         
+14120    | renseignement part             | AMANA Reçu Axes      | Colis      | AGENT OPERATIONS          | MOD   |         
+14123    | signature part  et départ axe  | AMANA Reçu Axes      | Colis      | AGENT OPERATIONS          | MOD   |         
+14125    | chargement VAN axe             | AMANA Reçu Axes      | Colis      | AGENT OPERATIONS          | MOD   |         
+14126    | Ouverture sac à Distribuer sur | AMANA Reçu local     | Sac        | AGENT OPERATIONS          | MOD   |         
+14136    | Contrôle facteurs Avant Départ | AMANA Reçu local     | Colis      | AGENT OPERATIONS          | MOD   |         
+14132    | Envoi details colis à distribu | AMANA Reçu local     | Colis      | AGENT OPERATIONS          | MOD   |         
+14144    | Etats non distribué            | AMANA Reçu local     | Colis      | AGENT OPERATIONS          | MOD   |         
+14205    | Passation Vs Guichet           | AMANA Reçu local     | colis      | GUICHETIER                | MOD   |         
+14259    | Opération guichet : Retrait    | AMANA Reçu local     | colis      | GUICHETIER                | MOD   |         
+14294    | Affectation au guichet ( Non d | AMANA Reçu local     | Colis      | AGENT OPERATIONS          | MOD   |         
+14211    | etat argent CRBT               | AMANA Reçu local     | Colis      | GESTIONNAIRE DES OPERATIO | MOD   |         
+14215    | Tri Général (Par secteur)      | AMANA Reçu local     | Colis      | GESTIONNAIRE DES OPERATIO | MOD   |         
+14216    | Affectation Colis Facteurs     | AMANA Reçu local     | Colis      | GESTIONNAIRE DES OPERATIO | MOD   |         
+14217    | Passation Avec Controleur      | AMANA Reçu local     | Colis      | GESTIONNAIRE DES OPERATIO | MOD   |         
+14218    | Tri Par tournée                | AMANA Reçu local     | Colis      | GESTIONNAIRE DES OPERATIO | MOD   |         
+14219    | impression DNL                 | AMANA Reçu local     | Colis      | GESTIONNAIRE DES OPERATIO | MOD   |         
+14221    | Appel Client                   | AMANA Reçu local     | Colis      | GESTIONNAIRE DES OPERATIO | MOD   |         
+14222    | retour info facteur            | AMANA Reçu local     | Colis      | GESTIONNAIRE DES OPERATIO | MOD   |         
+14223    | Réception colis avisé sur  SI  | AMANA Reçu local     | Colis      | GESTIONNAIRE DES OPERATIO | MOD   |         
+14296    | Distribution                   | AMANA Reçu local     | Colis      | GESTIONNAIRE DES OPERATIO | MOD   |         
+14304    | Déchargement Facteur           | AMANA Reçu local     | Colis      | GESTIONNAIRE DES OPERATIO | MOD   |         
+14312    | Chargement Facteur             | AMANA Reçu local     | Colis      | GESTIONNAIRE DES OPERATIO | MOD   |         
+14130    | Scan & Réception SI            | AMANA Reçu local     | Colis      | AGENT TRAITEMENT          | MOD   |         
+14199    | Passation Vs Guichet           | AMANA Reçu local     | colis      | AGENT TRAITEMENT          | MOD   |         
+14293    | Tri & Répartition entre : PP,  | AMANA Reçu local     | Colis      | AGENT TRAITEMENT          | MOD   |         
+14111    | Rapprochement entre physique e | AMANA Reçu total     | Colis      | AGENT TRAITEMENT          | MOD   |         
+14114    | Tri entre à distribuer  et à e | AMANA Reçu total     | Colis      | AGENT TRAITEMENT          | MOD   |         
+14108    | Comptage Colis                 | AMANA Reçu total     | Colis      | AGENT TRAITEMENT          | MOD   |         
+14269    | Déchargement camion Principal  | AMANA Reçu total     | Colis      | MANUTENTIONNAIRE          | MOD   |         
+14270    | Déchargement camion Principal  | AMANA Reçu total     | Sac        | MANUTENTIONNAIRE          | MOD   |         
+14272    | Chant et pointage              | AMANA Reçu total     | Colis      | MANUTENTIONNAIRE          | MOD   |         
+14273    | Chant et pointage              | AMANA Reçu total     | Sac        | MANUTENTIONNAIRE          | MOD   |         
+14271    | chant et pointage              | CO Arrivé            | Sac        | MANUTENTIONNAIRE          | MOD   |         
+14266    | Déchargement camion Principal  | CO Arrivé            | Sac        | MANUTENTIONNAIRE          | MOD   |         
+14286    | Tri entre à distribuer  et à e | CO Arrivé            | Sac        | AGENT TRAITEMENT          | MOD   |         
+14288    | chargement VAN axe             | CO Arrivé Axes       | Sac        | AGENT OPERATIONS          | MOD   |         
+14117    | signature part  et départ axe  | CO Arrivé Axes       | Sac        | AGENT OPERATIONS          | MOD   |         
+14110    | préparation chargement camion  | CO Arrivé Axes       | Sac        | AGENT OPERATIONS          | MOD   |         
+14113    | renseignement part             | CO Arrivé Axes       | Sac        | AGENT OPERATIONS          | MOD   |         
+14122    | Ouverture sac à Distribuer sur | CO Arrivé local      | Sac        | AGENT OPERATIONS          | MOD   |         
+14129    | Passation avec Facteur CO      | CO Arrivé local      | Courrier   | AGENT OPERATIONS          | MOD   |         
+14135    | Etats non distribué            | CO Arrivé local      | Facteur    | AGENT OPERATIONS          | MOD   |         
+14235    | Tri par Facteur CO (Salle des  | CO Arrivé local      | Courrier   | GESTIONNAIRE OPÉRATIONS C | MOD   |         
+14236    | Affectation aux  Facteurs      | CO Arrivé local      | Facteur    | GESTIONNAIRE OPÉRATIONS C | MOD   |         
+14237    | Tri Par tournée                | CO Arrivé local      | Courrier   | GESTIONNAIRE OPÉRATIONS C | MOD   |         
+14238    | Chargement Facteur             | CO Arrivé local      | Courrier   | GESTIONNAIRE OPÉRATIONS C | MOD   |         
+14201    | Passation avec Facteur CO      | CO Arrivé local      | Courrier   | GESTIONNAIRE OPÉRATIONS C | MOD   |         
+14302    | Distribution                   | CO Arrivé local      | Courrier   | GESTIONNAIRE OPÉRATIONS C | MOD   |         
+14303    | retour info facteur            | CO Arrivé local      | Facteur    | GESTIONNAIRE OPÉRATIONS C | MOD   |         
+14309    | Oblitération
+                 | CO Arrivé local      | Courrier   | GESTIONNAIRE OPÉRATIONS C | MOD   |         
+14139    | création dépeche               | CO MED               | Dépeche    | AGENT TRAITEMENT          | MOD   |         
+14141    | mise en sac                    | CO MED               | Sac        | AGENT TRAITEMENT          | MOD   |         
+14142    | fermeture sac                  | CO MED               | Sac        | AGENT TRAITEMENT          | MOD   |         
+14143    | numérotage                     | CO MED               | Sac        | AGENT TRAITEMENT          | MOD   |         
+14149    | renseignement envoie sur regis | CO MED               | Sac        | AGENT TRAITEMENT          | MOD   |         
+14152    | préparation pour chargement    | CO MED               | Sac        | AGENT TRAITEMENT          | MOD   |         
+14156    | chargement départ              | CO MED               | Sac        | AGENT TRAITEMENT          | MOD   |         
+14212    | ecriture n° dépêches           | CO MED               | Sac        | CONTRÔLEUR DE ZONE        | MOD   |         
+14291    | Ouverture sac                  | CO MED Axes          | Sac        | AGENT OPERATIONS          | MOD   |         
+14137    | Tri par destination            | CO MED Axes          | Sac        | AGENT OPERATIONS          | MOD   |         
+14138    | Préparation  part 115          | CO MED Axes          | Part       | AGENT OPERATIONS          | MOD   |         
+14276    | Déchargement Camions Axes      | CO MED Axes          | Sac        | AGENT OPERATIONS          | MOD   |         
+14277    | Chant et pointage              | CO MED Axes          | Sac        | AGENT OPERATIONS          | MOD   |         
+14213    | impression borderau            | CO MED local         | Facteur    | CONTRÔLEUR DE ZONE        | MOD   |         
+14289    | chargement VAN axe             | CR Arrivé Axes       | Courrier   | AGENT OPERATIONS          | MOD   |         
+14290    | chargement VAN axe             | CR Arrivé Axes       | Caisson    | AGENT OPERATIONS          | MOD   |         
+14124    | signature part  et départ axe  | CR Arrivé Axes       | Caisson    | AGENT OPERATIONS          | MOD   |         
+14121    | renseignement part             | CR Arrivé Axes       | Caisson    | AGENT OPERATIONS          | MOD   |         
+14119    | préparation chargement camion  | CR Arrivé Axes       | Caisson    | AGENT OPERATIONS          | MOD   |         
+14131    | Ouverture Bac à Distribuer sur | CR Arrivé local      | Caisson    | AGENT OPERATIONS          | MOD   |         
+14140    | Etats non distribué            | CR Arrivé local      | Courrier   | AGENT OPERATIONS          | MOD   |         
+14134    | Passation avec Facteur CR      | CR Arrivé local      | Courrier   | AGENT OPERATIONS          | MOD   |         
+14209    | etat argent CRBT               | CR Arrivé local      | Courrier   | GUICHETIER                | MOD   |         
+14305    | Opération guichet  : Retrait   | CR Arrivé local      | Courrier   | GUICHETIER                | MOD   |         
+14127    | Affectation : Avisé, Abonné, V | CR Arrivé local      | Courrier   | AGENT TRAITEMENT          | MOD   |         
+14128    | Notification envoi avisé clien | CR Arrivé local      | Courrier   | AGENT TRAITEMENT          | MOD   |         
+14133    | Scan & Réception SI            | CR Arrivé local      | Courrier   | AGENT TRAITEMENT          | MOD   |         
+14310    | Oblitération                   | CR Arrivé local      | Courrier   | GESTIONNAIRE OPÉRATIONS C | MOD   |         
+14300    | Distribution                   | CR Arrivé local      | Courrier   | GESTIONNAIRE OPÉRATIONS C | MOD   |         
+14301    | retour info facteur            | CR Arrivé local      | Courrier   | GESTIONNAIRE OPÉRATIONS C | MOD   |         
+14202    | Passation avec Facteur CR      | CR Arrivé local      | Courrier   | GESTIONNAIRE OPÉRATIONS C | MOD   |         
+14220    | Chargement Facteur             | CR Arrivé local      | Courrier   | GESTIONNAIRE OPÉRATIONS C | MOD   |         
+14239    | Reception courriers en Salle d | CR Arrivé local      | Courrier   | GESTIONNAIRE OPÉRATIONS C | MOD   |         
+14240    | Tri par Facteur CR (Cabine de  | CR Arrivé local      | Courrier   | GESTIONNAIRE OPÉRATIONS C | MOD   |         
+14241    | Affectation aux  Facteurs      | CR Arrivé local      | Courrier   | GESTIONNAIRE OPÉRATIONS C | MOD   |         
+14242    | Tri Par tournée                | CR Arrivé local      | Courrier   | GESTIONNAIRE OPÉRATIONS C | MOD   |         
+14243    | impression DNL                 | CR Arrivé local      | Courrier   | GESTIONNAIRE OPÉRATIONS C | MOD   |         
+14244    | Chargement Facteur             | CR Arrivé local      | Caisson    | GESTIONNAIRE OPÉRATIONS C | MOD   |         
+14154    | création dépeche               | CR MED               | Courrier   | AGENT TRAITEMENT          | MOD   |         
+14155    | mise en Bac                    | CR MED               | Caisson    | AGENT TRAITEMENT          | MOD   |         
+14150    | contrôle                       | CR MED               | Courrier   | AGENT TRAITEMENT          | MOD   |         
+14214    | impression borderau            | CR MED               | Courrier   | CONTRÔLEUR DE ZONE        | MOD   |         
+14295    | ecriture n° dépêches           | CR MED               | Caisson    | CONTRÔLEUR DE ZONE        | MOD   |         
+14166    | contrôle                       | CR MED               | Courrier   | CHARGÉ TRAITEMENT/ACHEMIN | MOD   |         
+14160    | numérotage                     | CR MED               | Caisson    | AGENT TRAITEMENT          | MOD   |         
+14162    | ecriture nbre courrier  à envo | CR MED               | Caisson    | AGENT TRAITEMENT          | MOD   |         
+14163    | saisi Sur SI                   | CR MED               | Courrier   | AGENT TRAITEMENT          | MOD   |         
+14165    | Edition PART                   | CR MED               | Courrier   | AGENT TRAITEMENT          | MOD   |         
+14167    | renseignement envoie sur regis | CR MED               | Courrier   | AGENT TRAITEMENT          | MOD   |         
+14169    | Expédition                     | CR MED               | Courrier   | AGENT TRAITEMENT          | MOD   |         
+14172    | préparation pour chargement    | CR MED               | Courrier   | AGENT TRAITEMENT          | MOD   |         
+14173    | chargement départ              | CR MED               | Courrier   | AGENT TRAITEMENT          | MOD   |         
+14175    | chargement départ              | CR MED               | Caisson    | AGENT TRAITEMENT          | MOD   |         
+14292    | Ouverture Bac à Distribuer sur | CR MED Axes          | Caisson    | AGENT OPERATIONS          | MOD   |         
+14148    | Préparation  part 116          | CR MED Axes          | Courrier   | AGENT OPERATIONS          | MOD   |         
+14145    | Tri par destination            | CR MED Axes          | Courrier   | AGENT OPERATIONS          | MOD   |         
+14278    | Déchargement Camions Axes      | CR MED Axes          | Courrier   | AGENT OPERATIONS          | MOD   |         
+14279    | Déchargement Camions Axes      | CR MED Axes          | Caisson    | AGENT OPERATIONS          | MOD   |         
+14280    | Chant et pointage              | CR MED Axes          | Courrier   | AGENT OPERATIONS          | MOD   |         
+14281    | Chant et pointage              | CR MED Axes          | Caisson    | AGENT OPERATIONS          | MOD   |         
+14158    | fermeture Bac                  | CR MED Axes          | Caisson    | AGENT TRAITEMENT          | MOD   |         
+14257    | Opération guichet : Dépôt      | CR MED local         | Courrier   | GUICHETIER                | MOD   |         
+14115    | Mise en enveloppe  e-barkia    | E barkia Arrivé      | Courrier   | AGENT OPERATIONS          | MOD   |         
+14232    | Timbre à date e-barkia         | E barkia Arrivé      | Courrier   | GESTIONNAIRE OPÉRATIONS C | MOD   |         
+14228    | Tri e-barkia                   | E barkia Arrivé      | Courrier   | GESTIONNAIRE OPÉRATIONS C | MOD   |         
+14230    | Affectation e-barkia           | E barkia Arrivé      | Courrier   | GESTIONNAIRE OPÉRATIONS C | MOD   |         
+14298    | Distribution  e-barkia         | E barkia Arrivé      | Courrier   | GESTIONNAIRE OPÉRATIONS C | MOD   |         
+14299    | Retour info e-barkia (J+1)     | E barkia Arrivé      | Courrier   | GESTIONNAIRE OPÉRATIONS C | MOD   |         
+14226    | Impression e-barkia            | E barkia Arrivé      | Courrier   | GESTIONNAIRE OPÉRATIONS C | MOD   |         
+14224    | Acquittement e-barkia          | E barkia Arrivé      | Courrier   | GESTIONNAIRE OPÉRATIONS C | MOD   |         
+14225    | Acquittement LRH               | LRH Arrivé           | Courrier   | GESTIONNAIRE OPÉRATIONS C | MOD   |         
+14227    | Impression LRH                 | LRH Arrivé           | Courrier   | GESTIONNAIRE OPÉRATIONS C | MOD   |         
+14231    | Affectation LRH                | LRH Arrivé           | Courrier   | GESTIONNAIRE OPÉRATIONS C | MOD   |         
+14229    | Tri LRH                        | LRH Arrivé           | Courrier   | GESTIONNAIRE OPÉRATIONS C | MOD   |         
+14233    | Distribution LRH               | LRH Arrivé           | Courrier   | GESTIONNAIRE OPÉRATIONS C | MOD   |         
+14234    | Retour info LRH  (J+1)         | LRH Arrivé           | Courrier   | GESTIONNAIRE OPÉRATIONS C | MOD   |         
+14116    | Mise en enveloppe LRH          | LRH Arrivé           | Courrier   | AGENT OPERATIONS          | MOD   |         
+14316    | collecte colis                 | AMANA Dépôt local    | Colis      | CHEF DE CENTRE COLIS LOGI | MOI   |         
+14245    | Suivi de recouvrement          | AMANA Dépôt total    | colis      | CHEF D'AGENCE             | MOI   |         
+14246    | Suvi des dépots du mois        | AMANA Dépôt total    | colis      | CHEF D'AGENCE             | MOI   |         
+14247    | Edition Factures en fin de moi | AMANA Dépôt total    | colis      | CHEF D'AGENCE             | MOI   |         
+14210    | etat argent CRBT               | AMANA Reçu local     | Colis      | CHEF D'AGENCE COLIS LOGIS | MOI   |         
+14207    | Bouclage des operations        | CO local             | Facteur    | AGENT REPORTING ET QUALIT | MOI   |         
+14430    | etat argent CRBT               | CR Arrivé local      | Courrier   | CHEF D'AGENCE             | MOI   |         
+14208    | Bouclage des operations        | CR local             | Courrier   | AGENT REPORTING ET QUALIT | MOI   |         
+
+Summary by Type Poste:
+  MOD: 192
+  MOI: 8
