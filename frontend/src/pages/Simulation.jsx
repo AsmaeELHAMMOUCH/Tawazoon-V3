@@ -2180,54 +2180,10 @@ export default function SimulationEffectifs() {
 
         console.log(`%c✅ Résultats reçus (Data-Driven ${pid ? 'Poste' : 'Centre'}):`, "color: #2e7d32; font-weight: bold;", res);
 
-        // --- SHIFT LOGIC (Frontend Override) ---
-        // Liste des postes concernés par le multiplicateur de shift
-        const shiftTargets = [
-          "agent operation", "agent opération", "agent d'operation", "agent d'opération",
-          "controleur", "contrôleur",
-          "responsable operation", "responsable opération", "responsable d'operation", "responsable d'opération",
-          "manutentionnaire",
-          "trieur",
-          "agent traitement"
-        ];
-        const isShiftTarget = (lbl) => {
-          if (!lbl) return false;
-          const norm = lbl.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-          return shiftTargets.some(t => norm.includes(t.normalize("NFD").replace(/[\u0300-\u036f]/g, "")));
-        };
-
-        const shiftVal = Number(shift || 1);
-
-        if (shiftVal > 1) {
-          if (pid) {
-            // Mode Poste Unique (Data-Driven)
-            const pLabel = postesOptions.find(p => String(p.id) === String(pid))?.label;
-            if (isShiftTarget(pLabel)) {
-              console.log(`⚡ Application du Shift x${shiftVal} pour le poste: ${pLabel}`);
-              res.fte_calcule = (res.fte_calcule || 0) * shiftVal;
-              res.fte_arrondi = Math.round(res.fte_calcule);
-            }
-          } else if (res.postes && Array.isArray(res.postes)) {
-            // Mode Centre Complet -> On itère sur les postes retournés
-            console.log(`⚡ Vérification Shift x${shiftVal} pour tous les postes du centre...`);
-            let newTotalETP = 0;
-            res.postes.forEach(p => {
-              if (isShiftTarget(p.poste_label || p.label)) {
-                // Apply Shift
-                // Note: p.etp_calcule comes from backend. We assume it's "1 shift based" or regular volume.
-                p.etp_calcule = (p.etp_calcule || 0) * shiftVal;
-                p.etp_arrondi = Math.round(p.etp_calcule);
-              }
-              newTotalETP += (p.etp_calcule || 0);
-            });
-            // Recalcul du total global
-            res.fte_calcule = newTotalETP;
-            // On ne touche pas forcément à total_heures car Shift multiply FTE only (availability), not workload hours?
-            // Le prompt dit "effectif calculé ... par le nombre choisit".
-            // Donc FTE change.
-          }
-        }
-        // --- END SHIFT LOGIC ---
+        // --- SHIFT LOGIC REMOVED (Handled by Backend) ---
+        // const shiftVal = Number(shift || 1);
+        // Logic removed to avoid double counting.
+        // ------------------------------------------------
 
         const details_taches = Array.isArray(res?.details_taches) ? res.details_taches : [];
 
@@ -2462,40 +2418,9 @@ export default function SimulationEffectifs() {
           heures_net: res.heures_net ?? heures_net_calculees,
         };
 
-        // --- SHIFT LOGIC (Vue Centre Optimisee) ---
-        // Liste des postes concernés par le multiplicateur de shift
-        const shiftTargets = [
-          "agent operation", "agent opération", "agent d'operation", "agent d'opération",
-          "controleur", "contrôleur",
-          "responsable operation", "responsable opération", "responsable d'operation", "responsable d'opération",
-          "manutentionnaire",
-          "trieur",
-          "agent traitement"
-        ];
-        const isShiftTarget = (lbl) => {
-          if (!lbl) return false;
-          const norm = lbl.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-          return shiftTargets.some(t => norm.includes(t.normalize("NFD").replace(/[\u0300-\u036f]/g, "")));
-        };
-
-        const shiftVal = Number(shift || 1);
-
-        if (shiftVal > 1 && res.postes && Array.isArray(res.postes)) {
-          console.log(`⚡ LEGACY Application du Shift x${shiftVal} pour les postes éligibles...`);
-          let newTotalETP = 0;
-          res.postes.forEach(p => {
-            // Pour VueCentreOptimisee, p a souvent p.label ou p.poste_label
-            if (isShiftTarget(p.label || p.poste_label)) {
-              p.etp_calcule = (p.etp_calcule || 0) * shiftVal;
-              p.etp_arrondi = Math.round(p.etp_calcule);
-            }
-            newTotalETP += (p.etp_calcule || 0);
-          });
-          res.total_etp_calcule = newTotalETP;
-          res.total_etp_arrondi = Math.round(newTotalETP);
-          tot.fte_calcule = newTotalETP;
-          tot.fte_arrondi = Math.round(newTotalETP);
-        }
+        // --- SHIFT LOGIC REMOVED (Handled by Backend) ---
+        // if (shiftVal > 1 && res.postes && Array.isArray(res.postes)) { ... }
+        // ------------------------------------------------
 
         // Pour VueCentre, on garde la structure complète avec .postes
         setResultats(res);
@@ -2508,33 +2433,9 @@ export default function SimulationEffectifs() {
         console.log("📍 Appel endpoint: /simulate");
         res = await api.simulate(payload);
 
-        // --- SHIFT LOGIC (Legacy Single Post / Simulate) ---
-        // 'pid' indicates current post.
-        const shiftTargets = [
-          "agent operation", "agent opération", "agent d'operation", "agent d'opération",
-          "controleur", "contrôleur",
-          "responsable operation", "responsable opération", "responsable d'operation", "responsable d'opération",
-          "manutentionnaire",
-          "trieur",
-          "agent traitement"
-        ];
-        const isShiftTarget = (lbl) => {
-          if (!lbl) return false;
-          const norm = lbl.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-          return shiftTargets.some(t => norm.includes(t.normalize("NFD").replace(/[\u0300-\u036f]/g, "")));
-        };
-        const shiftVal = Number(shift || 1);
-
-        if (shiftVal > 1 && pid) {
-          const pLabel = postesOptions.find(p => String(p.id) === String(pid))?.label;
-          if (isShiftTarget(pLabel)) {
-            console.log(`⚡ Legacy Simulate: Application Shift x${shiftVal} sur ${pLabel}`);
-            if (res) {
-              res.fte_calcule = (res.fte_calcule || 0) * shiftVal;
-              res.fte_arrondi = Math.round(res.fte_calcule);
-            }
-          }
-        }
+        // --- SHIFT LOGIC REMOVED (Handled by Backend) ---
+        // if (shiftVal > 1 && pid) { ... }
+        // ------------------------------------------------
         // ---------------------------------------------------
 
         const details_taches = Array.isArray(res?.details_taches)

@@ -30,6 +30,8 @@ class VolumesAnnuels(BaseModel):
     # 🆕 Coefficients de complexité (envoyés par le frontend)
     taux_complexite: float = Field(1.0, ge=0.5)
     nature_geo: float = Field(1.0, ge=1.0)
+    # 🆕 Shift (envoyé par le frontend pour legacy/simulate)
+    shift: float = Field(1.0, ge=1.0)
 
 class VolumeItem(BaseModel):
     centre_poste_id: int

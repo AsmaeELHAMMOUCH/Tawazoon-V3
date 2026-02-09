@@ -129,7 +129,7 @@ def get_volume_by_product(produit: str, volumes: BandoengInputVolumes) -> float:
                 get_grid_val(g, ['cr', 'med', 'axes']))
 
     # Direct Mappings
-    if p == "AMANA REÇU TOTAL":
+    if p in ["AMANA REÇU TOTAL","AMANA REÇU"]:
         return sum_amana_recu()
     
     if p == "CR ARRIVÉ":
