@@ -1112,6 +1112,23 @@ export default function BandoengSimulation() {
 
                                     {/* Effectif Actuel */}
                                     {(() => {
+                                        if (selectedPosteObj) {
+                                            const val = Number(selectedPosteObj.effectif_actuel || 0);
+                                            return (
+                                                <KPICardGlass
+                                                    label="Effectif Actuel"
+                                                    icon={User}
+                                                    tone="cyan"
+                                                    emphasize
+                                                    total={val}
+                                                >
+                                                    <div className="text-[10px] text-slate-500 mt-1 flex justify-center">
+                                                        {selectedPosteObj.label}
+                                                    </div>
+                                                </KPICardGlass>
+                                            );
+                                        }
+
                                         // Determine Actuals respecting selection
                                         let actualMOD = 0;
                                         let actualMOI = 0;
@@ -1161,6 +1178,18 @@ export default function BandoengSimulation() {
 
                                     {/* ETP Calculé */}
                                     {(() => {
+                                        if (selectedPosteObj) {
+                                            return (
+                                                <KPICardGlass
+                                                    label="ETP Calculé"
+                                                    icon={Calculator}
+                                                    tone="blue"
+                                                    emphasize
+                                                    total={formatSmallNumber(fteCalculated)}
+                                                />
+                                            );
+                                        }
+
                                         const targetCalculatedMOD = isMOD ? fteCalculated : 0;
                                         const targetCalculatedMOI = selectedPosteObj
                                             ? (isMoiPoste(selectedPosteObj) ? Number(selectedPosteObj.effectif_actuel || 0) : 0)
@@ -1186,6 +1215,18 @@ export default function BandoengSimulation() {
 
                                     {/* ETP Final */}
                                     {(() => {
+                                        if (selectedPosteObj) {
+                                            return (
+                                                <KPICardGlass
+                                                    label="ETP Final"
+                                                    icon={CheckCircle2}
+                                                    tone="amber"
+                                                    emphasize
+                                                    total={fteArrondi}
+                                                />
+                                            );
+                                        }
+
                                         // Targets
                                         const targetFinalMOD = isMOD ? fteArrondi : 0;
                                         const targetFinalMOI = selectedPosteObj
@@ -1226,8 +1267,27 @@ export default function BandoengSimulation() {
                                         );
                                     })()}
 
-                                    {/* Besoin */}
+                                    {/* Besoin / Ecart */}
                                     {(() => {
+                                        if (selectedPosteObj) {
+                                            const actuel = Number(selectedPosteObj.effectif_actuel || 0);
+                                            const ecart = fteArrondi - actuel;
+                                            const isPositive = ecart > 0;
+                                            return (
+                                                <KPICardGlass
+                                                    label="Ecart"
+                                                    icon={isPositive ? TrendingUp : CheckCircle2}
+                                                    tone={isPositive ? "rose" : "emerald"}
+                                                    emphasize
+                                                    total={ecart > 0 ? `+${ecart}` : `${ecart}`}
+                                                >
+                                                    <div className="text-[10px] text-slate-500 mt-1 flex justify-center">
+                                                        {fteArrondi} (Cible) - {actuel} (Actuel)
+                                                    </div>
+                                                </KPICardGlass>
+                                            );
+                                        }
+
                                         // Cibles (Final)
                                         const targetFinalMOD = isMOD ? fteArrondi : 0;
                                         const targetFinalMOI = selectedPosteObj
@@ -1252,13 +1312,46 @@ export default function BandoengSimulation() {
                                         const apsActual = Math.round(displayAPS);
                                         const apsDelta = apsTarget - apsActual;
 
-                                        // "si on a augmente l'APS" -> on affiche de combien
-                                        const valToDisplay = apsDelta > 0 ? apsDelta : 0;
+                                        // Global Diff Calculation
+                                        // Cible globale est statutaireCible.
+                                        // Actuel global est (actualStatutaire + apsActual)
+                                        const globalDiff = statutaireCible - (actualStatutaire + apsActual);
 
-                                        // Footer Ecarts
-                                        const diffMOD = targetFinalMOD - actualMOD;
-                                        const diffMOI = targetFinalMOI - actualMOI;
-                                        const diffStatutaire = statutaireCible - actualStatutaire;
+                                        // Footer Ecarts Logic
+                                        let diffMOD = 0;
+                                        let diffMOI = 0;
+                                        // diffStatutaire will be calculated as sum of MOD+MOI at the end
+                                        let finalApsValue = apsDelta;
+
+                                        if (selectedPosteObj) {
+                                            // Selection Case
+                                            diffMOD = targetFinalMOD - actualMOD;
+                                            diffMOI = targetFinalMOI - actualMOI;
+                                            finalApsValue = 0; // No APS in individual
+                                        } else {
+                                            // Global Case
+                                            // Surplus doit inclure l'APS pour représenter l'excédent TOTAL
+                                            const surplus = (actualStatutaire + apsActual) - statutaireCible;
+
+                                            if (surplus > 0) {
+                                                // Need to release people (Surplus)
+                                                // Priority: Reduce APS first, then MOD
+                                                const apsCut = Math.min(surplus, displayAPS);
+                                                const modCut = surplus - apsCut;
+
+                                                diffMOD = -modCut;
+                                                diffMOI = 0;
+                                                finalApsValue = -apsCut;
+                                            } else {
+                                                // Need to recruit (Deficit)
+                                                // User Request: "garde toujours MOD=0 et MOI=0"
+                                                diffMOD = 0;
+                                                diffMOI = 0;
+                                                // finalApsValue remains apsDelta
+                                            }
+                                        }
+
+                                        const diffStatutaire = diffMOD + diffMOI;
 
                                         const formatSigned = (val) => {
                                             const num = Number(val);
@@ -1269,18 +1362,18 @@ export default function BandoengSimulation() {
                                         return (
                                             <KPICardGlass
                                                 label="Besoin"
-                                                icon={valToDisplay > 0 ? TrendingUp : CheckCircle2}
-                                                tone={valToDisplay > 0 ? "rose" : "emerald"}
+                                                icon={globalDiff > 0 ? TrendingUp : CheckCircle2}
+                                                tone={globalDiff > 0 ? "rose" : "emerald"}
                                                 emphasize
-                                                total={valToDisplay > 0 ? `+${Math.round(valToDisplay)}` : "0"}
+                                                total={formatSigned(Math.round(globalDiff))}
                                             >
                                                 <EffectifFooter
                                                     totalLabel="Ecart Statutaire"
                                                     totalValue={formatSigned(Math.round(diffStatutaire))}
-                                                    modValue={formatSigned(diffMOD)}
-                                                    moiValue={formatSigned(diffMOI)}
+                                                    modValue={formatSigned(Math.round(diffMOD))}
+                                                    moiValue={formatSigned(Math.round(diffMOI))}
                                                     apsLabel="Var. APS"
-                                                    apsValue={formatSigned(Math.round(apsDelta))}
+                                                    apsValue={formatSigned(Math.round(finalApsValue))}
                                                 />
                                             </KPICardGlass>
                                         );

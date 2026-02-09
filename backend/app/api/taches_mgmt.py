@@ -8,6 +8,7 @@ import openpyxl
 import pandas as pd
 import io
 from io import BytesIO
+import os
 
 from app.core.db import get_db
 from app.models import db_models
@@ -346,7 +347,6 @@ def _process_import_taches(content: bytes, centre_id: int, db: Session, poste_id
         "errors": errors[:10] # Top 10 errors
     }
 
-
 @router.post("/taches/import/{centre_id}")
 async def import_taches(
     centre_id: int, 
@@ -396,5 +396,67 @@ def export_template():
         print(f"Error generating template: {e}")
         return {"error": str(e)}
     
+
+class InitTemplateInput(BaseModel):
+    typologie: str  # "AM" or "CCC"
+
+@router.post("/centres/{centre_id}/taches/init-from-template")
+def init_taches_from_template(centre_id: int, input: InitTemplateInput, db: Session = Depends(get_db)):
+    """
+    Initialise les tâches d'un centre à partir d'un template Excel selon la typologie spécifiée.
+    """
+    # 1. Vérifier si le centre existe
+    centre = db.query(db_models.Centre).filter(db_models.Centre.id == centre_id).first()
+    if not centre:
+        raise HTTPException(status_code=404, detail="Centre introuvable")
+
+    # 2. Vérifier si le centre a déjà des tâches (Idempotence)
+    cp_ids = [res.id for res in db.query(db_models.CentrePoste.id).filter(db_models.CentrePoste.centre_id == centre_id).all()]
+    if cp_ids:
+        taches_count = db.query(db_models.Tache).filter(db_models.Tache.centre_poste_id.in_(cp_ids)).count()
+        if taches_count > 0:
+            return {"status": "skipped", "reason": "already_has_tasks"}
+    
+    # 3. Choisir le fichier Excel selon la typologie
+    typo = input.typologie.upper()
+    if typo == "AM":
+        template_name = "template_taches_am.xlsx"
+    elif typo == "CCC":
+        template_name = "template_taches.xlsx"
+    else:
+        raise HTTPException(status_code=400, detail="Typologie invalide. Valeurs attendues: AM ou CCC")
+
+    # Construction du chemin absolu (public/ à la racine du projet ou à la racine du backend)
+    # On privilégie le dossier public du backend
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    template_path = os.path.join(base_dir, "public", template_name)
+    
+    if not os.path.exists(template_path):
+        # Fallback chemin relatif
+        template_path = os.path.join("public", template_name)
+        if not os.path.exists(template_path):
+            raise HTTPException(status_code=500, detail=f"Fichier template {template_name} introuvable.")
+
+    # 4. Charger et traiter le fichier (Transactionnel par défaut dans _process_import_taches via session)
+    try:
+        with open(template_path, "rb") as f:
+            content = f.read()
+        
+        result = _process_import_taches(content, centre_id, db)
+        return {
+            "status": "imported",
+            "imported_count": result.get("taches_creees", 0),
+            "template_used": template_name
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Import des tâches échoué : {str(e)}")
+
+ 
+
+
+
+
+
 
 

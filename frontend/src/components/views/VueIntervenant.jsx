@@ -34,6 +34,7 @@ import VolumeParamsCard from "../intervenant/VolumeParamsCard";
 import VirtualizedResultsTable from "../VirtualizedResultsTable";
 import ResultHeroCardCompact from "../results/ResultHeroCardCompact";
 import EnterpriseTable from "../tables/EnterpriseTable";
+import BandoengGrid from "@/components/centres_uniq/BandoengGrid"; // 🆕 Import BandoengGrid
 
 /* ===================== KPI COMPONENTS (COPIED FROM VUECENTRE) ===================== */
 const KPICardGlass = ({

@@ -70,8 +70,6 @@ export default function VolumeParamsCard({
   setNbrCoSac,
   nbrCrSac,
   setNbrCrSac,
-  crParCaisson,
-  setCrParCaisson,
 
   // collecte colis (gardé pour compat)
   colis,
@@ -90,7 +88,7 @@ export default function VolumeParamsCard({
   partProfessionnels,
 
   // rules
-  getEffectiveFluxMode = () => "input", // Default to "input" mode func if missing
+  getEffectiveFluxMode,
 
   // ➕ pour calcul heures nettes
   heures, // en heures
@@ -119,17 +117,6 @@ export default function VolumeParamsCard({
   // 🆕 Collecte
   pctCollecte,
   setPctCollecte,
-
-  // 🆕 Retour
-  pctRetour,
-  setPctRetour,
-
-  // 🆕 International
-  pctInternational,
-  setPctInternational,
-
-  // 🆕 Disable Axes
-  disabledAxes = false,
 }) {
   // ✅ style commun PROFESSIONAL DASHBOARD
   const baseInputClass =
@@ -171,7 +158,7 @@ export default function VolumeParamsCard({
   const [heuresNet, setHeuresNet] = useState(null);
 
   // 🆕 CR par caisson (pour règle CR Arrivé)
-  // const [crParCaisson, setCrParCaisson] = useState(500); // 🗑️ Moved to global state
+  const [crParCaisson, setCrParCaisson] = useState(500);
 
   // 🔄 Synchro ascendante : dès qu'un state local change, on met à jour la grille globale persistée
   useEffect(() => {
@@ -214,9 +201,6 @@ export default function VolumeParamsCard({
     }));
   };
 
-  /* -------------------------------------------------------------------------- */
-  /* ⚡ AUTOCALCUL : AXES & GLOBAL SELON % (Arrivée) */
-  /* -------------------------------------------------------------------------- */
   // helpers pour récupérer / setter le Global Arrivée suivant le flux
   const getGlobalArrivee = (key) => {
     switch (key) {
@@ -251,130 +235,6 @@ export default function VolumeParamsCard({
         return;
     }
   };
-
-  /* -------------------------------------------------------------------------- */
-  /* ⚡ AUTOCALCUL : AXES & GLOBAL SELON % (Arrivée) */
-  /* -------------------------------------------------------------------------- */
-  useEffect(() => {
-    // Si % Axes Arrivée est renseigné (> 0), on force le calcul de la colonne Axes et du Global
-    const pct = parseFloat(pctAxesArrivee);
-    if (!isNaN(pct) && pct > 0 && pct < 100) {
-      const factor = pct / 100.0;
-      let stateChanged = false;
-      const newState = { ...arriveeState };
-
-      fluxRows.forEach((row) => {
-        const key = row.key;
-        const current = newState[key] || {};
-
-        // On récupère Part + Pro (Base du % ?)
-        const part = parseFloat(current.part) || 0;
-        const pro = parseFloat(current.pro) || 0;
-        const dist = parseFloat(current.dist) || 0;
-
-        // SAFEGUARD: Si Part et Pro sont vides (0), ne pas écraser un Global existant (ex: Import)
-        // MAIS seulement si on n'a pas déjà de valeur calculée pour Axes (ce qui signifierait qu'on est en mode édition)
-        const currentGlobal = parseFloat(getGlobalArrivee(key)) || 0;
-        const currentAxesVal = parseFloat(current.axes) || 0;
-        if ((part + pro) === 0 && currentGlobal > 0 && currentAxesVal === 0) {
-          return; // On saute ce flux pour ne pas le réinitialiser
-        }
-
-        // Formule simplifiée demandée : Axes = (Part + Pro) * %Axes
-        const computedAxes = Math.round((part + pro) * factor);
-
-        // Calcul automatique de Dist (le reste après Axes)
-        const computedDist = (part + pro) - computedAxes;
-
-        // Update Axes and Dist if different
-        const currentAxes = parseFloat(current.axes) || 0;
-        const currentDist = parseFloat(current.dist) || 0;
-
-        if (computedAxes !== currentAxes || computedDist !== currentDist) {
-          newState[key] = {
-            ...current,
-            axes: computedAxes,
-            dist: computedDist
-          };
-          stateChanged = true;
-        }
-
-        // 🛑 MODIF : On ne met PLUS à jour le Global automatiquement
-        // Le calcul reste purement INDICATIF ("Juste pour affichage")
-        /*
-        // Update Global (Column B) = Part + Pro + Dist + Axes
-        const computedGlobal = part + pro + dist + computedAxes;
-
-        if (computedGlobal !== currentGlobal) {
-          setGlobalArrivee(key, computedGlobal);
-        }
-        */
-      });
-
-      if (stateChanged) {
-        setArriveeState(newState);
-      }
-    }
-  }, [pctAxesArrivee, arriveeState]); // Depend on arriveeState to react to Part/Pro changes
-
-  /* -------------------------------------------------------------------------- */
-  /* ⚡ AUTOCALCUL : AXES & GLOBAL SELON % (Départ) */
-  /* -------------------------------------------------------------------------- */
-  useEffect(() => {
-    const pct = parseFloat(pctAxesDepart);
-    if (!isNaN(pct) && pct > 0 && pct < 100) {
-      const factor = pct / 100.0;
-      let stateChanged = false;
-      const newState = { ...departState };
-
-      fluxRows.forEach((row) => {
-        const key = row.key;
-        const current = newState[key] || {};
-
-        const part = parseFloat(current.part) || 0;
-        const pro = parseFloat(current.pro) || 0;
-        const dist = parseFloat(current.dist) || 0;
-        const currentGlobal = parseFloat(current.global) || 0;
-        const currentAxesVal = parseFloat(current.axes) || 0;
-
-        // SAFEGUARD: Idem pour le départ
-        if ((part + pro) === 0 && currentGlobal > 0 && currentAxesVal === 0) {
-          return;
-        }
-
-        // Formule simplifiée demandée : Axes = (Part + Pro) * %Axes
-        const computedAxes = Math.round((part + pro) * factor);
-
-        // Calcul automatique de Dist (le reste après Axes)
-        const computedDist = (part + pro) - computedAxes;
-
-        const currentAxes = parseFloat(current.axes) || 0;
-        const currentDist = parseFloat(current.dist) || 0;
-
-        // 🛑 MODIF : On ne met PLUS à jour le Global (ni Axes dans le global)
-        /*
-        // Calcul du nouveau Global (Départ a sa propre colonne Global dans state)
-        const computedGlobal = part + pro + dist + computedAxes;
-        */
-
-        if (computedAxes !== currentAxes || computedDist !== currentDist /* || computedGlobal !== currentGlobal */) {
-          newState[key] = {
-            ...current,
-            axes: computedAxes,
-            dist: computedDist,
-            // global: computedGlobal // Disabled
-          };
-          stateChanged = true;
-        }
-      });
-
-      if (stateChanged) {
-        setDepartState(newState);
-      }
-    }
-  }, [pctAxesDepart, departState]);
-
-
 
   // 🔍 Détection des champs non applicables
   const hasNonApplicable = fluxRows.some(
@@ -414,9 +274,6 @@ export default function VolumeParamsCard({
 
       // 2. Ajouter les segments détaillés (Part, Pro, Dist, Axes)
       Object.keys(arr).forEach(field => {
-        // 🛑 MODIF : On EXCLUT 'axes' et 'dist' du payload envoyé au backend (calculs automatiques, affichage uniquement)
-        if (field === 'axes' || field === 'dist') return;
-
         const val = Number(arr[field] || 0);
         if (val > 0 && segmentsMap[field]) {
           list.push({ flux: fluxCode, sens: "ARRIVEE", segment: segmentsMap[field], volume: val });
@@ -426,9 +283,6 @@ export default function VolumeParamsCard({
       // Départ
       const dep = departState[row.key] || {};
       Object.keys(dep).forEach(field => {
-        // 🛑 MODIF : On EXCLUT 'axes' et 'dist' du payload
-        if (field === 'axes' || field === 'dist') return;
-
         const val = Number(dep[field] || 0);
         if (val > 0 && segmentsMap[field]) {
           list.push({ flux: fluxCode, sens: "DEPART", segment: segmentsMap[field], volume: val });
@@ -469,7 +323,6 @@ export default function VolumeParamsCard({
       courriers_cr_par_sac: Number(nbrCrSac || 0), // 🆕 Envoi spécifique CR
       colis_par_collecte: Number(colisParCollecte || 1),
       cr_par_caisson: Number(crParCaisson || 500), // 🆕 CR par caisson
-      pct_retour: Number(pctRetour || 0), // 🆕 Paramètre % Retour
 
       heures_net: hn,
       volumes_flux: buildVolumesFlux(), // Use the helper
@@ -523,7 +376,7 @@ export default function VolumeParamsCard({
     };
 
     return (
-      <input
+      <Input
         type="text"
         inputMode="numeric"
         disabled={disabled}
@@ -671,27 +524,10 @@ export default function VolumeParamsCard({
                   return;
                 }
 
-                // 🆕 RESET TOTAL : On repart d'objets vides pour écraser l'existant
-                const newArrivee = Object.fromEntries(
-                  fluxRows.map((r) => [r.key, { part: "", pro: "", dist: "", axes: "" }])
-                );
-                const newDepart = Object.fromEntries(
-                  fluxRows.map((r) => [
-                    r.key,
-                    { global: "", part: "", pro: "", dist: "", axes: "" },
-                  ])
-                );
-                const newDepotRecup = Object.fromEntries(
-                  fluxRows.map((r) => [r.key, { depot: "", recup: "" }])
-                );
-
-                // Réinitialiser aussi les globaux Arrivée (State React)
-                // On va tout remettre à 0 avant de lire le fichier
-                setCourrierOrdinaire("");
-                setCourrierRecommande("");
-                setEbarkia("");
-                setLrh("");
-                setAmana("");
+                // COPIE PROFONDE pour éviter les mutations de références
+                const newArrivee = JSON.parse(JSON.stringify(arriveeState));
+                const newDepart = JSON.parse(JSON.stringify(departState));
+                const newDepotRecup = JSON.parse(JSON.stringify(depotRecupState));
 
                 let linesRead = 0;
 
@@ -833,8 +669,8 @@ export default function VolumeParamsCard({
                         <td className="px-0.5 py-0.5 bg-blue-50/30"><ThousandInput disabled={disabled} value={globalVal} onChange={(v) => setGlobalArrivee(row.key, v)} className={`${baseInputClass} !font-bold !text-slate-900`} style={tableInputStyle} /></td>
                         <td className="px-0.5 py-0.5"><ThousandInput disabled={disabled} value={st.part} onChange={(v) => updateArrivee(row.key, "part", v)} className={baseInputClass} style={tableInputStyle} /></td>
                         <td className="px-0.5 py-0.5"><ThousandInput disabled={disabled} value={st.pro} onChange={(v) => updateArrivee(row.key, "pro", v)} className={baseInputClass} style={tableInputStyle} /></td>
-                        <td className="px-0.5 py-0.5"><ThousandInput disabled={true} value={st.dist} onChange={(v) => updateArrivee(row.key, "dist", v)} className={baseInputClass} style={tableInputStyle} /></td>
-                        <td className="px-0.5 py-0.5"><ThousandInput disabled={true} value={st.axes} onChange={(v) => updateArrivee(row.key, "axes", v)} className={baseInputClass} style={tableInputStyle} /></td>
+                        <td className="px-0.5 py-0.5"><ThousandInput disabled={disabled} value={st.dist} onChange={(v) => updateArrivee(row.key, "dist", v)} className={baseInputClass} style={tableInputStyle} /></td>
+                        <td className="px-0.5 py-0.5"><ThousandInput disabled={disabled} value={st.axes} onChange={(v) => updateArrivee(row.key, "axes", v)} className={baseInputClass} style={tableInputStyle} /></td>
                       </tr>
                     );
                   })}
@@ -913,8 +749,8 @@ export default function VolumeParamsCard({
                         <td className="px-0.5 py-0.5 bg-blue-50/30"><ThousandInput disabled={disabled} value={st.global} onChange={(v) => updateDepart(row.key, "global", v)} className={`${baseInputClass} !font-bold !text-slate-900`} style={tableInputStyle} /></td>
                         <td className="px-0.5 py-0.5"><ThousandInput disabled={disabled} value={st.part} onChange={(v) => updateDepart(row.key, "part", v)} className={baseInputClass} style={tableInputStyle} /></td>
                         <td className="px-0.5 py-0.5"><ThousandInput disabled={disabled} value={st.pro} onChange={(v) => updateDepart(row.key, "pro", v)} className={baseInputClass} style={tableInputStyle} /></td>
-                        <td className="px-0.5 py-0.5"><ThousandInput disabled={true} value={st.dist} onChange={(v) => updateDepart(row.key, "dist", v)} className={baseInputClass} style={tableInputStyle} /></td>
-                        <td className="px-0.5 py-0.5"><ThousandInput disabled={true} value={st.axes} onChange={(v) => updateDepart(row.key, "axes", v)} className={baseInputClass} style={tableInputStyle} /></td>
+                        <td className="px-0.5 py-0.5"><ThousandInput disabled={disabled} value={st.dist} onChange={(v) => updateDepart(row.key, "dist", v)} className={baseInputClass} style={tableInputStyle} /></td>
+                        <td className="px-0.5 py-0.5"><ThousandInput disabled={disabled} value={st.axes} onChange={(v) => updateDepart(row.key, "axes", v)} className={baseInputClass} style={tableInputStyle} /></td>
                       </tr>
                     );
                   })}
@@ -999,8 +835,8 @@ export default function VolumeParamsCard({
           <div className="w-px h-6 bg-slate-200 hidden md:block" />
 
           {/* 🆕 % Axes Arrivée */}
-          <div className={`flex items-center gap-1.5 min-w-[120px] flex-1 transition-opacity ${disabledAxes ? "opacity-60 grayscale" : ""}`}>
-            <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${(paramsDisabled || disabledAxes) ? "bg-slate-100 text-slate-400" : "bg-indigo-50 text-indigo-600"}`}>
+          <div className="flex items-center gap-1.5 min-w-[120px] flex-1">
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${paramsDisabled ? "bg-slate-100 text-slate-400" : "bg-indigo-50 text-indigo-600"}`}>
               <ArrowDownRight className="w-3 h-3" />
             </div>
             <div className="flex flex-col w-full">
@@ -1012,13 +848,13 @@ export default function VolumeParamsCard({
                   type="number"
                   min={0}
                   max={100}
-                  disabled={paramsDisabled || disabledAxes}
+                  disabled={paramsDisabled}
                   value={pctAxesArrivee}
                   onChange={(e) => {
                     const v = e.target.value === "" ? 0 : Math.min(100, Math.max(0, Number(e.target.value)));
                     setPctAxesArrivee && setPctAxesArrivee(v);
                   }}
-                  className={`text-xs font-semibold focus:outline-none w-full text-center rounded ${(paramsDisabled || disabledAxes) ? "bg-slate-100 text-slate-400 cursor-not-allowed" : "bg-transparent text-slate-800"}`}
+                  className={`text-xs font-semibold focus:outline-none w-full text-center ${paramsDisabled ? "bg-transparent text-slate-400 cursor-not-allowed" : "bg-transparent text-slate-800"}`}
                 />
                 <span className="text-[10px] text-slate-400 font-bold">%</span>
               </div>
@@ -1029,8 +865,8 @@ export default function VolumeParamsCard({
           <div className="w-px h-6 bg-slate-200 hidden md:block" />
 
           {/* 🆕 % Axes Départ */}
-          <div className={`flex items-center gap-1.5 min-w-[120px] flex-1 transition-opacity ${disabledAxes ? "opacity-60 grayscale" : ""}`}>
-            <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${(paramsDisabled || disabledAxes) ? "bg-slate-100 text-slate-400" : "bg-purple-50 text-purple-600"}`}>
+          <div className="flex items-center gap-1.5 min-w-[120px] flex-1">
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${paramsDisabled ? "bg-slate-100 text-slate-400" : "bg-purple-50 text-purple-600"}`}>
               <ArrowUpRight className="w-3 h-3" />
             </div>
             <div className="flex flex-col w-full">
@@ -1042,42 +878,13 @@ export default function VolumeParamsCard({
                   type="number"
                   min={0}
                   max={100}
-                  disabled={paramsDisabled || disabledAxes}
+                  disabled={paramsDisabled}
                   value={pctAxesDepart}
                   onChange={(e) => {
                     const v = e.target.value === "" ? 0 : Math.min(100, Math.max(0, Number(e.target.value)));
                     setPctAxesDepart && setPctAxesDepart(v);
                   }}
-                  className={`text-xs font-semibold focus:outline-none w-full text-center rounded ${(paramsDisabled || disabledAxes) ? "bg-slate-100 text-slate-400 cursor-not-allowed" : "bg-transparent text-slate-800"}`}
-                />
-                <span className="text-[10px] text-slate-400 font-bold">%</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="w-px h-6 bg-slate-200 hidden md:block" />
-
-          {/* 🆕 International % */}
-          <div className="flex items-center gap-1.5 min-w-[120px] flex-1">
-            <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${paramsDisabled ? "bg-slate-100 text-slate-400" : "bg-cyan-50 text-cyan-600"}`}>
-              <FileUp className="w-3 h-3" />
-            </div>
-            <div className="flex flex-col w-full">
-              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                International (%)
-              </label>
-              <div className="flex items-center">
-                <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  disabled={paramsDisabled}
-                  value={pctInternational}
-                  onChange={(e) => {
-                    const v = e.target.value === "" ? 0 : Math.min(100, Math.max(0, Number(e.target.value)));
-                    setPctInternational && setPctInternational(v);
-                  }}
-                  className={`text-xs font-semibold focus:outline-none w-full text-center rounded ${paramsDisabled ? "bg-slate-100 text-slate-400 cursor-not-allowed" : "bg-transparent text-slate-800"}`}
+                  className={`text-xs font-semibold focus:outline-none w-full text-center ${paramsDisabled ? "bg-transparent text-slate-400 cursor-not-allowed" : "bg-transparent text-slate-800"}`}
                 />
                 <span className="text-[10px] text-slate-400 font-bold">%</span>
               </div>
@@ -1087,8 +894,8 @@ export default function VolumeParamsCard({
           <div className="w-px h-6 bg-slate-200 hidden md:block" />
 
           {/* 🆕 % Collecte */}
-          <div className={`flex items-center gap-1.5 min-w-[120px] flex-1 transition-opacity ${disabledAxes ? "opacity-60 grayscale" : ""}`}>
-            <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${(paramsDisabled || disabledAxes) ? "bg-slate-100 text-slate-400" : "bg-green-50 text-green-600"}`}>
+          <div className="flex items-center gap-1.5 min-w-[120px] flex-1">
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${paramsDisabled ? "bg-slate-100 text-slate-400" : "bg-green-50 text-green-600"}`}>
               <Package className="w-3 h-3" />
             </div>
             <div className="flex flex-col w-full">
@@ -1100,40 +907,11 @@ export default function VolumeParamsCard({
                   type="number"
                   min={0}
                   max={100}
-                  disabled={paramsDisabled || disabledAxes}
+                  disabled={paramsDisabled}
                   value={pctCollecte}
                   onChange={(e) => {
                     const v = e.target.value === "" ? 0 : Math.min(100, Math.max(0, Number(e.target.value)));
                     setPctCollecte && setPctCollecte(v);
-                  }}
-                  className={`text-xs font-semibold focus:outline-none w-full text-center rounded ${(paramsDisabled || disabledAxes) ? "bg-slate-100 text-slate-400 cursor-not-allowed" : "bg-transparent text-slate-800"}`}
-                />
-                <span className="text-[10px] text-slate-400 font-bold">%</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="w-px h-6 bg-slate-200 hidden md:block" />
-
-          {/* 🆕 % Retour */}
-          <div className="flex items-center gap-1.5 min-w-[120px] flex-1">
-            <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${paramsDisabled ? "bg-slate-100 text-slate-400" : "bg-indigo-50 text-indigo-600"}`}>
-              <ArrowLeftRight className="w-3 h-3" />
-            </div>
-            <div className="flex flex-col w-full">
-              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                % Retour
-              </label>
-              <div className="flex items-center">
-                <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  disabled={paramsDisabled}
-                  value={pctRetour}
-                  onChange={(e) => {
-                    const v = e.target.value === "" ? 0 : Math.min(100, Math.max(0, Number(e.target.value)));
-                    setPctRetour && setPctRetour(v);
                   }}
                   className={`text-xs font-semibold focus:outline-none w-full text-center ${paramsDisabled ? "bg-transparent text-slate-400 cursor-not-allowed" : "bg-transparent text-slate-800"}`}
                 />

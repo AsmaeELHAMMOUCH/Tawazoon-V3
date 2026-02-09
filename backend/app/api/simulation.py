@@ -83,230 +83,161 @@ def simulate_effectifs(request: SimulationRequest, db: Session = Depends(get_db)
             )
             return resultat
 
-        # 🆕 CHECK FOR NEW DETAILED SIMULATION MODE
-        if request.volumes_details and len(request.volumes_details) > 0:
-            print("==================== REQUEST RECEIVED /simulate (DETAILED SQL MODE) ====================", flush=True)
-            
-            # 1. Create Simulation Run
-            sim_id = insert_simulation_run(
-                db=db,
-                centre_id=request.centre_id,
-                productivite=request.productivite,
-                commentaire=getattr(request, 'commentaire', None),
-                user_id=getattr(request, 'user_id', None)
-            )
-            print(f"✅ Created Simulation Run #{sim_id}", flush=True)
-            
-            # 2. Insert Volumes into VolumeSimulation
-            try:
-                # We can use bulk_save_objects for speed or simple add_all
-                vol_objects = [
-                    VolumeSimulation(
-                        simulation_id=sim_id,
-                        centre_poste_id=v.centre_poste_id,
-                        flux_id=v.flux_id,
-                        sens_id=v.sens_id,
-                        segment_id=v.segment_id,
-                        volume=v.volume
-                    )
-                    for v in request.volumes_details
-                ]
-                db.bulk_save_objects(vol_objects)
-                db.commit()
-            except Exception as e:
-                db.rollback()
-                raise HTTPException(status_code=500, detail=f"Failed to insert volume details: {e}")
-            
-            # 3. Calculate using SQL
-            resultat = calculer_simulation_sql(
-                db=db, 
-                simulation_id=sim_id, 
-                heures_net_jour=request.heures_net or 8.0,
-                productivite=request.productivite
-            )
-            
-            # 4. Save Result Stats
-            upsert_simulation_result(
-                db=db,
-                simulation_id=sim_id,
-                heures=resultat.total_heures or 0.0,
-                etp_calc=resultat.fte_calcule or 0.0,
-                etp_arr=resultat.fte_arrondi or 0
-            )
-            db.commit()
-            
-            return resultat
-
         # -----------------------------------------------------------
-        # LEGACY / FALLBACK LOGIC
+        # NEW BANDOENG ENGINE INTEGRATION (Replacing Legacy Logic)
         # -----------------------------------------------------------
-
-        # 1) tâches
-        sql = """
-    SELECT 
-        t.id, 
-        t.nom_tache, 
-        t.phase, 
-        t.unite_mesure, 
-        t.moyenne_min, 
-        t.famille_uo, -- ✅ Ajouté pour règle complexité
-        t.centre_poste_id,
-
-        cp.poste_id,
-        p.label as poste_label -- ✅ Ajouté pour règle complexité
-    FROM dbo.taches t
-    INNER JOIN dbo.centre_postes cp ON cp.id = t.centre_poste_id
-    LEFT JOIN dbo.postes p ON p.id = cp.poste_id
-    WHERE 1=1
-"""
-        params: Dict[str, Any] = {}
-
-        if request.centre_id:
-            sql += " AND cp.centre_id = :centre_id"
-            params["centre_id"] = request.centre_id
-
-        # ✅ Ne filtrer par poste_id que s'il est fourni (pas null)
-        # Cela permet de gérer le cas __ALL__ où poste_id est null
-        if request.poste_id is not None:
-            sql += " AND cp.poste_id = :poste_id"
-            params["poste_id"] = request.poste_id
-
-        sql += " ORDER BY t.nom_tache"
-
-        rows = db.execute(text(sql), params).mappings().all()
-        taches = [dict(r) for r in rows] if rows else []
-
-        # 2) regroupement courrier (LOGIC SHARED)
-        # taches_finales = regroup_tasks_for_scenarios(taches)
-        taches_finales = taches
-
-        # 3) volumes
-        va_dict = as_snake_annual(getattr(request, "volumes_annuels", None))
-        volumes_journaliers = request.volumes.dict() if request.volumes else {}
-        volumes_journaliers = annual_to_daily_post(volumes_journaliers)
-
-        # conserver les ratios transmis (pas de conversion /jour)
-        raw_req = request.dict(exclude_none=False)
-        raw_vols = raw_req.get("volumes", {}) if isinstance(raw_req, dict) else {}
-
-        def _ratio(key, fallback):
-            val = raw_vols.get(key, None)
-            try:
-                return float(val) if val not in (None, "") else (float(fallback) if fallback is not None else None)
-            except (TypeError, ValueError):
-                return float(fallback) if fallback is not None else None
-
-        # Overwrite ratios explicitly if passed in raw request (because annual_to_daily_post sets defaults)
-        if _ratio("colis_amana_par_sac", None) is not None:
-             volumes_journaliers["colis_amana_par_sac"] = _ratio("colis_amana_par_sac", 5.0)
-        if _ratio("courriers_par_sac", None) is not None:
-             volumes_journaliers["courriers_par_sac"] = _ratio("courriers_par_sac", 4500.0)
-        volumes_journaliers["colis_par_collecte"] = _ratio("colis_par_collecte", 1.0)
-
-
-        # DEBUG : vérifier les ratios reçus (Vue Intervenant)
-        print("\n" + "="*80, flush=True)
-        print("🎯 [BACKEND - STEP 1] API /simulate - Requête reçue (VUE INTERVENANT)", flush=True)
-        print("="*80, flush=True)
-        print(f"   Centre ID: {request.centre_id}", flush=True)
-        print(f"   Poste ID: {request.poste_id}", flush=True)
-        print(f"   Productivité: {request.productivite}%", flush=True)
-        print(f"   Heures nettes: {request.heures_net}h", flush=True)
-        print(f"   Volumes journaliers: {volumes_journaliers}", flush=True)
-        print(f"   Volumes annuels: {va_dict}", flush=True)
-        print(f"   Nombre de tâches: {len(taches_finales)}", flush=True)
-        print("="*80 + "\n", flush=True)
-
-        print(f"🔄 [BACKEND - STEP 2] Appel du moteur de calcul...", flush=True)
-        # Extract complexity from annual volumes (V2 standard)
-        t_complexite = float(va_dict.get("taux_complexite", 1.0))
-        n_geo = float(va_dict.get("nature_geo", 1.0))
-
-        # 4) calcul
-        resultat = calculer_simulation(
-            taches=taches_finales,
-            volumes=volumes_journaliers,
-            productivite=request.productivite,
-            heures_net_input=request.heures_net,
-            volumes_annuels=va_dict,
-            volumes_mensuels=None,
-            taux_complexite=t_complexite,
-            nature_geo=n_geo,
+        from app.services.bandoeng_engine import (
+            run_bandoeng_simulation,
+            BandoengInputVolumes,
+            BandoengParameters,
+            BandoengSimulationResult
         )
+
+        print(f"🔄 [BANDOENG ENGINE] Redirecting /simulate for Centre {request.centre_id}", flush=True)
+
+        # 1. Mapping Volumes (Daily & Annual)
+        # Simulation.jsx passes annual volumes in 'volumes_annuels' and daily in 'volumes'
         
-        print(f"\n✅ [BACKEND - STEP 3] Calcul terminé:", flush=True)
-        print(f"   ETP: {resultat.fte_arrondi}", flush=True)
-        print(f"   Heures totales: {resultat.total_heures}h", flush=True)
-        print(f"   Nombre de tâches détaillées: {len(resultat.details_taches or [])}", flush=True)
-        print("="*80 + "\n", flush=True)
+        va = request.volumes_annuels
+        v_daily = request.volumes
         
-        # 🆕 5) SAUVEGARDE AUTOMATIQUE DE LA SIMULATION
-        if not request.is_test:
-            try:
-                from app.services.simulation_run import (
-                    insert_simulation_run,
-                    bulk_insert_volumes,
-                    upsert_simulation_result
-                )
-                
-                # Préparer les volumes pour la sauvegarde
-                volumes_to_save = {}
-                unites_to_save = {}
-                
-                # Volumes journaliers
-                if request.volumes:
-                    vol_dict = request.volumes.dict() if hasattr(request.volumes, 'dict') else dict(request.volumes)
-                    for key, val in vol_dict.items():
-                        if val is not None and val != 0:
-                            volumes_to_save[key.upper()] = float(val)
-                            unites_to_save[key.upper()] = "jour"
-                
-                # Volumes annuels
-                if va_dict:
-                    for key, val in va_dict.items():
-                        if val is not None and val != 0:
-                            volumes_to_save[key.upper()] = float(val)
-                            unites_to_save[key.upper()] = "an"
-                
-                # 1. Créer l'enregistrement de simulation
-                sim_id = insert_simulation_run(
-                    db=db,
-                    centre_id=request.centre_id,
-                    productivite=request.productivite,
-                    commentaire=getattr(request, 'commentaire', None),
-                    user_id=getattr(request, 'user_id', None)
-                )
-                
-                # 2. Sauvegarder les volumes
-                if volumes_to_save:
-                    bulk_insert_volumes(db, sim_id, volumes_to_save, unites_to_save)
-                
-                # 3. Sauvegarder les résultats
-                upsert_simulation_result(
-                    db=db,
-                    simulation_id=sim_id,
-                    heures=resultat.total_heures or 0.0,
-                    etp_calc=resultat.fte_calcule or 0.0,
-                    etp_arr=resultat.fte_arrondi or 0
-                )
-                
-                db.commit()
-                print(f"✅ Simulation #{sim_id} sauvegardée avec succès", flush=True)
-                
-            except Exception as e:
-                print(f"⚠️  Erreur sauvegarde simulation: {e}", flush=True)
-                import traceback
-                print(traceback.format_exc(), flush=True)
-                # Ne pas bloquer la simulation si la sauvegarde échoue
-                db.rollback()
+        # Determine specific ratios from inputs or defaults
+        p_sac = 60.0
+        p_colis_sac = 35.0
+        p_co_sac = 350.0
+        p_cr_sac = 400.0
+        # p_colis_collecte used in frontend but not yet in engine core params directly
         
-        return resultat
+        if v_daily:
+            # Try to grab ratios if passed in daily volumes object (sometimes passed here)
+            if v_daily.colis_amana_par_sac: p_colis_sac = float(v_daily.colis_amana_par_sac)
+            if v_daily.courriers_par_sac: p_co_sac = float(v_daily.courriers_par_sac)
+
+        # Retrieve coefficients from Annual Volumes (V2 standards)
+        t_complexite = 1.0
+        n_geo = 1.0
+        if va:
+            if va.taux_complexite: t_complexite = float(va.taux_complexite)
+            if va.nature_geo: n_geo = float(va.nature_geo)
+
+        # Construct Input Volumes
+        # Note: Bandoeng Engine relies heavily on 'grid_values' for granular product logic (Recu/Depot/Local/Axes).
+        # Since Simulation.jsx provides FLAT annual volumes, we must populate grid accordingly.
+        # We map flat volumes to 'local' for safety, assuming simple distribution.
+        
+        grid = {}
+        
+        if va:
+            # AMANA
+            grid.setdefault('amana', {}).setdefault('recu', {}).setdefault('gc', {})['local'] = float(va.amana)
+            # CO
+            grid.setdefault('co', {}).setdefault('arrive', {})['local'] = float(va.courrier_ordinaire)
+            # CR
+            grid.setdefault('cr', {}).setdefault('arrive', {})['local'] = float(va.courrier_recommande)
+            # EBARKIA (Mapped to 'ebarkia' -> 'arrive')
+            grid.setdefault('ebarkia', {})['arrive'] = float(va.ebarkia)
+            # LRH (Mapped to 'lrh' -> 'arrive')
+            grid.setdefault('lrh', {})['arrive'] = float(va.lrh)
+            
+            # Export Volumes? Using fallback in engine if grid is missing, but here we populate grid.
+            # Simulation.jsx doesn't split import/export in 'volumes_annuels' typically (just one value).
+            # We assume the value represents the *Processed* volume.
+
+        vol_in = BandoengInputVolumes(
+            # Pass flat values too for fallbacks
+            amana_import=float(va.amana) if va else 0.0,
+            courrier_ordinaire_import=float(va.courrier_ordinaire) if va else 0.0,
+            courrier_recommande_import=float(va.courrier_recommande) if va else 0.0,
+            presse_import=float(va.lrh) if va else 0.0, # Approx
+            
+            grid_values=grid
+        )
+
+        # Construct Parameters
+  
+            
+        shift = 1
+        # Check shift in volumes_annuels (standard for Simulation.jsx legacy path)
+        if va and hasattr(va, 'shift') and va.shift:
+            shift = int(va.shift)
+            
+        param_in = BandoengParameters(
+            pct_sac=p_sac,
+            colis_amana_par_canva_sac=p_colis_sac,
+            nbr_co_sac=p_co_sac,
+            nbr_cr_sac=p_cr_sac,
+            
+            coeff_circ=t_complexite,
+            coeff_geo=n_geo,
+            
+            productivite=float(request.productivite),
+            idle_minutes=float(request.idle_minutes or 0.0),
+            
+            shift=shift 
+        )
+
+        # 2. Run Simulation
+        # We pass None for poste_code (calculate all tasks) unless request.poste_id allows fetching code
+        # However request.poste_id is ID not Code. Engine expects Code.
+        # We'll run for all (None) and let user filter results if needed, or update Engine to accept ID (risky now).
+        # OR: Resolve Code from ID here.
+        
+        poste_code_str = None
+        if request.poste_id:
+             try:
+                 from app.models.db_models import Poste
+                 poste_obj = db.query(Poste).filter(Poste.id == request.poste_id).first()
+                 if poste_obj:
+                     poste_code_str = poste_obj.Code
+             except:
+                 pass
+
+        result = run_bandoeng_simulation(db, request.centre_id, vol_in, param_in, poste_code_str)
+
+        # 3. Map Results to SimulationResponse
+        
+        # A) details_taches
+        details = []
+        heures_par_poste = {}
+        
+        for t in result.tasks:
+            # Accumulate per poste for breakdown
+            # centre_poste_id is used as key
+            cp_id_str = str(t.centre_poste_id)
+            heures_par_poste[cp_id_str] = heures_par_poste.get(cp_id_str, 0.0) + t.heures_calculees
+            
+            details.append(TacheDetail(
+                id=t.task_id,
+                task=t.task_name,
+                unit=t.unite_mesure,
+                produit=t.produit,
+                avg_sec=t.moy_sec, # Model expects float
+                heures=t.heures_calculees,
+                formule=t.formule,
+                role=t.responsable,
+                centre_poste_id=t.centre_poste_id,
+                phase=t.phase
+            ))
+
+        # B) Postes Summary (Optional but good for detailed view)
+        # Needs list of postes for sorting/labels. We can infer from tasks or query DB.
+        # Since 'run_bandoeng_simulation' aggregates tasks but doesn't return full poste meta info (label etc) in result logic distinct from tasks,
+        # we can reconstruct it from tasks or just return empty 'postes' list if not strictly needed by simple view.
+        # However, 'VueCentre' logic often relies on 'postes' list for matching. 
+        # For now, let's return minimal stats.
+        
+        return SimulationResponse(
+            total_heures=result.total_heures,
+            fte_calcule=result.fte_calcule,
+            fte_arrondi=float(result.fte_arrondi),
+            heures_net_jour=result.heures_net_jour,
+            details_taches=details,
+            heures_par_poste=heures_par_poste
+        )
 
     except Exception as e:
         import traceback
-
-        print(f"❌ ERREUR simulate: {e}")
-        print(traceback.format_exc())
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"simulate failed: {e}")
 
 

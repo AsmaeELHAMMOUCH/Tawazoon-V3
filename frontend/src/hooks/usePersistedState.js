@@ -54,7 +54,7 @@ export function useSimulationParams() {
   // 🆕 Axes vs Distribution (pourcentages UI 0-100)
   const [pctAxesArrivee, setPctAxesArrivee] = usePersistedState('sim_pctAxesArrivee', 40);
   const [pctAxesDepart, setPctAxesDepart] = usePersistedState('sim_pctAxesDepart', 30);
-  
+
   // 🆕 Amana Specific (Image Request)
   const [pctRetenue, setPctRetenue] = usePersistedState('sim_pctRetenue', 1);
   const [pctEchantillon, setPctEchantillon] = usePersistedState('sim_pctEchantillon', 5);
@@ -65,7 +65,7 @@ export function useSimulationParams() {
 
   const [pctRetour, setPctRetour] = usePersistedState('sim_pctRetour', 0.0);
   const [pctInternational, setPctInternational] = usePersistedState('sim_pctInternational', 0.0);
-  
+
   // 🆕 Shift
   const [shift, setShift] = usePersistedState('sim_shift', 1);
 
@@ -74,7 +74,7 @@ export function useSimulationParams() {
   const [nbrCrSac, setNbrCrSac] = usePersistedState('sim_nbrCrSac', 0);
   // 🆕 Helpers UI (caisson)
   const [crParCaisson, setCrParCaisson] = usePersistedState('sim_crParCaisson', 500);
-  
+
   // Volumes journaliers (legacy)
   const [sacs, setSacs] = usePersistedState('sim_sacs', 0);
   const [colis, setColis] = usePersistedState('sim_colis', 0);
@@ -88,11 +88,28 @@ export function useSimulationParams() {
   const [lrh, setLrh] = usePersistedState('sim_lrh', 0);
   const [amana, setAmana] = usePersistedState('sim_amana', 0);
 
-  // 🆕 Grille détaillée des volumes par flux/segment (pour VolumeParamsCard)
+  // 🆕 Grille détaillée des volumes par flux/segment (pour VolumeParamsCard & BandoengGrid)
   const [volumesFluxGrid, setVolumesFluxGrid] = usePersistedState('sim_volumesFluxGrid', {
-    arrivee: {},
-    depart: {},
-    depotRecup: {}
+    amana: {
+      depot: {
+        gc: { global: "", local: "", axes: "" },
+        part: { global: "", local: "", axes: "" }
+      },
+      recu: {
+        gc: { global: "", local: "", axes: "" },
+        part: { global: "", local: "", axes: "" }
+      }
+    },
+    cr: {
+      med: { global: "", local: "", axes: "" },
+      arrive: { global: "", local: "", axes: "" }
+    },
+    co: {
+      med: { global: "", local: "", axes: "" },
+      arrive: { global: "", local: "", axes: "" }
+    },
+    ebarkia: { med: "", arrive: "" },
+    lrh: { med: "", arrive: "" }
   });
 
   return {
@@ -115,7 +132,7 @@ export function useSimulationParams() {
     nbrCoSac, setNbrCoSac,
     nbrCrSac, setNbrCrSac,
     crParCaisson, setCrParCaisson,
-    
+
     // 🆕 Axes
     pctAxesArrivee, setPctAxesArrivee,
     pctAxesDepart, setPctAxesDepart,
