@@ -536,6 +536,8 @@ export default function VueCentre({
   setCrParCaisson = () => { },
   pctInternational = 0,
   setPctInternational = () => { },
+  pctMarcheOrdinaire = 0,
+  setPctMarcheOrdinaire = () => { },
   EmptyStateFirstRun = () => null,
   EmptyStateDirty = () => null,
   Card,
@@ -661,6 +663,15 @@ export default function VueCentre({
 
   // 🐛 DEBUG: Afficher la catégorie effective
   console.log("🔍 [VueCentre] effectiveCentreCategorie:", effectiveCentreCategorie);
+
+  // 🆕 Disabled Axes Logic (AM)
+  const disabledAxes = useMemo(() => {
+    return (
+      (effectiveCentreCategorie || "").startsWith("AM") ||
+      (centreObj?.type_site || "").startsWith("AM") ||
+      (centreObj?.typologie || "").startsWith("AM")
+    );
+  }, [effectiveCentreCategorie, centreObj]);
 
   const calculateVolFromGrid = () => {
     if (volumesFluxGrid && volumesFluxGrid.length > 0) {
@@ -1829,7 +1840,8 @@ export default function VueCentre({
                 <select
                   value={tauxComplexite}
                   onChange={(e) => setTauxComplexite(Number(e.target.value))}
-                  className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full text-center cursor-pointer"
+                  disabled={disabledAxes}
+                  className={`bg-transparent text-xs font-semibold focus:outline-none w-full text-center cursor-pointer ${disabledAxes ? "text-slate-400 cursor-not-allowed" : "text-slate-800"}`}
                 >
                   <option value="0.5">0.5</option>
                   <option value="0.75">0.75</option>
@@ -1851,7 +1863,8 @@ export default function VueCentre({
                   type="text"
                   value={natureGeo}
                   onChange={(e) => setNatureGeo(parseNonNeg(e.target.value) ?? 0)}
-                  className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full text-center"
+                  disabled={disabledAxes}
+                  className={`bg-transparent text-xs font-semibold focus:outline-none w-full text-center ${disabledAxes ? "text-slate-400 cursor-not-allowed" : "text-slate-800"}`}
                 />
               </div>
             </div>
@@ -1868,7 +1881,8 @@ export default function VueCentre({
                 <select
                   value={shift}
                   onChange={(e) => setShift(Number(e.target.value))}
-                  className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full text-center cursor-pointer"
+                  disabled={disabledAxes}
+                  className={`bg-transparent text-xs font-semibold focus:outline-none w-full text-center cursor-pointer ${disabledAxes ? "text-slate-400 cursor-not-allowed" : "text-slate-800"}`}
                 >
                   <option value="1">1</option>
                   <option value="2">2</option>
@@ -1929,6 +1943,8 @@ export default function VueCentre({
           setEdPercent={setEdPercent}
           pctInternational={pctInternational}
           setPctInternational={setPctInternational}
+          pctMarcheOrdinaire={pctMarcheOrdinaire}
+          setPctMarcheOrdinaire={setPctMarcheOrdinaire}
           colisAmanaParSac={colisAmanaParSac}
           setColisAmanaParSac={setColisAmanaParSac}
           readOnly={false}
@@ -1957,11 +1973,7 @@ export default function VueCentre({
           setPctCollecte={setPctCollecte}
           pctRetour={pctRetour}
           setPctRetour={setPctRetour}
-          disabledAxes={
-            (effectiveCentreCategorie || "").startsWith("AM") ||
-            (centreObj?.type_site || "").startsWith("AM") ||
-            (centreObj?.typologie || "").startsWith("AM")
-          }
+          disabledAxes={disabledAxes}
         />
       </div>
 

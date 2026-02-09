@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import {
   Info,
   BarChart3,
@@ -51,7 +51,7 @@ export function PageDirection() {
 import { MapContainer, TileLayer, CircleMarker, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import { useLocation } from "react-router-dom";
-import { useSimulationParams } from "@/hooks/usePersistedState";
+import { useSimulationParams, usePersistedState } from "@/hooks/usePersistedState";
 
 // Using local Segmented/Tooltip components and lucide icons instead of antd
 const fadeCard = {
@@ -1361,11 +1361,14 @@ export default function SimulationEffectifs() {
     volumesFluxGrid, setVolumesFluxGrid,
     pctAxesArrivee, setPctAxesArrivee,
     pctAxesDepart, setPctAxesDepart,
-    pctCollecte, setPctCollecte,
-    pctRetour, setPctRetour,
-    pctInternational, setPctInternational,
     shift, setShift,
   } = useSimulationParams();
+
+  const [pctCollecte, setPctCollecte] = usePersistedState("sim_pct_collecte", 5.0);
+  const [pctRetour, setPctRetour] = usePersistedState("sim_pct_retour", 0.0);
+  const [pctInternational, setPctInternational] = usePersistedState("sim_pct_international", 0);
+  const [pctNational, setPctNational] = usePersistedState("sim_pct_national", 0); // 🆕 Pct National
+  const [pctMarcheOrdinaire, setPctMarcheOrdinaire] = usePersistedState("sim_pct_marche_ordinaire", 0); // 🆕 Pct MO
 
   const [categorie, setCategorie] = useState("Activité Postale");
   const [heuresNet, setHeuresNet] = useState(8);
@@ -2129,6 +2132,8 @@ export default function SimulationEffectifs() {
         pct_collecte: Number(overrides.pct_collecte ?? pctCollecte ?? 5.0),
         pct_retour: Number(overrides.pct_retour ?? pctRetour ?? 0.0),
         pct_international: Number(overrides.pct_international ?? pctInternational ?? 0.0), // 🆕 International
+        pct_national: Number(overrides.pct_national ?? pctNational ?? 0.0), // 🆕 National
+        pct_marche_ordinaire: Number(overrides.pct_marche_ordinaire ?? pctMarcheOrdinaire ?? 0.0), // 🆕 MO
 
         // 🆕 Shift (priorité override > state)
         shift: Number(overrides.shift ?? shift ?? 1),
@@ -2564,6 +2569,11 @@ export default function SimulationEffectifs() {
     }
   };
 
+  /* ---------- Refresh Handler ---------- */
+  const handleRefresh = useCallback(() => {
+    setRefreshTrigger((prev) => prev + 1);
+  }, []);
+
   /* ---------- hasPhase (colonne Phase dynamique) ---------- */
   const hasPhase = useMemo(() => {
     return referentiel.some((r) => {
@@ -2705,12 +2715,15 @@ export default function SimulationEffectifs() {
             setNatureGeo={setNatureGeo}
             pctCollecte={pctCollecte}
             setPctCollecte={setPctCollecte}
+            onRefresh={handleRefresh}
             pctRetour={pctRetour}
             setPctRetour={setPctRetour}
             shift={shift}
             setShift={setShift}
             pctInternational={pctInternational}
             setPctInternational={setPctInternational}
+            pctMarcheOrdinaire={pctMarcheOrdinaire}
+            setPctMarcheOrdinaire={setPctMarcheOrdinaire}
             categories={categoriesList}
             selectedTypology={selectedTypology}
             setSelectedTypology={setSelectedTypology}
@@ -2813,6 +2826,10 @@ export default function SimulationEffectifs() {
             setShift={setShift}
             pctInternational={pctInternational}
             setPctInternational={setPctInternational}
+            pctNational={pctNational}
+            setPctNational={setPctNational}
+            pctMarcheOrdinaire={pctMarcheOrdinaire}
+            setPctMarcheOrdinaire={setPctMarcheOrdinaire}
           />
         )}
 

@@ -666,7 +666,7 @@ export default function CentersTasksManager() {
 
                 {/* Ligne Création Inline */}
                 {isCreating && (
-                    <div className="p-3 bg-blue-50/50 border-b border-blue-100 grid grid-cols-10 gap-3 items-end animate-in slide-in-from-top-2">
+                    <div className="p-3 bg-blue-50/50 border-b border-blue-100 grid grid-cols-11 gap-3 items-end animate-in slide-in-from-top-2">
                         <div className="col-span-2">
                             <InputField label="Nom Tâche" value={newForm.nom_tache} onChange={e => setNewForm({ ...newForm, nom_tache: e.target.value })} />
                         </div>
@@ -703,13 +703,16 @@ export default function CentersTasksManager() {
                             </select>
                         </div>
                         <div className="col-span-1">
+                            <InputField label="Phase" value={newForm.phase} onChange={e => setNewForm({ ...newForm, phase: e.target.value })} />
+                        </div>
+                        <div className="col-span-1">
                             <InputField label="Unité" value={newForm.unite_mesure} onChange={e => setNewForm({ ...newForm, unite_mesure: e.target.value })} />
                         </div>
                         <div className="col-span-1">
                             <InputField label="Min/U" type="number" value={newForm.moyenne_min} onChange={e => setNewForm({ ...newForm, moyenne_min: e.target.value })} />
                         </div>
 
-                        <div className="col-span-10 flex justify-end gap-2 pt-2 border-t border-blue-200/50 mt-1">
+                        <div className="col-span-11 flex justify-end gap-2 pt-2 border-t border-blue-200/50 mt-1">
                             <button onClick={handleCreate} disabled={saving} className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide">
                                 <Check size={12} /> Créer Tâche(s)
                             </button>
@@ -729,6 +732,7 @@ export default function CentersTasksManager() {
                                 <th className="px-2 py-2 w-12 text-center" style={{ display: 'none' }}>Seq</th>
                                 <th className="px-2 py-2 w-20 text-center">Etat</th>
                                 <th className="px-2 py-2 w-32">Produit</th>
+                                <th className="px-2 py-2 w-24">Phase</th>
                                 <th className="px-2 py-2 w-32">Famille</th>
                                 <th className="px-2 py-2 min-w-[200px]">
                                     <div className="flex flex-col gap-0.5">
@@ -788,7 +792,7 @@ export default function CentersTasksManager() {
                         <tbody className="divide-y divide-slate-100">
                             {loading ? (
                                 <tr>
-                                    <td colSpan="12" className="px-3 py-6 text-center text-slate-500">
+                                    <td colSpan="13" className="px-3 py-6 text-center text-slate-500">
                                         <div className="flex items-center justify-center gap-2">
                                             <Loader2 className="animate-spin" size={16} /> Chargement...
                                         </div>
@@ -796,7 +800,7 @@ export default function CentersTasksManager() {
                                 </tr>
                             ) : filteredTasks.length === 0 ? (
                                 <tr>
-                                    <td colSpan="12" className="px-3 py-6 text-center text-slate-500 italic">
+                                    <td colSpan="13" className="px-3 py-6 text-center text-slate-500 italic">
                                         Aucune tâche trouvée pour cette sélection.
                                     </td>
                                 </tr>
@@ -817,7 +821,10 @@ export default function CentersTasksManager() {
                                                     <input className="w-full border rounded px-1 py-0.5 text-xs" value={editForm.produit || ""} onChange={e => setEditForm({ ...editForm, produit: e.target.value })} />
                                                 </td>
                                                 <td className="px-2 py-1">
-                                                    <input className="w-full border rounded px-1 py-0.5 text-xs" value={editForm.famille || editForm.famille_uo || ""} onChange={e => setEditForm({ ...editForm, famille: e.target.value })} />
+                                                    <input className="w-full border rounded px-1 py-0.5 text-xs font-bold text-blue-700" value={editForm.phase || ""} onChange={e => setEditForm({ ...editForm, phase: e.target.value })} placeholder="Phase" />
+                                                </td>
+                                                <td className="px-2 py-1">
+                                                    <input className="w-full border rounded px-1 py-0.5 text-xs uppercase" value={editForm.famille || editForm.famille_uo || ""} onChange={e => setEditForm({ ...editForm, famille_uo: e.target.value })} placeholder="Famille" />
                                                 </td>
                                                 <td className="px-2 py-1">
                                                     <input className="w-full border rounded px-1 py-0.5 text-xs" value={editForm.task || editForm.nom_tache || ""} onChange={e => setEditForm({ ...editForm, task: e.target.value })} />
@@ -891,6 +898,7 @@ export default function CentersTasksManager() {
                                                     </span>
                                                 </td>
                                                 <td className="px-2 py-1 text-slate-500 text-[10px]">{task.produit}</td>
+                                                <td className="px-2 py-1 text-blue-600 font-bold text-[9px] uppercase">{task.phase}</td>
                                                 <td className="px-2 py-1 text-slate-600 text-[10px]">{task.famille || task.famille_uo}</td>
                                                 <td className="px-2 py-1 font-medium text-slate-700 text-[10px]">{task.task || task.nom_tache}</td>
                                                 <td className="px-2 py-1 text-center text-slate-500 text-[9px] uppercase">{task.unit || task.unite_mesure}</td>

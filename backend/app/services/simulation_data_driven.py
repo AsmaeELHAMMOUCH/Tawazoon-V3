@@ -99,7 +99,21 @@ class VolumeContext:
         return float(effectif or 0.0)
 
 # --- FONCTION DE CALCUL UNITAIRE ---
-def calculer_volume_applique(tache: Any, context: VolumeContext) -> tuple:
+def parse_base_calcul(val: Any) -> int:
+    """
+    Parses the base_calcul field, handling strings with '%' (e.g. '100%')
+    and converting to integer (e.g. 100). Defaults to 100 on error.
+    """
+    try:
+        if isinstance(val, str):
+            # Remove % and whitespace
+            val = val.replace('%', '').strip()
+        # Convert to float first (handles "100.0"), then int
+        return int(float(val or 100))
+    except:
+        return 100
+
+def _calculer_volume_raw(tache: Any, context: VolumeContext) -> tuple:
     """
     Calcule le volume à appliquer pour une tâche donnée.
     Returns:
@@ -107,6 +121,8 @@ def calculer_volume_applique(tache: Any, context: VolumeContext) -> tuple:
     """
     produit = str(getattr(tache, 'produit', '') or '').strip().upper()
     unite = str(getattr(tache, 'unite_mesure', '') or '').strip().upper()
+    phase = str(getattr(tache, 'phase', '') or '').strip().upper() # 🆕 Lecture Phase
+    base_val = parse_base_calcul(getattr(tache, 'base_calcul', 100)) # 🆕 Lecture Base
     
     # Log de traçage pour debug
     def log_trace(message):
@@ -179,11 +195,7 @@ def calculer_volume_applique(tache: Any, context: VolumeContext) -> tuple:
         log_trace(f"📦 BLOC AMANA RECU: ID={tache.id} '{tache.nom_tache}' PROD='{produit}'")
         
         # Récupération de la base de calcul
-        base_calcul = getattr(tache, 'base_calcul', 100)
-        try:
-            base_val = int(float(base_calcul or 100)) 
-        except:
-            base_val = 100
+        base_val = parse_base_calcul(getattr(tache, 'base_calcul', 100))
             
         if base_val != 100 and base_val != 60 and base_val != 40:
              return 0.0, 0.0, 1.0, f"N/A (Base={base_val})"
@@ -460,10 +472,9 @@ def calculer_volume_applique(tache: Any, context: VolumeContext) -> tuple:
     # 2A. PRODUIT: AMANA Dépôt International (NOUVEAU - Traitement spécifique)
     # ---------------------------------------------------------
     # ---------------------------------------------------------
-    # 2A. PRODUIT: AMANA Dépôt International (NOUVEAU - Traitement spécifique)
-    # ---------------------------------------------------------
-    # Matching Robuste : On vérifie si AMANA, DEPOT et INTERNATIONAL sont dans le produit (peu importe l'ordre/variantes)
-    elif "AMANA" in produit and ("DEPOT" in produit or "DÉPÔT" in produit) and "INTERNATIONAL" in produit and "INT" not in produit:
+    # 2A. PRODUIT: AMANA Dépôt International
+    # Règle : Produit AMANA DEPOT + (Phase='INTERNATIONAL' ou 'INTERNATIONAL' dans Produit/Nom)
+    elif "AMANA" in produit and ("DEPOT" in produit or "DÉPÔT" in produit) and (phase == "INTERNATIONAL" or "INTERNATIONAL" in produit or "INTERNATIONAL" in str(getattr(tache, 'nom_tache', '')).upper()):
         
         print(f"🌍 [INTL] ✅ MATCH BLOC 2A - Produit détecté via substring: '{produit}'")
         
@@ -479,11 +490,7 @@ def calculer_volume_applique(tache: Any, context: VolumeContext) -> tuple:
             return 0.0, 0.0, 1.0, "Exclu (Produit='BARID PRO')"
         
         # Récupération de la base de calcul (commune)
-        base_calcul = getattr(tache, 'base_calcul', 100)
-        try:
-            base_val = int(float(base_calcul or 100)) 
-        except:
-            base_val = 100
+        base_val = parse_base_calcul(getattr(tache, 'base_calcul', 100))
             
         famille = str(getattr(tache, 'famille_uo', '') or '').strip().upper()
         nom_tache_safe = str(getattr(tache, 'nom_tache', '') or '').upper()
@@ -580,25 +587,100 @@ def calculer_volume_applique(tache: Any, context: VolumeContext) -> tuple:
     elif "AMANA" in produit and ("DEPOT" in produit or "DÉPÔT" in produit or "DEPÔT" in produit or "DÉPOT" in produit):
         
         # Récupération de la base de calcul (commune)
-        base_calcul = getattr(tache, 'base_calcul', 100)
-        try:
-            base_val = int(float(base_calcul or 100)) 
-        except:
-            base_val = 100
+        base_val = parse_base_calcul(getattr(tache, 'base_calcul', 100))
             
         famille = str(getattr(tache, 'famille_uo', '') or '').strip().upper()
-        
-        print(f"📦 DEBUG AMANA DEPOT ENTRY: ID={tache.id} Nom='{tache.nom_tache}' Famille='{famille}' Base={base_val}")
-        print(f"   -> ASCII Famille: {ascii(famille)}")
-        print(f"   -> Test Condition DCP: {'CAMION PRINCIPAL' in famille and ('DEPART' in famille or 'DÉPART' in famille)}")
-        print(f"   -> Volume AMANA DEPART Dispo: {context.get_aggregated_volume('AMANA', 'DEPART')}")
 
         # DEBUG SÉCIFIQUE POUR COLLECTE
         if "COLLECTE" in famille or "CONFIRMATION" in tache.nom_tache.upper():
             print(f"🕵️ DEBUG AMANA DEPOT: ID={tache.id} Nom='{tache.nom_tache}' Famille='{famille}' Produit='{produit}' Base={tache.base_calcul}")
 
-        # --- BRANCHE SPECIALE : Famille COLLECTE (Règle forcée demandée) ---
-        if "COLLECTE" in famille:
+        phase = str(getattr(tache, 'phase', '') or '').strip().upper()
+        
+        # --- BRANCHE SPECIALE : Famille COLLECTE + Phase CIRCUL_COLLECT ---
+        # Rule: %Coll * %Axes(D) * Cplx * Vol(D)
+        if "COLLECTE" in famille and "CIRCUL_COLLECT" in phase:
+             vol_aggregat = context.get_aggregated_volume("AMANA", "DEPART")
+             
+             pct_axes = context.raw_volumes.pct_axes_depart or 0.0
+             if pct_axes > 1.0: pct_axes /= 100.0
+             
+             pct_coll = context.raw_volumes.pct_collecte or 0.0
+             if pct_coll > 1.0: pct_coll /= 100.0
+             
+             cplx_circ = context.raw_volumes.taux_complexite or 1.0
+             
+             vol_source = vol_aggregat * pct_axes * pct_coll * cplx_circ
+             
+             print(f"🔄 [DEBUG CIRCUL_COLLECT] Task='{tache.nom_tache}' VolAgreg={vol_aggregat} * {pct_axes:.2%}(Ax) * {pct_coll:.2%}(Coll) * {cplx_circ}(Cplx) -> VolSource={vol_source}")
+             
+             ui_path = f"AMANA.DEPART x {pct_axes:.2%}(AxD) x {pct_coll:.2%}(Coll) x {cplx_circ}(Cplx) [CirculCollect]"
+             
+             # Logic Base Standard
+             if base_val == 100:
+                 volume_annuel = vol_source
+                 ui_path += " [Base 100%]"
+             elif base_val == 60:
+                 volume_annuel = vol_source
+                 ui_path += " [Base 60%]"
+             elif base_val == 40:
+                 volume_annuel = vol_source
+                 ui_path += " [Base 40%]"
+             else:
+                 return 0.0, 0.0, 1.0, f"N/A (CircColl-Base={base_val})"
+             
+             # Calcul journalier
+             volume_jour = volume_annuel / nb_jours if nb_jours > 0 else 0.0
+             facteur_base = float(base_val) / 100.0
+             volume_final_jour = volume_jour * facteur_base 
+             
+             return volume_annuel * facteur_base, volume_final_jour, 1.0 * facteur_base, ui_path
+
+             return volume_annuel * facteur_base, volume_final_jour, 1.0 * facteur_base, ui_path
+
+        # --- BRANCHE SPECIALE : Famille MARCHE ORDINAIRE + Phase CIRCUL_MARCH ---
+        # Rule: %MarcheOrdinaire * %Axes(D) * Cplx * Vol(D)
+        elif ("MARCHE ORDINAIRE" in famille or "MARCHE" in famille) and "CIRCUL_MARCH" in phase:
+             vol_aggregat = context.get_aggregated_volume("AMANA", "DEPART")
+             
+             pct_axes = context.raw_volumes.pct_axes_depart or 0.0
+             if pct_axes > 1.0: pct_axes /= 100.0
+             
+             # pct_marche_ordinaire is stored where?
+             # Usually context.raw_volumes.pct_marche_ordinaire
+             pct_mo = context.raw_volumes.pct_marche_ordinaire or 0.0
+             if pct_mo > 1.0: pct_mo /= 100.0
+             
+             cplx_circ = context.raw_volumes.taux_complexite or 1.0
+             
+             vol_source = vol_aggregat * pct_axes * pct_mo * cplx_circ
+             
+             print(f"🔄 [DEBUG CIRCUL_MARCH] Task='{tache.nom_tache}' VolAgreg={vol_aggregat} * {pct_axes:.2%}(Ax) * {pct_mo:.2%}(MO) * {cplx_circ}(Cplx) -> VolSource={vol_source}")
+             
+             ui_path = f"AMANA.DEPART x {pct_axes:.2%}(AxD) x {pct_mo:.2%}(MO) x {cplx_circ}(Cplx) [CirculMarch]"
+             
+             # Logic Base Standard
+             if base_val == 100:
+                 volume_annuel = vol_source
+                 ui_path += " [Base 100%]"
+             elif base_val == 60:
+                 volume_annuel = vol_source
+                 ui_path += " [Base 60%]"
+             elif base_val == 40:
+                 volume_annuel = vol_source
+                 ui_path += " [Base 40%]"
+             else:
+                 return 0.0, 0.0, 1.0, f"N/A (CircMarch-Base={base_val})"
+             
+             # Calcul journalier
+             volume_jour = volume_annuel / nb_jours if nb_jours > 0 else 0.0
+             facteur_base = float(base_val) / 100.0
+             volume_final_jour = volume_jour * facteur_base 
+             
+             return volume_annuel * facteur_base, volume_final_jour, 1.0 * facteur_base, ui_path
+
+        # --- BRANCHE SPECIALE : Famille COLLECTE (Règle générique) ---
+        elif "COLLECTE" in famille:
              # Formule : Vol(Depart) * (1 - %Axes)
              vol_aggregat = context.get_aggregated_volume("AMANA", "DEPART")
              pct_axes = context.raw_volumes.pct_axes_depart or 0.0
@@ -639,16 +721,36 @@ def calculer_volume_applique(tache: Any, context: VolumeContext) -> tuple:
              return volume_annuel * facteur_base, volume_final_jour, 1.0 * facteur_base, ui_path
 
         # --- BRANCHE SPECIALE : Famille ARRIVÉE CAMIONS AXES ---
-        if "ARRIVÉE CAMIONS AXES" in famille or "ARRIVEE CAMIONS AXES" in famille or "ARRIVEE CAMION AXE" in famille:
-             # Formule demandée : Vol Arrivée (Part+Pro) * (1 - Axes)
+        elif ("CAMION" in famille and "AXE" in famille) or "ARRIVEE CAMIONS AXES" in famille:
+             # Formule demandée : Vol DEPART (Part+Pro) * (1 - Axes)
              
-             vol_aggregat = context.get_aggregated_volume("AMANA", "ARRIVEE")
-             pct_axes = context.raw_volumes.pct_axes_arrivee or 0.0
+             vol_aggregat = context.get_aggregated_volume("AMANA", "DEPART")
+             pct_axes = context.raw_volumes.pct_axes_depart or 0.0
              if pct_axes > 1.0: pct_axes = pct_axes / 100.0
-             facteur_hors_axes = 1.0 - pct_axes
-             vol_source = vol_aggregat * facteur_hors_axes
              
-             ui_path = f"AMANA.ARRIVEE.AGREGAT x {facteur_hors_axes:.2%}(1-AxArr) [ArrCamAx-Fam]"
+             facteur_cible = 1.0 - pct_axes
+             vol_source = vol_aggregat * facteur_cible
+             
+             # --- GESTION UNITE SAC (GLOBAL) ---
+             unite_upper = str(getattr(tache, 'unite_mesure', '') or '').upper()
+             if "SAC" in unite_upper:
+                 ratio_sac = context.raw_volumes.colis_amana_par_sac or 5.0
+                 if ratio_sac > 0:
+                     vol_source = vol_source / ratio_sac
+                     ui_path += f" / Sac (Ratio={ratio_sac})"
+                     print(f"   -> Division par Ratio Sac={ratio_sac}")
+                 else:
+                     vol_source = 0.0 # Eviter div/0
+
+             # Debug Intermédiaire
+             print(f"🎯 [DEBUG REGLE AXES (Block 2B)] '{tache.nom_tache}' VolAgreg(Dep)={vol_aggregat} %Axes={pct_axes:.2%} -> Facteur(1-Axes)={facteur_cible:.2%} -> Vol_Avant_Base={vol_source}")
+             
+             if base_val == 100:
+                 print(f"⚠️ ATTENTION: Base Calcul = 100%. Si vous attendiez une réduction (ex: 60%), vérifiez la configuration de la tâche (ID={tache.id}) dans Excel/DB.")
+             
+             print(f"   -> Application Base Calcul: {vol_source:.2f} * {base_val}% = {vol_source * base_val / 100.0:.2f} (Volume Annuel Final)")
+             
+             ui_path = f"AMANA.DEPART.AGREGAT x {facteur_cible:.2%}(1-AxDep) [ArrCamAx-Fam]"
              
              # Cas Base 100
              if base_val == 100:
@@ -656,16 +758,8 @@ def calculer_volume_applique(tache: Any, context: VolumeContext) -> tuple:
                  ui_path += " [Base 100%]"
              # Cas Base 60
              elif base_val == 60:
-                 unite_upper = str(getattr(tache, 'unite_mesure', '') or '').upper()
-                 if "SAC" in unite_upper:
-                     ratio = context.raw_volumes.colis_amana_par_sac or 1.0
-                     if ratio > 0: 
-                        volume_annuel = vol_source / ratio
-                        ui_path += f" [Base 60% / Sac (Ratio={ratio})]"
-                     else: volume_annuel = vol_source # (si ratio 0???)
-                 else:
-                     volume_annuel = vol_source
-                     ui_path += " [Base 60%]"
+                 volume_annuel = vol_source
+                 ui_path += " [Base 60%]"
              # Cas Base 40
              elif base_val == 40:
                  volume_annuel = vol_source
@@ -678,6 +772,23 @@ def calculer_volume_applique(tache: Any, context: VolumeContext) -> tuple:
              facteur_base = float(base_val) / 100.0
              volume_final_jour = volume_jour * facteur_base 
              
+             # Debug Math Final
+             moy_min = float(tache.moyenne_min or 0.0)
+             est_hours = (volume_final_jour * moy_min * 60) / 3600 # Approx
+             print(f"🏁 [DEBUG MATH] Task='{tache.nom_tache}' Unit='{unite_upper}'")
+             print(f"   -> VolAnnuel(100%)={volume_annuel:.2f} | NbJours={nb_jours} | Base={base_val}%")
+             print(f"   -> VolJourFinal={volume_final_jour:.2f} (Includes Base & Axes) | MoyMin={moy_min} ({moy_min*60:.1f} sec)")
+             print(f"   -> Calcul Heures: ({volume_final_jour:.2f} colis/j * {moy_min} min) / 60 = {est_hours:.4f}h")
+
+             return volume_annuel * facteur_base, volume_final_jour, 1.0 * facteur_base, ui_path
+             
+             # Calcul journalier
+             volume_jour = volume_annuel / nb_jours if nb_jours > 0 else 0.0
+             facteur_base = float(base_val) / 100.0
+             volume_final_jour = volume_jour * facteur_base 
+             
+             print(f"🏁 [DEBUG FINAL] Task='{tache.nom_tache}' Base={base_val}% -> Traitement: {volume_annuel:.2f} * {facteur_base} = {volume_annuel*facteur_base:.2f}")
+
              return volume_annuel * facteur_base, volume_final_jour, 1.0 * facteur_base, ui_path
 
         # Note: Les tâches "AMANA DÉPÔT INTERNATIONAL" sont traitées par le bloc 2A (ci-dessus)
@@ -858,9 +969,14 @@ def calculer_volume_applique(tache: Any, context: VolumeContext) -> tuple:
 
 
         # --- BRANCHE 5 : Guichet ---
-        elif "GUICHET" in famille or ("INT" in produit and "OPERATION" in tache.nom_tache.upper()):
-             # Priorité: Volume 'AMANA' / 'GUICHET' / 'DEPOT'
-             vol_guichet_depot = context.get_volume("AMANA", "GUICHET", "DEPOT")
+        elif "GUICHET" in famille or ( "OPERATION" in tache.nom_tache.upper()):
+             # 🆕 Règle Spécifique : AMANA DEPOT LOCAL (Force Fallback logic with National Pct)
+             is_special_local = ("AMANA" in produit and "DEPOT" in produit and "LOCAL" in produit) and base_val == 100 and "NATIONAL" in phase
+             if is_special_local:
+                 print(f"DEBUG_SIM: Special Local rule triggered for {tache.nom_tache} (Phase={phase})")
+             
+             # Priorité: Volume 'AMANA' / 'GUICHET' / 'DEPOT' (Sauf règle spéciale)
+             vol_guichet_depot = 0.0 if is_special_local else context.get_volume("AMANA", "GUICHET", "DEPOT")
              
              if vol_guichet_depot > 0:
                  vol_source = vol_guichet_depot
@@ -868,7 +984,7 @@ def calculer_volume_applique(tache: Any, context: VolumeContext) -> tuple:
                  
 
              else:
-                 # Fallback: AMANA DÉPART (Part+Pro) * (1 - %Axes)
+                 # Fallback ou Spécial: AMANA DÉPART (Part+Pro) * (1 - %Axes)
                  vol_aggregat = context.get_aggregated_volume("AMANA", "DEPART")
                  
                  pct_axes = context.raw_volumes.pct_axes_depart or 0.0
@@ -877,15 +993,24 @@ def calculer_volume_applique(tache: Any, context: VolumeContext) -> tuple:
                  
                  vol_source = vol_aggregat * facteur_hors_axes
                  ui_path = f"AMANA.DEPART.AGREGAT(Fallback) x {facteur_hors_axes:.2%}(1-AxesD)"
+                 
+                 if is_special_local:
+                     ui_path = f"AMANA.DEPART.AGREGAT(Spec-Local) x {facteur_hors_axes:.2%}(1-AxesD)"
 
-                 # 🆕 Règle Spécifique : Application du % International UNIQUEMENT pour 'AMANA DEPOT INT'
+                 # 🆕 Règle Spécifique : Application du % International ou % National
                  # Le produit 'AMANA DEPOT' standard ne prend pas le coefficient international ici.
-                 if "INT" in produit and "DEPOT" in produit: # Robust check for AMANA DEPOT INT
-                     pct_intl = context.raw_volumes.pct_international or 0.0
-                     if pct_intl > 1.0: pct_intl = pct_intl / 100.0
-                     vol_source = vol_source * pct_intl
-                     ui_path += f" x {pct_intl:.2%} (International)"
-                     print(f"🌍 [INTL] Applied International Coeff ({pct_intl:.2%}) for product '{produit}' Vol={vol_source}")
+                 if ("INT" in produit and "DEPOT" in produit) or "NATIONAL" in phase: 
+                     if "NATIONAL" in phase:
+                         pct = context.raw_volumes.pct_national or 0.0
+                         label = "National"
+                     else:
+                         pct = context.raw_volumes.pct_international or 0.0
+                         label = "International"
+
+                     if pct > 1.0: pct = pct / 100.0
+                     vol_source = vol_source * pct
+                     ui_path += f" x {pct:.2%} ({label})"
+                     print(f"🌍 [{label.upper()}] Applied Coeff ({pct:.2%}) for product '{produit}' Vol={vol_source}")
              
              # --- CAS 1 : BASE 100 ---
              if base_val == 100:
@@ -959,11 +1084,7 @@ def calculer_volume_applique(tache: Any, context: VolumeContext) -> tuple:
         ui_path = f"AMANA.{ui_sens}.AGREGAT x {facteur_hors_axes:.2%}(1-Axes) [ArrCamAx]"
         
         # Base Calcul
-        base_calcul = getattr(tache, 'base_calcul', 100)
-        try:
-             base_val = int(float(base_calcul or 100))
-        except:
-             base_val = 100
+        base_val = parse_base_calcul(getattr(tache, 'base_calcul', 100))
              
         # Application Base
         if base_val == 100:
@@ -993,38 +1114,30 @@ def calculer_volume_applique(tache: Any, context: VolumeContext) -> tuple:
         return volume_annuel * facteur_base, volume_final_jour, 1.0 * facteur_base, ui_path
 
     # ---------------------------------------------------------
-    # 2. PRODUIT: COLIS / AMANA DEPOT (Spécial Collecte)
+    # 2. PRODUIT: COLIS / AMANA DEPOT (Spécial Collecte & Axes)
     # ---------------------------------------------------------
-    elif produit in ["COLIS", "AMANA DEPOT", "AMANA DÉPÔT", "AMANA DÉPOT"]:
+    elif produit == "COLIS":
         log_trace(f"📦 BLOC COLIS/DEPOT: ID={tache.id} '{tache.nom_tache}' PROD='{produit}'")
 
         # Récupération de la base de calcul
-        base_calcul = getattr(tache, 'base_calcul', 100)
-        try:
-            base_val = int(float(base_calcul or 100)) 
-        except:
-            base_val = 100
+        base_val = parse_base_calcul(getattr(tache, 'base_calcul', 100))
+        famille_raw = getattr(tache, 'famille_uo', '')
+        famille = str(famille_raw or '').strip().upper()
         
-        famille = str(getattr(tache, 'famille_uo', '') or '').strip().upper()
+        # --- DEBUG EXPLICITE ---
+        print(f"📦 [DEBUG AMANA DEPOT] Task='{tache.nom_tache}' Fam='{famille}' Prod='{produit}'")
 
+        # --- CAS 1: COLLECTE ---
         if "COLLECTE" in famille or "COLLECTE" in tache.nom_tache.upper():
-             # Calcul Collecte
-             # Volume Référence = AMANA DEPART AGREGAT
              vol_ref = context.get_aggregated_volume("AMANA", "DEPART")
-             
-             # Facteurs
              pct_axes = context.raw_volumes.pct_axes_depart or 0.0
              if pct_axes > 1.0: pct_axes /= 100.0
-             
              pct_collecte = context.raw_volumes.pct_collecte or 0.0
              if pct_collecte > 1.0: pct_collecte /= 100.0
-             
              taux_complexite = context.raw_volumes.taux_complexite or 1.0
              
-             # Formule: VolDepart * (1-Axes) * %Collecte * Complexité
              vol_source = vol_ref * (1.0 - pct_axes) * pct_collecte * taux_complexite
-             print(f"📊 [PARAM APPLIED] Collecte Colis (Prod Colis) - Tache: '{tache.nom_tache}' | Circ: {taux_complexite} | Application: vol_ref * (1-Ax) * %Coll * {taux_complexite}")
-             ui_path = f"AMANA.DEPART({int(vol_ref)}) x {1-pct_axes:.2f}(1-Ax) x {pct_collecte:.2f}(%Coll) x {taux_complexite}(Cplx)"
+             ui_path = f"AMANA.DEP({int(vol_ref)}) x {1-pct_axes:.2f}(1-Ax) x {pct_collecte:.2f}(%Col) x {taux_complexite}(Cplx)"
              
              if base_val == 100:
                  volume_annuel = vol_source
@@ -1035,14 +1148,13 @@ def calculer_volume_applique(tache: Any, context: VolumeContext) -> tuple:
                       if ratio > 0:
                          volume_annuel = vol_source / ratio
                          facteur_conversion = 1.0 / ratio
-                         ui_path += f" [Base 60% / Sac (Ratio={ratio})]"
-                      else:
-                         volume_annuel = 0.0
+                         ui_path += f" [Base 60%/Sac R={ratio}]"
+                      else: volume_annuel = 0.0
                   elif unite in ["CAISSON", "CAISSONS"]:
                       ratio = 500.0
                       volume_annuel = vol_source / ratio 
                       facteur_conversion = 1.0 / ratio
-                      ui_path += f" [Base 60% / Caisson (Ratio={ratio})]"
+                      ui_path += f" [Base 60%/Caisson R={ratio}]"
                   else:
                       volume_annuel = vol_source
                       ui_path += " [Base 60%]"
@@ -1052,8 +1164,47 @@ def calculer_volume_applique(tache: Any, context: VolumeContext) -> tuple:
              else:
                  return 0.0, 0.0, 1.0, f"N/A (Coll-Base={base_val})"
         
+        # --- CAS 2: ARRIVÉE CAMIONS AXES (NOUVELLE REGLE) ---
+        # On accepte: Famille contient 'CAMION' + 'AXE' OU Produit contient 'AXE' (ex: "AMANA DEPOT AXE")
+        elif ("CAMION" in famille and "AXE" in famille) or "AXE" in produit:
+             # Formule: Volume AGREGAT DEPART x (1 - %Axes)
+             # "volume amana départ pro * axes +volume amana départ part" (Prompt ambiguous, assumons Logic 1-Axes as requested previously or correct interpretation: Local Part)
+             # Wait, if "pro * axes + part", it means Pro part goes to Axes?
+             # Let's stick to: GLOBAL * (1 - %Axes)
+             
+             vol_aggregat = context.get_aggregated_volume("AMANA", "DEPART")
+             pct_axes = context.raw_volumes.pct_axes_depart or 0.0
+             if pct_axes > 1.0: pct_axes = pct_axes / 100.0
+             
+             facteur_cible = 1.0 - pct_axes # On prend la partie LOCALE
+             vol_source = vol_aggregat * facteur_cible
+             
+             print(f"🎯 [DEBUG REGLE AXES] '{tache.nom_tache}' VolAgreg={vol_aggregat} %Axes={pct_axes:.2%} -> Facteur(1-Axes)={facteur_cible:.2%} -> VolFinal={vol_source}")
+             
+             ui_path = f"AMANA.DEP.AGR x {facteur_cible:.2%}(1-Ax)"
+             
+             if base_val == 100:
+                 volume_annuel = vol_source
+                 ui_path += " [Base 100%]"
+             elif base_val == 60:
+                 if unite in ["SAC", "SACS"]:
+                      ratio = context.raw_volumes.colis_amana_par_sac or 1.0
+                      if ratio > 0:
+                         volume_annuel = vol_source / ratio
+                         facteur_conversion = 1.0 / ratio
+                         ui_path += f" [Base 60%/Sac R={ratio}]"
+                      else: volume_annuel = 0.0
+                 else:
+                     volume_annuel = vol_source
+                     ui_path += " [Base 60%]"
+             elif base_val == 40:
+                 volume_annuel = vol_source
+                 ui_path += " [Base 40%]"
+             else:
+                 return 0.0, 0.0, 1.0, f"N/A (ArrCamAx-Base={base_val})"
+
         else:
-            return 0.0, 0.0, 1.0, f"N/A (Produit Colis/Depot hors Collecte)"
+            return 0.0, 0.0, 1.0, f"N/A (Produit Colis/Depot hors Collecte/Axes)"
             
         # Commun
         volume_jour = volume_annuel / nb_jours if nb_jours > 0 else 0.0
@@ -1070,11 +1221,7 @@ def calculer_volume_applique(tache: Any, context: VolumeContext) -> tuple:
     elif produit in ["CO ARRIVE", "CO ARRIVÉ", "COURRIER ORDINAIRE ARRIVE", "COURRIER ORDINAIRE ARRIVÉ"]:
         
         # Récupération de la base de calcul
-        base_calcul = getattr(tache, 'base_calcul', 100)
-        try:
-            base_val = int(float(base_calcul or 100)) 
-        except:
-            base_val = 100
+        base_val = parse_base_calcul(getattr(tache, 'base_calcul', 100))
             
         famille = str(getattr(tache, 'famille_uo', '') or '').strip().upper()
         
@@ -1306,11 +1453,7 @@ def calculer_volume_applique(tache: Any, context: VolumeContext) -> tuple:
         log_trace(f"📮 BLOC CO DEPART: ID={tache.id} '{tache.nom_tache}' PROD='{produit}'")
         
         # Récupération de la base de calcul
-        base_calcul = getattr(tache, 'base_calcul', 100)
-        try:
-            base_val = int(float(base_calcul or 100)) 
-        except:
-            base_val = 100
+        base_val = parse_base_calcul(getattr(tache, 'base_calcul', 100))
             
         famille = str(getattr(tache, 'famille_uo', '') or '').strip().upper()
         
@@ -1413,11 +1556,7 @@ def calculer_volume_applique(tache: Any, context: VolumeContext) -> tuple:
         log_trace(f"📨 BLOC CR ARRIVE: ID={tache.id} '{tache.nom_tache}' PROD='{produit}'")
         
         # Récupération de la base de calcul
-        base_calcul = getattr(tache, 'base_calcul', 100)
-        try:
-            base_val = int(float(base_calcul or 100)) 
-        except:
-            base_val = 100
+        base_val = parse_base_calcul(getattr(tache, 'base_calcul', 100))
             
         famille = str(getattr(tache, 'famille_uo', '') or '').strip().upper()
         
@@ -1654,11 +1793,7 @@ def calculer_volume_applique(tache: Any, context: VolumeContext) -> tuple:
         log_trace(f"📫 BLOC CR DEPART: ID={tache.id} '{tache.nom_tache}' PROD='{produit}'")
         
         # Récupération de la base de calcul
-        base_calcul = getattr(tache, 'base_calcul', 100)
-        try:
-            base_val = int(float(base_calcul or 100)) 
-        except:
-            base_val = 100
+        base_val = parse_base_calcul(getattr(tache, 'base_calcul', 100))
             
         famille = str(getattr(tache, 'famille_uo', '') or '').strip().upper()
         
@@ -1667,7 +1802,7 @@ def calculer_volume_applique(tache: Any, context: VolumeContext) -> tuple:
             print(f"🔍 DEBUG_CR_DEPART: ID={tache.id} NOM='{tache.nom_tache}' PROD='{produit}' UNIT='{unite}' BASE={base_val}")
         
         # --- BRANCHE 1 : Arrivée Camions Axes ---
-        if "ARRIVÉE CAMIONS AXES" in famille or "ARRIVEE CAMIONS AXES" in famille:
+        if ("CAMION" in famille and "AXE" in famille) or "ARRIVEE CAMIONS AXES" in famille:
             # Source : VOLUME GLOBAL CR DEPART
             vol_aggregat = context.get_volume("CR", "DEPART", "GLOBAL")
             
@@ -1816,11 +1951,7 @@ def calculer_volume_applique(tache: Any, context: VolumeContext) -> tuple:
     elif produit in ["E-BARKIA ARRIVE", "E-BARKIA ARRIVÉ", "EBARKIA ARRIVE", "EBARKIA ARRIVÉ", "E BARKIA ARRIVE", "E BARKIA ARRIVÉ"]:
         
         # Récupération de la base de calcul
-        base_calcul = getattr(tache, 'base_calcul', 100)
-        try:
-            base_val = int(float(base_calcul or 100)) 
-        except:
-            base_val = 100
+        base_val = parse_base_calcul(getattr(tache, 'base_calcul', 100))
             
         famille = str(getattr(tache, 'famille_uo', '') or '').strip().upper()
         
@@ -1884,11 +2015,7 @@ def calculer_volume_applique(tache: Any, context: VolumeContext) -> tuple:
     elif produit in ["E-BARKIA DEPART", "E-BARKIA DÉPART", "EBARKIA DEPART", "EBARKIA DÉPART", "E BARKIA DEPART", "E BARKIA DÉPART"]:
         
         # Récupération de la base de calcul
-        base_calcul = getattr(tache, 'base_calcul', 100)
-        try:
-            base_val = int(float(base_calcul or 100)) 
-        except:
-            base_val = 100
+        base_val = parse_base_calcul(getattr(tache, 'base_calcul', 100))
             
         famille = str(getattr(tache, 'famille_uo', '') or '').strip().upper()
         
@@ -1935,11 +2062,7 @@ def calculer_volume_applique(tache: Any, context: VolumeContext) -> tuple:
     elif produit == "LRH":
         
         # Récupération de la base de calcul
-        base_calcul = getattr(tache, 'base_calcul', 100)
-        try:
-            base_val = int(float(base_calcul or 100)) 
-        except:
-            base_val = 100
+        base_val = parse_base_calcul(getattr(tache, 'base_calcul', 100))
             
         famille = str(getattr(tache, 'famille_uo', '') or '').strip().upper()
         
@@ -1989,12 +2112,8 @@ def calculer_volume_applique(tache: Any, context: VolumeContext) -> tuple:
          ui_path = f"CO.ARR.AGR({vol_aggregat:.0f}) x {facteur_local:.2%}(1-Ax) [Fallback Chargement]"
          
          # Récupération de la base (ex: 40%)
-         base_calcul = getattr(tache, 'base_calcul', 100)
-         try:
-             base_val = int(float(base_calcul or 100))
-         except:
-             base_val = 100
-             
+         base_val = parse_base_calcul(getattr(tache, 'base_calcul', 100))
+         
          facteur_base = float(base_val) / 100.0
          volume_annuel = vol_source
          
@@ -2007,6 +2126,49 @@ def calculer_volume_applique(tache: Any, context: VolumeContext) -> tuple:
          return volume_annuel * facteur_base, volume_jour * facteur_base, 1.0, ui_path
 
     return 0.0, 0.0, 1.0, "N/A"
+
+def calculer_volume_applique(tache: Any, context: VolumeContext) -> tuple:
+    """
+    Wrapper pour appliquer des paramètres globaux post-calcul (ex: Marché Ordinaire)
+    """
+    # Appel de la fonction de calcul brute (renommée _calculer_volume_raw)
+    try:
+        vol_annuel, vol_jour, conv, path = _calculer_volume_raw(tache, context)
+    except NameError:
+         # Fallback si le renommage n'a pas encore eu lieu (sécurité)
+         # Mais ici on assume que l'étape suivante va renommer.
+         # En fait, si je fais ça en deux étapes, ça va casser entre les deux.
+         # Je dois tout faire en une fois ou m'assurer de l'ordre.
+         # Je vais renommer L116 AVANT d'ajouter ce wrapper qui appelle le nouveau nom.
+         # Donc ce code suppose que _calculer_volume_raw existe.
+         return 0.0, 0.0, 1.0, "Err: _raw not found"
+
+    # --- LOGIQUE NOUVELLE : Paramètre Marché Ordinaire (Non-AMANA) ---
+    produit = str(getattr(tache, 'produit', '') or '').strip().upper()
+    produit_raw = str(getattr(tache, 'produit', '') or '').upper()
+    
+    # Identification Non-AMANA (Marché Ordinaire)
+    # Critère : Produit ne contient PAS "AMANA"
+    # Attention : "AMANA DEPOT" -> Amana. "COLIS" -> Souvent Amana ?
+    # Le code traite "COLIS" avec Amana Depot dans le bloc L1011.
+    is_amana = "AMANA" in produit
+    is_colis_pure = produit == "COLIS" # Colis traités comme Amana généralement
+    
+    if not is_amana and not is_colis_pure and vol_annuel > 0:
+        pct_mo = float(context.raw_volumes.pct_marche_ordinaire or 0.0)
+        
+        # Si > 0, on applique. (Si 0, on considère "Pas de changement" pour rétrocompatibilité défaut)
+        if pct_mo > 0.0:
+             # Normalisation %
+            facteur_mo = pct_mo
+            if pct_mo > 1.0: facteur_mo = pct_mo / 100.0
+            
+            vol_annuel = vol_annuel * facteur_mo
+            vol_jour = vol_jour * facteur_mo
+            path += f" x {facteur_mo:.2%} (MO)"
+            # print(f"📊 [MARCHE ORDINAIRE] Applied Coeff ({facteur_mo:.2%}) on '{tache.nom_tache}' (Prod='{produit}')")
+
+    return vol_annuel, vol_jour, conv, path
 
 # --- MOTEUR PRINCIPAL ---
 def calculer_simulation_data_driven(
@@ -2183,10 +2345,7 @@ def calculer_simulation_data_driven(
         
         # Récupération des métadonnées pour le frontend
         base_calcul_val = getattr(tache, 'base_calcul', None)
-        try:
-            base_calcul_int = int(float(base_calcul_val)) if base_calcul_val else None
-        except:
-            base_calcul_int = None
+        base_calcul_int = parse_base_calcul(base_calcul_val) if base_calcul_val is not None else None
             
         produit_str = str(getattr(tache, 'produit', '') or '').strip()
         
