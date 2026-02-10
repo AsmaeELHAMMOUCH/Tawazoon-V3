@@ -6,12 +6,6 @@ import {
   MapPin,
   Building,
   Tag,
-  Package,
-  Mail,
-  Gauge,
-  Clock,
-  Play,
-  AlertCircle,
   UserRound,
   Calculator,
   CheckCircle2,
@@ -22,10 +16,7 @@ import {
   Sliders,
   X,
 } from "lucide-react";
-import VolumeParamsCard from "../intervenant/VolumeParamsCard";
-import ProductivityParamsCard from "../intervenant/ProductivityParamsCard";
-import ScoringSection from "./ScoringSection";
-import CentreScoringDetailsDrawer from "@/components/scoring/CentreScoringDetailsDrawer";
+
 import { api } from "../../lib/api";
 
 /* ===================== Helpers ===================== */
@@ -45,19 +36,21 @@ const parseNonNeg = (val) => {
 const toInput = (v) =>
   v === 0 || v === null || v === undefined ? "" : String(v);
 
-const monthly = (v) => {
-  const n = typeof v === "number" ? v : parseNonNeg(v);
-  return n === undefined ? undefined : n / 12;
-};
-
-const formatInt = (n) =>
-  new Intl.NumberFormat("fr-FR").format(Math.round(n || 0));
-
 const formatNumber = (value, decimals = 2) => {
   if (value === null || value === undefined) return "0.00";
   const num = typeof value === "number" ? value : parseFloat(value);
   if (!Number.isFinite(num)) return "0.00";
   return num.toFixed(decimals).replace(".", ",");
+};
+
+const formatUnit = (value, decimals = 0) => {
+  if (value === null || value === undefined || value === "") return "0";
+  const num = typeof value === "number" ? value : parseFloat(value);
+  if (!Number.isFinite(num)) return "0";
+  return new Intl.NumberFormat("fr-FR", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(num);
 };
 
 const formatSmallNumber = (value, decimals = 2) => {
@@ -507,8 +500,6 @@ export default function VueCentre({
   pctAxesDepart = 60,
   setPctAxesDepart = () => { },
   apiBaseUrl = "http://localhost:8000/api",
-  // New props
-  onSimuler = () => { },
   resultats = null,
   totaux = null,
   hasSimulated = false,
@@ -538,8 +529,6 @@ export default function VueCentre({
   setPctInternational = () => { },
   pctMarcheOrdinaire = 0,
   setPctMarcheOrdinaire = () => { },
-  EmptyStateFirstRun = () => null,
-  EmptyStateDirty = () => null,
   Card,
   Field,
   Input,
@@ -605,9 +594,6 @@ export default function VueCentre({
   );
 
 
-  const [partParticuliers, setPartParticuliers] = useState(75);
-  const partProfessionnels = 100 - partParticuliers;
-
   // 🏷️ Catégories (pour affichage dynamique)
   const [categorisationsList, setCategorisationsList] = useState([]);
 
@@ -658,6 +644,7 @@ export default function VueCentre({
   const showDetailsModal = activeModal !== null;
   const setShowDetailsModal = (val) => !val && setActiveModal(null); // Compatibilité ancienne API
 
+  const [showDetails, setShowDetails] = useState(false);
   const [showMODDetails, setShowMODDetails] = useState(false);
   const [showMOIDetails, setShowMOIDetails] = useState(false);
 
@@ -695,6 +682,74 @@ export default function VueCentre({
       ) || null
     );
   }, [centre, centres]);
+
+  const centreLabel = useMemo(() => {
+    if (centreObj) return centreObj.label || centreObj.name || centreObj.nom || "";
+    if (!centre || !centres || centres.length === 0) return "";
+    const c = centres.find(ct => String(ct.id) === String(centre));
+    return c?.nom || c?.label || c?.name || "";
+  }, [centreObj, centres, centre]);
+
+  const recapItems = useMemo(() => {
+    const pct = (v) => `${formatUnit(v, 0)}%`;
+    const num0 = (v) => formatUnit(v, 0);
+    const num2 = (v) => formatUnit(v, 2);
+    return [
+      { label: "Centre", value: centreLabel || "—" },
+      { label: "Productivite", value: pct(productivite) },
+      { label: "Temps mort", value: `${num0(idleMinutes)} min` },
+      { label: "Shift", value: num0(shift) },
+      { label: "Taux complexite", value: num2(tauxComplexite) },
+      { label: "Nature geo", value: num2(natureGeo) },
+      { label: "Axes arrivee", value: pct(pctAxesArrivee) },
+      { label: "Axes depart", value: pct(pctAxesDepart) },
+      { label: "Collecte", value: pct(pctCollecte) },
+      { label: "Retour", value: pct(pctRetour) },
+      { label: "International", value: pct(pctInternational) },
+      { label: "Marche ordinaire", value: pct(pctMarcheOrdinaire) },
+      { label: "ED %", value: pct(edPercent) },
+      { label: "Colis amana/sac", value: num0(colisAmanaParSac) },
+      { label: "Courriers/sac", value: num0(courriersParSac) },
+      { label: "Colis/collecte", value: num0(colisParCollecte) },
+      { label: "Nbr CO sac", value: num0(nbrCoSac) },
+      { label: "Nbr CR sac", value: num0(nbrCrSac) },
+      { label: "CR par caisson", value: num0(crParCaisson) },
+      { label: "Sacs", value: num0(sacs) },
+      { label: "Colis", value: num0(colis) },
+      { label: "CO", value: num0(cOrd) },
+      { label: "CR", value: num0(cReco) },
+      { label: "E-barkia", value: num0(eBarkia) },
+      { label: "LRH", value: num0(lrh) },
+      { label: "Amana", value: num0(amana) },
+    ];
+  }, [
+    centreLabel,
+    productivite,
+    idleMinutes,
+    shift,
+    tauxComplexite,
+    natureGeo,
+    pctAxesArrivee,
+    pctAxesDepart,
+    pctCollecte,
+    pctRetour,
+    pctInternational,
+    pctMarcheOrdinaire,
+    edPercent,
+    colisAmanaParSac,
+    courriersParSac,
+    colisParCollecte,
+    nbrCoSac,
+    nbrCrSac,
+    crParCaisson,
+    sacs,
+    colis,
+    cOrd,
+    cReco,
+    eBarkia,
+    lrh,
+    amana,
+  ]);
 
   const isTestMode = useMemo(() => {
     return (resultats?.centre_label || "").toLowerCase().includes("test");
@@ -792,44 +847,27 @@ export default function VueCentre({
     });
   }, [centreId, calculateVolFromGrid, resultats, pctAxesArrivee, pctAxesDepart, centreObj, navigate]);
 
-  const splitFlux = (total) => {
-    const v = Number(total ?? 0);
-    const ratioPart = partParticuliers / 100;
-    const ratioProf = 1 - ratioPart;
-    return { part: v * ratioPart, prof: v * ratioProf };
-  };
-
-
-
-  const renderMonthlyHint = useCallback((raw, lastValid) => {
-    const live = monthly(raw);
-    const m = live === undefined ? monthly(lastValid) : live;
-    const val = m ?? 0;
-    return (
-      <div className="text-[10px] text-slate-500 mt-1 min-h-[1rem]">
-        ≈ {formatNumber(val, 2)} / mois
-      </div>
-    );
+  const handleToggleDetails = useCallback(() => {
+    setShowDetails((prev) => {
+      const next = !prev;
+      if (!next) {
+        setShowMODDetails(false);
+        setShowMOIDetails(false);
+        setActiveModal(null);
+      }
+      return next;
+    });
   }, []);
 
-  /* ===================== SIMULER (API POST) ===================== */
-  const handleSimuler = useCallback(
-    (volParams = null) => {
-      if (!centreId) {
-        setError("Veuillez sélectionner un centre");
-        return;
-      }
+  const handleNavigateToAdequation = useCallback(() => {
+    if (!centreId) return;
+    const centreLabel =
+      centreObj?.label || centreObj?.name || resultats?.centre_label || "Centre";
+    navigate("/app/simulation/index_Adequation", {
+      state: { centreId, centreLabel },
+    });
+  }, [centreId, centreObj, resultats, navigate]);
 
-      onSimuler({
-        ...volParams,
-        productivite: Number(productivite),
-        idle_minutes: Number(idleMinutes || 0),
-        taux_complexite: Number(tauxComplexite || 0),
-        nature_geo: Number(natureGeo || 0),
-      });
-    },
-    [onSimuler, centreId, productivite, idleMinutes, tauxComplexite, natureGeo]
-  );
 
   /* ✅ Export CSV */
   const handleExportCSV = useCallback(() => {
@@ -1599,9 +1637,8 @@ export default function VueCentre({
   /* ===================== Rendu ===================== */
   return (
     <div className="space-y-1" style={{ zoom: "90%" }}>
-      {/* 1️⃣ Bandeau paramètres principaux + productivité */}
-      {/* 🔹 BARRES STICKY EN HAUT - Sélection + Productivité côte à côte */}
-      <div className="sticky top-[57px] z-20 grid grid-cols-1 xl:grid-cols-2 gap-2">
+      {/* 1️⃣ Bandeau selection centre */}
+      <div className="sticky top-[57px] z-20">
 
         {/* Barre de sélection */}
         <div className="bg-white/80 backdrop-blur-md border border-slate-200/60 shadow-sm rounded-lg px-3 py-2 flex flex-wrap items-center gap-3 transition-all duration-300">
@@ -1703,226 +1740,80 @@ export default function VueCentre({
             <span className="hidden sm:inline">Catégorisation</span>
           </button>
 
+          {/* Bouton Accès Rapide Index Adequation */}
+          <button
+            onClick={handleNavigateToAdequation}
+            disabled={!centre}
+            className={`
+              flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ml-1
+              ${centre
+                ? "bg-gradient-to-br from-emerald-50 to-teal-50 border-emerald-200 text-emerald-700 hover:from-emerald-100 hover:to-teal-100 hover:shadow-md cursor-pointer ring-1 ring-emerald-100"
+                : "bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed"}
+            `}
+            title="Ouvrir la page Index Adequation"
+          >
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Index Adequation</span>
+          </button>
+
 
 
         </div>
 
       </div>
-
-      {/* Configuration & Performance */}
-      <div className="bg-white/80 backdrop-blur-md border border-slate-200/60 shadow-sm rounded-lg px-3 py-2">
-        <div className="flex flex-wrap items-center gap-2">
-
-          {/* Productivité */}
-          <div className="flex items-center gap-1.5 min-w-[100px] flex-1">
-            <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
-              <Gauge className="w-3 h-3" />
-            </div>
-            <div className="flex flex-col w-full">
-              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                Productivité
-              </label>
-              <div className="relative">
-                <input
-                  type="number"
-                  min={0}
-                  max={200}
-                  value={productivite}
-                  onChange={(e) => setProductivite(Number(e.target.value || 0))}
-                  className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full pr-6 text-center"
-                />
-                <span className="absolute right-0 top-0 text-[9px] text-slate-400 font-bold pointer-events-none">
-                  %
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div className="w-px h-6 bg-slate-200 hidden md:block" />
-
-          {/* Temps mort */}
-          <div className="flex items-center gap-1.5 min-w-[100px] flex-1">
-            <div className="w-6 h-6 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-              <Clock className="w-3 h-3" />
-            </div>
-            <div className="flex flex-col w-full">
-              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                Temps mort
-              </label>
-              <div className="relative">
-                <input
-                  type="number"
-                  min={0}
-                  value={idleMinutes}
-                  onChange={(e) => setIdleMinutes(Number(e.target.value || 0))}
-                  className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full pr-8 text-center"
-                />
-                <span className="absolute right-0 top-0 text-[9px] text-slate-400 font-bold pointer-events-none">
-                  min
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div className="w-px h-6 bg-slate-200 hidden md:block" />
-
-
-
-          {/* Complexité Circulation */}
-          <div className="flex items-center gap-1.5 min-w-[90px] flex-1">
-            <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
-              <Sliders className="w-3 h-3" />
-            </div>
-            <div className="flex flex-col w-full">
-              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                Compl. Circ.
-              </label>
-              <select
-                value={tauxComplexite}
-                onChange={(e) => setTauxComplexite(Number(e.target.value))}
-                disabled={disabledAxes}
-                className={`bg-transparent text-xs font-semibold focus:outline-none w-full text-center cursor-pointer ${disabledAxes ? "text-slate-400 cursor-not-allowed" : "text-slate-800"}`}
+      {hasSimulated && (
+        <Card
+          title={<span className="text-[11px] font-semibold">Rappel des parametres utilises</span>}
+          headerRight={
+            <button
+              type="button"
+              onClick={handleToggleDetails}
+              className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white/80 px-2 py-1 text-[10px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              {showDetails ? (
+                <EyeOff className="w-3 h-3 text-slate-500" />
+              ) : (
+                <Eye className="w-3 h-3 text-slate-500" />
+              )}
+              <span>{showDetails ? "Masquer details" : "Afficher details"}</span>
+            </button>
+          }
+          bodyClassName="!p-2"
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+            {recapItems.map((item) => (
+              <div
+                key={item.label}
+                className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-white/70 px-2 py-1"
               >
-                <option value="0.5">0.5</option>
-                <option value="0.75">0.75</option>
-                <option value="1">1</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Compl. Géo */}
-          <div className="flex items-center gap-1.5 min-w-[90px] flex-1 border-l border-slate-200 pl-4">
-            <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
-              <MapPin className="w-3 h-3" />
-            </div>
-            <div className="flex flex-col w-full">
-              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                Compl. Géo
-              </label>
-              <input
-                type="text"
-                value={natureGeo}
-                onChange={(e) => setNatureGeo(parseNonNeg(e.target.value) ?? 0)}
-                disabled={disabledAxes}
-                className={`bg-transparent text-xs font-semibold focus:outline-none w-full text-center ${disabledAxes ? "text-slate-400 cursor-not-allowed" : "text-slate-800"}`}
-              />
-            </div>
-          </div>
-
-          {/* Shift */}
-          <div className="flex items-center gap-1.5 min-w-[90px] flex-1 border-l border-slate-200 pl-4">
-            <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
-              <Clock className="w-3 h-3" />
-            </div>
-            <div className="flex flex-col w-full">
-              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                Shift
-              </label>
-              <select
-                value={shift}
-                onChange={(e) => setShift(Number(e.target.value))}
-                disabled={disabledAxes}
-                className={`bg-transparent text-xs font-semibold focus:outline-none w-full text-center cursor-pointer ${disabledAxes ? "text-slate-400 cursor-not-allowed" : "text-slate-800"}`}
-              >
-                <option value="1">1</option>
-                <option value="2">2</option>
-                <option value="3">3</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="w-px h-6 bg-slate-200 hidden md:block" />
-
-          {/* Capacité Nette */}
-          <div className="flex items-center gap-1.5 min-w-[90px] flex-1">
-            <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
-              <Clock className="w-3 h-3" />
-            </div>
-            <div className="flex flex-col">
-              <label className="text-[9px] font-bold text-[#005EA8] uppercase tracking-wider">
-                Capacité Nette
-              </label>
-              <div className="flex items-baseline gap-1">
-                <span className="text-lg font-extrabold text-slate-800 tracking-tight">
-                  {(() => {
-                    // Recalcul local pour affichage fiable (Prod + Idle)
-                    const p = Number(productivite ?? 100) / 100;
-                    const idleH = Number(idleMinutes || 0) / 60;
-                    const base = 8;
-                    const productive = base * p;
-                    const net = Math.max(0, productive - idleH);
-
-                    const h = Math.floor(net);
-                    const m = Math.round((net - h) * 60);
-                    return `${h}h ${String(m).padStart(2, "0")}`;
-                  })()}
-                </span>
-                <span className="text-[9px] font-semibold text-slate-500">h/j</span>
+                <span className="text-[10px] text-slate-500">{item.label}</span>
+                <span className="text-[11px] font-semibold text-slate-700">{item.value}</span>
               </div>
-            </div>
+            ))}
           </div>
-        </div>
-      </div>
-      <div className="w-full">
-        <VolumeParamsCard
-          Card={Card}
-          Field={Field}
-          Input={Input}
-          volumesFluxGrid={volumesFluxGrid}
-          setVolumesFluxGrid={setVolumesFluxGrid}
-          nbrCoSac={nbrCoSac}
-          setNbrCoSac={setNbrCoSac}
-          nbrCrSac={nbrCrSac}
-          setNbrCrSac={setNbrCrSac}
-          crParCaisson={crParCaisson}
-          setCrParCaisson={setCrParCaisson}
-          edPercent={edPercent}
-          setEdPercent={setEdPercent}
-          pctInternational={pctInternational}
-          setPctInternational={setPctInternational}
-          pctMarcheOrdinaire={pctMarcheOrdinaire}
-          setPctMarcheOrdinaire={setPctMarcheOrdinaire}
-          colisAmanaParSac={colisAmanaParSac}
-          setColisAmanaParSac={setColisAmanaParSac}
-          readOnly={false}
-          showSacsInputs={true}
-          parseNonNeg={parseNonNeg}
-          toInput={toInput}
-          monthly={monthly}
-          formatInt={formatInt}
-          splitFlux={splitFlux}
-          partParticuliers={partParticuliers}
-          setPartParticuliers={setPartParticuliers}
-          partProfessionnels={partProfessionnels}
-          getEffectiveFluxMode={getEffectiveFluxMode}
-          // Shared Params
-          tauxComplexite={tauxComplexite}
-          setTauxComplexite={setTauxComplexite}
-          natureGeo={natureGeo}
-          setNatureGeo={setNatureGeo}
-          // Axes
-          pctAxesArrivee={pctAxesArrivee}
-          setPctAxesArrivee={setPctAxesArrivee}
-          pctAxesDepart={pctAxesDepart}
-          setPctAxesDepart={setPctAxesDepart}
-          // Collecte & Retour
-          pctCollecte={pctCollecte}
-          setPctCollecte={setPctCollecte}
-          pctRetour={pctRetour}
-          setPctRetour={setPctRetour}
-          disabledAxes={disabledAxes}
-        />
-      </div>
+          {simDirty && (
+            <div className="mt-2 text-[10px] text-amber-600">
+              Parametres modifies depuis la derniere simulation.
+            </div>
+          )}
+        </Card>
+      )}
+
+ 
 
       {/* Résultats */}
       {
         !hasSimulated ? (
           <Card title="Résultats de Simulation">
-            <EmptyStateFirstRun onSimuler={handleSimuler} disabled={!centre} />
+            <div className="text-xs text-slate-600">
+              Aucune simulation disponible. Lancez la simulation depuis la page Intervenant.
+            </div>
           </Card>
         ) : simDirty ? (
           <Card title="Résultats de Simulation">
-            <EmptyStateDirty onSimuler={handleSimuler} />
+            <div className="text-xs text-slate-600">
+              Paramètres modifiés. Relancez la simulation depuis la page Intervenant.
+            </div>
           </Card>
         ) : resultats && (
           <Card
@@ -1932,42 +1823,61 @@ export default function VueCentre({
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setShowDetailsModal(true)}
-                  className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-1 shadow-sm hover:bg-blue-100"
-                >
-                  <Eye className="w-3 h-3 text-blue-600" />
-                  <span className="text-[10px] sm:text-xs font-semibold text-blue-700">Vue Détaillée</span>
-                </button>
-                <div className="w-px h-4 bg-slate-300 mx-1"></div>
-                <button
-                  type="button"
-                  onClick={() => setShowMODDetails((v) => !v)}
+                  onClick={handleToggleDetails}
                   className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white/80 px-2 py-1 shadow-sm hover:bg-slate-50"
                 >
-                  {showMODDetails ? (
+                  {showDetails ? (
                     <EyeOff className="w-3 h-3 text-slate-500" />
                   ) : (
                     <Eye className="w-3 h-3 text-slate-500" />
                   )}
                   <span className="text-[10px] sm:text-xs">
-                    Détails Positions MOD
+                    {showDetails ? "Masquer détails" : "Afficher détails"}
                   </span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => setShowMOIDetails((v) => !v)}
-                  className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white/80 px-2 py-1 shadow-sm hover:bg-slate-50"
-                >
-                  {showMOIDetails ? (
-                    <EyeOff className="w-3 h-3 text-slate-500" />
-                  ) : (
-                    <Eye className="w-3 h-3 text-slate-500" />
-                  )}
-                  <span className="text-[10px] sm:text-xs">MOI / Autres</span>
-                </button>
+                {showDetails && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setShowDetailsModal(true)}
+                      className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-1 shadow-sm hover:bg-blue-100"
+                    >
+                      <Eye className="w-3 h-3 text-blue-600" />
+                      <span className="text-[10px] sm:text-xs font-semibold text-blue-700">Vue Détaillée</span>
+                    </button>
+                    <div className="w-px h-4 bg-slate-300 mx-1"></div>
+                    <button
+                      type="button"
+                      onClick={() => setShowMODDetails((v) => !v)}
+                      className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white/80 px-2 py-1 shadow-sm hover:bg-slate-50"
+                    >
+                      {showMODDetails ? (
+                        <EyeOff className="w-3 h-3 text-slate-500" />
+                      ) : (
+                        <Eye className="w-3 h-3 text-slate-500" />
+                      )}
+                      <span className="text-[10px] sm:text-xs">
+                        Détails Positions MOD
+                      </span>
+                    </button>
 
-                <div className="w-px h-4 bg-slate-300 mx-1"></div>
+                    <button
+                      type="button"
+                      onClick={() => setShowMOIDetails((v) => !v)}
+                      className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white/80 px-2 py-1 shadow-sm hover:bg-slate-50"
+                    >
+                      {showMOIDetails ? (
+                        <EyeOff className="w-3 h-3 text-slate-500" />
+                      ) : (
+                        <Eye className="w-3 h-3 text-slate-500" />
+                      )}
+                      <span className="text-[10px] sm:text-xs">MOI / Autres</span>
+                    </button>
+
+                    <div className="w-px h-4 bg-slate-300 mx-1"></div>
+                  </>
+                )}
 
                 <button
                   type="button"
@@ -2136,7 +2046,7 @@ export default function VueCentre({
 
       {/* Tables MOD / MOI */}
       {
-        showMODDetails && (
+        showDetails && showMODDetails && (
           <Card title="Positions MOD - Effectif actuel vs Effectif calculé">
             <Table
               rows={rowsMOD}
@@ -2148,7 +2058,7 @@ export default function VueCentre({
       }
 
       {
-        showMOIDetails && (
+        showDetails && showMOIDetails && (
           <Card title="Positions MOI - Effectif actuel">
             <Table
               rows={rowsMOI}
@@ -2162,7 +2072,7 @@ export default function VueCentre({
       }
       {/* 🔹 MODAL DETAILS */}
       {
-        showDetailsModal && (
+        showDetails && showDetailsModal && (
           <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="bg-white rounded-xl shadow-2xl max-w-7xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200">
 
@@ -2237,3 +2147,4 @@ export default function VueCentre({
     </div >
   );
 }
+
