@@ -244,10 +244,46 @@ export default function VueIntervenant({
   // 🆕 Filtre famille
   const [filterFamille, setFilterFamille] = useState("");
 
+  // 🆕 Paramètre Collecte (Local -> Global)
+  const [filterProduit, setFilterProduit] = useState("");
+
   // 🆕 Liste des familles uniques
   const uniqueFamilles = useMemo(() => {
     const s = new Set((referentiel || []).map(r => r.famille).filter(Boolean));
     return Array.from(s).sort();
+  }, [referentiel]);
+
+  // 🆕 Helper: Grouper les produits
+  const getGroupeProduit = (produitRaw) => {
+    const p = String(produitRaw || "").toUpperCase();
+    if (p.includes("AMANA") || p.includes("COLIS")) return "AMANA";
+    if (p.includes("CO") || p.includes("ORDINAIRE")) return "CO";
+    if (p.includes("CR") || p.includes("RECOMMANDE") || p.includes("RECOMMANDÉ")) return "CR";
+    if (p.includes("BARKIA")) return "E-BARKIA";
+    if (p.includes("LRH") || p.includes("HYBRIDE")) return "LRH";
+    return "AUTRE";
+  };
+
+  // 🆕 Liste des produits uniques (GROUPÉS)
+  const uniqueProduits = useMemo(() => {
+    const groups = new Set();
+    (referentiel || []).forEach(r => {
+      const g = getGroupeProduit(r.produit);
+      if (g !== "AUTRE") groups.add(g);
+    });
+    // Ordre spécifique demandé
+    const order = ["AMANA", "CO", "CR", "E-BARKIA", "LRH"];
+    return Array.from(groups).sort((a, b) => {
+      const idxA = order.indexOf(a);
+      const idxB = order.indexOf(b);
+      // Si les deux sont dans l'ordre défini, on trie selon l'ordre
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      // Si un seul est dans l'ordre, il passe avant
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      // Sinon tri alphabétique
+      return a.localeCompare(b);
+    });
   }, [referentiel]);
 
   // 🆕 Paramètre Collecte (Local -> Global)
@@ -257,16 +293,25 @@ export default function VueIntervenant({
 
   // State for Import
   const [isImporting, setIsImporting] = useState(false);
+  const [hasAttemptedAutoImport, setHasAttemptedAutoImport] = useState(false);
 
-  const handleImportCanva = async () => {
+  // Reset auto-import flag when centre changes
+  useEffect(() => {
+    setHasAttemptedAutoImport(false);
+  }, [centre]);
+
+  const handleImportCanva = useCallback(async (isAuto = false) => {
     if (!centre) return;
 
     // Determine file based on Typology
     const cat = String(centreCategorie || "").toUpperCase();
     const isAmType = cat.includes("AM") || cat.includes("MESSAGERIE");
-    const fileName = isAmType ? "canva_CM_FES.xlsx" : "Canvas.xlsx";
+    const fileName = isAmType ? "canva_AM.xlsx" : "Canvas.xlsx";
 
-    if (!confirm(`Voulez-vous importer les tâches par défaut depuis le fichier ${fileName} ?\nCela ajoutera les tâches par défaut à ce centre.`)) return;
+    // Skip confirm if auto
+    if (!isAuto) {
+      if (!confirm(`Voulez-vous importer les tâches par défaut depuis le fichier ${fileName} ?\nCela ajoutera les tâches par défaut à ce centre.`)) return;
+    }
 
     try {
       setIsImporting(true);
@@ -282,7 +327,6 @@ export default function VueIntervenant({
       const res = await api.importTaches(centre, file);
 
       if (res.status === 'imported') {
-        // alert(`Import réussi : ${res.count} tâches importées.`);
         if (onRefresh) onRefresh();
       } else {
         throw new Error(res.message || "Erreur lors de l'import");
@@ -290,11 +334,31 @@ export default function VueIntervenant({
 
     } catch (err) {
       console.error(err);
-      alert("Erreur: " + err.message);
+      if (!isAuto) alert("Erreur: " + err.message);
     } finally {
       setIsImporting(false);
     }
-  };
+  }, [centre, centreCategorie, onRefresh]);
+
+  // Auto-import effect - Enabled with robust loading check (Step 1391)
+  const prevLoadingRepoRef = React.useRef(loading?.referentiel);
+
+  useEffect(() => {
+    const wasLoading = prevLoadingRepoRef.current;
+    const isLoading = loading?.referentiel;
+
+    // Detect transition from true -> false (Load Complete)
+    if (wasLoading && !isLoading) {
+      // Only if center selected, empty tasks, not importing, and not tried yet
+      if (centre && referentiel.length === 0 && !isImporting && !hasAttemptedAutoImport) {
+        console.log("🔄 Auto-importing tasks because referentiel is empty after load...");
+        setHasAttemptedAutoImport(true);
+        handleImportCanva(true);
+      }
+    }
+
+    prevLoadingRepoRef.current = isLoading;
+  }, [loading?.referentiel, centre, referentiel, isImporting, hasAttemptedAutoImport, handleImportCanva]);
 
   // ✅ OPTIMISATION : Debounce des valeurs pour éviter les recalculs excessifs
   const debouncedColis = useDebouncedValue(colis, 300);
@@ -528,14 +592,16 @@ export default function VueIntervenant({
     return 0;
   }
 
-  // 🔹 Filtrer le référentiel pour exclure les tâches avec moyenne_min = 0 ET filtrer par famille
+  // 🔹 Filtrer le référentiel pour exclure les tâches avec moyenne_min = 0 ET filtrer par famille ET produit
   const referentielFiltered = useMemo(() => {
-    return (referentiel || []).filter((row) => {
-      // const hasMin = Number(row.m ?? 0) > 0; // 🗑️ On garde meme si 0 selon demande
-      const matchFamille = !filterFamille || row.famille === filterFamille;
-      return matchFamille;
-    });
-  }, [referentiel, filterFamille]);
+    return (referentiel || [])
+      .filter((row) => {
+        const matchFamille = !filterFamille || row.famille === filterFamille;
+        const matchProduit = !filterProduit || getGroupeProduit(row.produit) === filterProduit;
+        return matchFamille && matchProduit;
+      })
+      .sort((a, b) => (Number(a.ordre ?? 999) - Number(b.ordre ?? 999)));
+  }, [referentiel, filterFamille, filterProduit]);
 
   const referentielDisplayData = useMemo(() => {
     // DEBUG: Check order values
@@ -879,6 +945,90 @@ export default function VueIntervenant({
       ...overrides
     });
   }, [onSimuler, colisParCollecte, colisAmanaParSac, courriersParSac, partParticuliers, tauxComplexite, natureGeo, edPercent, pctCollecte, pctRetour, pctInternational]);
+
+  // 🆕 Organigramme Data Logic (Aligné sur Bandoeng)
+  const orgChartData = useMemo(() => {
+    if (!hasSimulated || !postesOptions) return null;
+
+    // Helper for Chef
+    const isChef = (label) => {
+      const l = (label || "").toUpperCase();
+      return l.includes("CHEF DE CENTRE") || l.includes("RESPONSABLE DE CENTRE") || l.includes("DIRECTEUR");
+    };
+
+    // 1. Chef
+    const chefPoste = postesOptions.find(p => isChef(p.label));
+    const chef = {
+      name: chefPoste ? chefPoste.label : "Chef de Centre",
+      effectif: 1
+    };
+
+    // 2. MOI (Always based on Actual Postes structure)
+    const moiStaff = postesOptions
+      .filter(p => isMoiPoste(p) && !isChef(p.label))
+      .map(p => ({
+        name: p.label || p.nom_poste,
+        effectif: Math.round(Number(p.effectif_actuel || 0)),
+        type: p.type_poste,
+        category: "MOI"
+      }))
+      .filter(s => s.effectif > 0);
+
+    // 3. MOD (Task-Based or Scaled Actuals)
+    let modStaff = [];
+    const tasks = resultats || [];
+    const hasResponsibilities = tasks.some(t => t.responsable && t.responsable !== "0" && t.responsable.trim() !== "");
+
+    if (hasResponsibilities) {
+      // Task-Based Distribution (Like Bandoeng)
+      const modMap = new Map();
+      tasks.forEach(t => {
+        const resp = (t.responsable || "").trim();
+        if (resp && resp !== "0" && !isChef(resp)) {
+          if (!modMap.has(resp)) {
+            modMap.set(resp, {
+              name: resp,
+              heures: 0,
+              category: "MOD"
+            });
+          }
+          modMap.get(resp).heures += (t.heures_calculees || 0);
+        }
+      });
+
+      // Calculate total hours for MOD tasks specifically
+      const totalModHours = Array.from(modMap.values()).reduce((acc, s) => acc + s.heures, 0) || 1;
+      const targetFTE = kpiData.targetFinalMOD;
+
+      modStaff = Array.from(modMap.values())
+        .map(staff => {
+          // Proportional Share of Target FTE
+          const share = staff.heures / totalModHours;
+          return {
+            ...staff,
+            effectif: Math.round(share * targetFTE)
+          };
+        })
+        .filter(s => s.effectif > 0);
+
+    } else {
+      // Fallback: Scale Actual MOD Distribution
+      const actualModPostes = postesOptions.filter(p => !isMoiPoste(p) && !isChef(p.label));
+      const totalActualMod = actualModPostes.reduce((sum, p) => sum + Number(p.effectif_actuel || 0), 0);
+      const targetMod = kpiData.targetFinalMOD;
+
+      modStaff = actualModPostes.map(p => {
+        const share = totalActualMod > 0 ? (Number(p.effectif_actuel || 0) / totalActualMod) : 0;
+        return {
+          name: p.label || p.nom_poste,
+          effectif: Math.round(share * targetMod),
+          category: "MOD"
+        };
+      }).filter(s => s.effectif > 0);
+    }
+
+    return { chef, moiStaff, modStaff };
+  }, [hasSimulated, postesOptions, resultats, kpiData, isMoiPoste]);
 
   return (
     <div className="w-full flex flex-col gap-3 pb-16" style={{ zoom: "90%" }}>
@@ -1241,61 +1391,128 @@ export default function VueIntervenant({
         {showDetails && (
           <div className="flex flex-col gap-2">
             {/* 🆕 Filtre Famille (Déplacé ici pour ne pas décaler les tableaux) */}
-            <div className="flex items-center gap-2 bg-slate-50/80 p-1.5 rounded-lg border border-slate-100 self-start">
-              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Filtre Famille:</span>
-              <select
-                className="bg-white border border-slate-200 text-xs text-slate-700 rounded px-2 py-1 focus:outline-none focus:border-blue-500 w-full max-w-[240px]"
-                value={filterFamille}
-                onChange={e => setFilterFamille(e.target.value)}
-              >
-                <option value="">Toutes les familles ({uniqueFamilles.length})</option>
-                {uniqueFamilles.map(f => (
-                  <option key={f} value={f}>{f}</option>
-                ))}
-              </select>
-              {filterFamille && (
-                <button
-                  onClick={() => setFilterFamille("")}
-                  className="text-[10px] text-red-500 hover:text-red-700 font-medium px-2 py-1 bg-red-50 rounded border border-red-100 transition-colors"
-                  title="Effacer le filtre"
+            {/* 🆕 Filtres Famille & Produit */}
+            <div className="flex flex-wrap items-center gap-4 bg-slate-50/80 p-1.5 rounded-lg border border-slate-100 self-start">
+
+              {/* Filtre Famille */}
+              <div className="flex items-center gap-2">
+                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Filtre Famille:</span>
+                <select
+                  className="bg-white border text-ellipsis border-slate-200 text-xs text-slate-700 rounded px-2 py-1 focus:outline-none focus:border-blue-500 w-full max-w-[180px]"
+                  value={filterFamille}
+                  onChange={e => setFilterFamille(e.target.value)}
                 >
-                  ✕
-                </button>
-              )}
+                  <option value="">Toutes les familles ({uniqueFamilles.length})</option>
+                  {uniqueFamilles.map(f => (
+                    <option key={f} value={f}>{f}</option>
+                  ))}
+                </select>
+                {filterFamille && (
+                  <button
+                    onClick={() => setFilterFamille("")}
+                    className="text-[10px] text-red-500 hover:text-red-700 font-medium px-2 py-1 bg-red-50 rounded border border-red-100 transition-colors"
+                    title="Effacer le filtre famille"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              {/* Filtre Produit */}
+              <div className="flex items-center gap-2 border-l border-slate-200 pl-4">
+                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Filtre Produit:</span>
+                <select
+                  className="bg-white border text-ellipsis border-slate-200 text-xs text-slate-700 rounded px-2 py-1 focus:outline-none focus:border-blue-500 w-full max-w-[180px]"
+                  value={filterProduit}
+                  onChange={e => setFilterProduit(e.target.value)}
+                >
+                  <option value="">Tous les produits ({uniqueProduits.length})</option>
+                  {uniqueProduits.map(p => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
+                {filterProduit && (
+                  <button
+                    onClick={() => setFilterProduit("")}
+                    className="text-[10px] text-red-500 hover:text-red-700 font-medium px-2 py-1 bg-red-50 rounded border border-red-100 transition-colors"
+                    title="Effacer le filtre produit"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 relative items-start">
               {/* Référentiel */}
               {refDisplay === "tableau" ? (
                 referentiel.length === 0 && centre && !loading?.referentiel ? (
-                  <div className="bg-white rounded-l-lg p-6 min-h-[460px] flex flex-col items-center justify-center text-center border border-slate-200">
-                    <div className="mb-4 p-4 bg-slate-50 rounded-full">
-                      <Upload className="w-8 h-8 text-slate-400" />
+                  <div className="bg-white rounded-l-lg p-6 min-h-[460px] flex flex-col items-center justify-center text-center border border-slate-200 relative overflow-hidden">
+                    {/* Background decorations */}
+                    <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none">
+                      <Upload className="w-64 h-64 text-blue-600" />
                     </div>
-                    <h3 className="text-lg font-semibold text-slate-800 mb-2">Aucune tâche définie</h3>
-                    <p className="text-sm text-slate-500 mb-6 max-w-xs mx-auto">
-                      Ce centre ne contient aucune tâche dans la base de données.
-                    </p>
-                    <button
-                      onClick={handleImportCanva}
-                      disabled={isImporting}
-                      className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white transition-colors bg-[#005EA8] border border-transparent rounded-md shadow-sm hover:bg-[#004E8A] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed gap-2"
-                    >
-                      {isImporting ? (
-                        <>
-                          <span className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                          Importation...
-                        </>
-                      ) : (
-                        <>
-                          <Upload className="w-4 h-4" />
-                          Importer {isAM ? "Canva CM FES" : "Canvas"}
-                        </>
-                      )}
-                    </button>
-                    <p className="text-xs text-slate-400 mt-4">
-                      Charge le fichier '{isAM ? "canva_CM_FES.xlsx" : "Canvas.xlsx"}' depuis le dossier public
-                    </p>
+
+                    {isImporting ? (
+                      <div className="flex flex-col items-center w-full max-w-sm z-10 animate-in fade-in zoom-in duration-300">
+                        <div className="relative mb-8">
+                          <div className="absolute inset-0 bg-blue-100 rounded-full animate-ping opacity-75"></div>
+                          <div className="relative bg-white p-4 rounded-full shadow-lg border-4 border-blue-50">
+                            <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+                          </div>
+                        </div>
+
+                        <h3 className="text-xl font-bold text-slate-800 mb-2">Importation en cours</h3>
+                        <p className="text-sm text-slate-500 mb-6">
+                          Nous configurons les tâches par défaut pour ce centre. <br />Cela peut prendre quelques secondes.
+                        </p>
+
+                        {/* Simulated Progress Bar */}
+                        <div className="w-full bg-slate-100 rounded-full h-2.5 mb-2 overflow-hidden">
+                          <div className="bg-blue-600 h-2.5 rounded-full animate-[progress_2s_ease-in-out_infinite] w-full origin-left scale-x-0" style={{ animationFillMode: 'forwards' }}></div>
+                        </div>
+                        <div className="flex justify-between w-full text-[10px] text-slate-400 font-medium px-1">
+                          <span>Initialisation</span>
+                          <span>Lecture fichier</span>
+                          <span>Finalisation</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center z-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <div className="mb-6 p-5 bg-blue-50 rounded-2xl shadow-sm border border-blue-100">
+                          <Upload className="w-10 h-10 text-blue-600" />
+                        </div>
+                        <h3 className="text-xl font-bold text-slate-800 mb-3">Aucune tâche active</h3>
+                        <p className="text-sm text-slate-500 mb-8 max-w-xs leading-relaxed">
+                          Ce centre ne contient pas encore de tâches. <br />
+                          Importez le modèle par défaut pour commencer la simulation.
+                        </p>
+
+                        <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 w-full max-w-xs mb-6">
+                          <div className="flex items-center gap-3 mb-2">
+                            <div className="w-8 h-8 rounded bg-green-100 flex items-center justify-center shrink-0">
+                              <span className="text-xs font-bold text-green-700">XLS</span>
+                            </div>
+                            <div className="text-left">
+                              <div className="text-xs font-semibold text-slate-700">{isAM ? "Modèle Messagerie (AM)" : "Modèle Standard"}</div>
+                              <div className="text-[10px] text-slate-400">Configuration automatique</div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={() => handleImportCanva(false)}
+                          className="group relative px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow-md hover:shadow-lg transition-all active:scale-95 overflow-hidden"
+                        >
+                          <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]"></div>
+                          <span className="flex items-center gap-2 relative z-10">
+                            <Upload className="w-4 h-4" />
+                            Lancer l'importation
+                          </span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="bg-white rounded-l-lg p-1.5 min-h-[460px]">
@@ -1303,7 +1520,7 @@ export default function VueIntervenant({
                       title="Référentiel Temps"
                       subtitle={
                         <div className="flex items-center gap-2">
-                          <span>{filterFamille ? `Filtre: ${filterFamille}` : "Base de calcul"}</span>
+                          <span>{(filterFamille || filterProduit) ? `Filtres: ${[filterFamille, filterProduit].filter(Boolean).join(" | ")}` : "Base de calcul"}</span>
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200">
                             {referentielDisplayData.length} tâche{referentielDisplayData.length > 1 ? 's' : ''}
                           </span>
@@ -1324,7 +1541,7 @@ export default function VueIntervenant({
                       ]}
                       data={referentielDisplayData.map((r, i) => ({
                         seq: r.ordre || i + 1, // Utiliser l'ordre DB ou fallback sur séquentiel
-                        p: (r.produit || "").replace(/Arrivé|Arrive|Reçu|Recu|Dépôt|Dépot|Depot|MED/gi, "").trim(), // ✅ Clean Produit (sans Arrivé/Reçu/Dépôt/MED)
+                        p: (r.produit || "").replace(/Arrivé|Arrive|Reçu|Recu|Dépôt|Dépot|Depot|MED|AXES|LOCAL/gi, "").trim(), // ✅ Clean Produit (sans Arrivé/Reçu/Dépôt/MED/AXES/LOCAL)
                         f: r.famille || "",
                         t: (r.t || "").replace(/\s*\([^)]*\)/g, "").trim(),
                         ph: r.ph && String(r.ph).trim().toLowerCase() !== "n/a" ? r.ph : "",
@@ -1582,7 +1799,7 @@ export default function VueIntervenant({
         )}
 
         {/* 🆕 Organigramme Button & Dialog */}
-        {showDetails && hasSimulated && !poste && (
+        {showDetails && hasSimulated && isGlobalView && (
           <div className="flex justify-center mt-2">
             <Dialog>
               <DialogTrigger asChild>
@@ -1611,22 +1828,13 @@ export default function VueIntervenant({
                   </DialogTitle>
                 </DialogHeader>
                 <div className="flex-1 w-full min-h-0 relative bg-slate-50/30">
-                  <OrganizationalChart
-                    chefCentre={{
-                      name: (postesOptions || []).find(p => (p.label || "").toUpperCase().includes("CHEF"))?.label || "Chef de Centre",
-                      effectif: 1
-                    }}
-                    moiStaff={(postesOptions || []).filter(p => isMoiPoste(p) && !(p.label || "").toUpperCase().includes("CHEF")).map(p => ({
-                      name: p.label || p.nom_poste,
-                      effectif: Math.round(Number(p.effectif_actuel || 0)),
-                      type: p.type_poste
-                    }))}
-                    modStaff={(postesOptions || []).filter(p => !isMoiPoste(p)).map(p => ({
-                      name: p.label || p.nom_poste,
-                      effectif: Math.round((Number(p.effectif_actuel || 0) / (totalEffectifCentreStats.mod || 1)) * kpiData.targetFinalMOD), // Distribute calculated MOD
-                      heures: 0 // Placeholder
-                    })).filter(s => s.effectif > 0)}
-                  />
+                  {orgChartData && (
+                    <OrganizationalChart
+                      chefCentre={orgChartData.chef}
+                      moiStaff={orgChartData.moiStaff}
+                      modStaff={orgChartData.modStaff}
+                    />
+                  )}
                 </div>
               </DialogContent>
             </Dialog>

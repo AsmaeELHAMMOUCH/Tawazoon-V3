@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 import {
-    Layers, Upload, Trash2, Edit2, Check, X
+    Layers, Upload, Trash2, Edit2, Check, X, Download
 } from 'lucide-react';
 
 export default function CentersTasksManager() {
@@ -75,22 +75,45 @@ export default function CentersTasksManager() {
             .finally(() => setLoading(false));
     };
 
+    const handleDownloadTemplate = async () => {
+        try {
+            const blob = await api.getImportTemplate();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = "modele_taches_centre.xlsx";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        } catch (e) {
+            alert("Erreur téléchargement modèle: " + e.message);
+        }
+    };
+
     const handleImport = async (e) => {
         const file = e.target.files[0];
-        e.target.value = null;
 
         if (!file || !selectedCentre) return;
-        if (!selectedPoste) {
-            alert("Veuillez sélectionner un Poste pour importer les tâches.");
+
+        // No check for selectedPoste anymore (it's global for centre)
+        if (!window.confirm("Cet import mettra à jour les tâches pour ce centre en utilisant le modèle Excel (colonnes Responsable 1/2). \nCela peut modifier les chronos et responsables existants. Continuer ?")) {
+            e.target.value = null;
             return;
         }
 
         try {
-            await api.importTaches(selectedCentre, file, selectedPoste);
-            alert("Import réussi !");
+            setLoading(true);
+            const res = await api.importTasksFromTemplate(selectedCentre, file);
+            alert(`Import Réussi :\n- ${res.updated_count} tâches mises à jour\n- ${res.duplicate_count} doublons gérés\n- ${res.not_found_count} non trouvées\n\n(Détails dans la console si erreurs)`);
+            if (res.errors && res.errors.length > 0) {
+                console.warn("Import Errors:", res.errors);
+            }
             loadTaches();
         } catch (e) {
             alert("Erreur import: " + e.message);
+        } finally {
+            setLoading(false);
+            e.target.value = null;
         }
     };
 
@@ -225,28 +248,34 @@ export default function CentersTasksManager() {
 
                             <div className="flex gap-2">
                                 <button
+                                    onClick={handleDownloadTemplate}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm transition-all"
+                                    title="Télécharger le modèle Excel"
+                                >
+                                    <Download className="w-3.5 h-3.5 text-green-600" />
+                                    <span>Modèle</span>
+                                </button>
+
+                                <button
                                     onClick={handleEditClick}
                                     className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm transition-all"
                                     title="Modifier les informations du centre"
                                 >
                                     <Edit2 className="w-3.5 h-3.5 text-blue-600" />
-                                    <span>Modifier Centre</span>
+                                    <span>Centre</span>
                                 </button>
 
                                 <label className={`
                                     flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all shadow-sm border
-                                    ${selectedPoste
-                                        ? 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer hover:border-slate-300'
-                                        : 'bg-slate-50 border-transparent text-slate-300 cursor-not-allowed'}
+                                    bg-white border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer hover:border-slate-300
                                 `}>
                                     <Upload className="w-3.5 h-3.5" />
-                                    <span>Importer Excel</span>
+                                    <span>Import Global</span>
                                     <input
                                         type="file"
                                         accept=".xlsx"
                                         className="hidden"
                                         onChange={handleImport}
-                                        disabled={!selectedPoste}
                                     />
                                 </label>
                             </div>

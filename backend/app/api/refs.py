@@ -2,7 +2,7 @@
 from typing import List, Optional, Literal
 from pydantic import BaseModel
 
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException, Body
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -319,7 +319,8 @@ def list_postes(
             ORDER BY p.label
         """
         rows = db.execute(text(sql), {"centre_id": centre_id}).mappings().all()
-        print(f"DEBUG POSTES CENTRE {centre_id}: {[dict(r) for r in rows if r['centre_poste_id'] == 13627 or 'FACTEUR' in str(r['label'])]}") # Filtrer pour ne pas spammer
+        print(f"DEBUG: list_postes centre_id={centre_id} -> Found {len(rows)} rows")
+        # print(f"DEBUG POSTES CENTRE {centre_id}: {[dict(r) for r in rows if r['centre_poste_id'] == 13627 or 'FACTEUR' in str(r['label'])]}") # Filtrer pour ne pas spammer
 
     else:
         sql = """
@@ -390,6 +391,7 @@ def get_taches(
             t.centre_poste_id,
             t.produit,
             t.base_calcul,
+            t.ordre,
             p.label as poste_label,
             p.label as nom_poste, -- ✅ Alias pour compatibilité frontend
             p.type_poste -- ✅ Ajout type_poste
@@ -404,7 +406,7 @@ def get_taches(
         query += " AND cp.poste_id = :poste_id"
         params["poste_id"] = poste_id
 
-    # query += " ORDER BY t.ordre ASC, t.id ASC"
+    query += " ORDER BY t.ordre ASC, t.id ASC"
 
     rows = db.execute(text(query), params).mappings().all()
     if rows:
@@ -487,9 +489,19 @@ class PosteUpdate(BaseModel):
     centre_poste_id: int
     etp_arrondi: float
 
+class VolumesAnnuelsInput(BaseModel):
+    courrier_ordinaire: float = 0
+    courrier_recommande: float = 0
+    amana: float = 0
+    ebarkia: float = 0
+    lrh: float = 0
+    sacs: float = 0
+    colis: float = 0
+
 class UpdateCategorisationInput(BaseModel):
     categorisation_id: int
     postes: Optional[List[PosteUpdate]] = None
+    volumes: Optional[VolumesAnnuelsInput] = None
 
 @router.put("/centres/{centre_id}/categorisation")
 def update_centre_categorisation(
@@ -524,13 +536,77 @@ def update_centre_categorisation(
                 cp.effectif_actuel = int(p_data.etp_arrondi)
                 updated_postes += 1
 
+    # 3. Mise à jour des volumes de référence (si fournis)
+    if input.volumes:
+        vol_ref = db.query(db_models.CentreVolumeRef).filter(db_models.CentreVolumeRef.centre_id == centre_id).first()
+        if not vol_ref:
+            vol_ref = db_models.CentreVolumeRef(centre_id=centre_id)
+            db.add(vol_ref)
+        
+        vol_ref.courrier_ordinaire = input.volumes.courrier_ordinaire
+        vol_ref.courrier_recommande = input.volumes.courrier_recommande
+        vol_ref.amana = input.volumes.amana
+        vol_ref.ebarkia = input.volumes.ebarkia
+        vol_ref.lrh = input.volumes.lrh
+        vol_ref.sacs = input.volumes.sacs
+        vol_ref.colis = input.volumes.colis
+
     db.commit()
     
     return {
         "status": "success", 
         "centre_id": centre_id, 
         "id_categorisation": centre.id_categorisation,
-        "updated_postes": updated_postes
+        "updated_postes": updated_postes,
+        "volumes_persisted": True if input.volumes else False
+    }
+
+@router.get("/centres/{centre_id}/volumes")
+def get_centre_volumes(centre_id: int, db: Session = Depends(get_db)):
+    """
+    Récupère les volumes de référence d'un centre.
+    """
+    vol_ref = db.query(db_models.CentreVolumeRef).filter(db_models.CentreVolumeRef.centre_id == centre_id).first()
+    if not vol_ref:
+        return {
+            "courrier_ordinaire": 0,
+            "courrier_recommande": 0,
+            "amana": 0,
+            "ebarkia": 0,
+            "lrh": 0,
+            "sacs": 0,
+            "colis": 0
+        }
+    
+    return {
+        "courrier_ordinaire": vol_ref.courrier_ordinaire,
+        "courrier_recommande": vol_ref.courrier_recommande,
+        "amana": vol_ref.amana,
+        "ebarkia": vol_ref.ebarkia,
+        "lrh": vol_ref.lrh,
+        "sacs": vol_ref.sacs,
+        "colis": vol_ref.colis
     }
 
 
+@router.put("/centres/{centre_id}/typologie")
+def update_centre_typology(
+    centre_id: int, 
+    typology_id: int = Body(..., embed=True), 
+    db: Session = Depends(get_db)
+):
+    """
+    Met à jour la typologie (categorie_id) d'un centre (AM, CCC, etc.)
+    """
+    centre = db.query(db_models.Centre).filter(db_models.Centre.id == centre_id).first()
+    if not centre:
+        raise HTTPException(status_code=404, detail="Centre non trouvé")
+    
+    centre.categorie_id = typology_id
+    db.commit()
+    
+    return {
+        "status": "success", 
+        "centre_id": centre_id, 
+        "categorie_id": centre.categorie_id
+    }

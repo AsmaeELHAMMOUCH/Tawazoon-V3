@@ -78,6 +78,7 @@ class BandoengTaskOut(BaseModel):
     responsable: str
     moy_sec: float
     centre_poste_id: int
+    ordre: int = 9999
 
 class BandoengSimulateResponse(BaseModel):
     tasks: List[BandoengTaskOut]
