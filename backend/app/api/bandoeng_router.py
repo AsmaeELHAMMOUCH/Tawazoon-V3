@@ -78,6 +78,7 @@ class BandoengTaskOut(BaseModel):
     responsable: str
     moy_sec: float
     centre_poste_id: int
+    phase: Optional[str] = None
 
 class BandoengSimulateResponse(BaseModel):
     tasks: List[BandoengTaskOut]
@@ -130,6 +131,7 @@ def simulate_bandoeng(request: BandoengSimulateRequest, db: Session = Depends(ge
             shift=request.params.shift
         )
         
+        print(f"DEBUG: simulate_bandoeng received grid_values: {request.volumes.grid_values}")
         result = run_bandoeng_simulation(db, request.centre_id, volumes, params, request.poste_code)
         
         # Convert Engine Result to Response
@@ -148,7 +150,8 @@ def simulate_bandoeng(request: BandoengSimulateRequest, db: Session = Depends(ge
                 famille=t.famille,
                 responsable=t.responsable,
                 moy_sec=t.moy_sec,
-                centre_poste_id=t.centre_poste_id
+                centre_poste_id=t.centre_poste_id,
+                phase=t.phase
             ) for t in result.tasks
         ]
         
@@ -168,6 +171,114 @@ def simulate_bandoeng(request: BandoengSimulateRequest, db: Session = Depends(ge
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- NEW: Simplified Endpoint for VueIntervenant ---
+class SimplifiedBandoengRequest(BaseModel):
+    """
+    Structure simplifiée pour VueIntervenant.
+    Accepte directement grid_values et parameters au lieu de volumes/params imbriqués.
+    """
+    centre_id: int = Field(default=1942, description="ID du centre")
+    poste_code: Optional[str] = Field(default=None, description="Code du poste (optionnel)")
+    grid_values: dict = Field(default_factory=dict, description="Valeurs de la grille Bandoeng")
+    parameters: dict = Field(default_factory=dict, description="Paramètres de simulation")
+
+@router.post("/simulate-bandoeng", response_model=BandoengSimulateResponse)
+def simulate_bandoeng_direct(request: SimplifiedBandoengRequest, db: Session = Depends(get_db)):
+    """
+    Endpoint simplifié utilisant bandoeng_engine.py directement.
+    Conçu pour VueIntervenant avec une structure de requête plus simple.
+    """
+    try:
+        # 1. Construire BandoengInputVolumes avec grid_values
+        volumes = BandoengInputVolumes(
+            grid_values=request.grid_values,
+            # Champs legacy non utilisés avec grid_values
+            amana_import=0.0,
+            amana_export=0.0,
+            courrier_ordinaire_import=0.0,
+            courrier_ordinaire_export=0.0,
+            courrier_recommande_import=0.0,
+            courrier_recommande_export=0.0,
+            gare_import=0.0,
+            gare_export=0.0,
+            presse_import=0.0,
+            presse_export=0.0
+        )
+        
+        # 2. Construire BandoengParameters depuis le dict parameters
+        p = request.parameters
+        params = BandoengParameters(
+            pct_sac=p.get('pct_sac', 60.0),
+            colis_amana_par_canva_sac=p.get('colis_amana_par_canva_sac', 35.0),
+            nbr_co_sac=p.get('nbr_co_sac', 350.0),
+            nbr_cr_sac=p.get('nbr_cr_sac', 400.0),
+            coeff_circ=p.get('taux_complexite', 1.0),  # Alias frontend
+            coeff_geo=p.get('nature_geo', 1.0),  # Alias frontend
+            pct_retour=p.get('pct_retour', 0.0),
+            pct_collecte=p.get('pct_collecte', 0.0),
+            pct_axes=p.get('pct_axes_arrivee', 0.0),  # Alias frontend
+            pct_local=p.get('pct_axes_depart', 0.0),  # Alias frontend
+            pct_international=p.get('pct_international', 0.0),
+            pct_national=p.get('pct_national', 100.0),
+            pct_march_ordinaire=p.get('pct_marche_ordinaire', 0.0),
+            productivite=p.get('productivite', 100.0),
+            idle_minutes=p.get('idle_minutes', 0.0),
+            ratio_trieur=p.get('ratio_trieur', 1200.0),
+            ratio_preparateur=p.get('ratio_preparateur', 1000.0),
+            ratio_magasinier=p.get('ratio_magasinier', 800.0),
+            shift=int(p.get('shift', 1))
+        )
+        
+        print(f"DEBUG: simulate_bandoeng_direct received grid_values: {request.grid_values}")
+        # 3. Appeler run_bandoeng_simulation
+        result = run_bandoeng_simulation(
+            db=db,
+            centre_id=request.centre_id,
+            volumes=volumes,
+            params=params,
+            poste_code=request.poste_code
+        )
+        
+        # 4. Convertir le résultat
+        tasks_out = [
+            BandoengTaskOut(
+                task_id=t.task_id,
+                task_name=t.task_name,
+                unite_mesure=t.unite_mesure,
+                produit=t.produit,
+                moyenne_min=t.moyenne_min,
+                volume_source=t.volume_source,
+                volume_annuel=t.volume_annuel,
+                volume_journalier=t.volume_journalier,
+                heures_calculees=t.heures_calculees,
+                formule=t.formule,
+                famille=t.famille,
+                responsable=t.responsable,
+                moy_sec=t.moy_sec,
+                centre_poste_id=t.centre_poste_id,
+                phase=t.phase
+            ) for t in result.tasks
+        ]
+        
+        return BandoengSimulateResponse(
+            tasks=tasks_out,
+            total_heures=result.total_heures,
+            heures_net_jour=result.heures_net_jour,
+            fte_calcule=result.fte_calcule,
+            fte_arrondi=result.fte_arrondi,
+            besoin_trieur=result.besoin_trieur,
+            besoin_preparateur=result.besoin_preparateur,
+            besoin_magasinier=result.besoin_magasinier,
+            total_ressources_humaines=result.total_ressources_humaines
+        )
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Erreur simulation Bandoeng: {str(e)}")
+
 
 
 # --- New Response Model for Centre Details ---

@@ -22,7 +22,7 @@ import {
   LineChart,
   TrendingDown,
 } from "lucide-react";
-import { api } from "@/lib/api";
+import { api, downloadBandoengVolumesTemplate, importBandoengVolumes } from "@/lib/api";
 import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
 import { initChartsTheme } from "./chartsTheme";
@@ -143,6 +143,8 @@ const sep = (v) =>
   (typeof v === "number" ? v : Number(v)).toLocaleString("fr-FR", {
     maximumFractionDigits: 2,
   });
+
+
 
 ////////// RÈGLES DE GESTION DES CHAMPS PAR CATÉGORIE //////////
 const FIELD_KEYS = ["sacs", "colis", "courrier", "ebarkia", "lrh"];
@@ -1305,6 +1307,10 @@ export default function SimulationEffectifs() {
     return fromState || fromQuery || "national";
   });
 
+  // 🆕 Paramètres supplémentaires Bandoeng (via BandoengParameters)
+  const [colisAmanaParCanvaSac, setColisAmanaParCanvaSac] = useState(35);
+  // nbrCoSac et nbrCrSac proviennent de useSimulationParams
+
   // Sync state from location updates (Sidebar navigation)
   useEffect(() => {
     const stateFlux = (location.state || {}).flux;
@@ -1362,12 +1368,155 @@ export default function SimulationEffectifs() {
     pctAxesArrivee, setPctAxesArrivee,
     pctAxesDepart, setPctAxesDepart,
     shift, setShift,
+    // 🆕 Bandoeng Grid
+    bandoengGridValues, setBandoengGridValues,
   } = useSimulationParams();
+
+  // 🆕 Helper: Handle Grid Change (Cell Update)
+  const handleGridChange = (path, value) => {
+    setBandoengGridValues((prev) => {
+      const newState = { ...prev };
+
+      // Navigate to the parent object
+      let current = newState;
+      for (let i = 0; i < path.length - 1; i++) {
+        current[path[i]] = { ...current[path[i]] };
+        current = current[path[i]];
+      }
+
+      const lastKey = path[path.length - 1];
+      current[lastKey] = value;
+
+      // 🧠 Auto-calculation Logic
+      const section = path[0]; // amana, cr, co
+      const flow = path[1]; // depot/med or recu/arrive
+
+      // Check if it's a field that requires calculation (ignore ebarkia, lrh)
+      if (['amana', 'cr', 'co'].includes(section)) {
+
+        // 1️⃣ Global Modified -> Calculate Local & Axes
+        if (lastKey === "global") {
+          const globalVal = parseFloat(String(value).replace(',', '.')) || 0;
+
+          // Determine percentage to use
+          let pctLocal = 0;
+          let pctAxes = 0;
+
+          // Depart Logic (med/depot) -> Uses pctAxesDepart (Label: % Local)
+          if (flow === 'depot' || flow === 'med') {
+            pctLocal = Number(pctAxesDepart || 0);
+            pctAxes = Math.max(0, 100 - pctLocal);
+          }
+          // Arrive Logic (recu/arrive) -> Uses pctAxesArrivee (Label: % Axes)
+          else if (flow === 'recu' || flow === 'arrive') {
+            pctAxes = Number(pctAxesArrivee || 0);
+            pctLocal = Math.max(0, 100 - pctAxes);
+          }
+
+          if (current.local !== undefined && current.axes !== undefined) {
+            const localVal = Math.round(globalVal * (pctLocal / 100));
+            const axesVal = Math.round(globalVal * (pctAxes / 100));
+            current.local = localVal.toString();
+            current.axes = axesVal.toString();
+          }
+        }
+
+        // 2️⃣ Local or Axes Modified -> Recalculate Global
+        if (lastKey === "local" || lastKey === "axes") {
+          const localVal = parseFloat(String(current.local || 0).replace(',', '.')) || 0;
+          const axesVal = parseFloat(String(current.axes || 0).replace(',', '.')) || 0;
+          current.global = Math.round(localVal + axesVal).toString();
+        }
+      }
+
+      return newState;
+    });
+  };
+
+  // 🆕 Auto-recalculate Grid when Percentages Change
+  useEffect(() => {
+    if (!bandoengGridValues) return;
+
+    setBandoengGridValues(prev => {
+      const newState = JSON.parse(JSON.stringify(prev)); // Deep copy
+
+      const sections = ['amana', 'cr', 'co'];
+
+      sections.forEach(section => {
+        if (!newState[section]) return;
+
+        // Traverse to find 'global' fields and recalculate
+        const traverse = (node, flowType) => {
+          if (node.global !== undefined && node.local !== undefined && node.axes !== undefined) {
+            const globalVal = parseFloat(String(node.global).replace(',', '.')) || 0;
+            if (globalVal > 0) {
+              let pctLocal = 0;
+              let pctAxes = 0;
+
+              // Depart Logic
+              if (flowType === 'depot' || flowType === 'med') {
+                pctLocal = Number(pctAxesDepart || 0);
+                pctAxes = Math.max(0, 100 - pctLocal);
+              }
+              // Arrive Logic
+              else if (flowType === 'recu' || flowType === 'arrive') {
+                pctAxes = Number(pctAxesArrivee || 0);
+                pctLocal = Math.max(0, 100 - pctAxes);
+              }
+
+              const localVal = Math.round(globalVal * (pctLocal / 100));
+              const axesVal = Math.round(globalVal * (pctAxes / 100));
+
+              // Only update if changed to avoid loops (though setBandoengGridValues handles react state)
+              node.local = localVal.toString();
+              node.axes = axesVal.toString();
+            }
+          } else {
+            Object.keys(node).forEach(key => {
+              // Propagate flowType if meaningful, or infer from key
+              const nextFlowType = (key === 'depot' || key === 'med' || key === 'recu' || key === 'arrive') ? key : flowType;
+              if (typeof node[key] === 'object' && node[key] !== null) {
+                traverse(node[key], nextFlowType);
+              }
+            });
+          }
+        };
+
+        traverse(newState[section], null);
+      });
+
+      return newState;
+    });
+  }, [pctAxesDepart, pctAxesArrivee]);
+
+  // 🆕 Helper: Handle Import Bandoeng
+  const handleImportBandoeng = useCallback(async (file) => {
+    try {
+      const data = await importBandoengVolumes(file);
+      if (data) {
+        setBandoengGridValues(data);
+        // alert("Données Bandoeng importées avec succès !");
+      }
+    } catch (e) {
+      console.error("Import Error:", e);
+      alert("Erreur lors de l'import : " + e.message);
+    }
+  }, [setBandoengGridValues]);
+
+  // 🆕 Helper: Handle Download Template
+  const handleDownloadTemplate = useCallback(async () => {
+    try {
+      await downloadBandoengVolumesTemplate();
+    } catch (e) {
+      console.error("Download Error:", e);
+      alert("Erreur téléchargement modèle");
+    }
+  }, []);
 
   const [pctCollecte, setPctCollecte] = usePersistedState("sim_pct_collecte", 5.0);
   const [pctRetour, setPctRetour] = usePersistedState("sim_pct_retour", 0.0);
   const [pctInternational, setPctInternational] = usePersistedState("sim_pct_international", 0);
-  const [pctNational, setPctNational] = usePersistedState("sim_pct_national", 0); // 🆕 Pct National
+  const [pctNational, setPctNational] = usePersistedState("sim_pct_national", 100); // 🆕 Pct National (Default 100%)
   const [pctMarcheOrdinaire, setPctMarcheOrdinaire] = usePersistedState("sim_pct_marche_ordinaire", 0); // 🆕 Pct MO
 
   const [categorie, setCategorie] = useState("Activité Postale");
@@ -2092,6 +2241,133 @@ export default function SimulationEffectifs() {
 
     // ✅ MODIFICATION: Utiliser DATA-DRIVEN pour la vue Intervenant (Poste spécifique) ET la vue Centre (Tous les postes)
     // La vue Direction utilisera toujours le moteur LEGACY pour l'instant
+
+    // --- BANDOENG DIRECT INTEGRATION (ID 1942 et autres tests) ---
+    // ✅ MODIF: On applique la logique Bandoeng si gridValues est présent ou par défaut pour cette vue
+    if (centre) {
+      console.log(`🚀 Simulation Bandoeng Direct (Centre ${centre})`);
+
+      // Resolve Poste Code (if specific post selected)
+      let posteCode = null;
+      if (pid) {
+        // Try to find code in postesList
+        // Note: api.js normalizePostes might not expose 'code' explicitly if it's not 'id'.
+        // We might need to check the raw object or hope 'label' is sufficient or 'id' is the code?
+        // Actually, for Bandoeng, we need the 'code' (e.g. 'REC')
+        const pObj = postesList.find(p => String(p.id) === String(pid));
+        // Fallback to label if code not found (risk? usually Bandoeng codes are short)
+        // Or if the ID itself is the code (string ids)
+        posteCode = pObj?.code || pObj?.label;
+        console.log("📍 Bandoeng Poste Filter:", posteCode);
+      }
+
+      const bandoengPayload = {
+        centre_id: Number(centre),
+        poste_code: posteCode, // Optional
+        grid_values: bandoengGridValues, // Directly from State
+        parameters: {
+          taux_complexite: Number(tauxComplexite || 1),
+          nature_geo: Number(natureGeo || 1),
+          pct_axes_arrivee: Number(pctAxesArrivee || 0),
+          pct_axes_depart: Number(pctAxesDepart || 0),
+          pct_national: Number(pctNational || 100),
+          pct_marche_ordinaire: Number(pctMarcheOrdinaire || 0),
+          pct_international: Number(pctInternational || 0),
+          // Bandoeng Specifics
+          pct_sac: 60.0, // Fixed default for now as per legacy? Or add state?
+          colis_amana_par_canva_sac: Number(colisAmanaParSac || 35),
+          nbr_co_sac: Number(nbrCoSac || 350),
+          nbr_cr_sac: Number(nbrCrSac || 400),
+          productivite: Number(productivite),
+          idle_minutes: Number(idleMinutes || 0),
+          shift: Number(shift || 1),
+          pct_collecte: Number(pctCollecte || 0),
+          pct_retour: Number(pctRetour || 0)
+        }
+      };
+
+      try {
+        const res = await api.simulateBandoengDirect(bandoengPayload);
+        console.log("✅ Résultat Bandoeng Direct:", res);
+
+        const rawTasks = res.tasks || [];
+        const tasks = rawTasks.map(t => ({
+          ...t,
+          id: t.task_id,
+          task: t.task_name,
+          unit: t.unite_mesure,
+          nombre_unite: t.volume_journalier,
+          heures: t.heures_calculees
+        }));
+
+        const tot = {
+          total_heures: res.total_heures || 0,
+          fte_calcule: res.fte_calcule || 0,
+          fte_arrondi: res.fte_arrondi || Math.round(res.fte_calcule || 0),
+          heures_net: res.heures_net_jour || heures_net_calculees
+        };
+
+        // 🔌 ADAPTATEUR : Aligner la structure sur celle attendue par VueCentre et VueIntervenant
+        let finalResObject = {
+          ...res,
+          details_taches: tasks, // VueIntervenant l'utilise via le memo 'tasks'
+          tasks: tasks,          // Backup
+          summary: tot           // Backup structure
+        };
+
+        // Si on est en vue centre (pid null), on groupe par poste
+        if (!pid) {
+          const grouped = {};
+          tasks.forEach(t => {
+            const cpId = t.centre_poste_id;
+            if (cpId) {
+              if (!grouped[cpId]) {
+                const pInfo = postesList.find(p => p.centre_poste_id === cpId) || {};
+                grouped[cpId] = {
+                  id: pInfo.id || cpId,
+                  poste_id: pInfo.id || cpId,
+                  centre_poste_id: cpId,
+                  poste_label: pInfo.label || `Poste ${cpId}`,
+                  total_heures: 0,
+                  etp_calcule: 0,
+                  etp_arrondi: 0,
+                  effectif_actuel: pInfo.effectif_actuel || 0,
+                  type_poste: pInfo.type_poste || 'MOD',
+                  effectif_statutaire: pInfo.effectif_actuel || 0,
+                  effectif_aps: pInfo.effectif_aps || 0,
+                  etp_statutaire: 0,
+                  etp_aps: 0
+                };
+              }
+              grouped[cpId].total_heures += (t.heures || 0);
+            }
+          });
+
+          const hNet = tot.heures_net || 8;
+          finalResObject.postes = Object.values(grouped).map(p => ({
+            ...p,
+            etp_calcule: hNet > 0 ? p.total_heures / hNet : 0,
+            etp_arrondi: Math.round(hNet > 0 ? p.total_heures / hNet : 0)
+          }));
+        }
+
+        setResultats(finalResObject);
+        setTotaux(tot);
+        setHasSimulated(true);
+        setSimDirty(false);
+
+      } catch (e) {
+        console.error("❌ Erreur Bandoeng Direct:", e);
+        setErr(e);
+        setResultats([]);
+        setTotaux(null);
+      } finally {
+        setLoading(l => ({ ...l, simulation: false }));
+      }
+      return; // STOP HERE
+    }
+    // ---------------------------------------------
+
     if (activeFlux === 'poste' || activeFlux === 'centre') {
       const resolvedID = pid ? (postesList.find(p => Number(p.id) === pid)?.centre_poste_id || pid) : null;
       const centreID = centre ? Number(centre) : null;
@@ -2103,6 +2379,8 @@ export default function SimulationEffectifs() {
       // 1. Préparation du payload VolumesUIInput (Commun)
       const volumes_flux = overrides.volumes_flux || [];
       const uiPayload = {
+        // --- Legacy Params ---
+        volumes_flux: volumesList,
         flux_arrivee: {
           amana: { GLOBAL: amana || 0, PART: 0, PRO: 0, DIST: 0, AXES: 0 },
           co: { GLOBAL: courrierOrdinaire || 0, PART: 0, PRO: 0, DIST: 0, AXES: 0 },
@@ -2118,32 +2396,27 @@ export default function SimulationEffectifs() {
           ebarkia: { GLOBAL: 0, PART: 0, PRO: 0, DIST: 0, AXES: 0 },
           lrh: { GLOBAL: 0, PART: 0, PRO: 0, DIST: 0, AXES: 0 }
         },
+        // --- New Unified Grid ---
+        grid_values: bandoengGridValues,
+
+        // --- Parameters ---
+        colis_amana_par_canva_sac: Number(colisAmanaParCanvaSac),
+        nbr_co_sac: Number(nbrCoSac),
+        nbr_cr_sac: Number(nbrCrSac),
+
         colis_amana_par_sac: Number(colisAmanaParSac || 5),
         courriers_par_sac: Number(courriersParSac || 4500),
-        courriers_co_par_sac: Number(nbrCoSac || 0), // 🆕
-        courriers_cr_par_sac: Number(nbrCrSac || 0), // 🆕
-        cr_par_caisson: Number(crParCaisson || 500), // 🆕
+        courriers_co_par_sac: Number(nbrCoSac || 0), // Alias logic
+        courriers_cr_par_sac: Number(nbrCrSac || 0), // Alias logic
+        cr_par_caisson: Number(crParCaisson || 500),
         colis_par_collecte: Number(colisParCollecte || 1),
+
         // 🆕 Paramètres Axes (Conversion % -> decimal)
         pct_axes_arrivee: Number(pctAxesArrivee ?? 40) / 100.0,
         pct_axes_depart: Number(pctAxesDepart ?? 30) / 100.0,
 
         // 🆕 Collecte & Retour (priorité override > state)
-        pct_collecte: Number(overrides.pct_collecte ?? pctCollecte ?? 5.0),
-        pct_retour: Number(overrides.pct_retour ?? pctRetour ?? 0.0),
-        pct_international: Number(overrides.pct_international ?? pctInternational ?? 0.0), // 🆕 International
-        pct_national: Number(overrides.pct_national ?? pctNational ?? 0.0), // 🆕 National
-        pct_marche_ordinaire: Number(overrides.pct_marche_ordinaire ?? pctMarcheOrdinaire ?? 0.0), // 🆕 MO
-
-        // 🆕 Shift (priorité override > state)
-        shift: Number(overrides.shift ?? shift ?? 1),
-
-        // 🆕 Coefficients de complexité (priorité aux overrides venant de VueIntervenant)
-        taux_complexite: overrides.taux_complexite !== undefined ? Number(overrides.taux_complexite) : Number(tauxComplexite || 1),
-        nature_geo: overrides.nature_geo !== undefined ? Number(overrides.nature_geo) : Number(natureGeo || 1),
-
-        nb_jours_ouvres_an: 264,
-        volumes_flux: volumes_flux // ✅ AJOUT : Nécessaire pour le contexte par famille
+        pct_collecte: Number(overrides.pct_collecte ?? pctCollecte ?? 5.0)
       };
 
       // Injection des granularités (si saisies dans le tableau)
@@ -2818,6 +3091,13 @@ export default function SimulationEffectifs() {
             setPctRetour={setPctRetour}
             pctCollecte={pctCollecte}
             setPctCollecte={setPctCollecte}
+            // 🆕 Unified Grid Props
+            gridValues={bandoengGridValues}
+            handleGridChange={handleGridChange}
+            onImportBandoeng={handleImportBandoeng}
+            onDownloadTemplate={handleDownloadTemplate}
+            colisAmanaParCanvaSac={colisAmanaParCanvaSac}
+            setColisAmanaParCanvaSac={setColisAmanaParCanvaSac}
             tauxComplexite={tauxComplexite}
             setTauxComplexite={setTauxComplexite}
             natureGeo={natureGeo}

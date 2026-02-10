@@ -42,8 +42,8 @@ export function useSimulationParams() {
   // Paramètres de performance
   const [productivite, setProductivite] = usePersistedState('sim_productivite', 100);
   const [idleMinutes, setIdleMinutes] = usePersistedState('sim_idleMinutes', 0);
-  const [tauxComplexite, setTauxComplexite] = usePersistedState('sim_tauxComplexite', 0);
-  const [natureGeo, setNatureGeo] = usePersistedState('sim_natureGeo', 0);
+  const [tauxComplexite, setTauxComplexite] = usePersistedState('sim_tauxComplexite', 1.0);
+  const [natureGeo, setNatureGeo] = usePersistedState('sim_natureGeo', 1.0);
 
   // Paramètres ED et ratios
   const [edPercent, setEdPercent] = usePersistedState('sim_edPercent', 60);
@@ -54,7 +54,7 @@ export function useSimulationParams() {
   // 🆕 Axes vs Distribution (pourcentages UI 0-100)
   const [pctAxesArrivee, setPctAxesArrivee] = usePersistedState('sim_pctAxesArrivee', 40);
   const [pctAxesDepart, setPctAxesDepart] = usePersistedState('sim_pctAxesDepart', 30);
-  
+
   // 🆕 Amana Specific (Image Request)
   const [pctRetenue, setPctRetenue] = usePersistedState('sim_pctRetenue', 1);
   const [pctEchantillon, setPctEchantillon] = usePersistedState('sim_pctEchantillon', 5);
@@ -65,16 +65,16 @@ export function useSimulationParams() {
 
   const [pctRetour, setPctRetour] = usePersistedState('sim_pctRetour', 0.0);
   const [pctInternational, setPctInternational] = usePersistedState('sim_pctInternational', 0.0);
-  
+
   // 🆕 Shift
   const [shift, setShift] = usePersistedState('sim_shift', 1);
 
   // Helpers UI (sacs)
-  const [nbrCoSac, setNbrCoSac] = usePersistedState('sim_nbrCoSac', 0);
-  const [nbrCrSac, setNbrCrSac] = usePersistedState('sim_nbrCrSac', 0);
+  const [nbrCoSac, setNbrCoSac] = usePersistedState('sim_nbrCoSac', 4500);
+  const [nbrCrSac, setNbrCrSac] = usePersistedState('sim_nbrCrSac', 500);
   // 🆕 Helpers UI (caisson)
   const [crParCaisson, setCrParCaisson] = usePersistedState('sim_crParCaisson', 500);
-  
+
   // Volumes journaliers (legacy)
   const [sacs, setSacs] = usePersistedState('sim_sacs', 0);
   const [colis, setColis] = usePersistedState('sim_colis', 0);
@@ -93,6 +93,30 @@ export function useSimulationParams() {
     arrivee: {},
     depart: {},
     depotRecup: {}
+  });
+
+  // 🆕 État détaillé pour le grid Bandoeng (Structure complexe)
+  const [bandoengGridValues, setBandoengGridValues] = usePersistedState('sim_bandoeng_grid_values', {
+    amana: {
+      depot: {
+        gc: { global: "", local: "", axes: "" },
+        part: { global: "", local: "", axes: "" }
+      },
+      recu: {
+        gc: { global: "", local: "", axes: "" },
+        part: { global: "", local: "", axes: "" }
+      }
+    },
+    cr: {
+      med: { global: "", local: "", axes: "" },
+      arrive: { global: "", local: "", axes: "" }
+    },
+    co: {
+      med: { global: "", local: "", axes: "" },
+      arrive: { global: "", local: "", axes: "" }
+    },
+    ebarkia: { med: "", arrive: "" },
+    lrh: { med: "", arrive: "" }
   });
 
   return {
@@ -115,7 +139,7 @@ export function useSimulationParams() {
     nbrCoSac, setNbrCoSac,
     nbrCrSac, setNbrCrSac,
     crParCaisson, setCrParCaisson,
-    
+
     // 🆕 Axes
     pctAxesArrivee, setPctAxesArrivee,
     pctAxesDepart, setPctAxesDepart,
@@ -146,5 +170,7 @@ export function useSimulationParams() {
 
     // Grille flux/segment
     volumesFluxGrid, setVolumesFluxGrid,
+    // 🆕 Grille Bandoeng
+    bandoengGridValues, setBandoengGridValues,
   };
 }

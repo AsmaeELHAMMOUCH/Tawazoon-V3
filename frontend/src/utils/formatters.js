@@ -16,7 +16,7 @@ export const fmt = (v) =>
 export const numOrNull = (val) => {
   if (val === null || val === undefined || val === "") return null;
   if (typeof val === "number") return Number.isFinite(val) ? val : null;
-  
+
   let s = String(val)
     .replace(/\s|[\u00A0\u202F]/g, "") // Remove spaces
     .replace(/[^0-9.,-]/g, ""); // Remove non-numeric chars except . , -
@@ -26,7 +26,7 @@ export const numOrNull = (val) => {
   // Handle comma vs dot
   const lastComma = s.lastIndexOf(",");
   const lastDot = s.lastIndexOf(".");
-  
+
   if (lastComma !== -1 && lastDot !== -1) {
     // If both present, assume last one is decimal separator
     const decIsComma = lastComma > lastDot;
@@ -39,7 +39,7 @@ export const numOrNull = (val) => {
     // Standardize comma to dot
     s = s.replace(/,/g, ".");
   }
-  
+
   const num = Number(s);
   return Number.isFinite(num) ? num : null;
 };
@@ -61,7 +61,7 @@ export const normalizeCentre = (row) => {
   const r = lower(row);
   const label = r.label ?? r.libelle ?? r.name ?? r.centre_label ?? `Centre`;
   const id = r.id ?? r.centre_id ?? r.cid;
-  
+
   return {
     id: id ? (Number(id) || id) : null,
     label,
@@ -79,11 +79,17 @@ export const normalizeCentre = (row) => {
 export const normalizePoste = (row) => {
   const r = lower(row);
   return {
-      label: r.label ?? r.poste_label ?? r.libelle ?? "Poste",
-      effectif_actuel: Number(r.effectif_actuel ?? r.fte_actuel ?? 0),
-      etp_calcule: Number(r.etp_calcule ?? r.fte_calcule ?? 0),
-      etp_arrondi: Number(r.etp_arrondi ?? 0),
-      ecart: Number(r.ecart ?? 0),
-      type_poste: r.type_poste ?? r.type ?? ""
+    label: r.label ?? r.poste_label ?? r.libelle ?? "Poste",
+    effectif_actuel: Number(r.effectif_actuel ?? r.fte_actuel ?? 0),
+    etp_calcule: Number(r.etp_calcule ?? r.fte_calcule ?? 0),
+    etp_arrondi: Number(r.etp_arrondi ?? 0),
+    ecart: Number(r.ecart ?? 0),
+    type_poste: r.type_poste ?? r.type ?? ""
   };
+};
+export const formatHoursMinutes = (decimalHours) => {
+  if (!decimalHours || isNaN(decimalHours)) return "0h 00";
+  const hours = Math.floor(decimalHours);
+  const minutes = Math.round((decimalHours - hours) * 60);
+  return `${hours}h ${minutes.toString().padStart(2, '0')}`;
 };

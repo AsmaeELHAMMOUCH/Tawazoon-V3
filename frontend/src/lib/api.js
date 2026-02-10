@@ -132,8 +132,9 @@ function normalizePostes(payload) {
         Array.isArray(payload?.items) ? payload.items :
           [];
   return list.map((p, i) => ({
-    id: p.id ?? p.poste_id ?? p.code ?? i,
-    label: p.label ?? p.name ?? p.nom ?? p.nom_poste ?? String(p.id ?? p.poste_id ?? p.code ?? i),
+    id: p.id ?? p.poste_id ?? p.code ?? p.Code ?? i,
+    label: p.label ?? p.name ?? p.nom ?? p.nom_poste ?? String(p.id ?? p.poste_id ?? p.code ?? p.Code ?? i),
+    code: p.code ?? p.Code ?? null,
     centre_id: p.centre_id ?? null,
     centre_poste_id: p.centre_poste_id ?? null,
     effectif_actuel: Number(p.effectif_actuel ?? p.effectif ?? 0),
@@ -606,6 +607,55 @@ export const api = {
     return await res.blob();
   },
 
+  // --- Bandoeng Simulation ---
+  simulateBandoengDirect: async (payload) => {
+    return await http("/bandoeng/simulate-bandoeng", { method: "POST", body: payload });
+  },
+
+  downloadBandoengVolumesTemplate: async () => {
+    const t = getToken();
+    const headers = {};
+    if (t) headers.Authorization = `Bearer ${t}`;
+
+    const res = await fetch(`${API_BASE}/bandoeng/import-template`, {
+      method: "GET",
+      headers
+    });
+
+    if (!res.ok) throw new Error("Erreur téléchargement modèle");
+    const blob = await res.blob();
+
+    // Create download link
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'Modele_Import_Volumes_Bandoeng.xlsx');
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  },
+
+  importBandoengVolumes: async (file) => {
+    const t = getToken();
+    const headers = {};
+    if (t) headers.Authorization = `Bearer ${t}`;
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const res = await fetch(`${API_BASE}/bandoeng/import/volume-grid`, {
+      method: "POST",
+      headers,
+      body: formData
+    });
+
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error(txt || "Erreur import volumes");
+    }
+    return await res.json();
+  },
+
   // --- National Simulation ---
   nationalSimulation: (params) => http("/national", { method: "POST", body: params }),
   importVolumesRef: (data) => http("/volumes/import-ref", { method: "POST", body: data }),
@@ -648,27 +698,27 @@ export const api = {
   updateTache: (id, data) => http(`/taches/${id}`, { method: 'PUT', body: data }),
   deleteTache: (id) => http(`/taches/${id}`, { method: 'DELETE' }),
   deleteTachesByCentre: (centreId) => http(`/taches/centre/${centreId}`, { method: 'DELETE' }),
-  
+
   importTaches: async (centreId, file, posteId = null) => {
     const t = getToken();
     const headers = {};
     if (t) headers.Authorization = `Bearer ${t}`;
-    
+
     const formData = new FormData();
     formData.append('file', file);
-    
+
     let url = `${API_BASE}/taches/import/${centreId}`;
     if (posteId) url += `?poste_id=${posteId}`;
-    
+
     const res = await fetch(url, {
-         method: 'POST',
-         headers, 
-         body: formData
+      method: 'POST',
+      headers,
+      body: formData
     });
-    
+
     if (!res.ok) {
-         const txt = await res.text();
-         throw new Error(txt || "Import Failed");
+      const txt = await res.text();
+      throw new Error(txt || "Import Failed");
     }
     return await res.json();
   },
@@ -687,3 +737,9 @@ export const api = {
 
 // Export par défaut pour compatibilité
 export default api;
+
+// Export des méthodes individuelles pour l'import destructuré
+export const {
+  downloadBandoengVolumesTemplate,
+  importBandoengVolumes
+} = api;
