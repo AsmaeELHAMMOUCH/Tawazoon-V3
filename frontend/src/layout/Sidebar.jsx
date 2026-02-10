@@ -60,20 +60,16 @@ export default function Sidebar({
 
   const commonElements = [
     { label: "Capacité Nominale", icon: FileText, key: "capacite-nominale" },
-    { label: "Normes", icon: ListChecks, key: "normes" },
     { label: "Référentiel", icon: BookText, key: "referentiel" },
     { label: "Schéma", icon: Workflow, key: "schema" },
-    { label: "Chronogramme", icon: TimerReset, key: "chronogramme" },
-    { label: "Catégorisation Des Centres", icon: Tag, key: "categorisation" },
   ];
 
   const simulationItems = [
     { label: "Par Intervenant", slug: "", flux: "poste" },
     { label: "Par Centre", slug: "centre", flux: "centre" },
     { label: "Par Région", slug: "direction", flux: "direction" },
-    { label: "National", slug: "national", flux: "national" },
-    { label: "Niveau Siège", slug: "region", flux: "siege" },
     { label: "Nationale", slug: "national", flux: "national" },
+    { label: "Niveau Siège", slug: "region", flux: "siege" },
     { label: "Centres Uniques", slug: "centres-uniques", flux: "centres-uniques" },
   ];
 
@@ -89,22 +85,8 @@ export default function Sidebar({
       icon: PiggyBank,
       path: "/app/vue-globale/economies-budgetaires",
     },
-    {
-      id: "projections",
-      label: "Projections",
-      icon: TrendingUp,
-    },
-    {
-      id: "admin-import",
-      label: "Mise à jour Tâches",
-      icon: Database,
-      path: "/app/admin/import-tasks"
-    },
-    {
-      label: "Comparatif Positions",
-      icon: ArrowLeftRight,
-      path: "/app/vue-globale/comparatif",
-    },
+
+
     {
       label: "Historique Simulations",
       icon: History,
@@ -438,6 +420,18 @@ export default function Sidebar({
               >
                 <span className="pointer-events-none absolute left-2 top-1.5 w-3 h-3 border-l border-t border-slate-200/80 rounded-tl" />
                 Gestion Postes
+              </button>
+
+              <button
+                onClick={() => handleNav('/app/centres-typologie')}
+                className={
+                  "relative w-full text-left rounded-md hover:bg-slate-100 text-gray-700 " +
+                  "pl-6 pr-2 py-[clamp(2px,0.25vw,4px)] " +
+                  "text-[clamp(9px,0.75vw,11px)] transition"
+                }
+              >
+                <span className="pointer-events-none absolute left-2 top-1.5 w-3 h-3 border-l border-t border-slate-200/80 rounded-tl" />
+                Typologie Centres
               </button>
             </div>
           )}

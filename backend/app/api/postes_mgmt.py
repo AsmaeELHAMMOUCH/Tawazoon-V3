@@ -466,6 +466,14 @@ async def _process_import(file: UploadFile, db: Session, target_centre_id: Optio
 def export_centre_template(centre_id: int, db: Session = Depends(get_db)):
     """Génère un template Excel pour un centre spécifique"""
     try:
+        from sqlalchemy.orm import joinedload
+        
+        # 1. Vérifier existence centre avec eager loading de la région
+        centre_info = db.query(Centre).options(joinedload(Centre.region)).filter(Centre.id == centre_id).first()
+        if not centre_info:
+            raise HTTPException(status_code=404, detail=f"Centre {centre_id} introuvable")
+
+        # 2. Récupérer les données
         query = text("""
             SELECT 
                 r.label as region,
@@ -474,28 +482,31 @@ def export_centre_template(centre_id: int, db: Session = Depends(get_db)):
                 COALESCE(cp.effectif_actuel, 0) as effectif_actuel
             FROM dbo.centre_postes cp
             JOIN dbo.centres c ON c.id = cp.centre_id
-            JOIN dbo.regions r ON r.id = c.region_id
+            LEFT JOIN dbo.regions r ON r.id = c.region_id
             JOIN dbo.postes p ON p.id = cp.poste_id
             WHERE cp.centre_id = :centre_id
             ORDER BY p.label
         """)
         rows = db.execute(query, {"centre_id": centre_id}).mappings().all()
         
-        # Récupérer les données du centre (notamment APS)
-        centre_info = db.query(Centre).filter(Centre.id == centre_id).first()
-        aps_value = centre_info.t_aps if centre_info else 0
+        # Récupérer APS
+        aps_value = centre_info.aps if centre_info.aps is not None else 0
         
-        data = [{
-            "REGION": r["region"],
-            "centre_label": r["centre_label"],
-            "POSTE": r["poste"],
-            "EFFECTIF_ACTUEL": r["effectif_actuel"],
-            "APS": aps_value
-        } for r in rows]
+        data = []
+        for r in rows:
+            data.append({
+                "REGION": r["region"] if r["region"] else "",
+                "centre_label": r["centre_label"],
+                "POSTE": r["poste"],
+                "EFFECTIF_ACTUEL": r["effectif_actuel"],
+                "APS": aps_value
+            })
         
-        if not data and centre_info:
+        # Si aucune donnée (centre sans postes), créer une ligne vide modèle
+        if not data:
+            region_label = centre_info.region.label if centre_info.region else ""
             data = [{
-                "REGION": centre_info.region.label if centre_info.region else "",
+                "REGION": region_label,
                 "centre_label": centre_info.label,
                 "POSTE": "",
                 "EFFECTIF_ACTUEL": 0,
@@ -503,17 +514,34 @@ def export_centre_template(centre_id: int, db: Session = Depends(get_db)):
             }]
             
         df = pd.DataFrame(data)
+        
+        # Ordonner les colonnes pour que le template soit propre
+        cols = ["REGION", "centre_label", "POSTE", "EFFECTIF_ACTUEL", "APS"]
+        # S'assurer que les colonnes existent
+        for c in cols:
+            if c not in df.columns:
+                df[c] = ""
+        df = df[cols]
+        
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             df.to_excel(writer, index=False, sheet_name='Effectifs Centre')
         
         output.seek(0)
         filename = f"template_effectifs_{centre_id}.xlsx"
-        return StreamingResponse(output, headers={'Content-Disposition': f'attachment; filename="{filename}"'}, media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        
+        return StreamingResponse(
+            output, 
+            headers={'Content-Disposition': f'attachment; filename="{filename}"'}, 
+            media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
         
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print(f"Erreur export template centre: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        # Renvoyer une erreur 500 explicite
+        raise HTTPException(status_code=500, detail=f"Erreur technique génération Excel: {str(e)}")
 
 
 @router.get("/export-template")

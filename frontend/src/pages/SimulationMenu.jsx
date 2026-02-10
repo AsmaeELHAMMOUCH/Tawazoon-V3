@@ -59,15 +59,14 @@ export default function MenuAnalyseEffectifs() {
       chipClass: CHIP_BLUE,
       items: [
         { icon: UserCog, title: "Simulation Par Intervenant", key: "simulation", flux: "poste" },
+        { icon: Sparkles, title: "Simulation Intervenant Avancée", key: "simulation-avancee", flux: "intervenant-avancee" },
         { icon: ClipboardList, title: "Simulation Par Centre", key: "simulation", flux: "centre" },
 
         { icon: Users, title: "Simulation par Région", key: "simulation", flux: "regional" },
         { icon: Building, title: "Simulation Nationale", key: "simulation", flux: "national" },
         { icon: FileText, title: "Capacité Nominale", key: "capacite-nominale" },
-        { icon: ListChecks, title: "Normes", key: "normes" },
         { icon: BookText, title: "Référentiel", key: "referentiel" },
         { icon: Workflow, title: "Schéma", key: "schema" },
-        { icon: TimerReset, title: "Chronogramme", key: "chronogramme" },
       ],
     },
     recommande: {
@@ -76,15 +75,14 @@ export default function MenuAnalyseEffectifs() {
       chipClass: CHIP_BLUE,
       items: [
         { icon: UserCog, title: "Simulation Par Intervenant", key: "simulation", flux: "poste" },
+        { icon: Sparkles, title: "Simulation Intervenant Avancée", key: "simulation-avancee", flux: "intervenant-avancee" },
         { icon: ClipboardList, title: "Simulation Par Centre", key: "simulation", flux: "centre" },
 
         { icon: Users, title: "Simulation par Région", key: "simulation", flux: "regional" },
         { icon: Building, title: "Simulation Nationale", key: "simulation", flux: "national" },
         { icon: FileText, title: "Capacité Nominale", key: "capacite-nominale" },
-        { icon: ListChecks, title: "Normes", key: "normes" },
         { icon: BookText, title: "Référentiel", key: "referentiel" },
         { icon: Workflow, title: "Schéma", key: "schema" },
-        { icon: TimerReset, title: "Chronogramme", key: "chronogramme" },
       ],
     },
   };
@@ -130,6 +128,11 @@ export default function MenuAnalyseEffectifs() {
         return navigate(routesByFlux[item.flux], { state: { flux: item.flux } });
       }
       return;
+    }
+
+    // Gestion de la simulation avancée
+    if (item.key === "simulation-avancee") {
+      return navigate("/app/simulation/intervenant-avancee", { state: { flux: "intervenant-avancee" } });
     }
 
 

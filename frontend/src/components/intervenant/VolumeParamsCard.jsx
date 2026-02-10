@@ -1241,61 +1241,67 @@ export default function VolumeParamsCard({
             </>
           )}
 
-          {/* 11. % Collecte */}
-          <div className={`flex items-center gap-1.5 min-w-[120px] flex-1 transition-opacity ${disabledAxes ? "opacity-60 grayscale" : ""}`}>
-            <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${(paramsDisabled || disabledAxes) ? "bg-slate-100 text-slate-400" : "bg-green-50 text-green-600"}`}>
-              <Package className="w-3 h-3" />
-            </div>
-            <div className="flex flex-col w-full">
-              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                % Collecte
-              </label>
-              <div className="flex items-center">
-                <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  disabled={paramsDisabled || disabledAxes}
-                  value={pctCollecte}
-                  onChange={(e) => {
-                    const v = e.target.value === "" ? 0 : Math.min(100, Math.max(0, Number(e.target.value)));
-                    setPctCollecte && setPctCollecte(v);
-                  }}
-                  className={`text-xs font-semibold focus:outline-none w-full text-center rounded ${(paramsDisabled || disabledAxes) ? "bg-slate-100 text-slate-400 cursor-not-allowed" : "bg-transparent text-slate-800"}`}
-                />
-                <span className="text-[10px] text-slate-400 font-bold">%</span>
+          {/* 11. % Collecte - Hide if AM (disabledAxes) */}
+          {!disabledAxes && (
+            <div className={`flex items-center gap-1.5 min-w-[120px] flex-1 transition-opacity ${disabledAxes ? "opacity-60 grayscale" : ""}`}>
+              <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${(paramsDisabled || disabledAxes) ? "bg-slate-100 text-slate-400" : "bg-green-50 text-green-600"}`}>
+                <Package className="w-3 h-3" />
+              </div>
+              <div className="flex flex-col w-full">
+                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                  % Collecte
+                </label>
+                <div className="flex items-center">
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    disabled={paramsDisabled || disabledAxes}
+                    value={pctCollecte}
+                    onChange={(e) => {
+                      const v = e.target.value === "" ? 0 : Math.min(100, Math.max(0, Number(e.target.value)));
+                      setPctCollecte && setPctCollecte(v);
+                    }}
+                    className={`text-xs font-semibold focus:outline-none w-full text-center rounded ${(paramsDisabled || disabledAxes) ? "bg-slate-100 text-slate-400 cursor-not-allowed" : "bg-transparent text-slate-800"}`}
+                  />
+                  <span className="text-[10px] text-slate-400 font-bold">%</span>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
-          <div className="w-px h-6 bg-slate-200 hidden md:block" />
+          {!disabledAxes && (
+            <div className="w-px h-6 bg-slate-200 hidden md:block" />
+          )}
 
-          {/* 12. % Retour */}
-          <div className="flex items-center gap-1.5 min-w-[120px] flex-1">
-            <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${paramsDisabled ? "bg-slate-100 text-slate-400" : "bg-indigo-50 text-indigo-600"}`}>
-              <ArrowLeftRight className="w-3 h-3" />
-            </div>
-            <div className="flex flex-col w-full">
-              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                % Retour
-              </label>
-              <div className="flex items-center">
-                <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  disabled={paramsDisabled}
-                  value={pctRetour}
-                  onChange={(e) => {
-                    const v = e.target.value === "" ? 0 : Math.min(100, Math.max(0, Number(e.target.value)));
-                    setPctRetour && setPctRetour(v);
-                  }}
-                  className={`text-xs font-semibold focus:outline-none w-full text-center ${paramsDisabled ? "bg-transparent text-slate-400 cursor-not-allowed" : "bg-transparent text-slate-800"}`}
-                />
-                <span className="text-[10px] text-slate-400 font-bold">%</span>
+          {/* 12. % Retour - Hide if AM (disabledAxes) */}
+          {!disabledAxes && (
+            <div className="flex items-center gap-1.5 min-w-[120px] flex-1">
+              <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${paramsDisabled ? "bg-slate-100 text-slate-400" : "bg-indigo-50 text-indigo-600"}`}>
+                <ArrowLeftRight className="w-3 h-3" />
+              </div>
+              <div className="flex flex-col w-full">
+                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                  % Retour
+                </label>
+                <div className="flex items-center">
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    disabled={paramsDisabled}
+                    value={pctRetour}
+                    onChange={(e) => {
+                      const v = e.target.value === "" ? 0 : Math.min(100, Math.max(0, Number(e.target.value)));
+                      setPctRetour && setPctRetour(v);
+                    }}
+                    className={`text-xs font-semibold focus:outline-none w-full text-center ${paramsDisabled ? "bg-transparent text-slate-400 cursor-not-allowed" : "bg-transparent text-slate-800"}`}
+                  />
+                  <span className="text-[10px] text-slate-400 font-bold">%</span>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           <div className="w-px h-6 bg-slate-200 hidden md:block" />
 

@@ -2045,7 +2045,7 @@ export default function SimulationEffectifs() {
     } else {
       setReferentiel([]);
     }
-  }, [activeFlux, centre, poste]);
+  }, [activeFlux, centre, poste, refreshTrigger]); // ✅ Added refreshTrigger to reload tasks after import
 
   useEffect(() => {
     // Exemple : productivité (%) convertie en heures net sur 8h de base
@@ -2731,6 +2731,9 @@ export default function SimulationEffectifs() {
             setPctNational={setPctNational}
             pctMarcheOrdinaire={pctMarcheOrdinaire}
             setPctMarcheOrdinaire={setPctMarcheOrdinaire}
+            pctMarcheOrdinaire={pctMarcheOrdinaire}
+            setPctMarcheOrdinaire={setPctMarcheOrdinaire}
+            onRefresh={() => setRefreshTrigger(prev => prev + 1)} // ✅ TRIGGER REFRESH AFTER IMPORT
           />
         )}
 

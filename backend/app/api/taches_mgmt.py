@@ -27,6 +27,7 @@ class TacheCreate(BaseModel):
     base_calcul: Optional[int] = 100
     poste_label: Optional[str] = None
     centre_poste_id: Optional[int] = None
+    ordre: Optional[int] = 999
 
 class TacheUpdate(BaseModel):
     nom_tache: Optional[str] = None
@@ -39,6 +40,7 @@ class TacheUpdate(BaseModel):
     centre_poste_id: Optional[int] = None
     min_min: Optional[float] = None
     moy_sec: Optional[float] = None
+    ordre: Optional[int] = None
     # min_sec removed as it is not in DB
 
 @router.post("/taches")
@@ -80,6 +82,7 @@ def create_tache(tache: TacheCreate, db: Session = Depends(get_db)):
         moyenne_min=tache.moyenne_min,
         produit=tache.produit,
         base_calcul=tache.base_calcul,
+        ordre=tache.ordre,
         etat="ACTIF"
     )
     db.add(new_tache)
@@ -101,6 +104,7 @@ def update_tache(tache_id: int, update: TacheUpdate, db: Session = Depends(get_d
     if update.produit is not None: t.produit = update.produit
     if update.base_calcul is not None: t.base_calcul = update.base_calcul
     if update.centre_poste_id is not None: t.centre_poste_id = update.centre_poste_id
+    if update.ordre is not None: t.ordre = update.ordre
     
     # SIMPLIFIED LOGIC (User Directive: Step 1735)
     # Strict Direct Mapping:
@@ -379,7 +383,8 @@ def _process_import_taches(content: bytes, centre_id: int, db: Session, poste_id
                         base_calcul=base_calc_db,
                         min_min=v_min_db,
                         moy_sec=v_sec_db,
-                        moyenne_min=moyenne_db
+                        moyenne_min=moyenne_db,
+                        ordre=int(secure_float(val(col_ordre))) if col_ordre is not None else 999
                     )
                     db.add(tache)
                     count += 1

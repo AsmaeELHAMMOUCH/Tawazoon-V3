@@ -467,9 +467,11 @@ export const api = {
    */
   getCentre: async (centreId) => {
     if (!centreId) throw new Error("centreId requis");
-    const data = await http(`/centres/${encodeURIComponent(centreId)}`);
-    console.debug("getCentre(api): raw=", data);
-    return data;
+    // Utilisation de la route de liste avec filtre car /centres/{id} n'existe pas
+    const data = await http(`/centres?centre_id=${encodeURIComponent(centreId)}`);
+    const list = normalizeCentres(data);
+    console.debug("getCentre(api): raw=", data, " normalized=", list[0]);
+    return list[0] || null;
   },
 
   /**
@@ -614,12 +616,32 @@ export const api = {
    * Mise à jour de la catégorisation d'un centre
    * @param {Array} postes - Liste optionnelle de {centre_poste_id, etp_arrondi}
    */
-  updateCentreCategorisation: async (centreId, categorisationId, postes = []) => {
+  updateCentreCategorisation: async (centreId, categorisationId, postes = [], volumes = null) => {
     return await http(`/centres/${centreId}/categorisation`, {
       method: "PUT",
       body: {
         categorisation_id: Number(categorisationId),
-        postes: postes
+        postes: postes,
+        volumes: volumes
+      },
+    });
+  },
+
+  /**
+   * Récupère les volumes de référence d'un centre
+   */
+  getCentreVolumes: async (centreId) => {
+    return await http(`/centres/${centreId}/volumes`);
+  },
+
+  /**
+   * Mise à jour de la typologie d'un centre (AM, CCC, etc.)
+   */
+  updateCentreTypology: async (centreId, typologyId) => {
+    return await http(`/centres/${centreId}/typologie`, {
+      method: "PUT",
+      body: {
+        typology_id: Number(typologyId),
       },
     });
   },

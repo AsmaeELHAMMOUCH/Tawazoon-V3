@@ -555,6 +555,56 @@ export default function VueCentre({
 
   const [error, setError] = useState("");
 
+  const [annualInputs, setAnnualInputs] = useState({
+    cOrd: toInput(cOrd),
+    cReco: toInput(cReco),
+    eBarkia: toInput(eBarkia),
+    lrh: toInput(lrh),
+    amana: toInput(amana),
+  });
+
+  const [annualParsed, setAnnualParsed] = useState({
+    cOrd: parseNonNeg(cOrd) ?? 0,
+    cReco: parseNonNeg(cReco) ?? 0,
+    eBarkia: parseNonNeg(eBarkia) ?? 0,
+    lrh: parseNonNeg(lrh) ?? 0,
+    amana: parseNonNeg(amana) ?? 0,
+  });
+
+  useEffect(() => {
+    setError("");
+    setAnnualInputs({
+      cOrd: toInput(cOrd),
+      cReco: toInput(cReco),
+      eBarkia: toInput(eBarkia),
+      lrh: toInput(lrh),
+      amana: toInput(amana),
+    });
+    setAnnualParsed({
+      cOrd: parseNonNeg(cOrd) ?? 0,
+      cReco: parseNonNeg(cReco) ?? 0,
+      eBarkia: parseNonNeg(eBarkia) ?? 0,
+      lrh: parseNonNeg(lrh) ?? 0,
+      amana: parseNonNeg(amana) ?? 0,
+    });
+  }, [centre, cOrd, cReco, eBarkia, lrh, amana]);
+
+  const handleAnnualChange = useCallback(
+    (key) => (e) => setAnnualInputs((p) => ({ ...p, [key]: e.target.value })),
+    []
+  );
+
+  const handleAnnualBlur = useCallback(
+    (key, setter) => (e) => {
+      const n = parseNonNeg(e.target.value);
+      if (n === undefined) return setAnnualInputs((p) => ({ ...p, [key]: "" }));
+      setter(n);
+      setAnnualParsed((p) => ({ ...p, [key]: n }));
+    },
+    []
+  );
+
+
   const [partParticuliers, setPartParticuliers] = useState(75);
   const partProfessionnels = 100 - partParticuliers;
 
@@ -673,37 +723,74 @@ export default function VueCentre({
     );
   }, [effectiveCentreCategorie, centreObj]);
 
-  const calculateVolFromGrid = () => {
+  const calculateVolFromGrid = useCallback(() => {
+    const baseVols = {
+      cOrd: annualParsed.cOrd ?? Number(cOrd || 0),
+      cReco: annualParsed.cReco ?? Number(cReco || 0),
+      amana: annualParsed.amana ?? Number(amana || 0),
+      eBarkia: annualParsed.eBarkia ?? Number(eBarkia || 0),
+      lrh: annualParsed.lrh ?? Number(lrh || 0),
+      sacs: Number(sacs || 0),
+      colis: Number(colis || 0),
+    };
+
     if (volumesFluxGrid && volumesFluxGrid.length > 0) {
       const getSum = (tag) => {
-        return volumesFluxGrid
+        const sum = volumesFluxGrid
           .filter((row) => {
             const f = (row.flux || "").toLowerCase();
             return f === tag || (tag === "ebarkia" && f === "eb");
           })
           .reduce((acc, cur) => acc + (Number(cur.volume) || 0), 0);
+
+        // Si la somme est 0 dans la grille, on garde la valeur de base (prop/state)
+        return sum > 0 ? sum : null;
       };
+
       return {
-        cOrd: getSum("co"),
-        cReco: getSum("cr"),
-        amana: getSum("amana"),
-        eBarkia: getSum("ebarkia"),
-        lrh: getSum("lrh"),
-        sacs: Number(sacs || 0),
-        colis: Number(colis || 0),
+        cOrd: getSum("co") ?? baseVols.cOrd,
+        cReco: getSum("cr") ?? baseVols.cReco,
+        amana: getSum("amana") ?? baseVols.amana,
+        eBarkia: getSum("ebarkia") ?? baseVols.eBarkia,
+        lrh: getSum("lrh") ?? baseVols.lrh,
+        sacs: baseVols.sacs,
+        colis: baseVols.colis,
       };
     }
-    // Fallback
-    return {
-      cOrd: Number(cOrd || 0),
-      cReco: Number(cReco || 0),
-      amana: Number(amana || 0),
-      eBarkia: Number(eBarkia || 0),
-      lrh: Number(lrh || 0),
-      sacs: Number(sacs || 0),
-      colis: Number(colis || 0),
-    };
-  };
+    return baseVols;
+  }, [volumesFluxGrid, annualParsed, cOrd, cReco, amana, eBarkia, lrh, sacs, colis]);
+
+  const handleNavigateToCategorisation = useCallback(async () => {
+    if (!centreId) return;
+
+    const currentVolumes = calculateVolFromGrid();
+
+    const simulationResults = resultats ? {
+      postes: resultats.postes,
+      total_heures: resultats.total_heures,
+      total_etp_calcule: resultats.total_etp_calcule,
+      total_etp_arrondi: resultats.total_etp_arrondi ?? 0, // Fallback to resultats or 0
+      total_ecart: resultats.ecart_total ?? 0, // Fallback to resultats or 0
+      acheminement_score: (pctAxesArrivee > 0 && pctAxesDepart > 0) ? 100 : 0
+    } : null;
+
+    let enrichedCentreInfo = { ...centreObj };
+    if (centreObj?.id_categorisation) {
+      try {
+        const catList = await api.categorisations();
+        const currentCat = catList.find(c => c.id === centreObj.id_categorisation);
+        if (currentCat) enrichedCentreInfo.categorisation_label = currentCat.label;
+      } catch (e) { }
+    }
+
+    navigate(`/app/simulation/categorisation/${centreId}`, {
+      state: {
+        simulationResults,
+        centreInfo: enrichedCentreInfo,
+        volumes: currentVolumes
+      }
+    });
+  }, [centreId, calculateVolFromGrid, resultats, pctAxesArrivee, pctAxesDepart, centreObj, navigate]);
 
   const splitFlux = (total) => {
     const v = Number(total ?? 0);
@@ -712,55 +799,7 @@ export default function VueCentre({
     return { part: v * ratioPart, prof: v * ratioProf };
   };
 
-  const [annualInputs, setAnnualInputs] = useState({
-    cOrd: toInput(cOrd),
-    cReco: toInput(cReco),
-    eBarkia: toInput(eBarkia),
-    lrh: toInput(lrh),
-    amana: toInput(amana),
-  });
 
-  const [annualParsed, setAnnualParsed] = useState({
-    cOrd: parseNonNeg(cOrd) ?? 0,
-    cReco: parseNonNeg(cReco) ?? 0,
-    eBarkia: parseNonNeg(eBarkia) ?? 0,
-    lrh: parseNonNeg(lrh) ?? 0,
-    amana: parseNonNeg(amana) ?? 0,
-  });
-
-  useEffect(() => {
-
-    setError("");
-    setAnnualInputs({
-      cOrd: toInput(cOrd),
-      cReco: toInput(cReco),
-      eBarkia: toInput(eBarkia),
-      lrh: toInput(lrh),
-      amana: toInput(amana),
-    });
-    setAnnualParsed({
-      cOrd: parseNonNeg(cOrd) ?? 0,
-      cReco: parseNonNeg(cReco) ?? 0,
-      eBarkia: parseNonNeg(eBarkia) ?? 0,
-      lrh: parseNonNeg(lrh) ?? 0,
-      amana: parseNonNeg(amana) ?? 0,
-    });
-  }, [centre, cOrd, cReco, eBarkia, lrh, amana]);
-
-  const handleAnnualChange = useCallback(
-    (key) => (e) => setAnnualInputs((p) => ({ ...p, [key]: e.target.value })),
-    []
-  );
-
-  const handleAnnualBlur = useCallback(
-    (key, setter) => (e) => {
-      const n = parseNonNeg(e.target.value);
-      if (n === undefined) return setAnnualInputs((p) => ({ ...p, [key]: "" }));
-      setter(n);
-      setAnnualParsed((p) => ({ ...p, [key]: n }));
-    },
-    []
-  );
 
   const renderMonthlyHint = useCallback((raw, lastValid) => {
     const live = monthly(raw);
@@ -1650,29 +1689,7 @@ export default function VueCentre({
 
           {/* Bouton Accès Rapide Catégorisation */}
           <button
-            onClick={() => {
-              if (!centre) return;
-
-              // Préparation des données (si dispos)
-              const simulationResults = resultats ? {
-                postes: resultats.postes,
-                total_heures: resultats.total_heures,
-                total_etp_calcule: resultats.total_etp_calcule,
-                total_etp_arrondi: kpi.etpArr,
-                total_ecart: kpi.ecart,
-                acheminement_score: 0
-              } : null;
-
-              navigate(`/app/simulation/categorisation/${centre}`, {
-                state: {
-                  simulationResults,
-                  centreInfo: centreObj,
-                  volumes: {
-                    cOrd, cReco, amana, eBarkia, lrh, sacs: resultats?.sacs || 0, colis
-                  }
-                }
-              });
-            }}
+            onClick={handleNavigateToCategorisation}
             disabled={!centre}
             className={`
               flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ml-1
@@ -1688,244 +1705,164 @@ export default function VueCentre({
 
 
 
-          {/* Typologie (Tag) */}
-          <div className="flex items-center gap-1.5">
-
-
-            {/* Bouton Catégorisation */}
-            {false && (
-              <button
-                onClick={async () => {
-                  const centreObj = centres.find(c => String(c.id) === String(centreId));
-
-                  // Get postes from resultats or totaux
-                  const postes = resultats?.postes || totaux?.postes || [];
-
-                  // ✅ Use the SAME calculation as the "Effectif Arrondi" card
-                  // From kpi calculation: etpArr = etpArrMOD + etpArrMOI
-                  const etpArrMOD = totalsMOD?.etpArrondi ?? 0;
-                  const etpArrMOI = totalsMOI?.etpArrondi ?? 0; // ✅ Correction : Utiliser l'ETP Arrondi (qui inclut le structurel)
-                  const realEtpArrondi = etpArrMOD + etpArrMOI;
-
-                  // ✅ Calculate Acheminement score based on Axes parameters
-                  // If both Axes Arrivée AND Axes Départ are non-empty (> 0) → 100 points
-                  // Otherwise → 0 points
-                  const hasAxesArrivee = pctAxesArrivee > 0;
-                  const hasAxesDepart = pctAxesDepart > 0;
-                  const acheminementScore = (hasAxesArrivee && hasAxesDepart) ? 100 : 0;
-
-                  console.log("📊 [CATEG] MOD ETP Arrondi:", etpArrMOD);
-                  console.log("📊 [CATEG] MOI Effectif:", etpArrMOI);
-                  console.log("📊 [CATEG] Total ETP Arrondi (card value):", realEtpArrondi);
-                  console.log("📊 [CATEG] Axes Arrivée:", pctAxesArrivee, "→", hasAxesArrivee ? "✅" : "❌");
-                  console.log("📊 [CATEG] Axes Départ:", pctAxesDepart, "→", hasAxesDepart ? "✅" : "❌");
-                  console.log("📊 [CATEG] Acheminement Score:", acheminementScore);
-
-                  // Prepare simulation results payload
-                  const simulationResults = {
-                    postes: postes,
-                    total_heures: totaux?.total_heures || totaux?.heures || 0,
-                    total_etp_calcule: totaux?.total_etp_calcule || totaux?.fte_calcule || 0,
-                    total_etp_arrondi: realEtpArrondi, // ✅ Use same calc as card
-                    total_ecart: totaux?.total_ecart || totaux?.ecart || 0,
-                    acheminement_score: acheminementScore, // ✅ New criterion
-                    axes_arrivee: pctAxesArrivee,
-                    axes_depart: pctAxesDepart
-                  };
-
-                  console.log("📤 [CATEG] Sending simulationResults:", simulationResults);
-
-                  // ✅ Fetch categorisation label if id_categorisation exists
-                  let enrichedCentreInfo = { ...centreObj };
-                  if (centreObj?.id_categorisation) {
-                    try {
-                      const catList = await api.categorisations();
-                      const currentCat = catList.find(c => c.id === centreObj.id_categorisation);
-                      if (currentCat) {
-                        enrichedCentreInfo.categorisation_label = currentCat.label;
-                      }
-                    } catch (e) {
-                      console.warn("Could not fetch categorisation label:", e);
-                    }
-                  }
-
-                  navigate(`/app/simulation/categorisation/${centreId}`, {
-                    state: {
-                      simulationResults,  // ✅ Send simulation results
-                      centreInfo: enrichedCentreInfo, // ✅ Include categorisation label
-                      volumes: calculateVolFromGrid()
-                    }
-                  });
-                }}
-                className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 text-indigo-600 border border-indigo-200 hover:bg-indigo-100 transition-colors"
-                title="Simulateur Complexité & Catégorisation"
-                disabled={!totaux && !resultats}
-              >
-                <Sliders className="w-2.5 h-2.5" />
-                Catégorisation
-              </button>
-            )}
-          </div>
-
         </div>
 
-        {/* Configuration & Performance */}
-        <div className="bg-white/80 backdrop-blur-md border border-slate-200/60 shadow-sm rounded-lg px-3 py-2">
-          <div className="flex flex-wrap items-center gap-2">
+      </div>
 
-            {/* Productivité */}
-            <div className="flex items-center gap-1.5 min-w-[100px] flex-1">
-              <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
-                <Gauge className="w-3 h-3" />
-              </div>
-              <div className="flex flex-col w-full">
-                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                  Productivité
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    min={0}
-                    max={200}
-                    value={productivite}
-                    onChange={(e) => setProductivite(Number(e.target.value || 0))}
-                    className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full pr-6 text-center"
-                  />
-                  <span className="absolute right-0 top-0 text-[9px] text-slate-400 font-bold pointer-events-none">
-                    %
-                  </span>
-                </div>
-              </div>
+      {/* Configuration & Performance */}
+      <div className="bg-white/80 backdrop-blur-md border border-slate-200/60 shadow-sm rounded-lg px-3 py-2">
+        <div className="flex flex-wrap items-center gap-2">
+
+          {/* Productivité */}
+          <div className="flex items-center gap-1.5 min-w-[100px] flex-1">
+            <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
+              <Gauge className="w-3 h-3" />
             </div>
-
-            <div className="w-px h-6 bg-slate-200 hidden md:block" />
-
-            {/* Temps mort */}
-            <div className="flex items-center gap-1.5 min-w-[100px] flex-1">
-              <div className="w-6 h-6 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-                <Clock className="w-3 h-3" />
-              </div>
-              <div className="flex flex-col w-full">
-                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                  Temps mort
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    min={0}
-                    value={idleMinutes}
-                    onChange={(e) => setIdleMinutes(Number(e.target.value || 0))}
-                    className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full pr-8 text-center"
-                  />
-                  <span className="absolute right-0 top-0 text-[9px] text-slate-400 font-bold pointer-events-none">
-                    min
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="w-px h-6 bg-slate-200 hidden md:block" />
-
-
-
-            {/* Complexité Circulation */}
-            <div className="flex items-center gap-1.5 min-w-[90px] flex-1">
-              <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
-                <Sliders className="w-3 h-3" />
-              </div>
-              <div className="flex flex-col w-full">
-                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                  Compl. Circ.
-                </label>
-                <select
-                  value={tauxComplexite}
-                  onChange={(e) => setTauxComplexite(Number(e.target.value))}
-                  disabled={disabledAxes}
-                  className={`bg-transparent text-xs font-semibold focus:outline-none w-full text-center cursor-pointer ${disabledAxes ? "text-slate-400 cursor-not-allowed" : "text-slate-800"}`}
-                >
-                  <option value="0.5">0.5</option>
-                  <option value="0.75">0.75</option>
-                  <option value="1">1</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Compl. Géo */}
-            <div className="flex items-center gap-1.5 min-w-[90px] flex-1 border-l border-slate-200 pl-4">
-              <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
-                <MapPin className="w-3 h-3" />
-              </div>
-              <div className="flex flex-col w-full">
-                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                  Compl. Géo
-                </label>
+            <div className="flex flex-col w-full">
+              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                Productivité
+              </label>
+              <div className="relative">
                 <input
-                  type="text"
-                  value={natureGeo}
-                  onChange={(e) => setNatureGeo(parseNonNeg(e.target.value) ?? 0)}
-                  disabled={disabledAxes}
-                  className={`bg-transparent text-xs font-semibold focus:outline-none w-full text-center ${disabledAxes ? "text-slate-400 cursor-not-allowed" : "text-slate-800"}`}
+                  type="number"
+                  min={0}
+                  max={200}
+                  value={productivite}
+                  onChange={(e) => setProductivite(Number(e.target.value || 0))}
+                  className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full pr-6 text-center"
                 />
+                <span className="absolute right-0 top-0 text-[9px] text-slate-400 font-bold pointer-events-none">
+                  %
+                </span>
               </div>
             </div>
+          </div>
 
-            {/* Shift */}
-            <div className="flex items-center gap-1.5 min-w-[90px] flex-1 border-l border-slate-200 pl-4">
-              <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
-                <Clock className="w-3 h-3" />
-              </div>
-              <div className="flex flex-col w-full">
-                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                  Shift
-                </label>
-                <select
-                  value={shift}
-                  onChange={(e) => setShift(Number(e.target.value))}
-                  disabled={disabledAxes}
-                  className={`bg-transparent text-xs font-semibold focus:outline-none w-full text-center cursor-pointer ${disabledAxes ? "text-slate-400 cursor-not-allowed" : "text-slate-800"}`}
-                >
-                  <option value="1">1</option>
-                  <option value="2">2</option>
-                  <option value="3">3</option>
-                </select>
+          <div className="w-px h-6 bg-slate-200 hidden md:block" />
+
+          {/* Temps mort */}
+          <div className="flex items-center gap-1.5 min-w-[100px] flex-1">
+            <div className="w-6 h-6 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+              <Clock className="w-3 h-3" />
+            </div>
+            <div className="flex flex-col w-full">
+              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                Temps mort
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  min={0}
+                  value={idleMinutes}
+                  onChange={(e) => setIdleMinutes(Number(e.target.value || 0))}
+                  className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full pr-8 text-center"
+                />
+                <span className="absolute right-0 top-0 text-[9px] text-slate-400 font-bold pointer-events-none">
+                  min
+                </span>
               </div>
             </div>
+          </div>
 
-            <div className="w-px h-6 bg-slate-200 hidden md:block" />
+          <div className="w-px h-6 bg-slate-200 hidden md:block" />
 
-            {/* Capacité Nette */}
-            <div className="flex items-center gap-1.5 min-w-[90px] flex-1">
-              <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
-                <Clock className="w-3 h-3" />
-              </div>
-              <div className="flex flex-col">
-                <label className="text-[9px] font-bold text-[#005EA8] uppercase tracking-wider">
-                  Capacité Nette
-                </label>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-lg font-extrabold text-slate-800 tracking-tight">
-                    {(() => {
-                      // Recalcul local pour affichage fiable (Prod + Idle)
-                      const p = Number(productivite ?? 100) / 100;
-                      const idleH = Number(idleMinutes || 0) / 60;
-                      const base = 8;
-                      const productive = base * p;
-                      const net = Math.max(0, productive - idleH);
 
-                      const h = Math.floor(net);
-                      const m = Math.round((net - h) * 60);
-                      return `${h}h ${String(m).padStart(2, "0")}`;
-                    })()}
-                  </span>
-                  <span className="text-[9px] font-semibold text-slate-500">h/j</span>
-                </div>
+
+          {/* Complexité Circulation */}
+          <div className="flex items-center gap-1.5 min-w-[90px] flex-1">
+            <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
+              <Sliders className="w-3 h-3" />
+            </div>
+            <div className="flex flex-col w-full">
+              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                Compl. Circ.
+              </label>
+              <select
+                value={tauxComplexite}
+                onChange={(e) => setTauxComplexite(Number(e.target.value))}
+                disabled={disabledAxes}
+                className={`bg-transparent text-xs font-semibold focus:outline-none w-full text-center cursor-pointer ${disabledAxes ? "text-slate-400 cursor-not-allowed" : "text-slate-800"}`}
+              >
+                <option value="0.5">0.5</option>
+                <option value="0.75">0.75</option>
+                <option value="1">1</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Compl. Géo */}
+          <div className="flex items-center gap-1.5 min-w-[90px] flex-1 border-l border-slate-200 pl-4">
+            <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
+              <MapPin className="w-3 h-3" />
+            </div>
+            <div className="flex flex-col w-full">
+              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                Compl. Géo
+              </label>
+              <input
+                type="text"
+                value={natureGeo}
+                onChange={(e) => setNatureGeo(parseNonNeg(e.target.value) ?? 0)}
+                disabled={disabledAxes}
+                className={`bg-transparent text-xs font-semibold focus:outline-none w-full text-center ${disabledAxes ? "text-slate-400 cursor-not-allowed" : "text-slate-800"}`}
+              />
+            </div>
+          </div>
+
+          {/* Shift */}
+          <div className="flex items-center gap-1.5 min-w-[90px] flex-1 border-l border-slate-200 pl-4">
+            <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
+              <Clock className="w-3 h-3" />
+            </div>
+            <div className="flex flex-col w-full">
+              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                Shift
+              </label>
+              <select
+                value={shift}
+                onChange={(e) => setShift(Number(e.target.value))}
+                disabled={disabledAxes}
+                className={`bg-transparent text-xs font-semibold focus:outline-none w-full text-center cursor-pointer ${disabledAxes ? "text-slate-400 cursor-not-allowed" : "text-slate-800"}`}
+              >
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="w-px h-6 bg-slate-200 hidden md:block" />
+
+          {/* Capacité Nette */}
+          <div className="flex items-center gap-1.5 min-w-[90px] flex-1">
+            <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
+              <Clock className="w-3 h-3" />
+            </div>
+            <div className="flex flex-col">
+              <label className="text-[9px] font-bold text-[#005EA8] uppercase tracking-wider">
+                Capacité Nette
+              </label>
+              <div className="flex items-baseline gap-1">
+                <span className="text-lg font-extrabold text-slate-800 tracking-tight">
+                  {(() => {
+                    // Recalcul local pour affichage fiable (Prod + Idle)
+                    const p = Number(productivite ?? 100) / 100;
+                    const idleH = Number(idleMinutes || 0) / 60;
+                    const base = 8;
+                    const productive = base * p;
+                    const net = Math.max(0, productive - idleH);
+
+                    const h = Math.floor(net);
+                    const m = Math.round((net - h) * 60);
+                    return `${h}h ${String(m).padStart(2, "0")}`;
+                  })()}
+                </span>
+                <span className="text-[9px] font-semibold text-slate-500">h/j</span>
               </div>
             </div>
           </div>
         </div>
       </div>
-
-      {/* 🔹 Paramètres & Grille des Volumes */}
       <div className="w-full">
         <VolumeParamsCard
           Card={Card}
@@ -2034,56 +1971,7 @@ export default function VueCentre({
 
                 <button
                   type="button"
-                  onClick={() => {
-                    const calculateVolFromGrid = () => {
-                      if (volumesFluxGrid && volumesFluxGrid.length > 0) {
-                        const getSum = (tag) => {
-                          return volumesFluxGrid
-                            .filter((row) => {
-                              const f = (row.flux || "").toLowerCase();
-                              return f === tag || (tag === "ebarkia" && f === "eb");
-                            })
-                            .reduce((acc, cur) => acc + (Number(cur.volume) || 0), 0);
-                        };
-                        return {
-                          cOrd: getSum("co"),
-                          cReco: getSum("cr"),
-                          amana: getSum("amana"),
-                          eBarkia: getSum("ebarkia"),
-                          lrh: getSum("lrh"),
-                          sacs: Number(sacs || 0),
-                          colis: Number(colis || 0),
-                        };
-                      }
-                      // Fallback
-                      return {
-                        cOrd: Number(cOrd || 0),
-                        cReco: Number(cReco || 0),
-                        amana: Number(amana || 0),
-                        eBarkia: Number(eBarkia || 0),
-                        lrh: Number(lrh || 0),
-                        sacs: Number(sacs || 0),
-                        colis: Number(colis || 0),
-                      };
-                    };
-
-                    const simulationResults = {
-                      postes: resultats.postes,
-                      total_heures: resultats.total_heures,
-                      total_etp_calcule: resultats.total_etp_calcule,
-                      total_etp_arrondi: kpi.etpArr,
-                      total_ecart: kpi.ecart,
-                      acheminement_score: 0
-                    };
-
-                    navigate(`/app/simulation/categorisation/${centre}`, {
-                      state: {
-                        simulationResults,
-                        centreInfo: centreObj,
-                        volumes: calculateVolFromGrid()
-                      }
-                    });
-                  }}
+                  onClick={handleNavigateToCategorisation}
                   className="inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-2 py-1 shadow-sm hover:bg-indigo-100 transition-colors"
                   title="Accéder à la catégorisation"
                 >
