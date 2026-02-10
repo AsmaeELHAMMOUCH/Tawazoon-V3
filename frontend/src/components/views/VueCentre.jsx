@@ -15,6 +15,12 @@ import {
   EyeOff,
   Sliders,
   X,
+  Calendar,
+  Layers,
+  Users,
+  BarChart,
+  FileText,
+  DollarSign,
 } from "lucide-react";
 
 import { api } from "../../lib/api";
@@ -642,11 +648,13 @@ export default function VueCentre({
   /* const [showDetailsModal, setShowDetailsModal] = useState(false); */
   const [activeModal, setActiveModal] = useState(null); // 'ACTUEL', 'CALC'
   const showDetailsModal = activeModal !== null;
-  const setShowDetailsModal = (val) => !val && setActiveModal(null); // Compatibilité ancienne API
+  const setShowDetailsModal = (val) => setActiveModal(val ? 'CALC' : null); // Compatibilité ancienne API
+
 
   const [showDetails, setShowDetails] = useState(false);
   const [showMODDetails, setShowMODDetails] = useState(false);
   const [showMOIDetails, setShowMOIDetails] = useState(false);
+  const [showRecapParams, setShowRecapParams] = useState(true); // 👁️ Affichage du contenu de la carte Rappel des paramètres
 
 
 
@@ -863,10 +871,71 @@ export default function VueCentre({
     if (!centreId) return;
     const centreLabel =
       centreObj?.label || centreObj?.name || resultats?.centre_label || "Centre";
+
+    // Préparer les résultats de simulation pour la page Index Adéquation
+    const simulationResults = resultats ? {
+      postes: Array.isArray(resultats) ? resultats : (resultats.postes || []),
+      total_heures: totaux?.total_heures || 0,
+      total_etp_calcule: totaux?.total_etp_calcule || 0,
+      total_etp_arrondi: totaux?.total_etp_arrondi || 0,
+    } : null;
+
     navigate("/app/simulation/index_Adequation", {
-      state: { centreId, centreLabel },
+      state: {
+        centreId,
+        centreLabel,
+        simulationResults,
+        centreInfo: {
+          label: centreLabel,
+          categorie: centreCategorie,
+        }
+      },
     });
-  }, [centreId, centreObj, resultats, navigate]);
+  }, [centreId, centreObj, resultats, totaux, centreCategorie, navigate]);
+
+  // 🆕 Handlers pour les cartes de menu
+  const handleNavigateToSaisonnalite = useCallback(() => {
+    if (!centreId) return;
+    navigate("/app/simulation/saisonnalite", {
+      state: { centreId, centreLabel: centreObj?.label || centreObj?.name || "Centre" },
+    });
+  }, [centreId, centreObj, navigate]);
+
+  const handleNavigateToOrganogramme = useCallback(() => {
+    if (!centreId) return;
+    navigate("/app/simulation/organigramme", {
+      state: { centreId, centreLabel: centreObj?.label || centreObj?.name || "Centre" },
+    });
+  }, [centreId, centreObj, navigate]);
+
+  const handleNavigateToCapaciteNominale = useCallback(() => {
+    if (!centreId) return;
+    navigate("/app/simulation/capacite_nominale", {
+      state: { centreId, centreLabel: centreObj?.label || centreObj?.name || "Centre" },
+    });
+  }, [centreId, centreObj, navigate]);
+
+  const handleNavigateToComparatifs = useCallback(() => {
+    if (!centreId) return;
+    navigate("/app/simulation/comparatifs", {
+      state: { centreId, centreLabel: centreObj?.label || centreObj?.name || "Centre" },
+    });
+  }, [centreId, centreObj, navigate]);
+
+  const handleNavigateToNbre = useCallback(() => {
+    if (!centreId) return;
+    navigate("/app/simulation/nbre", {
+      state: { centreId, centreLabel: centreObj?.label || centreObj?.name || "Centre" },
+    });
+  }, [centreId, centreObj, navigate]);
+
+  const handleNavigateToEconomies = useCallback(() => {
+    if (!centreId) return;
+    navigate("/app/simulation/economies", {
+      state: { centreId, centreLabel: centreObj?.label || centreObj?.name || "Centre" },
+    });
+  }, [centreId, centreObj, navigate]);
+
 
 
   /* ✅ Export CSV */
@@ -970,13 +1039,24 @@ export default function VueCentre({
       const typePoste = (poste.type_poste || "").toUpperCase();
       const labelPoste = (poste.poste_label || "").toUpperCase();
 
-      // 🚨 DÉTECTION MOI AGRESSIVE (Keywords prioritisés) 🚨
+      // 🚨 DÉTECTION MOI AGRESSIVE (Keywords prioritisés - Aligné avec VueIntervenant) 🚨
       const isMOIKeyword = labelPoste.includes("RECEVEUR") ||
-        labelPoste.includes("CHEF DE CENTRE") ||
-        labelPoste.includes("CHEF ETABLISSEMENT") ||
+        labelPoste.includes("CHEF") ||
         labelPoste.includes("DIRECTEUR") ||
         labelPoste.includes("GERANT") ||
-        labelPoste.includes("RESPONSABLE");
+        labelPoste.includes("RESPONSABLE") ||
+        labelPoste.includes("ADJOINT") ||
+        labelPoste.includes("ASSISTANT") ||
+        labelPoste.includes("ADMIN") ||
+        labelPoste.includes("RH") ||
+        labelPoste.includes("RESSOURCES") ||
+        labelPoste.includes("SECRETAIRE") ||
+        labelPoste.includes("SUPPORT") ||
+        labelPoste.includes("QUALITE") ||
+        labelPoste.includes("PILOTE") ||
+        labelPoste.includes("COORDINATEUR") ||
+        labelPoste.includes("ENCADR") ||
+        labelPoste.includes("SUPERVISEUR");
 
       const isMOI = typePoste === "MOI" ||
         typePoste === "INDIRECT" ||
@@ -1016,20 +1096,8 @@ export default function VueCentre({
       }
     });
 
-    // 🚨 FORCE VISUEL : Si aucun poste MOI n'est trouvé, on en ajoute un fictif pour justifier le KPI = 1
-    if (MOI.length === 0) {
-      MOI.push({
-        centre_poste_id: 'moi_forced',
-        poste_id: 9999,
-        poste_label: "Encadrement / Structure (Simulé)",
-        type_poste: "MOI",
-        effectif_actuel: 1,
-        etp_calcule: 1,
-        etp_arrondi: 1,
-        ecart: 0,
-        total_heures: 0
-      });
-    }
+    // 🚨 Logique supprimée : On ne force plus MOI fictif à 1 si non trouvé, pour alignement strict avec les données réelles et VueIntervenant.
+    // if (MOI.length === 0) { ... }
 
     return {
       rowsMOD: MOD,
@@ -1064,7 +1132,10 @@ export default function VueCentre({
     const effMOI = totalsMOI.effectif ?? 0;
     const effTotal = effMOD + effMOI;
 
-    const etpCalcMOD = totalsMOD.etpCalcule ?? 0;
+    // 🚨 ALIGNEMENT VUE INTERVENANT : Utiliser `totaux.fte_calcule` si disponible (Backend) pour garantir la cohérence
+    const etpCalcMOD = (totaux && typeof totaux.fte_calcule === 'number')
+      ? totaux.fte_calcule
+      : (totalsMOD.etpCalcule ?? 0);
     const etpCalcMOI = totalsMOI.etpCalcule ?? 0;
     const etpCalc = etpCalcMOD + etpCalcMOI;
 
@@ -1073,20 +1144,8 @@ export default function VueCentre({
     // ✅ APS : Priorité à la valeur globale T_APS du centre (Database)
     const valAPS = (centreObj && (centreObj.t_aps_global ?? centreObj.aps_legacy ?? centreObj.T_APS ?? centreObj.t_aps));
 
-    // 🆕 WORKAROUND TEMPORAIRE: Mapping hardcodé pour centres spécifiques
-    const T_APS_MAPPING = {
-      1913: 2,  // AGENCE MESSAGERIE FES
-      2102: 7,  // KENITRA CENTRE MESSAGERIE
-      2075: 12, // CM MARRAKECH
-      2064: 0,  // OUARZAZAT
-      2108: 0,  // RABAT CD AL IRFAN
-      1942: 7,  // Bandong
-      1952: 25, // CCI
-    };
-
-    const centreId = centreObj?.id;
-    const apsFromMapping = centreId ? T_APS_MAPPING[centreId] : null;
-    const finalAPS = apsFromMapping ?? valAPS;
+    // Suppression du mapping temporaire pour utiliser la valeur réelle de la base de données
+    const finalAPS = valAPS;
 
     let apsGlobal = (finalAPS !== undefined && finalAPS !== null) ? Number(finalAPS) : null;
     const effAPSMOD = apsGlobal !== null ? apsGlobal : (totalsMOD.effectifAPS ?? 0);
@@ -1722,40 +1781,6 @@ export default function VueCentre({
             </div>
           </div>
 
-          <div className="w-px h-6 bg-slate-200 hidden md:block" />
-
-          {/* Bouton Accès Rapide Catégorisation */}
-          <button
-            onClick={handleNavigateToCategorisation}
-            disabled={!centre}
-            className={`
-              flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ml-1
-              ${centre
-                ? "bg-gradient-to-br from-indigo-50 to-violet-50 border-indigo-200 text-indigo-700 hover:from-indigo-100 hover:to-violet-100 hover:shadow-md cursor-pointer ring-1 ring-indigo-100"
-                : "bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed"}
-            `}
-            title="Ouvrir la page de Catégorisation & Complexité"
-          >
-            <Sliders className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Catégorisation</span>
-          </button>
-
-          {/* Bouton Accès Rapide Index Adequation */}
-          <button
-            onClick={handleNavigateToAdequation}
-            disabled={!centre}
-            className={`
-              flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ml-1
-              ${centre
-                ? "bg-gradient-to-br from-emerald-50 to-teal-50 border-emerald-200 text-emerald-700 hover:from-emerald-100 hover:to-teal-100 hover:shadow-md cursor-pointer ring-1 ring-emerald-100"
-                : "bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed"}
-            `}
-            title="Ouvrir la page Index Adequation"
-          >
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Index Adequation</span>
-          </button>
-
 
 
         </div>
@@ -1767,39 +1792,43 @@ export default function VueCentre({
           headerRight={
             <button
               type="button"
-              onClick={handleToggleDetails}
+              onClick={() => setShowRecapParams(prev => !prev)}
               className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white/80 px-2 py-1 text-[10px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
             >
-              {showDetails ? (
+              {showRecapParams ? (
                 <EyeOff className="w-3 h-3 text-slate-500" />
               ) : (
                 <Eye className="w-3 h-3 text-slate-500" />
               )}
-              <span>{showDetails ? "Masquer details" : "Afficher details"}</span>
+              <span>{showRecapParams ? "Masquer" : "Afficher"}</span>
             </button>
           }
           bodyClassName="!p-2"
         >
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-            {recapItems.map((item) => (
-              <div
-                key={item.label}
-                className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-white/70 px-2 py-1"
-              >
-                <span className="text-[10px] text-slate-500">{item.label}</span>
-                <span className="text-[11px] font-semibold text-slate-700">{item.value}</span>
+          {showRecapParams && (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                {recapItems.map((item) => (
+                  <div
+                    key={item.label}
+                    className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-white/70 px-2 py-1"
+                  >
+                    <span className="text-[10px] text-slate-500">{item.label}</span>
+                    <span className="text-[11px] font-semibold text-slate-700">{item.value}</span>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-          {simDirty && (
-            <div className="mt-2 text-[10px] text-amber-600">
-              Parametres modifies depuis la derniere simulation.
-            </div>
+              {simDirty && (
+                <div className="mt-2 text-[10px] text-amber-600">
+                  Parametres modifies depuis la derniere simulation.
+                </div>
+              )}
+            </>
           )}
         </Card>
       )}
 
- 
+
 
       {/* Résultats */}
       {
@@ -1989,6 +2018,9 @@ export default function VueCentre({
                         </span>
                       </>
                     }
+                    toggleable
+                    onToggle={() => setActiveModal('CALC')}
+                    isOpen={activeModal === 'CALC'}
                     customFooter={
                       <EffectifFooter
                         totalLabel="Écart Statutaire"
@@ -2072,7 +2104,7 @@ export default function VueCentre({
       }
       {/* 🔹 MODAL DETAILS */}
       {
-        showDetails && showDetailsModal && (
+        showDetailsModal && (
           <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="bg-white rounded-xl shadow-2xl max-w-7xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200">
 
@@ -2144,6 +2176,155 @@ export default function VueCentre({
           </div>
         )
       }
+
+      {/* 🆕 Grille de cartes de menu - Placée à la fin */}
+      {centre && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
+          {/* Simulation Saisonnalité */}
+          <button
+            onClick={handleNavigateToSaisonnalite}
+            className="group relative overflow-hidden rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-cyan-50 p-4 text-left transition-all hover:shadow-lg hover:scale-105 hover:border-blue-300"
+          >
+            <div className="absolute top-2 right-2 opacity-10 group-hover:opacity-20 transition-opacity">
+              <Calendar className="w-12 h-12 text-blue-600" />
+            </div>
+            <div className="relative z-10">
+              <div className="flex items-center gap-2 mb-1">
+                <div className="p-1.5 rounded-lg bg-blue-100">
+                  <Calendar className="w-4 h-4 text-blue-600" />
+                </div>
+              </div>
+              <h3 className="text-sm font-bold text-blue-900">Simulation Saisonnalité</h3>
+            </div>
+          </button>
+
+          {/* Organogramme */}
+          <button
+            onClick={handleNavigateToOrganogramme}
+            className="group relative overflow-hidden rounded-xl border border-rose-200 bg-gradient-to-br from-rose-50 to-pink-50 p-4 text-left transition-all hover:shadow-lg hover:scale-105 hover:border-rose-300"
+          >
+            <div className="absolute top-2 right-2 opacity-10 group-hover:opacity-20 transition-opacity">
+              <Layers className="w-12 h-12 text-rose-600" />
+            </div>
+            <div className="relative z-10">
+              <div className="flex items-center gap-2 mb-1">
+                <div className="p-1.5 rounded-lg bg-rose-100">
+                  <Layers className="w-4 h-4 text-rose-600" />
+                </div>
+              </div>
+              <h3 className="text-sm font-bold text-rose-900">Organigramme</h3>
+            </div>
+          </button>
+
+          {/* Catégorisation */}
+          <button
+            onClick={handleNavigateToCategorisation}
+            className="group relative overflow-hidden rounded-xl border border-red-200 bg-gradient-to-br from-red-50 to-orange-50 p-4 text-left transition-all hover:shadow-lg hover:scale-105 hover:border-red-300"
+          >
+            <div className="absolute top-2 right-2 opacity-10 group-hover:opacity-20 transition-opacity">
+              <Sliders className="w-12 h-12 text-red-600" />
+            </div>
+            <div className="relative z-10">
+              <div className="flex items-center gap-2 mb-1">
+                <div className="p-1.5 rounded-lg bg-red-100">
+                  <Sliders className="w-4 h-4 text-red-600" />
+                </div>
+              </div>
+              <h3 className="text-sm font-bold text-red-900">Catégorisation</h3>
+            </div>
+          </button>
+
+          {/* Index Adéquation */}
+          <button
+            onClick={handleNavigateToAdequation}
+            className="group relative overflow-hidden rounded-xl border border-sky-200 bg-gradient-to-br from-sky-50 to-blue-50 p-4 text-left transition-all hover:shadow-lg hover:scale-105 hover:border-sky-300"
+          >
+            <div className="absolute top-2 right-2 opacity-10 group-hover:opacity-20 transition-opacity">
+              <CheckCircle2 className="w-12 h-12 text-sky-600" />
+            </div>
+            <div className="relative z-10">
+              <div className="flex items-center gap-2 mb-1">
+                <div className="p-1.5 rounded-lg bg-sky-100">
+                  <CheckCircle2 className="w-4 h-4 text-sky-600" />
+                </div>
+              </div>
+              <h3 className="text-sm font-bold text-sky-900">Index Adéquation</h3>
+            </div>
+          </button>
+
+          {/* Capacité Nominale */}
+          <button
+            onClick={handleNavigateToCapaciteNominale}
+            className="group relative overflow-hidden rounded-xl border border-cyan-200 bg-gradient-to-br from-cyan-50 to-teal-50 p-4 text-left transition-all hover:shadow-lg hover:scale-105 hover:border-cyan-300"
+          >
+            <div className="absolute top-2 right-2 opacity-10 group-hover:opacity-20 transition-opacity">
+              <Users className="w-12 h-12 text-cyan-600" />
+            </div>
+            <div className="relative z-10">
+              <div className="flex items-center gap-2 mb-1">
+                <div className="p-1.5 rounded-lg bg-cyan-100">
+                  <Users className="w-4 h-4 text-cyan-600" />
+                </div>
+              </div>
+              <h3 className="text-sm font-bold text-cyan-900">Capacité Nominale</h3>
+            </div>
+          </button>
+
+          {/* Comparatifs */}
+          <button
+            onClick={handleNavigateToComparatifs}
+            className="group relative overflow-hidden rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-yellow-50 p-4 text-left transition-all hover:shadow-lg hover:scale-105 hover:border-amber-300"
+          >
+            <div className="absolute top-2 right-2 opacity-10 group-hover:opacity-20 transition-opacity">
+              <BarChart className="w-12 h-12 text-amber-600" />
+            </div>
+            <div className="relative z-10">
+              <div className="flex items-center gap-2 mb-1">
+                <div className="p-1.5 rounded-lg bg-amber-100">
+                  <BarChart className="w-4 h-4 text-amber-600" />
+                </div>
+              </div>
+              <h3 className="text-sm font-bold text-amber-900">Comparatifs</h3>
+            </div>
+          </button>
+
+          {/* Nbre */}
+          <button
+            onClick={handleNavigateToNbre}
+            className="group relative overflow-hidden rounded-xl border border-indigo-200 bg-gradient-to-br from-indigo-50 to-purple-50 p-4 text-left transition-all hover:shadow-lg hover:scale-105 hover:border-indigo-300"
+          >
+            <div className="absolute top-2 right-2 opacity-10 group-hover:opacity-20 transition-opacity">
+              <FileText className="w-12 h-12 text-indigo-600" />
+            </div>
+            <div className="relative z-10">
+              <div className="flex items-center gap-2 mb-1">
+                <div className="p-1.5 rounded-lg bg-indigo-100">
+                  <FileText className="w-4 h-4 text-indigo-600" />
+                </div>
+              </div>
+              <h3 className="text-sm font-bold text-indigo-900">Nbre</h3>
+            </div>
+          </button>
+
+          {/* Economies */}
+          <button
+            onClick={handleNavigateToEconomies}
+            className="group relative overflow-hidden rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-green-50 p-4 text-left transition-all hover:shadow-lg hover:scale-105 hover:border-emerald-300"
+          >
+            <div className="absolute top-2 right-2 opacity-10 group-hover:opacity-20 transition-opacity">
+              <DollarSign className="w-12 h-12 text-emerald-600" />
+            </div>
+            <div className="relative z-10">
+              <div className="flex items-center gap-2 mb-1">
+                <div className="p-1.5 rounded-lg bg-emerald-100">
+                  <DollarSign className="w-4 h-4 text-emerald-600" />
+                </div>
+              </div>
+              <h3 className="text-sm font-bold text-emerald-900">Economies</h3>
+            </div>
+          </button>
+        </div>
+      )}
     </div >
   );
 }

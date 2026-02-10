@@ -73,13 +73,18 @@ import CNDPSimulation from "./pages/centres_uniq/CNDPSimulation"; // ðŸ†• 
 import SimulationCentresUniques from "./pages/SimulationCentresUniques"; // ðŸ†• Parent Page CNDP/Bandoeng
 import GlobalImportPage from "./pages/GlobalImportPage"; // ðŸ†• Global Import
 import SimulationIntervenantAvancee from "./pages/SimulationIntervenantAvancee"; // ðŸ†• Simulation Intervenant AvancÃ©e
+import CapaciteNominale from "./pages/CapaciteNominale";
 import IndexAdequation from "./pages/IndexAdequation";
+
+// ...
+
+
 
 
 // ðŸ”¹ NOUVELLE ARCHITECTURE DATA-DRIVEN - IntÃ©grÃ©e directement dans SimulationEffectifs
 
 function NotFound() {
-  return <div className="p-6">404 â€” Page introuvable</div>;
+  return <div className="p-6">404 age introuvable</div>;
 }
 
 const BYPASS_AUTH = true;
@@ -248,6 +253,11 @@ export default function App() {
           <Route path="simulation/centres-uniques" element={<RouteErrorBoundary><SimulationCentresUniques /></RouteErrorBoundary>} />
           <Route path="simulation/intervenant-avancee" element={<RouteErrorBoundary><SimulationIntervenantAvancee /></RouteErrorBoundary>} />
           <Route path="simulation/index_Adequation" element={<RouteErrorBoundary><IndexAdequation /></RouteErrorBoundary>} />
+
+          {/* Capacité Nominale */}
+          <Route path="actuel/capacite-nominale" element={<RouteErrorBoundary><CapaciteNominale /></RouteErrorBoundary>} />
+          <Route path="simulation/capacite-nominale" element={<RouteErrorBoundary><CapaciteNominale /></RouteErrorBoundary>} />
+          <Route path="simulation/capacite_nominale" element={<RouteErrorBoundary><CapaciteNominale /></RouteErrorBoundary>} />
 
           {/* Administration */}
           <Route path="admin/import-tasks" element={<RouteErrorBoundary><GlobalImportPage /></RouteErrorBoundary>} />
