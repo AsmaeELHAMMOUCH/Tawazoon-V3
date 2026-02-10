@@ -65,12 +65,14 @@ import CentreBuilder from "./pages/CentreBuilder"; // 🆕 Page Builder (Créer 
 import AjoutTache from "./pages/admin/AjoutTache"; // 🆕 Page Ajout Tâche
 import CentersTasksManager from "./pages/admin/CentersTasksManager"; // 🆕 Page gestion Tâches
 import PostesManager from "./pages/admin/PostesManager"; // 🆕 Page gestion Postes
+import CentresTypologieManager from "./pages/admin/CentresTypologieManager"; // 🆕 Page gestion Typologies
 import Glossary from "./pages/help/Glossary"; // 🆕 Page Glossaire
 import MainMenu from "./pages/MainMenu"; // 🆕 Page Menu Principal
 import CentresUniques from "./pages/CentresUniques"; // 🆕 Page Centres Uniques
 import CNDPSimulation from "./pages/centres_uniq/CNDPSimulation"; // 🆕 CNDP Isolated Page
 import SimulationCentresUniques from "./pages/SimulationCentresUniques"; // 🆕 Parent Page CNDP/Bandoeng
 import GlobalImportPage from "./pages/GlobalImportPage"; // 🆕 Global Import
+import SimulationIntervenantAvancee from "./pages/SimulationIntervenantAvancee"; // 🆕 Simulation Intervenant Avancée
 
 
 // 🔹 NOUVELLE ARCHITECTURE DATA-DRIVEN - Intégrée directement dans SimulationEffectifs
@@ -243,6 +245,7 @@ export default function App() {
           <Route path="simulation/categorisation/:centreId" element={<RouteErrorBoundary><CategorisationCentre /></RouteErrorBoundary>} />
           <Route path="simulation/cndp" element={<RouteErrorBoundary><CNDPSimulation /></RouteErrorBoundary>} />
           <Route path="simulation/centres-uniques" element={<RouteErrorBoundary><SimulationCentresUniques /></RouteErrorBoundary>} />
+          <Route path="simulation/intervenant-avancee" element={<RouteErrorBoundary><SimulationIntervenantAvancee /></RouteErrorBoundary>} />
 
           {/* Administration */}
           <Route path="admin/import-tasks" element={<RouteErrorBoundary><GlobalImportPage /></RouteErrorBoundary>} />
@@ -252,6 +255,7 @@ export default function App() {
           <Route path="builder" element={<RouteErrorBoundary><AjoutTache /></RouteErrorBoundary>} />
           <Route path="taches-manager" element={<RouteErrorBoundary><CentersTasksManager /></RouteErrorBoundary>} />
           <Route path="postes-manager" element={<RouteErrorBoundary><PostesManager /></RouteErrorBoundary>} />
+          <Route path="centres-typologie" element={<RouteErrorBoundary><CentresTypologieManager /></RouteErrorBoundary>} />
           <Route path="glossary" element={<RouteErrorBoundary><Glossary /></RouteErrorBoundary>} />
 
 

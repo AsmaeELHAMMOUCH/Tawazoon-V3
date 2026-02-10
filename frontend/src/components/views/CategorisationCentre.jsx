@@ -224,71 +224,89 @@ export default function CategorisationCentre() {
 
     // Fetch categorisation data - either from navigation state or from API
     useEffect(() => {
-        // Priority 1: Check if data was passed via navigation (from Vue Centre)
-        if (location.state?.simulationResults) {
-            const simData = location.state.simulationResults;
-            console.log("✅ Simulation data received from navigation:", simData);
-
-            setSimResults({
-                postes: simData.postes || [],
-                total_heures: simData.total_heures,
-                fte_calcule: simData.total_etp_calcule,
-                fte_arrondi: simData.total_etp_arrondi
-            });
-
-            // Auto-fill Block 4 (Ressources) with total ETP
-            if (typeof simData.total_etp_arrondi === 'number') {
-                setRessourcesInputs(prev => ({
-                    ...prev,
-                    effectif_global: simData.total_etp_arrondi
-                }));
-            }
-
-            // ✅ Set Acheminement score
-            if (typeof simData.acheminement_score === 'number') {
-                setAcheminementScore(simData.acheminement_score);
-                console.log("✅ Acheminement score set to:", simData.acheminement_score);
-            }
-
-            return; // Don't fetch from API if we have navigation data
-        }
-
-        // Priority 2: Fetch from categorisation API
-        const fetchCategData = async () => {
-            try {
-                console.log("📥 Fetching latest categorisation simulation for centre:", centreId);
-                const response = await api.getLatestCategSimulation(centreId);
-
-                if (response.found && response.data) {
-                    const categData = response.data;
-                    console.log("✅ Categorisation data found:", categData);
-
-                    setSimResults({
-                        postes: categData.postes || [],
-                        total_heures: categData.total_heures,
-                        fte_calcule: categData.total_etp_calcule,
-                        fte_arrondi: categData.total_etp_arrondi
+        const fetchData = async () => {
+            // 1. Volumes - Priority to location.state, then DB
+            if (location.state?.volumes) {
+                const vols = location.state.volumes;
+                setVolumeInputs({
+                    cOrd: vols.cOrd || 0,
+                    cReco: vols.cReco || 0,
+                    amana: vols.amana || 0,
+                    eBarkia: vols.eBarkia || 0,
+                    lrh: vols.lrh || 0,
+                    sacs: vols.sacs || 0,
+                    colis: vols.colis || 0,
+                });
+            } else if (centreId) {
+                try {
+                    const v = await api.getCentreVolumes(centreId);
+                    setVolumeInputs({
+                        cOrd: v.courrier_ordinaire || 0,
+                        cReco: v.courrier_recommande || 0,
+                        amana: v.amana || 0,
+                        eBarkia: v.ebarkia || 0,
+                        lrh: v.lrh || 0,
+                        sacs: v.sacs || 0,
+                        colis: v.colis || 0,
                     });
+                } catch (e) {
+                    console.error("Failed to fetch reference volumes", e);
+                }
+            }
 
-                    if (typeof categData.total_etp_arrondi === 'number') {
-                        setRessourcesInputs(prev => ({
-                            ...prev,
-                            effectif_global: categData.total_etp_arrondi
-                        }));
+            // 2. Simulation Results
+            if (location.state?.simulationResults) {
+                const simData = location.state.simulationResults;
+                console.log("✅ Simulation data received from navigation:", simData);
+
+                setSimResults({
+                    postes: simData.postes || [],
+                    total_heures: simData.total_heures,
+                    fte_calcule: simData.total_etp_calcule,
+                    fte_arrondi: simData.total_etp_arrondi
+                });
+
+                if (typeof simData.total_etp_arrondi === 'number') {
+                    setRessourcesInputs(prev => ({
+                        ...prev,
+                        effectif_global: simData.total_etp_arrondi
+                    }));
+                }
+
+                if (typeof simData.acheminement_score === 'number') {
+                    setAcheminementScore(simData.acheminement_score);
+                }
+            } else if (centreId) {
+                try {
+                    console.log("📥 Fetching latest categorisation simulation for centre:", centreId);
+                    const response = await api.getLatestCategSimulation(centreId);
+
+                    if (response.found && response.data) {
+                        const categData = response.data;
+                        setSimResults({
+                            postes: categData.postes || [],
+                            total_heures: categData.total_heures,
+                            fte_calcule: categData.total_etp_calcule,
+                            fte_arrondi: categData.total_etp_arrondi
+                        });
+
+                        if (typeof categData.total_etp_arrondi === 'number') {
+                            setRessourcesInputs(prev => ({
+                                ...prev,
+                                effectif_global: categData.total_etp_arrondi
+                            }));
+                        }
+                    } else {
+                        setSimResults({ postes: [] });
                     }
-                } else {
-                    console.warn("⚠️ No categorisation data found. Please run a simulation in Vue Centre first.");
+                } catch (err) {
+                    console.error("❌ Error fetching categorisation data:", err);
                     setSimResults({ postes: [] });
                 }
-            } catch (err) {
-                console.error("❌ Error fetching categorisation data:", err);
-                setSimResults({ postes: [] });
             }
         };
 
-        if (centreId) {
-            fetchCategData();
-        }
+        fetchData();
     }, [centreId, location.state]);
 
     // Apple Rule: Distribution Finale
@@ -557,7 +575,16 @@ export default function CategorisationCentre() {
         if (matchedCat) {
             if (window.confirm(`Confirmez-vous la sauvegarde ?\n\nCatégorie: ${classeCentre}\nScore: ${totalScore.toFixed(1)}\nPostes à mettre à jour: ${postesToUpdate.length}`)) {
                 try {
-                    await api.updateCentreCategorisation(centreId, matchedCat.id, postesToUpdate);
+                    // ✅ Pass volumes for persistence
+                    await api.updateCentreCategorisation(centreId, matchedCat.id, postesToUpdate, {
+                        courrier_ordinaire: Number(volumeInputs.cOrd) || 0,
+                        courrier_recommande: Number(volumeInputs.cReco) || 0,
+                        amana: Number(volumeInputs.amana) || 0,
+                        ebarkia: Number(volumeInputs.eBarkia) || 0,
+                        lrh: Number(volumeInputs.lrh) || 0,
+                        sacs: Number(volumeInputs.sacs) || 0,
+                        colis: Number(volumeInputs.colis) || 0
+                    });
                     alert(`Sauvegardé avec succès ! Les effectifs ont été mis à jour.`);
                 } catch (e) {
                     console.error("Error saving categorisation:", e);

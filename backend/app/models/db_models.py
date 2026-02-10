@@ -108,7 +108,7 @@ class Tache(Base):
     phase = Column(String, nullable=True)
     unite_mesure = Column(String, nullable=False)
     etat = Column(String, nullable=True)  # 🆕 AJOUT: État de la tâche (ex: 'NA' pour non active)
-    # ordre = Column(Integer, nullable=True) # 🆕 AJOUT: Ordre d'affichage
+    ordre = Column(Integer, nullable=True) # 🆕 AJOUT: Ordre d'affichage
     
     min_min = Column(String, nullable=True)
     moy_sec = Column(String, nullable=True) 
