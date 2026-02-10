@@ -49,6 +49,7 @@ import {
     DialogTrigger,
 } from "@/components/ui/dialog";
 import OrganizationalChart from "@/components/centres_uniq/OrganizationalChart";
+import { formatHoursMinutes } from "@/utils/formatters";
 
 const CNDP_CENTRE_ID = 1965;
 
@@ -220,12 +221,7 @@ export default function CNDPSimulation() {
         });
     };
 
-    const formatHoursMinutes = (decimalHours) => {
-        if (!decimalHours || isNaN(decimalHours)) return "0h 00";
-        const hours = Math.floor(decimalHours);
-        const minutes = Math.round((decimalHours - hours) * 60);
-        return `${hours}h ${minutes.toString().padStart(2, '0')}`;
-    };
+
 
     const heuresNettesJourCalculees = React.useMemo(() => {
         const hBase = 8; // Convention standard

@@ -15,14 +15,103 @@ class VolumeContext:
         self.db = db
         # Ajouter ici les propriétés calculées (ex: totaux annuels)
         self.nb_jours_ouvres_an = volumes_ui.nb_jours_ouvres_an or 264
+        self.grid_values = volumes_ui.grid_values or {}
+
+    def get_grid_volume_by_product(self, produit: str) -> float:
+        """
+        Récupère le volume depuis la grille (grid_values) en fonction du nom du produit.
+        Logique adaptée de bandoeng_engine pour l'unification.
+        """
+        if not self.grid_values:
+            return 0.0
+
+        p = produit.upper().strip() if produit else ""
+        g = self.grid_values
+
+        def val(path_list):
+            curr = g
+            for k in path_list:
+                if isinstance(curr, dict) and k in curr:
+                    curr = curr[k]
+                else:
+                    return 0.0
+            try:
+                # Handle possible string formatting in grid values
+                if isinstance(curr, str):
+                   curr = curr.replace(',', '.').replace(' ', '').replace('%', '').strip()
+                   if not curr: return 0.0
+                return float(curr)
+            except:
+                return 0.0
+
+        # --- LOGIQUE IDENTIQUE A BANDOENG ENGINE ---
+        
+        # Flux AMANA
+        if "AMANA" in p:
+            if "RECU" in p or "REÇU" in p or "ARRIVEE" in p or "ARRIVÉ" in p:
+                if "INTERNATIONAL" in p: return val(['amana', 'import', 'international'])
+                if "NATIONAL" in p: return val(['amana', 'import', 'national'])
+                if "LOCAL" in p: return val(['amana', 'import', 'local']) # Souvent 0
+                return val(['amana', 'import', 'national']) + val(['amana', 'import', 'international']) # Default Arrivé
+
+            if "DEPART" in p or "DÉPART" in p:
+                if "GUICHET" in p: return val(['amana', 'export', 'guichet'])
+                if "COLLECTE" in p: return val(['amana', 'export', 'collecte'])
+                # Default Depart = Guichet + Collecte
+                return val(['amana', 'export', 'guichet']) + val(['amana', 'export', 'collecte'])
+
+        # Courrier Ordinaire (CO)
+        if "COURRIER ORDINAIRE" in p or "ORDINAIRE" in p:
+            if "ARRIVEE" in p or "REÇU" in p or "RECU" in p:
+                if "INTERNATIONAL" in p: return val(['courrier_ordinaire', 'import', 'international'])
+                if "NATIONAL" in p: return val(['courrier_ordinaire', 'import', 'national'])
+                # Cas spécial : CO Arrivé (Somme Local + Axes) selon Bandoeng
+                # Mais ici on reste générique. Bandoeng dit: Local + Axes
+                return val(['courrier_ordinaire', 'import', 'local']) + val(['courrier_ordinaire', 'import', 'axes'])
+
+            if "DEPART" in p or "DÉPART" in p:
+                if "COLLECTE" in p: return val(['courrier_ordinaire', 'export', 'collecte'])
+                if "GUICHET" in p: return val(['courrier_ordinaire', 'export', 'guichet'])
+                if "BOITE" in p: return val(['courrier_ordinaire', 'export', 'boites_lettres'])
+                # Total Depart
+                return val(['courrier_ordinaire', 'export', 'guichet']) + \
+                       val(['courrier_ordinaire', 'export', 'boites_lettres']) + \
+                       val(['courrier_ordinaire', 'export', 'collecte'])
+
+        # Courrier Recommandé (CR)
+        if "COURRIER RECOMMANDE" in p or "RECOMMANDÉ" in p or " R " in p:
+             if "ARRIVEE" in p or "REÇU" in p or "RECU" in p:
+                 if "INTERNATIONAL" in p: return val(['courrier_recommande', 'import', 'international'])
+                 if "NATIONAL" in p: return val(['courrier_recommande', 'import', 'national'])
+                 return val(['courrier_recommande', 'import', 'local']) + val(['courrier_recommande', 'import', 'axes']) # Default
+
+             if "DEPART" in p or "DÉPART" in p:
+                 if "COLLECTE" in p: return val(['courrier_recommande', 'export', 'collecte'])
+                 if "GUICHET" in p: return val(['courrier_recommande', 'export', 'guichet'])
+                 return val(['courrier_recommande', 'export', 'guichet']) + val(['courrier_recommande', 'export', 'collecte'])
+
+        # E-Barkia
+        if "BARKIA" in p:
+             if "MED" in p or "DÉPART" in p or "DEPART" in p: return val(['ebarkia', 'med'])
+             if "ARRIVEE" in p or "ARRIVÉ" in p or "RECU" in p: return val(['ebarkia', 'arrive'])
+             return val(['ebarkia', 'med']) # Default
+
+        # LRH
+        if "LRH" in p:
+             if "MED" in p or "DÉPART" in p or "DEPART" in p: return val(['lrh', 'med'])
+             if "ARRIVEE" in p or "ARRIVÉ" in p or "RECU" in p: return val(['lrh', 'arrive'])
+             return val(['lrh', 'med']) # Default
+
+        return 0.0
 
     def get_volume(self, flux: str, sens: str, segment: str = "GLOBAL") -> float:
         """
         Récupère un volume par son code flux/sens/segment depuis la liste plate volumes_flux.
         """
+        # ... existing implementation ...
         if not self.raw_volumes.volumes_flux:
             return 0.0
-        
+            
         flux = flux.upper()
         sens = sens.upper()
         segment = segment.upper()
@@ -138,6 +227,51 @@ def _calculer_volume_raw(tache: Any, context: VolumeContext) -> tuple:
     # DEBUG TRACE
     if "Rapprochement" in tache.nom_tache:
         print(f"DEBUG_TASK: ID={getattr(tache, 'id_tache', '?')} NOM={tache.nom_tache} PROD_RAW='{getattr(tache, 'produit', '')}' PROD_NORM='{produit}' FAMILLE='{getattr(tache, 'famille_uo', '')}'")
+
+    # 🆕 INTEGRATION GRILLE UNIFIEE (Prioritaire)
+    if context.grid_values:
+        vol_brut = context.get_grid_volume_by_product(produit)
+        
+        # Si on trouve un volume dans la grille, on l'utilise
+        # Note: get_grid_volume_by_product retourne 0.0 si pas trouvé. 
+        # Mais 0.0 peut être une vraie valeur. Comment savoir ?
+        # On assume que si grid_values est présent, on DOIT l'utiliser pour tous les produits mappés.
+        # Si le produit n'est pas mappé (ex: International), ça retourne 0 -> Correct.
+        
+        # 2. Conversion Annuel -> Journalier
+        # Diviseur Jours (264 par défaut)
+        div_jours = float(context.nb_jours_ouvres_an)
+        if "day_350" in phase.lower(): div_jours = 350.0
+        elif "day_24" in phase.lower(): div_jours = 24.0
+        elif "retour_day_350" in phase.lower(): div_jours = 350.0
+        
+        vol_jour_brut = vol_brut / div_jours if div_jours > 0 else 0.0
+        
+        # 3. Facteur de Conversion (Diviseur Unitaire)
+        divisor = 1.0
+        if "CAISSON" in unite:
+             divisor = float(context.nbr_cr_sac or 400.0)
+        elif "SAC" in unite:
+             if "AMANA" in produit: divisor = float(context.colis_amana_par_canva_sac or 35.0)
+             elif "CR" in produit or "RECOMMANDE" in produit: divisor = float(context.nbr_cr_sac or 400.0)
+             elif "CO" in produit or "ORDINAIRE" in produit: divisor = float(context.nbr_co_sac or 350.0)
+        
+        # Volume Journalier Net (avant Base)
+        volume_jour = vol_jour_brut / divisor if divisor > 0 else 0.0
+        
+        # 4. Application Base Calcul
+        # La fonction retourne le volume FINAL (avec base appliquée)
+        facteur_base = float(base_val) / 100.0
+        volume_final_jour = volume_jour * facteur_base
+        volume_final_annuel = vol_brut * facteur_base # ? Pas sûr si vol annuel doit avoir base. Legacy le fait line 558.
+        
+        # Troncature spécifique
+        if "CHARGEMENT FACTEUR" in tache.nom_tache.upper() or "APPEL CLIENT" in tache.nom_tache.upper():
+            volume_final_jour = int(volume_final_jour)
+
+        facteur_conversion = (1.0 / divisor) * facteur_base
+        
+        return volume_final_annuel, volume_final_jour, facteur_conversion, f"GRID[{produit}] Base={base_val}% Div={divisor} PhaseDiv={div_jours}"
 
     nb_jours = context.nb_jours_ouvres_an
     

@@ -1,6 +1,6 @@
 ﻿/* VueIntervenant.jsx - normalisation /jour + productivité + formatage */
 "use client";
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useDebouncedValue } from "../../hooks/useDebounce";
 import {
   MapPin,
@@ -25,6 +25,9 @@ import {
   Eye,
   EyeOff,
   Upload,
+  Download,
+  Box,
+  Play,
 } from "lucide-react";
 
 import { api } from "../../lib/api";
@@ -46,6 +49,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"; // 🆕 Import Dialog
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+
+import BandoengGrid from "@/components/centres_uniq/BandoengGrid";
+import BandoengAdditionalParams from "@/components/centres_uniq/BandoengAdditionalParams";
+import BandoengParameters from "@/components/centres_uniq/BandoengParameters";
 
 
 /* ===================== KPI COMPONENTS (COPIED FROM VUECENTRE) ===================== */
@@ -102,6 +111,12 @@ const KPICardGlass = ({
   );
 };
 
+const formatSigned = (v) => {
+  if (!v) return "0";
+  const n = typeof v === 'string' ? parseFloat(v) : v;
+  return n > 0 ? `+${n}` : `${n}`;
+};
+
 const EffectifFooter = ({ totalLabel, totalValue, modValue, moiValue, apsLabel, apsValue }) => (
   <div className="text-[10px] text-slate-600 space-y-1.5">
     {totalValue !== undefined && (
@@ -127,6 +142,7 @@ const EffectifFooter = ({ totalLabel, totalValue, modValue, moiValue, apsLabel, 
 import Tooltip from "../ui/Tooltip";
 import "../tables/EnterpriseTable.css";
 import "../../styles/tooltips.css";
+import { CardContent } from "../card";
 
 export default function VueIntervenant({
   regions = [],
@@ -157,7 +173,7 @@ export default function VueIntervenant({
   pctAxesArrivee, setPctAxesArrivee,
   pctAxesDepart, setPctAxesDepart,
   pctInternational = 0, setPctInternational = () => { },
-  pctNational = 0, setPctNational = () => { },
+  pctNational = 100, setPctNational = () => { },
   pctMarcheOrdinaire = 0, setPctMarcheOrdinaire = () => { },
   productivite,
   setProductivite,
@@ -194,6 +210,11 @@ export default function VueIntervenant({
   // 🆕 Grille Flux (persistance detailed grid)
   volumesFluxGrid = null,
   setVolumesFluxGrid = () => { },
+  // 🆕 Unified Grid Props
+  gridValues,
+  handleGridChange,
+  colisAmanaParCanvaSac,
+  setColisAmanaParCanvaSac,
   edPercent = 60,
   setEdPercent = () => { },
   nbrCoSac = 0,
@@ -215,7 +236,20 @@ export default function VueIntervenant({
   categories = [],
   selectedTypology = "",
   setSelectedTypology = () => { },
+  onImportBandoeng,
+  onDownloadTemplate,
 }) {
+  const fileInputRef = useRef(null);
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (onImportBandoeng) {
+      onImportBandoeng(file);
+    }
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
   const JOURS_OUVRES_AN = 264;
   const PAGE_SCALE = 0.8;
 
@@ -246,6 +280,8 @@ export default function VueIntervenant({
 
   // 🆕 Paramètre Collecte (Local -> Global)
   const [filterProduit, setFilterProduit] = useState("");
+  // 🆕 State local pour Bandoeng UI (si non géré par parent)
+  const [pctSac, setPctSac] = useState(60);
 
   // 🆕 Liste des familles uniques
   const uniqueFamilles = useMemo(() => {
@@ -436,6 +472,33 @@ export default function VueIntervenant({
     setHeuresBrutes(heuresBase);
     setHeuresNet(heuresNettes.toFixed(2));
   }, [debouncedIdleMinutes, debouncedProductivite, setHeuresNet]);
+
+  // 🆕 AUTO-BALANCE LOGIC for Bandoeng Parameters
+  // Wrapper functions to auto-balance complementary percentages
+  // Using useCallback to prevent recreation on each render (fixes input focus loss)
+  const handlePctAxesArriveeChange = React.useCallback((val) => {
+    const axes = Math.max(0, Math.min(100, Number(val || 0)));
+    setPctAxesArrivee(axes);
+    setPctAxesDepart(100 - axes); // Auto-balance Local
+  }, [setPctAxesArrivee, setPctAxesDepart]);
+
+  const handlePctAxesDepartChange = React.useCallback((val) => {
+    const local = Math.max(0, Math.min(100, Number(val || 0)));
+    setPctAxesDepart(local);
+    setPctAxesArrivee(100 - local); // Auto-balance Axes
+  }, [setPctAxesDepart, setPctAxesArrivee]);
+
+  const handlePctInternationalChange = React.useCallback((val) => {
+    const inter = Math.max(0, Math.min(100, Number(val || 0)));
+    setPctInternational(inter);
+    setPctNational(100 - inter); // Auto-balance National
+  }, [setPctInternational, setPctNational]);
+
+  const handlePctNationalChange = React.useCallback((val) => {
+    const nat = Math.max(0, Math.min(100, Number(val || 0)));
+    setPctNational(nat);
+    setPctInternational(100 - nat); // Auto-balance International
+  }, [setPctNational, setPctInternational]);
 
   const posteValue = poste == null ? "" : String(poste);
 
@@ -941,8 +1004,6 @@ export default function VueIntervenant({
       ed_percent: Number(edPercent || 0), // 🆕 % En dehors
       pct_collecte: Number(pctCollecte || 0), // 🆕 % Collecte
       pct_retour: Number(pctRetour || 0), // 🆕 % Retour
-      pct_international: Number(pctInternational || 0), // 🆕 % International
-      ...overrides
     });
   }, [onSimuler, colisParCollecte, colisAmanaParSac, courriersParSac, partParticuliers, tauxComplexite, natureGeo, edPercent, pctCollecte, pctRetour, pctInternational]);
 
@@ -1029,9 +1090,47 @@ export default function VueIntervenant({
 
     return { chef, moiStaff, modStaff };
   }, [hasSimulated, postesOptions, resultats, kpiData, isMoiPoste]);
+  // ---------------------------------------------------------------------------
+  // 🆕 ADAPTERS POUR COMPOSANTS UNIFIÉS (BandoengParameters / BandoengGrid)
+  // ---------------------------------------------------------------------------
+
+  const paramsBandoeng = {
+    productivite: productivite,
+    idle_minutes: idleMinutes,
+    shift: shift,
+    ed_percent: edPercent,
+    pct_sac: pctSac,
+    colis_amana_par_canva_sac: colisAmanaParCanvaSac,
+    nbr_co_sac: nbrCoSac,
+    nbr_cr_sac: nbrCrSac,
+  };
+
+  const handleParamChangeBandoeng = (key, value) => {
+    const v = Number(value);
+    switch (key) {
+      case "productivite": setProductivite(v); break;
+      case "idle_minutes": setIdleMinutes(v); break;
+      case "shift": setShift(v); break;
+      case "ed_percent": setEdPercent(v); break;
+      case "pct_sac": setPctSac(v); break;
+      case "colis_amana_par_canva_sac": setColisAmanaParCanvaSac(v); break;
+      case "nbr_co_sac": setNbrCoSac(v); break;
+      case "nbr_cr_sac": setNbrCrSac(v); break;
+      default: console.warn("Unknown Bandoeng param:", key);
+    }
+  };
+
+  // Calcul Capacité Nette Formattée
+  const netCapacityStr = useMemo(() => {
+    const val = Number(heuresNet || 0); // Note: prop is heuresNet, previous code used baseHeuresNet? Checks needed.
+    // Checking props: heuresNet is passed.
+    const h = Math.floor(val);
+    const m = Math.round((val - h) * 60);
+    return `${h}h ${String(m).padStart(2, "0")}`;
+  }, [heuresNet]);
 
   return (
-    <div className="w-full flex flex-col gap-3 pb-16" style={{ zoom: "90%" }}>
+    <div className="flex flex-col gap-6 w-full max-w-[1600px] mx-auto pb-20" style={{ zoom: "90%" }}>
       {/* 🔹 BARRES STICKY EN HAUT - Sélection + Productivité côte à côte */}
       <div className="sticky top-[57px] z-20 grid grid-cols-1 xl:grid-cols-2 gap-2">
         {/* Barre de sélection */}
@@ -1148,243 +1247,142 @@ export default function VueIntervenant({
           </div>
         </div>
 
-        {/* Configuration & Performance */}
-        <div className="bg-white/80 backdrop-blur-md border border-slate-200/60 shadow-sm rounded-lg px-3 py-2">
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Productivité */}
-            <div className="flex items-center gap-1.5 min-w-[100px] flex-1">
-              <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
-                <Gauge className="w-3 h-3" />
-              </div>
-              <div className="flex flex-col w-full">
-                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                  Productivité
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    min={0}
-                    max={200}
-                    value={toInput(productivite)}
-                    placeholder="100"
-                    onChange={(e) =>
-                      setProductivite(parseNonNeg(e.target.value) ?? 100)
-                    }
-                    className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full pr-6 text-center"
-                  />
-                  <span className="absolute right-0 top-0 text-[9px] text-slate-400 font-bold pointer-events-none">
-                    %
-                  </span>
-                </div>
-              </div>
+        {/* 🆕 Calculate formatted net capacity for BandoengParameters */}
+        {(() => {
+          const p = Number(productivite ?? 100) / 100;
+          const idleH = Number(idleMinutes || 0) / 60;
+          const base = 8;
+          const productive = base * p;
+          const net = Math.max(0, productive - idleH);
+          const h = Math.floor(net);
+          const m = Math.round((net - h) * 60);
+          const netCapacityFormatted = `${h}h ${String(m).padStart(2, "0")}`;
+
+          return (
+            <>
+              {/* 🆕 Unified Parameters Component */}
+              <BandoengParameters
+                params={{
+                  shift: shift,
+                  productivite: productivite,
+                  idle_minutes: idleMinutes,
+                }}
+                handleParamChange={(key, value) => {
+                  if (key === "shift") setShift(Number(value));
+                  else if (key === "productivite") setProductivite(Number(value));
+                  else if (key === "idle_minutes") setIdleMinutes(Number(value));
+                }}
+                netCapacity={netCapacityFormatted}
+                className="w-full"
+              />
+            </>
+          );
+        })()}
+      </div>
+
+      <div className="w-full space-y-1">
+
+        <Card className="bg-white border-slate-200 shadow-sm shrink-0">
+          {/* Paramètres de volume */}
+          <div className="flex items-center justify-between px-4 py-0 border-b border-slate-100 bg-slate-50/50">
+            <div className="flex items-center gap-2">
+              <Box className="w-4 h-4 text-[#005EA8]" />
+              <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">Saisie des Volumes</span>
             </div>
+            <div className="flex gap-2 items-center justify-end">
+              <Button
+                size="sm"
+                onClick={handleSimuler}
+                disabled={loading.simulation || !gridValues}
+                className="h-8 text-xs gap-2 bg-[#005EA8] hover:bg-[#004E8A] text-white"
+              >
+                {loading.simulation ? (
+                  <>
+                    <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <span>Calcul...</span>
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-3.5 h-3.5 fill-current" />
+                    <span>Lancer Simulation</span>
+                  </>
+                )}
+              </Button>
 
-            <div className="w-px h-6 bg-slate-200 hidden md:block" />
+              <div className="h-4 w-px bg-slate-200 mx-1" />
 
-            {/* Temps mort */}
-            <div className="flex items-center gap-1.5 min-w-[100px] flex-1">
-              <div className="w-6 h-6 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-                <Clock className="w-3 h-3" />
-              </div>
-              <div className="flex flex-col w-full">
-                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                  Temps mort
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    min={0}
-                    value={idleMinutes}
-                    onChange={(e) =>
-                      setIdleMinutes(Number(e.target.value || 0))
-                    }
-                    className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full pr-8 text-center"
-                  />
-                  <span className="absolute right-0 top-0 text-[9px] text-slate-400 font-bold pointer-events-none">
-                    min
-                  </span>
-                </div>
-              </div>
-            </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onDownloadTemplate}
+                disabled={!onDownloadTemplate}
+                className="h-8 text-xs gap-2"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Modèle Import
+              </Button>
 
-            <div className="w-px h-6 bg-slate-200 hidden md:block" />
-
-            {/* Complexité Circulation */}
-            <div className={`flex items-center gap-1.5 min-w-[90px] flex-1 ${isAM ? "opacity-40 grayscale pointer-events-none" : ""}`}>
-              <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
-                <Sliders className="w-3 h-3" />
-              </div>
-              <div className="flex flex-col w-full">
-                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                  Compl. Circ.
-                </label>
-                <select
-                  value={isAM ? 1 : tauxComplexite}
-                  disabled={isAM}
-                  onChange={(e) =>
-                    setTauxComplexite(Number(e.target.value))
-                  }
-                  className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full text-center cursor-pointer disabled:cursor-not-allowed"
+              <div className="relative">
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  className="hidden"
+                  ref={fileInputRef}
+                  onChange={handleFileSelect}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={!onImportBandoeng}
+                  className="h-8 text-xs gap-2"
                 >
-                  <option value="0.5">0.5</option>
-                  <option value="0.75">0.75</option>
-                  <option value="1">1</option>
-                  <option value="1.25">1.25</option>
-                  <option value="1.5">1.5</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="w-px h-6 bg-slate-200 hidden md:block" />
-
-            {/* Complexité Géo */}
-            <div className={`flex items-center gap-1.5 min-w-[90px] flex-1 ${isAM ? "opacity-40 grayscale pointer-events-none" : ""}`}>
-              <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
-                <MapPin className="w-3 h-3" />
-              </div>
-              <div className="flex flex-col w-full">
-                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                  Compl. Géo
-                </label>
-                <select
-                  value={isAM ? 1 : natureGeo}
-                  disabled={isAM}
-                  onChange={(e) => setNatureGeo(Number(e.target.value))}
-                  className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full text-center cursor-pointer disabled:cursor-not-allowed"
-                >
-                  <option value="0.5">0.5</option>
-                  <option value="0.75">0.75</option>
-                  <option value="1">1</option>
-                  <option value="1.25">1.25</option>
-                  <option value="1.5">1.5</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="w-px h-6 bg-slate-200 hidden md:block" />
-
-            {/* Shift */}
-            <div className={`flex items-center gap-1.5 min-w-[90px] flex-1 ${isAM ? "opacity-40 grayscale pointer-events-none" : ""}`}>
-              <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
-                <Clock className="w-3 h-3" />
-              </div>
-              <div className="flex flex-col w-full">
-                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                  Shift
-                </label>
-                <select
-                  value={isAM ? 1 : shift}
-                  disabled={isAM}
-                  onChange={(e) => setShift(Number(e.target.value))}
-                  className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full text-center cursor-pointer disabled:cursor-not-allowed"
-                >
-                  <option value="1">1</option>
-                  <option value="2">2</option>
-                  <option value="3">3</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="w-px h-6 bg-slate-200 hidden md:block" />
-
-            {/* Capacité Nette - Résultat */}
-            <div className="flex items-center gap-1.5">
-              <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
-                <Clock className="w-3 h-3" />
-              </div>
-              <div className="flex flex-col">
-                <label className="text-[9px] font-bold text-[#005EA8] uppercase tracking-wider">
-                  Capacité Nette
-                </label>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-lg font-extrabold text-slate-800 tracking-tight">
-                    {(() => {
-                      const val = Number(baseHeuresNet || 0);
-                      const h = Math.floor(val);
-                      const m = Math.round((val - h) * 60);
-                      return `${h}h ${String(m).padStart(2, "0")}`;
-                    })()}
-                  </span>
-                  <span className="text-[9px] font-semibold text-slate-500">h/j</span>
-                </div>
+                  <Upload className="w-3.5 h-3.5" />
+                  Importer Volumes
+                </Button>
               </div>
             </div>
           </div>
-        </div>
-      </div>
 
-      <div className="w-full space-y-3">
+          <CardContent className="p-1">
+            <BandoengGrid
+              gridValues={gridValues}
+              handleGridChange={handleGridChange}
+              disabled={!region || !centre}
+            />
+          </CardContent>
+        </Card>
 
 
+        {/* 🆕 GRILLE UNIFIÉE BANDOENG */}
 
-        {/* Paramètres de volume */}
-        <VolumeParamsCard
-          Card={Card}
-          Field={Field}
-          Input={Input}
-          centre={centre}
-          centreCategorie={centreCategorie}
-          loading={loading}
-          courrierOrdinaire={courrierOrdinaire}
-          setCourrierOrdinaire={setCourrierOrdinaire}
-          courrierRecommande={courrierRecommande}
-          setCourrierRecommande={setCourrierRecommande}
-          ebarkia={ebarkia}
-          setEbarkia={setEbarkia}
-          lrh={lrh}
-          setLrh={setLrh}
-          amana={amana}
-          setAmana={setAmana}
-          colisAmanaParSac={colisAmanaParSac}
-          setColisAmanaParSac={setColisAmanaParSac}
-          courriersParSac={courriersParSac}
-          setCourriersParSac={setCourriersParSac}
+
+        {/* 🆕 PARAMÈTRES ADDITIONNELS BANDOENG */}
+        <BandoengAdditionalParams
+          colisAmanaParCanvaSac={colisAmanaParCanvaSac}
+          setColisAmanaParCanvaSac={setColisAmanaParCanvaSac}
           nbrCoSac={nbrCoSac}
           setNbrCoSac={setNbrCoSac}
           nbrCrSac={nbrCrSac}
           setNbrCrSac={setNbrCrSac}
-          crParCaisson={crParCaisson}
-          setCrParCaisson={setCrParCaisson}
-          colisParCollecte={colisParCollecte}
-          setColisParCollecte={setColisParCollecte}
-          parseNonNeg={parseNonNeg}
-          toInput={toInput}
-          monthly={monthly}
-          formatInt={formatUnit}
-          splitFlux={splitFlux}
-          partParticuliers={partParticuliers}
-          setPartParticuliers={setPartParticuliers}
-          partProfessionnels={partProfessionnels}
-          getEffectiveFluxMode={getEffectiveFluxMode}
-          // 🆕 Synchro Grille Flux
-          volumesFluxGrid={volumesFluxGrid}
-          setVolumesFluxGrid={setVolumesFluxGrid}
-          onSimuler={handleSimuler}
-          simDirty={simDirty}
-          edPercent={edPercent}
-          setEdPercent={setEdPercent}
-          pctAxesArrivee={pctAxesArrivee}
-          setPctAxesArrivee={setPctAxesArrivee}
-          pctAxesDepart={pctAxesDepart}
-          setPctAxesDepart={setPctAxesDepart}
           pctCollecte={pctCollecte}
           setPctCollecte={setPctCollecte}
           pctRetour={pctRetour}
           setPctRetour={setPctRetour}
-          // 🆕 International
-          pctInternational={pctInternational}
-          setPctInternational={setPctInternational}
-          // 🆕 National
-          pctNational={pctNational}
-          setPctNational={setPctNational}
-          // 🆕 Marche Ordinaire
+          tauxComplexite={tauxComplexite}
+          setTauxComplexite={setTauxComplexite}
+          natureGeo={natureGeo}
+          setNatureGeo={setNatureGeo}
+          pctAxesArrivee={pctAxesArrivee}
+          setPctAxesArrivee={handlePctAxesArriveeChange}
+          pctAxesDepart={pctAxesDepart}
+          setPctAxesDepart={handlePctAxesDepartChange}
           pctMarcheOrdinaire={pctMarcheOrdinaire}
           setPctMarcheOrdinaire={setPctMarcheOrdinaire}
-          disabledAxes={
-            (centreCategorie || "").startsWith("AM") ||
-            (selectedCentreWithAPS?.type_site || "").startsWith("AM") ||
-            (selectedCentreWithAPS?.typologie || "").startsWith("AM")
-          }
+          pctInternational={pctInternational}
+          setPctInternational={handlePctInternationalChange}
+          pctNational={pctNational}
+          setPctNational={handlePctNationalChange}
         />
 
         {/* Référentiel & résultats - Masquable */}

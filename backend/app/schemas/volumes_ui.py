@@ -56,6 +56,9 @@ class VolumesUIInput(BaseModel):
     # 🆕 Support du format liste plate (nouveau format)
     volumes_flux: Optional[List[VolumeItem]] = Field(default_factory=list)
 
+    # 🆕 Support du format Grille (Bandoeng/Unified)
+    grid_values: Optional[Dict[str, Dict[str, float]]] = Field(default_factory=dict, description="Valeurs brutes de la grille unifiée")
+
     # ----------- ANCIENS PARAMETRES (Garder pour compatibilite ?) -----------
     # Flux Arrivée
     flux_arrivee: Optional[FluxVolumesInput] = Field(default_factory=FluxVolumesInput)
@@ -109,6 +112,11 @@ class VolumesUIInput(BaseModel):
     pct_reclam_co: Optional[float] = Field(default=0.0, description="Pourcentage de réclamations CO")
     pct_reclam_cr: Optional[float] = Field(default=0.0, description="Pourcentage de réclamations CR")
 
+    
+    # 🆕 Paramètres Bandoeng (Alias pour compatibilité)
+    colis_amana_par_canva_sac: Optional[float] = Field(default=None, description="Alias pour colis_amana_par_sac")
+    nbr_co_sac: Optional[float] = Field(default=None, description="Alias pour courriers_co_par_sac")
+    nbr_cr_sac: Optional[float] = Field(default=None, description="Alias pour courriers_cr_par_sac")
     
     # Nombre de jours ouvrés par an (fixe, configurable)
     nb_jours_ouvres_an: int = Field(default=264, description="Nombre de jours ouvrés par an")

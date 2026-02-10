@@ -42,8 +42,8 @@ export function useSimulationParams() {
   // Paramètres de performance
   const [productivite, setProductivite] = usePersistedState('sim_productivite', 100);
   const [idleMinutes, setIdleMinutes] = usePersistedState('sim_idleMinutes', 0);
-  const [tauxComplexite, setTauxComplexite] = usePersistedState('sim_tauxComplexite', 0);
-  const [natureGeo, setNatureGeo] = usePersistedState('sim_natureGeo', 0);
+  const [tauxComplexite, setTauxComplexite] = usePersistedState('sim_tauxComplexite', 1.0);
+  const [natureGeo, setNatureGeo] = usePersistedState('sim_natureGeo', 1.0);
 
   // Paramètres ED et ratios
   const [edPercent, setEdPercent] = usePersistedState('sim_edPercent', 60);
@@ -70,8 +70,8 @@ export function useSimulationParams() {
   const [shift, setShift] = usePersistedState('sim_shift', 1);
 
   // Helpers UI (sacs)
-  const [nbrCoSac, setNbrCoSac] = usePersistedState('sim_nbrCoSac', 0);
-  const [nbrCrSac, setNbrCrSac] = usePersistedState('sim_nbrCrSac', 0);
+  const [nbrCoSac, setNbrCoSac] = usePersistedState('sim_nbrCoSac', 4500);
+  const [nbrCrSac, setNbrCrSac] = usePersistedState('sim_nbrCrSac', 500);
   // 🆕 Helpers UI (caisson)
   const [crParCaisson, setCrParCaisson] = usePersistedState('sim_crParCaisson', 500);
 
@@ -90,6 +90,30 @@ export function useSimulationParams() {
 
   // 🆕 Grille détaillée des volumes par flux/segment (pour VolumeParamsCard & BandoengGrid)
   const [volumesFluxGrid, setVolumesFluxGrid] = usePersistedState('sim_volumesFluxGrid', {
+    amana: {
+      depot: {
+        gc: { global: "", local: "", axes: "" },
+        part: { global: "", local: "", axes: "" }
+      },
+      recu: {
+        gc: { global: "", local: "", axes: "" },
+        part: { global: "", local: "", axes: "" }
+      }
+    },
+    cr: {
+      med: { global: "", local: "", axes: "" },
+      arrive: { global: "", local: "", axes: "" }
+    },
+    co: {
+      med: { global: "", local: "", axes: "" },
+      arrive: { global: "", local: "", axes: "" }
+    },
+    ebarkia: { med: "", arrive: "" },
+    lrh: { med: "", arrive: "" }
+  });
+
+  // 🆕 État détaillé pour le grid Bandoeng (Structure complexe)
+  const [bandoengGridValues, setBandoengGridValues] = usePersistedState('sim_bandoeng_grid_values', {
     amana: {
       depot: {
         gc: { global: "", local: "", axes: "" },
@@ -163,5 +187,7 @@ export function useSimulationParams() {
 
     // Grille flux/segment
     volumesFluxGrid, setVolumesFluxGrid,
+    // 🆕 Grille Bandoeng
+    bandoengGridValues, setBandoengGridValues,
   };
 }

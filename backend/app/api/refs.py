@@ -311,11 +311,12 @@ def list_postes(
                 MAX(cp.id) AS centre_poste_id,
                 p.label,
                 p.type_poste,
+                p.Code,
                 SUM(COALESCE(cp.effectif_actuel, 0)) AS effectif_actuel
             FROM dbo.postes p
             INNER JOIN dbo.centre_postes cp ON cp.poste_id = p.id
             WHERE cp.centre_id = :centre_id
-            GROUP BY p.id, p.label, p.type_poste
+            GROUP BY p.id, p.label, p.type_poste, p.Code
             ORDER BY p.label
         """
         rows = db.execute(text(sql), {"centre_id": centre_id}).mappings().all()
@@ -329,6 +330,7 @@ def list_postes(
                 NULL AS centre_poste_id,
                 p.label,
                 p.type_poste AS type_poste,
+                p.Code,
                 0 AS effectif_actuel
             FROM dbo.postes p
             ORDER BY p.label
@@ -346,6 +348,7 @@ def list_postes(
             "id": r["id"],
             "centre_poste_id": r["centre_poste_id"],
             "label": r["label"],
+            "code": r.get("Code"),
             "type_poste": r.get("type_poste"),
             "effectif_actuel": r.get("effectif_actuel", 0),
         })
