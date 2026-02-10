@@ -1,4 +1,4 @@
-import {
+﻿import {
   BrowserRouter,
   Routes,
   Route,
@@ -39,7 +39,7 @@ class RouteErrorBoundary extends React.Component {
         <div style={{ padding: 16 }}>
           <h2>Une erreur est survenue</h2>
           <pre style={{ whiteSpace: "pre-wrap" }}>{String(this.state.error)}</pre>
-          <button onClick={() => this.setState({ hasError: false, error: null })} className="btn">Réessayer</button>
+          <button onClick={() => this.setState({ hasError: false, error: null })} className="btn">RÃ©essayer</button>
         </div>
       );
     }
@@ -56,29 +56,30 @@ import SimulationMenu from "./pages/SimulationMenu";
 import VueCategorie from "./pages/VueCategorie";
 import SimulationHistoryPage from "./pages/SimulationHistoryPage";
 
-// 🔹 IMPORTE TA PAGE MENU PARAMÉTRÉE
+// ðŸ”¹ IMPORTE TA PAGE MENU PARAMÃ‰TRÃ‰E
 import MenuAnalyseEffectifs from "./pages/SimulationMenu";
 import AlertsTestButton from "./components/alerts/AlertsTestButton";
 
 import CategorisationCentre from "./components/views/CategorisationCentre";
-import CentreBuilder from "./pages/CentreBuilder"; // 🆕 Page Builder (Créer Centre)
-import AjoutTache from "./pages/admin/AjoutTache"; // 🆕 Page Ajout Tâche
-import CentersTasksManager from "./pages/admin/CentersTasksManager"; // 🆕 Page gestion Tâches
-import PostesManager from "./pages/admin/PostesManager"; // 🆕 Page gestion Postes
-import CentresTypologieManager from "./pages/admin/CentresTypologieManager"; // 🆕 Page gestion Typologies
-import Glossary from "./pages/help/Glossary"; // 🆕 Page Glossaire
-import MainMenu from "./pages/MainMenu"; // 🆕 Page Menu Principal
-import CentresUniques from "./pages/CentresUniques"; // 🆕 Page Centres Uniques
-import CNDPSimulation from "./pages/centres_uniq/CNDPSimulation"; // 🆕 CNDP Isolated Page
-import SimulationCentresUniques from "./pages/SimulationCentresUniques"; // 🆕 Parent Page CNDP/Bandoeng
-import GlobalImportPage from "./pages/GlobalImportPage"; // 🆕 Global Import
-import SimulationIntervenantAvancee from "./pages/SimulationIntervenantAvancee"; // 🆕 Simulation Intervenant Avancée
+import CentreBuilder from "./pages/CentreBuilder"; // ðŸ†• Page Builder (CrÃ©er Centre)
+import AjoutTache from "./pages/admin/AjoutTache"; // ðŸ†• Page Ajout TÃ¢che
+import CentersTasksManager from "./pages/admin/CentersTasksManager"; // ðŸ†• Page gestion TÃ¢ches
+import PostesManager from "./pages/admin/PostesManager"; // ðŸ†• Page gestion Postes
+import CentresTypologieManager from "./pages/admin/CentresTypologieManager"; // ðŸ†• Page gestion Typologies
+import Glossary from "./pages/help/Glossary"; // ðŸ†• Page Glossaire
+import MainMenu from "./pages/MainMenu"; // ðŸ†• Page Menu Principal
+import CentresUniques from "./pages/CentresUniques"; // ðŸ†• Page Centres Uniques
+import CNDPSimulation from "./pages/centres_uniq/CNDPSimulation"; // ðŸ†• CNDP Isolated Page
+import SimulationCentresUniques from "./pages/SimulationCentresUniques"; // ðŸ†• Parent Page CNDP/Bandoeng
+import GlobalImportPage from "./pages/GlobalImportPage"; // ðŸ†• Global Import
+import SimulationIntervenantAvancee from "./pages/SimulationIntervenantAvancee"; // ðŸ†• Simulation Intervenant AvancÃ©e
+import IndexAdequation from "./pages/IndexAdequation";
 
 
-// 🔹 NOUVELLE ARCHITECTURE DATA-DRIVEN - Intégrée directement dans SimulationEffectifs
+// ðŸ”¹ NOUVELLE ARCHITECTURE DATA-DRIVEN - IntÃ©grÃ©e directement dans SimulationEffectifs
 
 function NotFound() {
-  return <div className="p-6">404 — Page introuvable</div>;
+  return <div className="p-6">404 â€” Page introuvable</div>;
 }
 
 const BYPASS_AUTH = true;
@@ -105,7 +106,7 @@ function SidebarWithNav(props) {
     // Simulation
     simulation: "/app/simulation/menu",
     comparatif: "/app/simulation?mode=comparatif",
-    // Résultats
+    // RÃ©sultats
     dashboard: "/app",
     "vue-globale": "/app/global",
     "ratios-analyse": "/app/global?view=chart&group=centre",
@@ -137,7 +138,7 @@ function Layout() {
       <AppShell sidebar={SidebarWithNav}>
         <Outlet />
       </AppShell>
-      {/* Bouton de test des alertes - À retirer en production */}
+      {/* Bouton de test des alertes - Ã€ retirer en production */}
       {/* <AlertsTestButton /> */}
     </>
   );
@@ -168,7 +169,7 @@ export default function App() {
         <Route path="/" element={<Accueil />} />
         {/* Page de connexion */}
         <Route path="/login" element={<Login />} />
-        {/* Page de choix d'activité */}
+        {/* Page de choix d'activitÃ© */}
         <Route
           path="/choix-activite"
           element={
@@ -198,7 +199,7 @@ export default function App() {
           }
         />
 
-        {/* Espace application PROTÉGÉ avec Sidebar */}
+        {/* Espace application PROTÃ‰GÃ‰ avec Sidebar */}
         <Route
           path="/app"
           element={
@@ -210,12 +211,12 @@ export default function App() {
           {/* Redirection vers le menu principal */}
           <Route index element={<Navigate to="/menu-principal" replace />} />
 
-          {/* ====== MENU PARAMÉTRÉ PAR SECTION ====== */}
+          {/* ====== MENU PARAMÃ‰TRÃ‰ PAR SECTION ====== */}
           {/* /app/vue-globale/menu | /app/actuel/menu | /app/recommande/menu */}
           <Route path=":section/menu" element={<MenuAnalyseEffectifs />} />
           <Route path=":section/categorisation" element={<VueCategorie />} />
 
-          {/* ====== VUE GLOBALE – CIBLES ====== */}
+          {/* ====== VUE GLOBALE â€“ CIBLES ====== */}
           <Route path="vue-globale/tableau" element={<Dashboard />} />
           <Route path="vue-globale/ratios" element={<GraphPage />} />
           <Route
@@ -225,10 +226,10 @@ export default function App() {
           <Route path="vue-globale/comparatif" element={<ComparativeView />} />
           <Route path="simulations/history" element={<SimulationHistoryPage />} />
 
-          {/* ====== SIMULATION – MENUS ET VARIANTS ====== */}
-          {/* Ton ancien menu spécifique si tu veux le garder */}
+          {/* ====== SIMULATION â€“ MENUS ET VARIANTS ====== */}
+          {/* Ton ancien menu spÃ©cifique si tu veux le garder */}
           <Route path="simulation/menu" element={<SimulationMenu />} />
-          {/* Vue Simulation par défaut (poste) */}
+          {/* Vue Simulation par dÃ©faut (poste) */}
           <Route path="simulation" element={<RouteErrorBoundary><SimulationEffectifs /></RouteErrorBoundary>} />
           {/* Vue Simulation CCP (standalone route) */}
           <Route path="simulation/ccp" element={<RouteErrorBoundary><VueCCP /></RouteErrorBoundary>} />
@@ -236,7 +237,7 @@ export default function App() {
           <Route path="simulation/cna" element={<RouteErrorBoundary><VueCNA /></RouteErrorBoundary>} />
           {/* Vue Simulation CCI (standalone route) */}
           <Route path="simulation/cci" element={<RouteErrorBoundary><VueCCI /></RouteErrorBoundary>} />
-          {/* Variantes par flux (centre/direction/région/national) */}
+          {/* Variantes par flux (centre/direction/rÃ©gion/national) */}
           <Route path="simulation/centre" element={<RouteErrorBoundary><SimulationEffectifs /></RouteErrorBoundary>} />
           <Route path="simulation/direction" element={<RouteErrorBoundary><SimulationEffectifs /></RouteErrorBoundary>} />
           <Route path="simulation/direction-v2" element={<RouteErrorBoundary><SimulationDirectionV2 /></RouteErrorBoundary>} />
@@ -246,6 +247,7 @@ export default function App() {
           <Route path="simulation/cndp" element={<RouteErrorBoundary><CNDPSimulation /></RouteErrorBoundary>} />
           <Route path="simulation/centres-uniques" element={<RouteErrorBoundary><SimulationCentresUniques /></RouteErrorBoundary>} />
           <Route path="simulation/intervenant-avancee" element={<RouteErrorBoundary><SimulationIntervenantAvancee /></RouteErrorBoundary>} />
+          <Route path="simulation/index_Adequation" element={<RouteErrorBoundary><IndexAdequation /></RouteErrorBoundary>} />
 
           {/* Administration */}
           <Route path="admin/import-tasks" element={<RouteErrorBoundary><GlobalImportPage /></RouteErrorBoundary>} />
@@ -262,7 +264,7 @@ export default function App() {
           {/* 404 dans /app */}
           <Route
             path="*"
-            element={<div className="p-6">404 — Page introuvable</div>}
+            element={<div className="p-6">404 â€” Page introuvable</div>}
           />
         </Route>
 
@@ -272,3 +274,6 @@ export default function App() {
     </BrowserRouter>
   );
 }
+
+
+
