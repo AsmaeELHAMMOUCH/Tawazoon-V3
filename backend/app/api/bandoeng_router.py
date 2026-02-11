@@ -79,7 +79,6 @@ class BandoengTaskOut(BaseModel):
     responsable: str
     moy_sec: float
     centre_poste_id: int
-    ordre: int = 9999
     phase: Optional[str] = None
 
 class BandoengSimulateResponse(BaseModel):

@@ -20,7 +20,6 @@ class BandoengTaskResult:
     moy_sec: float = 0.0
     centre_poste_id: int = 0
     phase: str = ""
-    ordre: int = 9999
 
 @dataclass
 class BandoengSimulationResult:
@@ -100,38 +99,35 @@ def get_volume_by_product(produit: str, volumes: BandoengInputVolumes) -> float:
     p = produit.upper().strip() if produit else ""
     g = volumes.grid_values
 
-    # Helper sums - ✅ inclusion de global (National) + local + axes
+    # Helper sums - ✅ UNIQUEMENT local + axes (pas global)
     def sum_amana_recu():
-        # Amana Recu = GC + Part (global + local + axes)
+        # Amana Recu = GC + Part (local + axes UNIQUEMENT)
         total = 0.0
         for seg in ['gc', 'part']:
-            for geo in ['global', 'local', 'axes']:  # ✅ Inclusion de 'global'
+            for geo in ['local', 'axes']:  # ✅ Exclusion de 'global'
                 total += get_grid_val(g, ['amana', 'recu', seg, geo])
         return total
 
     def sum_amana_depot():
         total = 0.0
         for seg in ['gc', 'part']:
-            for geo in ['global', 'local', 'axes']:  # ✅ Inclusion de 'global'
+            for geo in ['local', 'axes']:  # ✅ Exclusion de 'global'
                 total += get_grid_val(g, ['amana', 'depot', seg, geo])
         return total
 
     def sum_cr_arrive():
-        # ✅ global + local + axes
-        return (get_grid_val(g, ['cr', 'arrive', 'global']) + 
-                get_grid_val(g, ['cr', 'arrive', 'local']) + 
+        # ✅ local + axes uniquement
+        return (get_grid_val(g, ['cr', 'arrive', 'local']) + 
                 get_grid_val(g, ['cr', 'arrive', 'axes']))
 
     def sum_co_med():
-        # ✅ global + local + axes
-        return (get_grid_val(g, ['co', 'med', 'global']) + 
-                get_grid_val(g, ['co', 'med', 'local']) + 
+        # ✅ local + axes uniquement
+        return (get_grid_val(g, ['co', 'med', 'local']) + 
                 get_grid_val(g, ['co', 'med', 'axes']))
     
     def sum_cr_med():
-        # ✅ global + local + axes
-        return (get_grid_val(g, ['cr', 'med', 'global']) + 
-                get_grid_val(g, ['cr', 'med', 'local']) + 
+        # ✅ local + axes uniquement
+        return (get_grid_val(g, ['cr', 'med', 'local']) + 
                 get_grid_val(g, ['cr', 'med', 'axes']))
 
     # Direct Mappings
@@ -392,14 +388,13 @@ def calculate_task_duration(
     famille = str(task.famille_uo or "").strip()
     cp_id = task.centre_poste_id
     
-    if task.centre_poste and task.centre_poste.poste:
-        poste = task.centre_poste.poste
-        poste_code = poste.Code
+    if task.centre_poste:
+        code_resp = task.centre_poste.code_resp
         # ✅ Priorité au Code pour la résolution du nom (Demande User)
-        if poste_map and poste_code and poste_code in poste_map:
-             responsable = poste_map[poste_code]
-        else:
-             responsable = str(poste.label or "Inconnu")
+        if poste_map and code_resp and code_resp in poste_map:
+             responsable = poste_map[code_resp]
+        elif task.centre_poste.poste:
+             responsable = str(task.centre_poste.poste.label or "Inconnu")
 
     # --- Apply SHIFT Multiplier for Specific Roles ---
     # Roles: MANUTENTIONNAIRE, Agent op, Responsable des op, Contr...
@@ -432,8 +427,7 @@ def calculate_task_duration(
         responsable=responsable,
         moy_sec=moy_sec,
         centre_poste_id=cp_id,
-        phase=phase,
-        ordre=task.ordre or 9999
+        phase=phase
     )
 
 def run_bandoeng_simulation(
@@ -448,43 +442,15 @@ def run_bandoeng_simulation(
     query = (
         db.query(Tache)
         .join(CentrePoste)
-        .join(Poste, CentrePoste.poste_id == Poste.id)  # ✅ Join via poste_id
+        .join(Poste, CentrePoste.code_resp == Poste.Code)  # ✅ Join avec la table Poste via Code (plus robuste)
         .filter(CentrePoste.centre_id == centre_id)
         .filter(Poste.type_poste == 'MOD')  # ✅ Strictement MOD uniquement
-        .order_by(Tache.ordre, Tache.id) # ✅ Sort by Ordre then ID
     )
     
     if poste_code:
-        query = query.filter(Poste.Code == poste_code)
+        query = query.filter(CentrePoste.code_resp == poste_code)
         
     taches = query.all()
-
-    # ✅ GLOBAL MODE OPTIMIZATION: Deduplicate tasks to avoid double counting volume load
-    # If multiple posts have the same task (same name, product, family, phase, unit) working on the SAME global volume,
-    # we should only count the resource requirement ONCE for the center (it will be shared among posts).
-    if not poste_code:
-        print(f"DEBUG: Global Mode - Initial Tasks Count: {len(taches)}")
-        unique_tasks = {}
-        for t in taches:
-            # Normalize keys to ensure consistent deduplication
-            n_nom = (t.nom_tache or "").strip().upper()
-            n_prod = (t.produit or "").strip().upper()
-            n_fam = (t.famille_uo or "").strip().upper()
-            n_phase = (t.phase or "").strip().upper()
-            n_unit = (t.unite_mesure or "").strip().upper()
-            
-            key = (n_nom, n_prod, n_fam, n_phase, n_unit)
-            
-            # Keep the first occurrence (assuming standard times from repository)
-            if key not in unique_tasks:
-                unique_tasks[key] = t
-            else:
-                # Debug duplicate drop
-                # print(f"DEBUG: Dropping duplicate task '{t.nom_tache}' (Product: {t.produit}) from Poste ID {t.centre_poste_id}")
-                pass
-        
-        taches = list(unique_tasks.values())
-        print(f"DEBUG: Global Mode - Deduplicated Tasks Count: {len(taches)}")
     
     # ✅ Pre-fetch Poste labels by Code
     poste_map = {}
@@ -495,15 +461,10 @@ def run_bandoeng_simulation(
     task_results = []
     total_heures = 0.0
     
-    print("DEBUG: --- Calculation Start ---")
     for t in taches:
         res = calculate_task_duration(t, volumes, params, poste_map)
-        if res.heures_calculees > 0:
-             # print(f"DEBUG Task: {res.task_name} | Vol: {res.volume_journalier} | Heures: {res.heures_calculees}")
-             pass
         task_results.append(res)
         total_heures += res.heures_calculees
-    print(f"DEBUG: --- Calculation End. Total Heures: {total_heures} ---")
         
     # Calcul Capacité Nette (Net Capacity)
     # Heures Prod = 8h * Productivité
