@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { useDebouncedValue } from "../hooks/useDebounce";
+import { useDebouncedValue } from "../../hooks/useDebounce";
 import {
   User,
   Gauge,
@@ -23,6 +23,7 @@ import {
   AlertCircle,
   Globe,
 } from "lucide-react";
+import SimulationHeader from "@/components/centres_uniq/SimulationHeader";
 
 import { EmptyStateFirstRun } from "@/components/states/EmptyStateFirstRun";
 import { EmptyStateDirty } from "@/components/states/EmptyStateDirty";
@@ -871,39 +872,21 @@ export default function VueCCP() {
 
   return (
     <div className="w-full flex flex-col gap-5 pb-16" style={{ zoom: "90%" }}>
-      {/* 🔹 TITRE & HEADER */}
-      <div className="flex items-center justify-between px-1 mb-1">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#005EA8] to-blue-600 flex items-center justify-center shadow-lg shadow-blue-900/20">
-            <Package className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight leading-none">
-              Simulation Centre Unique
-            </h1>
-            <p className="text-xs font-bold text-[#005EA8] uppercase tracking-[0.2em] mt-1">
-              Centre Colis Postaux
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* 🔹 BARRES DE CONFIGURATION (Sticky) */}
-      <div className="sticky top-[57px] z-30 flex flex-col xl:flex-row gap-4 items-stretch">
-
-        {/* 1. SÉLECTEUR INTERVENANT (Plus compact & Stylisé) */}
-        <div className="bg-white/90 backdrop-blur-xl border border-white/40 shadow-xl shadow-slate-200/50 rounded-2xl px-4 py-3 flex flex-col justify-center min-w-[280px]">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0 ring-4 ring-blue-50/50">
-              <User className="w-4.5 h-4.5" />
-            </div>
-            <div className="flex flex-col w-full relative">
-              <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest mb-0.5">
+      {/* 🔹 TITRE & HEADER (Sticky) */}
+      <div className="sticky top-[57px] z-30 flex flex-col gap-2">
+        <SimulationHeader
+          title="Centre Colis Postaux (CCP)"
+          region="Region Casa"
+          subtitle="Code 1962 - Simulation"
+        >
+          <div className="flex items-center gap-2 min-w-[280px] flex-1">
+            <div className="flex flex-col flex-1 relative group">
+              <label className="absolute -top-1.5 left-2 px-1 text-[8px] font-bold text-[#005EA8] uppercase tracking-wider bg-white/50 backdrop-blur z-10 transition-colors group-hover:text-[#0A6BBC]">
                 Poste de Travail
               </label>
               <div className="relative">
                 <select
-                  className="appearance-none bg-slate-50 border border-slate-200 text-sm font-bold text-slate-800 rounded-lg pl-3 pr-8 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#005EA8] focus:border-transparent w-full cursor-pointer transition-all hover:bg-white hover:border-blue-300"
+                  className="appearance-none bg-white/50 border border-slate-200 text-xs font-bold text-slate-800 rounded-lg pl-3 pr-8 py-1 focus:outline-none focus:ring-1 focus:ring-[#005EA8]/20 focus:border-[#005EA8]/30 w-full cursor-pointer transition-all hover:bg-white hover:border-blue-300 h-7"
                   value={posteValue}
                   onChange={(e) => setPoste?.(e.target.value)}
                   disabled={!centre || loading?.postes}
@@ -916,135 +899,139 @@ export default function VueCCP() {
                   ))}
                 </select>
                 <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                  <Sliders className="w-3.5 h-3.5" />
+                  <Sliders className="w-3 h-3" />
                 </div>
               </div>
             </div>
           </div>
-        </div>
+        </SimulationHeader>
 
-        {/* Configuration & Performance */}
-        <div className="bg-white/80 backdrop-blur-md border border-slate-200/60 shadow-sm rounded-lg px-3 py-2">
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Productivité */}
-            <div className="flex items-center gap-1.5 min-w-[100px] flex-1">
-              <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
-                <Gauge className="w-3 h-3" />
-              </div>
-              <div className="flex flex-col w-full">
-                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                  Productivité
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    min={0}
-                    max={200}
-                    value={toInput(productivite)}
-                    placeholder="100"
-                    onChange={(e) =>
-                      setProductivite(parseNonNeg(e.target.value) ?? 100)
-                    }
-                    className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full pr-6 text-center"
-                  />
-                  <span className="absolute right-0 top-0 text-[9px] text-slate-400 font-bold pointer-events-none">
-                    %
-                  </span>
+        {/* 🔹 BARRES DE CONFIGURATION (Sticky secondary) */}
+        <div className="flex flex-col gap-2 w-full">
+
+          {/* Configuration & Performance */}
+          <div className="bg-white/80 backdrop-blur-md border border-slate-200/60 shadow-sm rounded-lg px-3 py-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Productivité */}
+              <div className="flex items-center gap-1.5 min-w-[100px] flex-1">
+                <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
+                  <Gauge className="w-3 h-3" />
+                </div>
+                <div className="flex flex-col w-full">
+                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                    Productivité
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min={0}
+                      max={200}
+                      value={toInput(productivite)}
+                      placeholder="100"
+                      onChange={(e) =>
+                        setProductivite(parseNonNeg(e.target.value) ?? 100)
+                      }
+                      className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full pr-6 text-center"
+                    />
+                    <span className="absolute right-0 top-0 text-[9px] text-slate-400 font-bold pointer-events-none">
+                      %
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="w-px h-6 bg-slate-200 hidden md:block" />
+              <div className="w-px h-6 bg-slate-200 hidden md:block" />
 
-            {/* Temps mort */}
-            <div className="flex items-center gap-1.5 min-w-[100px] flex-1">
-              <div className="w-6 h-6 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-                <Clock className="w-3 h-3" />
-              </div>
-              <div className="flex flex-col w-full">
-                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                  Temps mort
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    min={0}
-                    value={idleMinutes}
-                    onChange={(e) =>
-                      setIdleMinutes(Number(e.target.value || 0))
-                    }
-                    className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full pr-8 text-center"
-                  />
-                  <span className="absolute right-0 top-0 text-[9px] text-slate-400 font-bold pointer-events-none">
-                    min
-                  </span>
+              {/* Temps mort */}
+              <div className="flex items-center gap-1.5 min-w-[100px] flex-1">
+                <div className="w-6 h-6 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                  <Clock className="w-3 h-3" />
+                </div>
+                <div className="flex flex-col w-full">
+                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                    Temps mort
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min={0}
+                      value={idleMinutes}
+                      onChange={(e) =>
+                        setIdleMinutes(Number(e.target.value || 0))
+                      }
+                      className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full pr-8 text-center"
+                    />
+                    <span className="absolute right-0 top-0 text-[9px] text-slate-400 font-bold pointer-events-none">
+                      min
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="w-px h-6 bg-slate-200 hidden md:block" />
+              <div className="w-px h-6 bg-slate-200 hidden md:block" />
 
-            {/* Complexité Circulation */}
-            <div className="flex items-center gap-1.5 min-w-[90px] flex-1">
-              <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
-                <Sliders className="w-3 h-3" />
+              {/* Complexité Circulation */}
+              <div className="flex items-center gap-1.5 min-w-[90px] flex-1">
+                <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
+                  <Sliders className="w-3 h-3" />
+                </div>
+                <div className="flex flex-col w-full">
+                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                    Compl. Circ.
+                  </label>
+                  <select
+                    value={tauxComplexite}
+                    onChange={(e) =>
+                      setTauxComplexite(Number(e.target.value))
+                    }
+                    className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full text-center cursor-pointer"
+                  >
+                    <option value="1">1</option>
+                    <option value="1.25">1.25</option>
+                    <option value="1.5">1.5</option>
+                  </select>
+                </div>
               </div>
-              <div className="flex flex-col w-full">
-                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                  Compl. Circ.
-                </label>
-                <select
-                  value={tauxComplexite}
-                  onChange={(e) =>
-                    setTauxComplexite(Number(e.target.value))
-                  }
-                  className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full text-center cursor-pointer"
-                >
-                  <option value="1">1</option>
-                  <option value="1.25">1.25</option>
-                  <option value="1.5">1.5</option>
-                </select>
-              </div>
-            </div>
 
-            <div className="w-px h-6 bg-slate-200 hidden md:block" />
+              <div className="w-px h-6 bg-slate-200 hidden md:block" />
 
-            {/* Complexité Géo */}
-            <div className="flex items-center gap-1.5 min-w-[90px] flex-1">
-              <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
-                <MapPin className="w-3 h-3" />
+              {/* Complexité Géo */}
+              <div className="flex items-center gap-1.5 min-w-[90px] flex-1">
+                <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
+                  <MapPin className="w-3 h-3" />
+                </div>
+                <div className="flex flex-col w-full">
+                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                    Compl. Géo
+                  </label>
+                  <select
+                    value={natureGeo}
+                    onChange={(e) => setNatureGeo(Number(e.target.value))}
+                    className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full text-center cursor-pointer"
+                  >
+                    <option value="1">1</option>
+                    <option value="1.5">1.5</option>
+                  </select>
+                </div>
               </div>
-              <div className="flex flex-col w-full">
-                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                  Compl. Géo
-                </label>
-                <select
-                  value={natureGeo}
-                  onChange={(e) => setNatureGeo(Number(e.target.value))}
-                  className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none w-full text-center cursor-pointer"
-                >
-                  <option value="1">1</option>
-                  <option value="1.5">1.5</option>
-                </select>
-              </div>
-            </div>
 
-            <div className="w-px h-6 bg-slate-200 hidden md:block" />
+              <div className="w-px h-6 bg-slate-200 hidden md:block" />
 
-            {/* Capacité Nette - Résultat */}
-            <div className="flex items-center gap-1.5">
-              <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
-                <Clock className="w-3 h-3" />
-              </div>
-              <div className="flex flex-col">
-                <label className="text-[9px] font-bold text-[#005EA8] uppercase tracking-wider">
-                  Capacité Nette
-                </label>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-lg font-extrabold text-slate-800 tracking-tight">
-                    {Number(baseHeuresNet || 0).toFixed(2)}
-                  </span>
-                  <span className="text-[9px] font-semibold text-slate-500">h/j</span>
+              {/* Capacité Nette - Résultat */}
+              <div className="flex items-center gap-1.5">
+                <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
+                  <Clock className="w-3 h-3" />
+                </div>
+                <div className="flex flex-col">
+                  <label className="text-[9px] font-bold text-[#005EA8] uppercase tracking-wider">
+                    Capacité Nette
+                  </label>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-lg font-extrabold text-slate-800 tracking-tight">
+                      {Number(baseHeuresNet || 0).toFixed(2)}
+                    </span>
+                    <span className="text-[9px] font-semibold text-slate-500">h/j</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1398,399 +1385,399 @@ export default function VueCCP() {
 
         </div>
       </div>
-
       {/* Référentiel & Résultats - Sophisticated layout */}
-      {showDetails && (
-        <div className="flex flex-col gap-3">
-          {/* Filtre Famille */}
-          {uniqueFamilles.length > 0 && (
-            <div className="flex items-center gap-2 bg-gradient-to-r from-slate-50/90 to-slate-50/70 backdrop-blur-sm p-2 rounded-xl border border-slate-200/60 self-start shadow-sm">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Filtre Famille:</span>
-              <select
-                className="bg-white border border-slate-200/80 text-xs text-slate-700 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#005EA8]/20 focus:border-[#005EA8] w-full max-w-[240px] transition-all"
-                value={filterFamille}
-                onChange={e => setFilterFamille(e.target.value)}
-              >
-                <option value="">Toutes les familles ({uniqueFamilles.length})</option>
-                {uniqueFamilles.map(f => (
-                  <option key={f} value={f}>{f}</option>
-                ))}
-              </select>
-              {filterFamille && (
-                <button
-                  onClick={() => setFilterFamille("")}
-                  className="text-[10px] text-red-500 hover:text-red-700 font-medium px-2.5 py-1 bg-red-50 rounded-lg border border-red-100 transition-colors hover:bg-red-100"
-                  title="Effacer le filtre"
+      {
+        showDetails && (
+          <div className="flex flex-col gap-3">
+            {/* Filtre Famille */}
+            {uniqueFamilles.length > 0 && (
+              <div className="flex items-center gap-2 bg-gradient-to-r from-slate-50/90 to-slate-50/70 backdrop-blur-sm p-2 rounded-xl border border-slate-200/60 self-start shadow-sm">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Filtre Famille:</span>
+                <select
+                  className="bg-white border border-slate-200/80 text-xs text-slate-700 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#005EA8]/20 focus:border-[#005EA8] w-full max-w-[240px] transition-all"
+                  value={filterFamille}
+                  onChange={e => setFilterFamille(e.target.value)}
                 >
-                  ✕
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* Grid: Référentiel | Arrow | Résultats */}
-          <div className="grid grid-cols-1 xl:grid-cols-[1fr_auto_1fr] gap-5 min-h-0 items-start">
-            {/* Référentiel */}
-            {refDisplay === "tableau" ? (
-              <div className="flex flex-col gap-2 w-full">
-                <EnterpriseTable
-                  title="Référentiel Temps"
-                  subtitle={filterFamille ? `Filtre: ${filterFamille}` : "Base de calcul"}
-                  tooltip="Temps moyen nécessaire pour traiter une unité (colis, sac…)"
-                  icon={Clock}
-                  columns={[
-                    { key: 'f', label: 'Famille', align: 'left', width: '120px', ellipsis: true },
-                    { key: 't', label: 'Tâche', align: 'left', ellipsis: true },
-                    ...(hasPhase ? [{ key: 'ph', label: 'Phase', align: 'left', width: '100px', ellipsis: true }] : []),
-                    { key: 'u', label: 'Unité', align: 'left', width: '140px', ellipsis: true },
-                    { key: 'm', label: 'Moy. (min)', align: 'right', width: '80px', render: (val) => Number(val || 0).toFixed(5) }
-                  ]}
-                  data={referentielFiltered.map((r, i) => ({
-                    seq: i + 1,
-                    f: r.famille || "",
-                    t: r.t,
-                    ph: r.ph && String(r.ph).trim().toLowerCase() !== "n/a" ? r.ph : "",
-                    u: r.u,
-                    m: r.m
-                  }))}
-                  currentView="table"
-                  onViewChange={(view) => setRefDisplay(view === 'table' ? 'tableau' : 'graphe')}
-                  showViewToggle={true}
-                  height={380}
-                />
+                  <option value="">Toutes les familles ({uniqueFamilles.length})</option>
+                  {uniqueFamilles.map(f => (
+                    <option key={f} value={f}>{f}</option>
+                  ))}
+                </select>
+                {filterFamille && (
+                  <button
+                    onClick={() => setFilterFamille("")}
+                    className="text-[10px] text-red-500 hover:text-red-700 font-medium px-2.5 py-1 bg-red-50 rounded-lg border border-red-100 transition-colors hover:bg-red-100"
+                    title="Effacer le filtre"
+                  >
+                    ✕
+                  </button>
+                )}
               </div>
-            ) : (
-              <Card
-                title={<span className="text-[11px] font-semibold">Référentiel Temps</span>}
-                actions={
-                  <div className="flex rounded-lg border border-slate-300 overflow-hidden shadow-sm">
-                    <button
-                      className={`px-2.5 py-1.5 text-[10px] font-medium transition-colors flex items-center gap-1.5 ${refDisplay === "tableau" ? "bg-[#005EA8] text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
-                      onClick={() => setRefDisplay("tableau")}
-                    >
-                      <TableIcon className="w-3 h-3" /> Tableau
-                    </button>
-                    <button
-                      className={`px-2.5 py-1.5 text-[10px] font-medium transition-colors flex items-center gap-1.5 border-l border-slate-300 ${refDisplay === "graphe" ? "bg-[#005EA8] text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
-                      onClick={() => setRefDisplay("graphe")}
-                    >
-                      <BarChart3 className="w-3 h-3" /> Graphe
-                    </button>
-                  </div>
-                }
-                bodyClassName="!p-1"
-              >
-                <div className="p-1.5 h-[380px]">
-                  <GraphReferentielComponent
-                    referentiel={referentielFiltered}
-                    loading={loading?.referentiel}
-                    hasPhase={hasPhase}
-                  />
-                </div>
-              </Card>
             )}
 
-            {/* Arrow separator */}
-            <div className="hidden xl:flex flex-col items-center justify-center py-12">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center shadow-sm ring-1 ring-blue-100">
-                <ArrowRight className="w-5 h-5 text-[#005EA8]" />
-              </div>
-              <span className="text-[10px] font-semibold text-[#005EA8] mt-2 uppercase tracking-wider">
-                Calcul
-              </span>
-            </div>
-
-            {/* Résultats */}
-            {display === "tableau" ? (
-              loading?.simulation ? (
-                <Card
-                  title={<span className="text-[11px] font-semibold">Résultats de Simulation</span>}
-                  bodyClassName="!p-1"
-                >
-                  <div className="px-2 py-1 text-slate-500 text-[10px]">
-                    Calcul en cours…
-                  </div>
-                </Card>
-              ) : !hasSimulated ? (
-                <Card
-                  title={<span className="text-[11px] font-semibold">Résultats de Simulation</span>}
-                  bodyClassName="!p-1"
-                >
-                  <EmptyStateFirstRun
-                    onSimuler={handleSimuler}
-                    disabled={!centre}
+            {/* Grid: Référentiel | Arrow | Résultats */}
+            <div className="grid grid-cols-1 xl:grid-cols-[1fr_auto_1fr] gap-5 min-h-0 items-start">
+              {/* Référentiel */}
+              {refDisplay === "tableau" ? (
+                <div className="flex flex-col gap-2 w-full">
+                  <EnterpriseTable
+                    title="Référentiel Temps"
+                    subtitle={filterFamille ? `Filtre: ${filterFamille}` : "Base de calcul"}
+                    tooltip="Temps moyen nécessaire pour traiter une unité (colis, sac…)"
+                    icon={Clock}
+                    columns={[
+                      { key: 'f', label: 'Famille', align: 'left', width: '120px', ellipsis: true },
+                      { key: 't', label: 'Tâche', align: 'left', ellipsis: true },
+                      ...(hasPhase ? [{ key: 'ph', label: 'Phase', align: 'left', width: '100px', ellipsis: true }] : []),
+                      { key: 'u', label: 'Unité', align: 'left', width: '140px', ellipsis: true },
+                      { key: 'm', label: 'Moy. (min)', align: 'right', width: '80px', render: (val) => Number(val || 0).toFixed(5) }
+                    ]}
+                    data={referentielFiltered.map((r, i) => ({
+                      seq: i + 1,
+                      f: r.famille || "",
+                      t: r.t,
+                      ph: r.ph && String(r.ph).trim().toLowerCase() !== "n/a" ? r.ph : "",
+                      u: r.u,
+                      m: r.m
+                    }))}
+                    currentView="table"
+                    onViewChange={(view) => setRefDisplay(view === 'table' ? 'tableau' : 'graphe')}
+                    showViewToggle={true}
+                    height={380}
                   />
-                </Card>
-              ) : simDirty ? (
-                <Card
-                  title={<span className="text-[11px] font-semibold">Résultats de Simulation</span>}
-                  bodyClassName="!p-1"
-                >
-                  <EmptyStateDirty onSimuler={handleSimuler} disabled={!centre} />
-                </Card>
-              ) : (mergedResults?.length ?? 0) === 0 ? (
-                <Card
-                  title={<span className="text-[11px] font-semibold">Résultats de Simulation</span>}
-                  bodyClassName="!p-1"
-                >
-                  <div className="px-2 py-1 text-slate-500 text-[10px]">
-                    Aucune donnée.
-                  </div>
-                </Card>
+                </div>
               ) : (
-                <EnterpriseTable
-                  title="Résultats de Simulation"
-                  subtitle="Données calculées"
-                  tooltip="Volumes × temps → heures nécessaires"
-                  icon={CheckCircle2}
-                  columns={[
-                    { key: 'task', label: 'Tâche', align: 'left', ellipsis: true },
-                    { key: 'formule', label: 'Formule', align: 'left', ellipsis: true, width: '250px', render: (val) => <span className="text-[10px] text-slate-500 font-mono">{val || '-'}</span> },
-                    { key: 'nombre_Unite', label: 'Unit. (/jour)', align: 'right', width: '100px', render: (val) => formatUnit(val) },
-                    { key: 'heures', label: 'Heures', align: 'right', width: '80px', bold: true, render: (val) => Number(val || 0).toFixed(2) }
-                  ]}
-                  data={mergedResults}
-                  footer={null}
-                  height={380}
-                  currentView="table"
-                  onViewChange={(view) => setDisplay(view === 'table' ? 'tableau' : 'graphe')}
-                  showViewToggle={true}
-                />
-              )
-            ) : (
-              <Card
-                title={<span className="text-[11px] font-semibold">Résultats de Simulation</span>}
-                actions={
-                  <div className="flex rounded-lg border border-slate-300 overflow-hidden shadow-sm">
-                    <button
-                      className={`px-2.5 py-1.5 text-[10px] font-medium transition-colors flex items-center gap-1.5 ${display === "tableau" ? "bg-[#005EA8] text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
-                      onClick={() => setDisplay("tableau")}
-                    >
-                      <TableIcon className="w-3 h-3" /> Tableau
-                    </button>
-                    <button
-                      className={`px-2.5 py-1.5 text-[10px] font-medium transition-colors flex items-center gap-1.5 border-l border-slate-300 ${display === "graphe" ? "bg-[#005EA8] text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
-                      onClick={() => setDisplay("graphe")}
-                    >
-                      <BarChart3 className="w-3 h-3" /> Graphe
-                    </button>
+                <Card
+                  title={<span className="text-[11px] font-semibold">Référentiel Temps</span>}
+                  actions={
+                    <div className="flex rounded-lg border border-slate-300 overflow-hidden shadow-sm">
+                      <button
+                        className={`px-2.5 py-1.5 text-[10px] font-medium transition-colors flex items-center gap-1.5 ${refDisplay === "tableau" ? "bg-[#005EA8] text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+                        onClick={() => setRefDisplay("tableau")}
+                      >
+                        <TableIcon className="w-3 h-3" /> Tableau
+                      </button>
+                      <button
+                        className={`px-2.5 py-1.5 text-[10px] font-medium transition-colors flex items-center gap-1.5 border-l border-slate-300 ${refDisplay === "graphe" ? "bg-[#005EA8] text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+                        onClick={() => setRefDisplay("graphe")}
+                      >
+                        <BarChart3 className="w-3 h-3" /> Graphe
+                      </button>
+                    </div>
+                  }
+                  bodyClassName="!p-1"
+                >
+                  <div className="p-1.5 h-[380px]">
+                    <GraphReferentielComponent
+                      referentiel={referentielFiltered}
+                      loading={loading?.referentiel}
+                      hasPhase={hasPhase}
+                    />
                   </div>
-                }
-                bodyClassName="!p-1"
-              >
-                <div className="p-1.5 h-[380px]">
-                  {loading?.simulation ? (
+                </Card>
+              )}
+
+              {/* Arrow separator */}
+              <div className="hidden xl:flex flex-col items-center justify-center py-12">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center shadow-sm ring-1 ring-blue-100">
+                  <ArrowRight className="w-5 h-5 text-[#005EA8]" />
+                </div>
+                <span className="text-[10px] font-semibold text-[#005EA8] mt-2 uppercase tracking-wider">
+                  Calcul
+                </span>
+              </div>
+
+              {/* Résultats */}
+              {display === "tableau" ? (
+                loading?.simulation ? (
+                  <Card
+                    title={<span className="text-[11px] font-semibold">Résultats de Simulation</span>}
+                    bodyClassName="!p-1"
+                  >
                     <div className="px-2 py-1 text-slate-500 text-[10px]">
                       Calcul en cours…
                     </div>
-                  ) : !hasSimulated ? (
+                  </Card>
+                ) : !hasSimulated ? (
+                  <Card
+                    title={<span className="text-[11px] font-semibold">Résultats de Simulation</span>}
+                    bodyClassName="!p-1"
+                  >
                     <EmptyStateFirstRun
                       onSimuler={handleSimuler}
                       disabled={!centre}
                     />
-                  ) : simDirty ? (
-                    <EmptyStateDirty
-                      onSimuler={handleSimuler}
-                      disabled={!centre}
-                    />
-                  ) : (
-                    <GraphResultatsComponent
-                      resultats={mergedResults}
-                      totaux={
-                        totaux ?? {
-                          total_heures: totalHeuresAffichees,
-                          heures_net: heuresNet,
+                  </Card>
+                ) : simDirty ? (
+                  <Card
+                    title={<span className="text-[11px] font-semibold">Résultats de Simulation</span>}
+                    bodyClassName="!p-1"
+                  >
+                    <EmptyStateDirty onSimuler={handleSimuler} disabled={!centre} />
+                  </Card>
+                ) : (mergedResults?.length ?? 0) === 0 ? (
+                  <Card
+                    title={<span className="text-[11px] font-semibold">Résultats de Simulation</span>}
+                    bodyClassName="!p-1"
+                  >
+                    <div className="px-2 py-1 text-slate-500 text-[10px]">
+                      Aucune donnée.
+                    </div>
+                  </Card>
+                ) : (
+                  <EnterpriseTable
+                    title="Résultats de Simulation"
+                    subtitle="Données calculées"
+                    tooltip="Volumes × temps → heures nécessaires"
+                    icon={CheckCircle2}
+                    columns={[
+                      { key: 'task', label: 'Tâche', align: 'left', ellipsis: true },
+                      { key: 'formule', label: 'Formule', align: 'left', ellipsis: true, width: '250px', render: (val) => <span className="text-[10px] text-slate-500 font-mono">{val || '-'}</span> },
+                      { key: 'nombre_Unite', label: 'Unit. (/jour)', align: 'right', width: '100px', render: (val) => formatUnit(val) },
+                      { key: 'heures', label: 'Heures', align: 'right', width: '80px', bold: true, render: (val) => Number(val || 0).toFixed(2) }
+                    ]}
+                    data={mergedResults}
+                    footer={null}
+                    height={380}
+                    currentView="table"
+                    onViewChange={(view) => setDisplay(view === 'table' ? 'tableau' : 'graphe')}
+                    showViewToggle={true}
+                  />
+                )
+              ) : (
+                <Card
+                  title={<span className="text-[11px] font-semibold">Résultats de Simulation</span>}
+                  actions={
+                    <div className="flex rounded-lg border border-slate-300 overflow-hidden shadow-sm">
+                      <button
+                        className={`px-2.5 py-1.5 text-[10px] font-medium transition-colors flex items-center gap-1.5 ${display === "tableau" ? "bg-[#005EA8] text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+                        onClick={() => setDisplay("tableau")}
+                      >
+                        <TableIcon className="w-3 h-3" /> Tableau
+                      </button>
+                      <button
+                        className={`px-2.5 py-1.5 text-[10px] font-medium transition-colors flex items-center gap-1.5 border-l border-slate-300 ${display === "graphe" ? "bg-[#005EA8] text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+                        onClick={() => setDisplay("graphe")}
+                      >
+                        <BarChart3 className="w-3 h-3" /> Graphe
+                      </button>
+                    </div>
+                  }
+                  bodyClassName="!p-1"
+                >
+                  <div className="p-1.5 h-[380px]">
+                    {loading?.simulation ? (
+                      <div className="px-2 py-1 text-slate-500 text-[10px]">
+                        Calcul en cours…
+                      </div>
+                    ) : !hasSimulated ? (
+                      <EmptyStateFirstRun
+                        onSimuler={handleSimuler}
+                        disabled={!centre}
+                      />
+                    ) : simDirty ? (
+                      <EmptyStateDirty
+                        onSimuler={handleSimuler}
+                        disabled={!centre}
+                      />
+                    ) : (
+                      <GraphResultatsComponent
+                        resultats={mergedResults}
+                        totaux={
+                          totaux ?? {
+                            total_heures: totalHeuresAffichees,
+                            heures_net: heuresNet,
+                          }
                         }
-                      }
-                      loading={loading?.simulation}
-                    />
-                  )}
-                </div>
-              </Card>
-            )}
+                        loading={loading?.simulation}
+                      />
+                    )}
+                  </div>
+                </Card>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* Synthèse des Résultats - Sophisticated design */}
-      {showDetails && hasSimulated && (
-        <div className="bg-gradient-to-br from-blue-50/60 via-blue-50/40 to-slate-50/60 border border-blue-100/80 rounded-2xl p-4 mt-2 shadow-lg backdrop-blur-sm">
-          <div className="flex items-center gap-2.5 mb-4">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#005EA8] to-blue-600 flex items-center justify-center shadow-md">
-              <Gauge className="w-4 h-4 text-white" />
-            </div>
-            <h3 className="text-base font-bold text-[#005EA8] tracking-tight">
-              Synthèse des Résultats
-            </h3>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-            {/* 1. Charge Totale */}
-            <div className="relative overflow-hidden rounded-2xl border border-white/60 bg-white/70 backdrop-blur-xl p-3 min-h-[100px] ring-1 ring-slate-200/60 shadow-md flex flex-col items-center justify-center transition-all hover:ring-blue-200 hover:shadow-lg">
-              <div className="text-[11px] font-semibold text-slate-600 mb-1.5">Charge Totale</div>
-              <div className="text-2xl font-extrabold text-slate-900">{Number(totalHeuresFinal || 0).toFixed(2)}</div>
-              <div className="text-[10px] text-slate-500 bg-slate-100/80 px-2.5 py-1 rounded-full mt-1.5 font-medium">heures / jour</div>
+      {
+        showDetails && hasSimulated && (
+          <div className="bg-gradient-to-br from-blue-50/60 via-blue-50/40 to-slate-50/60 border border-blue-100/80 rounded-2xl p-4 mt-2 shadow-lg backdrop-blur-sm">
+            <div className="flex items-center gap-2.5 mb-4">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#005EA8] to-blue-600 flex items-center justify-center shadow-md">
+                <Gauge className="w-4 h-4 text-white" />
+              </div>
+              <h3 className="text-base font-bold text-[#005EA8] tracking-tight">
+                Synthèse des Résultats
+              </h3>
             </div>
 
-            {/* 2. Effectif Actuel */}
-            {/* 2. Effectif Actuel */}
-            <KPICardGlass
-              label="Effectif Actuel"
-              icon={UserRound}
-              tone="slate"
-              emphasize
-              total={formatSmallNumber((totaux?.total_mod_actuel || 0) + (totaux?.total_moi_actuel || 0) + ((!poste || poste === "__ALL__") ? (totaux?.total_aps_actuel || 0) : 0), 2)}
-              toggleable={false}
-              customFooter={
-                <div className="flex flex-col w-full px-2 mt-1 gap-1">
-                  {/* Statutaire Centered Above */}
-                  <div className="flex justify-center border-b border-slate-100 pb-1 mb-0.5">
-                    <div className="flex flex-col items-center">
-                      <span className="text-[9px] text-fuchsia-600 font-bold uppercase tracking-wide">Statutaire</span>
-                      <span className="text-[11px] font-extrabold text-slate-800">{formatSmallNumber((totaux?.total_mod_actuel || 0) + (totaux?.total_moi_actuel || 0), 0)}</span>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+              {/* 1. Charge Totale */}
+              <div className="relative overflow-hidden rounded-2xl border border-white/60 bg-white/70 backdrop-blur-xl p-3 min-h-[100px] ring-1 ring-slate-200/60 shadow-md flex flex-col items-center justify-center transition-all hover:ring-blue-200 hover:shadow-lg">
+                <div className="text-[11px] font-semibold text-slate-600 mb-1.5">Charge Totale</div>
+                <div className="text-2xl font-extrabold text-slate-900">{Number(totalHeuresFinal || 0).toFixed(2)}</div>
+                <div className="text-[10px] text-slate-500 bg-slate-100/80 px-2.5 py-1 rounded-full mt-1.5 font-medium">heures / jour</div>
+              </div>
+
+              {/* 2. Effectif Actuel */}
+              {/* 2. Effectif Actuel */}
+              <KPICardGlass
+                label="Effectif Actuel"
+                icon={UserRound}
+                tone="slate"
+                emphasize
+                total={formatSmallNumber((totaux?.total_mod_actuel || 0) + (totaux?.total_moi_actuel || 0) + ((!poste || poste === "__ALL__") ? (totaux?.total_aps_actuel || 0) : 0), 2)}
+                toggleable={false}
+                customFooter={
+                  <div className="flex flex-col w-full px-2 mt-1 gap-1">
+                    {/* Statutaire Centered Above */}
+                    <div className="flex justify-center border-b border-slate-100 pb-1 mb-0.5">
+                      <div className="flex flex-col items-center">
+                        <span className="text-[9px] text-fuchsia-600 font-bold uppercase tracking-wide">Statutaire</span>
+                        <span className="text-[11px] font-extrabold text-slate-800">{formatSmallNumber((totaux?.total_mod_actuel || 0) + (totaux?.total_moi_actuel || 0), 0)}</span>
+                      </div>
+                    </div>
+
+                    {/* Breakdown Below */}
+                    <div className="flex justify-between items-center w-full">
+                      <div className="flex flex-col items-center">
+                        <span className="text-[9px] text-slate-400 font-bold uppercase">MOD</span>
+                        <span className="text-[10px] font-bold text-slate-700">{formatSmallNumber(totaux?.total_mod_actuel, 0)}</span>
+                      </div>
+                      <div className="flex flex-col items-center">
+                        <span className="text-[9px] text-slate-400 font-bold uppercase">MOI</span>
+                        <span className="text-[10px] font-bold text-slate-700">{formatSmallNumber(totaux?.total_moi_actuel, 0)}</span>
+                      </div>
+                      {(!poste || poste === "__ALL__") && (
+                        <div className="flex flex-col items-center">
+                          <span className="text-[9px] text-slate-400 font-bold uppercase">APS</span>
+                          <span className="text-[10px] font-bold text-slate-700">{formatSmallNumber(totaux?.total_aps_actuel, 0)}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
+                }
+              />
 
-                  {/* Breakdown Below */}
-                  <div className="flex justify-between items-center w-full">
+              {/* 3. Effectif Calculé (NO APS/STATUTAIRE) */}
+              <KPICardGlass
+                label="Effectif Calculé"
+                icon={Calculator}
+                tone="blue"
+                emphasize
+                total={formatSmallNumber((totaux?.total_mod_calcule || 0) + (totaux?.total_moi_target || totaux?.total_moi || 0), 2)}
+                toggleable={false}
+                customFooter={
+                  <div className="flex justify-evenly items-center w-full px-2 mt-1">
+                    {/* SHOW ONLY MOD AND MOI */}
                     <div className="flex flex-col items-center">
-                      <span className="text-[9px] text-slate-400 font-bold uppercase">MOD</span>
-                      <span className="text-[10px] font-bold text-slate-700">{formatSmallNumber(totaux?.total_mod_actuel, 0)}</span>
+                      <span className="text-[9px] text-blue-400 font-bold uppercase">MOD</span>
+                      <span className="text-[10px] font-bold text-slate-700">{formatSmallNumber(totaux?.total_mod_calcule, 2)}</span>
                     </div>
                     <div className="flex flex-col items-center">
-                      <span className="text-[9px] text-slate-400 font-bold uppercase">MOI</span>
-                      <span className="text-[10px] font-bold text-slate-700">{formatSmallNumber(totaux?.total_moi_actuel, 0)}</span>
+                      <span className="text-[9px] text-blue-400 font-bold uppercase">MOI</span>
+                      <span className="text-[10px] font-bold text-slate-700">{formatSmallNumber(totaux?.total_moi_target || totaux?.total_moi, 0)}</span>
+                    </div>
+                  </div>
+                }
+              />
+
+              {/* 4. Effectif Arrondi (PROPOSED OPTIMIZED) */}
+              <KPICardGlass
+                label="Effectif Arrondi"
+                icon={CheckCircle2}
+                tone="amber"
+                emphasize
+                total={formatSmallNumber((totaux?.total_mod_target || 0) + (totaux?.total_moi_target || 0) + ((!poste || poste === "__ALL__") ? (totaux?.total_aps_target || 0) : 0), 0)}
+                toggleable={false}
+                customFooter={
+                  <div className="flex justify-between items-center w-full px-2 mt-1">
+                    <div className="flex flex-col items-center">
+                      <span className="text-[9px] text-amber-500 font-bold uppercase">MOD</span>
+                      <span className="text-[10px] font-bold text-slate-800">{formatSmallNumber(totaux?.total_mod_target, 0)}</span>
+                    </div>
+                    <div className="flex flex-col items-center">
+                      <span className="text-[9px] text-amber-500 font-bold uppercase">MOI</span>
+                      <span className="text-[10px] font-bold text-slate-800">{formatSmallNumber(totaux?.total_moi_target, 0)}</span>
                     </div>
                     {(!poste || poste === "__ALL__") && (
                       <div className="flex flex-col items-center">
-                        <span className="text-[9px] text-slate-400 font-bold uppercase">APS</span>
-                        <span className="text-[10px] font-bold text-slate-700">{formatSmallNumber(totaux?.total_aps_actuel, 0)}</span>
+                        <span className="text-[9px] text-amber-500 font-bold uppercase">APS</span>
+                        <span className="text-[10px] font-bold text-slate-800">{formatSmallNumber(totaux?.total_aps_target, 0)}</span>
                       </div>
                     )}
                   </div>
-                </div>
-              }
-            />
+                }
+              />
 
-            {/* 3. Effectif Calculé (NO APS/STATUTAIRE) */}
-            <KPICardGlass
-              label="Effectif Calculé"
-              icon={Calculator}
-              tone="blue"
-              emphasize
-              total={formatSmallNumber((totaux?.total_mod_calcule || 0) + (totaux?.total_moi_target || totaux?.total_moi || 0), 2)}
-              toggleable={false}
-              customFooter={
-                <div className="flex justify-evenly items-center w-full px-2 mt-1">
-                  {/* SHOW ONLY MOD AND MOI */}
-                  <div className="flex flex-col items-center">
-                    <span className="text-[9px] text-blue-400 font-bold uppercase">MOD</span>
-                    <span className="text-[10px] font-bold text-slate-700">{formatSmallNumber(totaux?.total_mod_calcule, 2)}</span>
-                  </div>
-                  <div className="flex flex-col items-center">
-                    <span className="text-[9px] text-blue-400 font-bold uppercase">MOI</span>
-                    <span className="text-[10px] font-bold text-slate-700">{formatSmallNumber(totaux?.total_moi_target || totaux?.total_moi, 0)}</span>
-                  </div>
-                </div>
-              }
-            />
+              {/* 5. Ecart Total */}
+              {(() => {
+                const showAPS = (!poste || poste === "__ALL__");
 
-            {/* 4. Effectif Arrondi (PROPOSED OPTIMIZED) */}
-            <KPICardGlass
-              label="Effectif Arrondi"
-              icon={CheckCircle2}
-              tone="amber"
-              emphasize
-              total={formatSmallNumber((totaux?.total_mod_target || 0) + (totaux?.total_moi_target || 0) + ((!poste || poste === "__ALL__") ? (totaux?.total_aps_target || 0) : 0), 0)}
-              toggleable={false}
-              customFooter={
-                <div className="flex justify-between items-center w-full px-2 mt-1">
-                  <div className="flex flex-col items-center">
-                    <span className="text-[9px] text-amber-500 font-bold uppercase">MOD</span>
-                    <span className="text-[10px] font-bold text-slate-800">{formatSmallNumber(totaux?.total_mod_target, 0)}</span>
-                  </div>
-                  <div className="flex flex-col items-center">
-                    <span className="text-[9px] text-amber-500 font-bold uppercase">MOI</span>
-                    <span className="text-[10px] font-bold text-slate-800">{formatSmallNumber(totaux?.total_moi_target, 0)}</span>
-                  </div>
-                  {(!poste || poste === "__ALL__") && (
-                    <div className="flex flex-col items-center">
-                      <span className="text-[9px] text-amber-500 font-bold uppercase">APS</span>
-                      <span className="text-[10px] font-bold text-slate-800">{formatSmallNumber(totaux?.total_aps_target, 0)}</span>
-                    </div>
-                  )}
-                </div>
-              }
-            />
+                const targetMOD = totaux?.total_mod_target || 0;
+                const targetMOI = totaux?.total_moi_target || 0;
+                const targetAPS = totaux?.total_aps_target || 0;
 
-            {/* 5. Ecart Total */}
-            {(() => {
-              const showAPS = (!poste || poste === "__ALL__");
+                const actuelMOD = totaux?.total_mod_actuel || 0;
+                const actuelMOI = totaux?.total_moi_actuel || 0;
+                const actuelAPS = totaux?.total_aps_actuel || 0;
 
-              const targetMOD = totaux?.total_mod_target || 0;
-              const targetMOI = totaux?.total_moi_target || 0;
-              const targetAPS = totaux?.total_aps_target || 0;
+                const targetTotal = targetMOD + targetMOI + (showAPS ? targetAPS : 0);
+                const actuelTotal = actuelMOD + actuelMOI + (showAPS ? actuelAPS : 0);
 
-              const actuelMOD = totaux?.total_mod_actuel || 0;
-              const actuelMOI = totaux?.total_moi_actuel || 0;
-              const actuelAPS = totaux?.total_aps_actuel || 0;
+                const ecartVal = targetTotal - actuelTotal;
 
-              const targetTotal = targetMOD + targetMOI + (showAPS ? targetAPS : 0);
-              const actuelTotal = actuelMOD + actuelMOI + (showAPS ? actuelAPS : 0);
+                const ecartMOD = targetMOD - actuelMOD;
+                const ecartMOI = targetMOI - actuelMOI;
+                const ecartAPS = targetAPS - actuelAPS;
 
-              const ecartVal = targetTotal - actuelTotal;
+                const isPositive = ecartVal > 0;
 
-              const ecartMOD = targetMOD - actuelMOD;
-              const ecartMOI = targetMOI - actuelMOI;
-              const ecartAPS = targetAPS - actuelAPS;
-
-              const isPositive = ecartVal > 0;
-
-              return (
-                <div className={`relative overflow-hidden rounded-2xl border backdrop-blur-xl p-3 min-h-[100px] shadow-md flex flex-col items-center justify-between
+                return (
+                  <div className={`relative overflow-hidden rounded-2xl border backdrop-blur-xl p-3 min-h-[100px] shadow-md flex flex-col items-center justify-between
                     ${isPositive ? "bg-emerald-50/60 border-emerald-100 ring-1 ring-emerald-200" : ecartVal < 0 ? "bg-red-50/60 border-red-100 ring-1 ring-red-200" : "bg-white/70 border-white/60"}
                  `}>
-                  <div className="text-[11px] font-semibold text-slate-600 mb-0.5 flex items-center gap-1.5 w-full justify-center">
-                    <TrendingUp className="w-3 h-3" /> Ecart Total
-                  </div>
-
-                  <div className={`text-2xl font-extrabold -mt-1 ${isPositive ? "text-emerald-600" : ecartVal < 0 ? "text-red-500" : "text-slate-400"}`}>
-                    {ecartVal > 0 ? "+" : ""}{formatSmallNumber(ecartVal, 2)}
-                  </div>
-
-                  {/* Detailed Breakdown Footer */}
-                  <div className="flex justify-between items-center w-full px-1 mt-1 border-t border-slate-200/50 pt-1">
-                    <div className="flex flex-col items-center">
-                      <span className="text-[8px] text-slate-500 font-bold uppercase">MOD</span>
-                      <span className={`text-[9px] font-bold ${ecartMOD > 0 ? "text-emerald-600" : ecartMOD < 0 ? "text-red-500" : "text-slate-600"}`}>
-                        {ecartMOD > 0 ? "+" : ""}{formatSmallNumber(ecartMOD, 1)}
-                      </span>
+                    <div className="text-[11px] font-semibold text-slate-600 mb-0.5 flex items-center gap-1.5 w-full justify-center">
+                      <TrendingUp className="w-3 h-3" /> Ecart Total
                     </div>
-                    <div className="flex flex-col items-center">
-                      <span className="text-[8px] text-slate-500 font-bold uppercase">MOI</span>
-                      <span className={`text-[9px] font-bold ${ecartMOI > 0 ? "text-emerald-600" : ecartMOI < 0 ? "text-red-500" : "text-slate-600"}`}>
-                        {ecartMOI > 0 ? "+" : ""}{formatSmallNumber(ecartMOI, 1)}
-                      </span>
+
+                    <div className={`text-2xl font-extrabold -mt-1 ${isPositive ? "text-emerald-600" : ecartVal < 0 ? "text-red-500" : "text-slate-400"}`}>
+                      {ecartVal > 0 ? "+" : ""}{formatSmallNumber(ecartVal, 2)}
                     </div>
-                    {showAPS && (
+
+                    {/* Detailed Breakdown Footer */}
+                    <div className="flex justify-between items-center w-full px-1 mt-1 border-t border-slate-200/50 pt-1">
                       <div className="flex flex-col items-center">
-                        <span className="text-[8px] text-slate-500 font-bold uppercase">APS</span>
-                        <span className={`text-[9px] font-bold ${ecartAPS > 0 ? "text-emerald-600" : ecartAPS < 0 ? "text-red-500" : "text-slate-600"}`}>
-                          {ecartAPS > 0 ? "+" : ""}{formatSmallNumber(ecartAPS, 1)}
+                        <span className="text-[8px] text-slate-500 font-bold uppercase">MOD</span>
+                        <span className={`text-[9px] font-bold ${ecartMOD > 0 ? "text-emerald-600" : ecartMOD < 0 ? "text-red-500" : "text-slate-600"}`}>
+                          {ecartMOD > 0 ? "+" : ""}{formatSmallNumber(ecartMOD, 1)}
                         </span>
                       </div>
-                    )}
+                      <div className="flex flex-col items-center">
+                        <span className="text-[8px] text-slate-500 font-bold uppercase">MOI</span>
+                        <span className={`text-[9px] font-bold ${ecartMOI > 0 ? "text-emerald-600" : ecartMOI < 0 ? "text-red-500" : "text-slate-600"}`}>
+                          {ecartMOI > 0 ? "+" : ""}{formatSmallNumber(ecartMOI, 1)}
+                        </span>
+                      </div>
+                      {showAPS && (
+                        <div className="flex flex-col items-center">
+                          <span className="text-[8px] text-slate-500 font-bold uppercase">APS</span>
+                          <span className={`text-[9px] font-bold ${ecartAPS > 0 ? "text-emerald-600" : ecartAPS < 0 ? "text-red-500" : "text-slate-600"}`}>
+                            {ecartAPS > 0 ? "+" : ""}{formatSmallNumber(ecartAPS, 1)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })()}
-
-
+                );
+              })()}
+            </div>
           </div>
-        </div>
-      )}
+        )
+      }
     </div>
-
   );
 }
 

@@ -100,23 +100,27 @@ const FormattedInput = ({ value, onChange, className, placeholder }) => {
     );
 };
 
-/* ===================== KPI COMPONENTS (MATCHING VUE INTERVENANT) ===================== */
+/* ===================== KPI COMPONENTS (MATCHING BANDOENG) ===================== */
 const EffectifFooter = ({ totalLabel, totalValue, modValue, moiValue, apsLabel, apsValue }) => (
     <div className="text-[10px] text-slate-600 space-y-1.5">
-        <div className="flex flex-wrap items-center justify-center gap-2 rounded-full bg-slate-50 px-2 py-1">
-            <span className="font-semibold text-slate-700">{totalLabel}</span>
-            <span className="px-2 py-0.5 rounded-full bg-white text-slate-800 font-semibold shadow-sm">Total : {totalValue}</span>
-        </div>
+        {(totalValue !== undefined && totalValue !== null) && (
+            <div className="flex flex-wrap items-center justify-center gap-2 rounded-full bg-slate-50 px-2 py-1">
+                {totalLabel && <span className="font-semibold text-slate-700">{totalLabel}</span>}
+                <span className="px-2 py-0.5 rounded-full bg-white text-slate-800 font-semibold shadow-sm text-center min-w-[80px]">Total : {totalValue}</span>
+            </div>
+        )}
         <div className="flex items-center justify-center gap-2">
-            <span className="px-1.5 py-0.5 rounded-full bg-blue-50 text-[#005EA8]">MOD : {modValue}</span>
-            {moiValue !== undefined && moiValue !== null && (
-                <span className="px-1.5 py-0.5 rounded-full bg-fuchsia-50 text-fuchsia-700">MOI : {moiValue}</span>
+            <span className="px-2 py-0.5 rounded-full bg-blue-50 text-[#005EA8] font-bold shadow-sm border border-blue-100/50 min-w-[70px] text-center">MOD : {modValue}</span>
+            {(moiValue !== undefined && moiValue !== null) && (
+                <span className="px-2 py-0.5 rounded-full bg-fuchsia-50 text-fuchsia-700 font-bold shadow-sm border border-fuchsia-100/50 min-w-[70px] text-center">MOI : {moiValue}</span>
             )}
         </div>
-        <div className="flex flex-wrap items-center justify-center gap-2 rounded-full bg-emerald-50/70 px-2 py-1">
-            <span className="font-semibold text-emerald-800">{apsLabel}</span>
-            <span className="px-2 py-0.5 rounded-full bg-white/90 text-emerald-700 font-semibold shadow-sm">Total APS : {apsValue}</span>
-        </div>
+        {(apsValue !== undefined && apsValue !== null) && (
+            <div className="flex flex-wrap items-center justify-center gap-2 rounded-full bg-emerald-50/70 px-2 py-1">
+                <span className="font-semibold text-emerald-800">{apsLabel}</span>
+                <span className="px-2 py-0.5 rounded-full bg-white/90 text-emerald-700 font-semibold shadow-sm text-center min-w-[80px]">Total APS : {apsValue}</span>
+            </div>
+        )}
     </div>
 );
 
@@ -127,10 +131,12 @@ const KPICardGlass = ({
     const T = {
         blue: { ring: "ring-blue-300/60", halo: "from-blue-400/25", text: "text-[#005EA8]", dot: "bg-[#005EA8]" },
         amber: { ring: "ring-amber-300/60", halo: "from-amber-400/25", text: "text-amber-600", dot: "bg-amber-500" },
+        cyan: { ring: "ring-cyan-300/60", halo: "from-cyan-400/25", text: "text-cyan-600", dot: "bg-cyan-500" },
+        rose: { ring: "ring-rose-300/60", halo: "from-rose-400/25", text: "text-rose-600", dot: "bg-rose-500" },
+        emerald: { ring: "ring-emerald-300/60", halo: "from-emerald-400/25", text: "text-emerald-600", dot: "bg-emerald-500" },
         green: { ring: "ring-emerald-300/60", halo: "from-emerald-400/25", text: "text-emerald-600", dot: "bg-emerald-500" },
         slate: { ring: "ring-slate-300/60", halo: "from-slate-400/20", text: "text-slate-700", dot: "bg-slate-500" },
         red: { ring: "ring-rose-300/60", halo: "from-rose-400/25", text: "text-rose-600", dot: "bg-rose-500" },
-        cyan: { ring: "ring-cyan-300/60", halo: "from-cyan-400/25", text: "text-cyan-600", dot: "bg-cyan-500" },
     }[tone] || { ring: "ring-blue-300/60", halo: "from-blue-400/25", text: "text-[#005EA8]", dot: "bg-[#005EA8]" };
 
     return (
@@ -150,9 +156,9 @@ const KPICardGlass = ({
             </div>
 
             {customFooter ? (
-                <div className="mt-1 border-t border-slate-100 pt-0.5">{customFooter}</div>
+                <div className="mt-1 border-t border-slate-100 pt-0.5 whitespace-nowrap overflow-x-auto no-scrollbar">{customFooter}</div>
             ) : children ? (
-                <div className="mt-1 border-t border-slate-100 pt-0.5">{children}</div>
+                <div className="mt-1 border-t border-slate-100 pt-0.5 whitespace-nowrap overflow-x-auto no-scrollbar">{children}</div>
             ) : null}
         </div>
     );
@@ -237,13 +243,6 @@ export default function CNDPSimulation() {
     //     return type === "MOI" || type === "INDIRECT" || type === "STRUCTURE" || label.includes("RESPONSABLE") || !!p.is_moi;
     // };
 
-    const currentEffectif = React.useMemo(() => {
-        if (selectedPoste && selectedPoste !== "all") {
-            const p = postes.find(x => x.code === selectedPoste);
-            return p ? Number(p.effectif_actuel || 0) : 0;
-        }
-        return postes.reduce((acc, p) => acc + Number(p.effectif_actuel || 0), 0);
-    }, [selectedPoste, postes]);
 
     const handleSimulate = async () => {
         setLoading(true);
@@ -378,37 +377,26 @@ export default function CNDPSimulation() {
     const isMOD = selectedPosteObj ? !isMoiPoste(selectedPosteObj) : true; // Default to MOD treatment if all selected (usually)
 
     // Calculated values for Footer
+    // Calculated values from simulation
     const fteCalculated = results?.fte_calcule || 0;
     const fteArrondi = results?.fte_arrondi || 0;
 
-    const effActuelMOD = selectedPosteObj
-        ? (isMOD ? Number(selectedPosteObj.effectif_actuel || 0) : 0)
-        : totalModGlobal;
+    // Base values for display (Global or Intervenant)
+    // Similar to Bandoeng's centreDetails vs computed fallbacks
+    const displayMOD = Number(centreInfo?.mod_global ?? totalModGlobal ?? 0);
+    const displayMOI = Number(centreInfo?.moi_global ?? totalMoiGlobal ?? 0);
+    const displayAPS = Number(centreInfo?.aps ?? totalApsGlobal ?? 0);
+    const displayStatutaire = displayMOD + displayMOI;
+    const displayTotal = displayStatutaire + displayAPS;
 
-    const effActuelTotal = currentEffectif; // This represents Statutaire (MOD + MOI)
-
-    const apsValue = selectedPosteObj ? Number(selectedPosteObj.eff_aps || 0) : totalApsGlobal;
-
-    const etpCalculeTotal = (isMOD ? fteCalculated : 0) + totalMoiGlobal;
-
-    // Ecart = ETP Calculé - Effectif Actuel (Statutaire + APS)
-    const ecart = etpCalculeTotal - (effActuelTotal + apsValue);
-
-    // Regle: 
-    // Si Ecart < 0 (Surplus) => On affiche l'écart absolu (le besoin de reduction?)
-    // Si Ecart > 0 (Besoin) => On affiche APS Actuel - Ecart (Regle initiale)
-    let apsCalculeDisplayVal = 0;
-    if (ecart < 0) {
-        apsCalculeDisplayVal = Math.abs(ecart);
-    } else {
-        apsCalculeDisplayVal = apsValue - ecart;
-    }
-
-    const effActuelDisplay = effActuelTotal + apsValue; // Total + APS
+    // Logique APS Calculé (Demandé par User: Cible Final vs Actuel)
+    // Strict mirror of Bandoeng logic
+    const statutaireCible = (isMOD ? fteArrondi : 0) + displayMOI;
+    const ecartCible = statutaireCible - displayStatutaire;
+    const apsCalculeDisplay = ecartCible > 0 ? ecartCible : 0;
 
     const formatSmallNumber = (v) => Number(v || 0).toFixed(2).replace('.', ',');
 
-    // --- ORG CHART DATA PREPARATION ---
     // --- ORG CHART DATA PREPARATION ---
 
     const orgChartData = React.useMemo(() => {
@@ -445,53 +433,56 @@ export default function CNDPSimulation() {
         // MOD Staff (Dynamic from Results)
         const modMap = new Map();
         if (results.tasks && Array.isArray(results.tasks)) {
-            // Group tasks by "Responsable" if available? 
-            // CNDP result currently returns `tasks` list. 
-            // We need to map tasks back to their responsible posts/categories.
-            // Since we don't have explicit 'responsable' string in CNDPTaskOut easily mapped to Category unless we check task name or fetch from backend.
-            // BUT, CNDP tasks are directly linked to Poste Code. 
-            // For the chart, we want aggregated categories?
-            // Wait, Bandoeng `results.tasks` has `responsable` field.
-            // CNDP `results.tasks` has `task_name`.
+            results.tasks.forEach(task => {
+                if (task.responsable && task.centre_poste_id) {
+                    const responsable = task.responsable.trim();
 
-            // Let's check `CNDPSimulationResult` structure or infer from `postes`.
-            // Actually, for CNDP, MOD structure is simpler?
-            // Let's use the `postes` list for MOD structure as well, but assign calculated hours to them?
-            // Or follow Bandoeng: Build MOD from Tasks.
+                    // Skip generic or invalid names
+                    if (!responsable || responsable === "0" || responsable === "." || responsable.toLowerCase().includes("non défini")) return;
 
-            // FIXME: CNDP `tasks` output might not have "Responsable" column.
-            // Let's rely on `postes` for structure and assume MOD are non-MOI.
-            // This is safer for CNDP which is simpler.
+                    // Skip Chef (Deduplication)
+                    if (isChef(responsable)) return;
+
+                    if (!modMap.has(responsable)) {
+                        // Tenter de trouver le poste pour la catégorie
+                        const posteOrigine = postes.find(p => (p.label || "").trim() === responsable);
+
+                        modMap.set(responsable, {
+                            name: responsable,
+                            heures: 0,
+                            tasks: [],
+                            category: posteOrigine?.categorie || "OPERATION"
+                        });
+                    }
+                    const entry = modMap.get(responsable);
+                    entry.heures += (task.heures_calculees || 0);
+                    entry.tasks.push(task.task_name);
+                }
+            });
         }
 
-        // Alternative MOD Strategy for CNDP (since tasks might not map 1:1 to 'Responsable' field strings like Bandoeng)
-        // We will list all MOD posts from `postes` and try to attribute calculated ETP if possible, 
-        // OR just show current effectif vs calculated global.
+        // Calculate effectif for each MOD responsable using KPI logic
+        const totalFteCalculated = results.fte_calcule || 0;
+        const totalHeures = results.total_heures || 0;
 
-        // Bandoeng shows "Calculated" distribution.
-        // If we can't easily map tasks to people for the chart, we might just show the STATIC structure + Global Calculated.
-        // But the prompt says "afficher l'organigramme ... de meme manière".
-        // Bandoeng's chart visualizes the *Team Structure*, primarily based on Categories.
+        const modStaffWithEffectif = Array.from(modMap.values())
+            .filter(staff => staff.heures > 0) // Hide staff with 0 hours
+            .map(staff => {
+                // Calculate proportional effectif based on hours share
+                const proportionalEffectif = totalHeures > 0
+                    ? (staff.heures / totalHeures) * totalFteCalculated
+                    : 0;
 
-        // Let's build MOD staff from the `postes` list (which now has categories!)
-        // This is actually better/stable.
-
-        const modStaff = postes
-            .filter(p => !isMoiPoste(p) && !isChef(p.label || ""))
-            .map(p => ({
-                name: p.label || "Poste MOD",
-                effectif: Math.round(Number(p.effectif_actuel || 0)), // Show CURRENT effectif for now in chart? Or calculated?
-                // Bandoeng chart shows "effectif" which seems to be based on calculated hours share in the code I saw.
-                // But for CNDP, we can just show the theoretical structure (Current).
-                // User asked for "Organigramme", implies structure.
-                category: p.categorie || "OPERATION"
-            }))
-            .filter(s => s.effectif > 0);
+                return {
+                    ...staff,
+                    effectif: Math.round(proportionalEffectif)
+                };
+            });
 
         return {
             chef,
             moiStaff,
-            modStaff
+            modStaff: modStaffWithEffectif
         };
     }, [results, postes]);
 
@@ -749,7 +740,7 @@ export default function CNDPSimulation() {
                         </Card>
                     ) : (
                         <>
-                            {/* KPI Cards - VueIntervenant Style - COMPACT */}
+                            {/* Synthesis Block - Bandoeng Style */}
                             <div className="flex items-center gap-2 mb-0.5 px-1 shrink-0">
                                 <Gauge className="w-3.5 h-3.5 text-[#005EA8]" />
                                 <h3 className="text-xs font-semibold text-[#005EA8]">
@@ -761,110 +752,180 @@ export default function CNDPSimulation() {
                                 {/* Charge Totale */}
                                 <div className="relative overflow-hidden rounded-xl border border-white/50 bg-white/55 backdrop-blur-xl p-2 min-h-[70px] pb-2 ring-1 ring-slate-200 shadow-sm flex flex-col items-center justify-center transition-all hover:ring-blue-200 hover:scale-[1.02] duration-300">
                                     <div className="text-[10px] font-semibold text-slate-600 mb-0.5">Charge Totale</div>
-                                    <div className="text-lg font-bold text-slate-800">{(results.total_heures).toFixed(2)}</div>
+                                    <div className="text-lg font-bold text-slate-800">{(results.total_heures || 0).toFixed(2)}</div>
                                     <div className="text-[9px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full mt-0.5">heures / jour</div>
                                 </div>
 
-                                {/* Effectifs Actuels */}
-                                <KPICardGlass
-                                    label="Effectif Actuel"
-                                    icon={User}
-                                    tone="cyan"
-                                    emphasize
-                                    total={effActuelDisplay}
-                                >
-                                    <EffectifFooter
-                                        totalLabel="Actuel"
-                                        totalValue={formatSmallNumber(effActuelTotal)}
-                                        modValue={formatSmallNumber(effActuelMOD)}
-                                        moiValue={formatSmallNumber(totalMoiGlobal)}
-                                        apsLabel="APS"
-                                        apsValue={formatSmallNumber(apsValue)}
-                                    />
-                                </KPICardGlass>
-
-                                {/* ETP Calculé */}
-                                <KPICardGlass
-                                    label="ETP Calculé"
-                                    icon={Calculator}
-                                    tone="blue"
-                                    emphasize
-                                    total={formatSmallNumber(etpCalculeTotal)}
-                                >
-                                    <EffectifFooter
-                                        totalLabel="Calculé"
-                                        totalValue={formatSmallNumber(etpCalculeTotal)}
-                                        modValue={formatSmallNumber(fteCalculated)}
-                                        moiValue={formatSmallNumber(totalMoiGlobal)}
-                                        apsLabel="APS"
-                                        apsValue={formatSmallNumber(apsCalculeDisplayVal)}
-                                    />
-                                </KPICardGlass>
-
-                                {/* ETP Final */}
-                                <KPICardGlass
-                                    label="ETP Final"
-                                    icon={CheckCircle2}
-                                    tone="amber"
-                                    emphasize
-                                    total={Math.round((isMOD ? fteArrondi : 0) + totalMoiGlobal)}
-                                >
-                                    <EffectifFooter
-                                        totalLabel="Arrondi"
-                                        totalValue={Math.round((isMOD ? fteArrondi : 0) + totalMoiGlobal)}
-                                        modValue={fteArrondi}
-                                        moiValue={formatSmallNumber(totalMoiGlobal)}
-                                        apsLabel="APS"
-                                        apsValue={Math.round(apsCalculeDisplayVal)}
-                                    />
-                                </KPICardGlass>
-
-                                {/* Ecart Total */}
+                                {/* 1. Effectif Actuel */}
                                 {(() => {
-                                    // Calcul des écarts (Cible - Actuel)
-                                    // Target MOD = fteArrondi (si MOD sélectionné)
-                                    // Actual MOD = effActuelMOD (equivalent displayMOD)
-                                    // Note: effActuelMOD variable is defined above line 363. 
-                                    const displayMOD = effActuelMOD;
+                                    let actualStatutaire = 0;
+                                    let actualMOD = 0;
+                                    let actualMOI = 0;
+                                    let actualAPS = 0;
+                                    let actualTotal = 0;
 
-                                    const targetMOD = isMOD ? fteArrondi : 0;
-                                    const ecartMOD = targetMOD - displayMOD;
+                                    if (selectedPosteObj) {
+                                        const val = Number(selectedPosteObj.effectif_actuel || 0);
+                                        if (isMoiPoste(selectedPosteObj)) {
+                                            actualMOI = val;
+                                        } else {
+                                            actualMOD = val;
+                                        }
+                                        actualStatutaire = actualMOD + actualMOI;
+                                        actualTotal = actualStatutaire;
+                                    } else {
+                                        actualMOD = displayMOD;
+                                        actualMOI = displayMOI;
+                                        actualAPS = displayAPS;
+                                        actualStatutaire = displayStatutaire;
+                                        actualTotal = displayTotal;
+                                    }
 
-                                    // Target MOI = totalMoiGlobal (Statutaire = Actuel pour MOI dans ce contexte)
-                                    const displayMOI = totalMoiGlobal;
-                                    const ecartMOI = displayMOI - displayMOI; // Toujours 0 ici
+                                    return (
+                                        <KPICardGlass
+                                            label="Effectif Actuel"
+                                            icon={User}
+                                            tone="cyan"
+                                            emphasize
+                                            total={Math.round(actualTotal)}
+                                        >
+                                            {(!selectedPoste || selectedPoste === "all") && (
+                                                <EffectifFooter
+                                                    totalLabel="Statutaire"
+                                                    totalValue={Math.round(actualStatutaire)}
+                                                    modValue={Math.round(actualMOD)}
+                                                    moiValue={Math.round(actualMOI)}
+                                                    apsLabel="APS"
+                                                    apsValue={Math.round(actualAPS)}
+                                                />
+                                            )}
+                                        </KPICardGlass>
+                                    );
+                                })()}
 
-                                    // Target APS = Math.round(apsCalculeDisplayVal)
-                                    const targetAPS = Math.round(apsCalculeDisplayVal);
-                                    // displayAPS = apsValue (defined line 367)
-                                    const displayAPS = apsValue;
-                                    const ecartAPS = targetAPS - displayAPS;
+                                {/* 2. ETP Calculé */}
+                                {(() => {
+                                    const targetCalculatedMOD = isMOD ? fteCalculated : 0;
+                                    const targetCalculatedMOI = selectedPosteObj
+                                        ? (isMoiPoste(selectedPosteObj) ? Number(selectedPosteObj.effectif_actuel || 0) : 0)
+                                        : displayMOI;
 
-                                    const ecartTotal = ecartMOD + ecartMOI + ecartAPS;
-                                    const ecartStatutaire = ecartMOD + ecartMOI;
+                                    const totalCalculated = targetCalculatedMOD + targetCalculatedMOI;
 
+                                    return (
+                                        <KPICardGlass
+                                            label="ETP Calculé"
+                                            icon={Calculator}
+                                            tone="blue"
+                                            emphasize
+                                            total={formatSmallNumber(totalCalculated)}
+                                        >
+                                            {(!selectedPoste || selectedPoste === "all") && (
+                                                <EffectifFooter
+                                                    modValue={formatSmallNumber(targetCalculatedMOD)}
+                                                    moiValue={formatSmallNumber(targetCalculatedMOI)}
+                                                />
+                                            )}
+                                        </KPICardGlass>
+                                    );
+                                })()}
+
+                                {/* 3. ETP Final */}
+                                {(() => {
+                                    const targetFinalMOD = isMOD ? fteArrondi : 0;
+                                    const targetFinalMOI = selectedPosteObj
+                                        ? (isMoiPoste(selectedPosteObj) ? Number(selectedPosteObj.effectif_actuel || 0) : 0)
+                                        : displayMOI;
+
+                                    const totalFinal = targetFinalMOD + targetFinalMOI;
+
+                                    let actualStatutaire = 0;
+                                    if (selectedPosteObj) {
+                                        actualStatutaire = Number(selectedPosteObj.effectif_actuel || 0);
+                                    } else {
+                                        actualStatutaire = displayStatutaire;
+                                    }
+
+                                    const apsDisplay = Math.round(apsCalculeDisplay);
+
+                                    return (
+                                        <KPICardGlass
+                                            label="ETP Final"
+                                            icon={CheckCircle2}
+                                            tone="amber"
+                                            emphasize
+                                            total={Math.round(totalFinal)}
+                                        >
+                                            {(!selectedPoste || selectedPoste === "all") && (
+                                                <EffectifFooter
+                                                    totalLabel="Statutaire"
+                                                    totalValue={Math.round(actualStatutaire)}
+                                                    modValue={targetFinalMOD}
+                                                    moiValue={formatSmallNumber(targetFinalMOI)}
+                                                    apsLabel="APS"
+                                                    apsValue={apsDisplay}
+                                                />
+                                            )}
+                                        </KPICardGlass>
+                                    );
+                                })()}
+
+                                {/* 4. Besoin */}
+                                {(() => {
                                     const formatSigned = (val) => {
                                         const num = Number(val);
                                         if (isNaN(num)) return "0";
                                         return num > 0 ? `+${num}` : `${num}`;
                                     };
 
+                                    const targetFinalMOD = isMOD ? fteArrondi : 0;
+                                    const targetFinalMOI = selectedPosteObj
+                                        ? (isMoiPoste(selectedPosteObj) ? Number(selectedPosteObj.effectif_actuel || 0) : 0)
+                                        : displayMOI;
+                                    const statutaireCible = targetFinalMOD + targetFinalMOI;
+
+                                    let actualMOD = 0;
+                                    let actualMOI = 0;
+                                    if (selectedPosteObj) {
+                                        actualMOD = isMOD ? Number(selectedPosteObj.effectif_actuel || 0) : 0;
+                                        actualMOI = isMoiPoste(selectedPosteObj) ? Number(selectedPosteObj.effectif_actuel || 0) : 0;
+                                    } else {
+                                        actualMOD = displayMOD;
+                                        actualMOI = displayMOI;
+                                    }
+                                    const actualStatutaire = actualMOD + actualMOI;
+                                    const diffStatutaire = statutaireCible - actualStatutaire;
+
+                                    const apsTarget = Math.round(apsCalculeDisplay);
+                                    const apsActual = Math.round(displayAPS);
+                                    const apsDelta = apsTarget - apsActual;
+
+                                    const isIndividual = selectedPoste && selectedPoste !== "all";
+                                    const valToDisplay = isIndividual ? diffStatutaire : (apsDelta > 0 ? apsDelta : 0);
+                                    const tone = valToDisplay > 0 ? "rose" : "emerald";
+                                    const displayTotal = isIndividual ? formatSigned(Math.round(valToDisplay)) : (valToDisplay > 0 ? `+${Math.round(valToDisplay)}` : "0");
+
+                                    const diffMOD = targetFinalMOD - actualMOD;
+                                    const diffMOI = targetFinalMOI - actualMOI;
+
                                     return (
                                         <KPICardGlass
-                                            label="Écart Total"
-                                            icon={ecartTotal < 0 ? TrendingDown : TrendingUp}
-                                            tone={ecartTotal > 0 ? "rose" : ecartTotal < 0 ? "emerald" : "slate"}
+                                            label="Besoin"
+                                            icon={valToDisplay > 0 ? TrendingUp : CheckCircle2}
+                                            tone={tone}
                                             emphasize
-                                            total={formatSigned(ecartTotal)}
+                                            total={displayTotal}
                                         >
-                                            <EffectifFooter
-                                                totalLabel="Statutaire"
-                                                totalValue={formatSigned(ecartStatutaire)}
-                                                modValue={formatSigned(ecartMOD)}
-                                                moiValue={Math.round(ecartMOI)}
-                                                apsLabel="APS"
-                                                apsValue={formatSigned(ecartAPS)}
-                                            />
+                                            {(!selectedPoste || selectedPoste === "all") && (
+                                                <EffectifFooter
+                                                    totalLabel="Ecart Statutaire"
+                                                    totalValue={formatSigned(Math.round(diffStatutaire))}
+                                                    modValue={formatSigned(diffMOD)}
+                                                    moiValue={formatSigned(diffMOI)}
+                                                    apsLabel="Var. APS"
+                                                    apsValue={formatSigned(Math.round(apsDelta))}
+                                                />
+                                            )}
                                         </KPICardGlass>
                                     );
                                 })()}

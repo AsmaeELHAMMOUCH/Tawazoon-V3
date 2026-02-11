@@ -56,6 +56,7 @@ class BandoengParamsIn(BaseModel):
     ratio_preparateur: float = 1000.0
     ratio_magasinier: float = 800.0
     shift: int = 1
+    pct_mois: Optional[float] = None
 
 class BandoengSimulateRequest(BaseModel):
     centre_id: int = 1942
@@ -91,6 +92,7 @@ class BandoengSimulateResponse(BaseModel):
     besoin_preparateur: float
     besoin_magasinier: float
     total_ressources_humaines: float
+    ressources_par_poste: dict = {}
 
 @router.post("/simulate", response_model=BandoengSimulateResponse)
 def simulate_bandoeng(request: BandoengSimulateRequest, db: Session = Depends(get_db)):
@@ -129,7 +131,8 @@ def simulate_bandoeng(request: BandoengSimulateRequest, db: Session = Depends(ge
             ratio_trieur=request.params.ratio_trieur,
             ratio_preparateur=request.params.ratio_preparateur,
             ratio_magasinier=request.params.ratio_magasinier,
-            shift=request.params.shift
+            shift=request.params.shift,
+            pct_mois=request.params.pct_mois
         )
         
         print(f"DEBUG: simulate_bandoeng received grid_values: {request.volumes.grid_values}")
@@ -165,7 +168,8 @@ def simulate_bandoeng(request: BandoengSimulateRequest, db: Session = Depends(ge
             besoin_trieur=result.besoin_trieur,
             besoin_preparateur=result.besoin_preparateur,
             besoin_magasinier=result.besoin_magasinier,
-            total_ressources_humaines=result.total_ressources_humaines
+            total_ressources_humaines=result.total_ressources_humaines,
+            ressources_par_poste=result.ressources_par_poste
         )
         
     except Exception as e:
@@ -229,7 +233,8 @@ def simulate_bandoeng_direct(request: SimplifiedBandoengRequest, db: Session = D
             ratio_trieur=p.get('ratio_trieur', 1200.0),
             ratio_preparateur=p.get('ratio_preparateur', 1000.0),
             ratio_magasinier=p.get('ratio_magasinier', 800.0),
-            shift=int(p.get('shift', 1))
+            shift=int(p.get('shift', 1)),
+            pct_mois=p.get('pct_mois')
         )
         
         print(f"DEBUG: simulate_bandoeng_direct received grid_values: {request.grid_values}")
@@ -272,7 +277,8 @@ def simulate_bandoeng_direct(request: SimplifiedBandoengRequest, db: Session = D
             besoin_trieur=result.besoin_trieur,
             besoin_preparateur=result.besoin_preparateur,
             besoin_magasinier=result.besoin_magasinier,
-            total_ressources_humaines=result.total_ressources_humaines
+            total_ressources_humaines=result.total_ressources_humaines,
+            ressources_par_poste=result.ressources_par_poste
         )
         
     except Exception as e:

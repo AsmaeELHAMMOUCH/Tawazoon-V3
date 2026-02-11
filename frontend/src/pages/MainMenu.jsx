@@ -21,7 +21,7 @@ export default function MainMenu() {
             icon: Building2,
             color: 'from-cyan-500 to-cyan-600',
             hoverColor: 'hover:from-cyan-600 hover:to-cyan-700',
-            path: '/app/centres-uniques'
+            path: '/app/simulation/centres-uniques'
         },
         {
             id: 'simulation-nouvelle',

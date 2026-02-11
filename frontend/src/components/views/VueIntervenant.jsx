@@ -1,6 +1,7 @@
 ﻿/* VueIntervenant.jsx - normalisation /jour + productivité + formatage */
 "use client";
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import * as XLSX from 'xlsx';
 import { useDebouncedValue } from "../../hooks/useDebounce";
 import {
   MapPin,
@@ -28,6 +29,7 @@ import {
   Download,
   Box,
   Play,
+  CalendarDays
 } from "lucide-react";
 
 import { api } from "../../lib/api";
@@ -55,7 +57,13 @@ import { Input } from "@/components/ui/input";
 import BandoengGrid from "@/components/centres_uniq/BandoengGrid";
 import BandoengAdditionalParams from "@/components/centres_uniq/BandoengAdditionalParams";
 import BandoengParameters from "@/components/centres_uniq/BandoengParameters";
+import SeasonalityModule from "@/components/centres_uniq/SeasonalityModule";
 
+
+const MONTHS = [
+  "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+  "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"
+];
 
 /* ===================== KPI COMPONENTS (COPIED FROM VUECENTRE) ===================== */
 const KPICardGlass = ({
@@ -143,6 +151,25 @@ import Tooltip from "../ui/Tooltip";
 import "../tables/EnterpriseTable.css";
 import "../../styles/tooltips.css";
 import { CardContent } from "../card";
+
+// 🆕 Helper pour catégoriser les postes (Généralisation Bandoeng)
+const getCategory = (poste) => {
+  // 1. API Category (from HierarchiePostes)
+  if (poste.category) return poste.category;
+
+  // 2. Keyword Mapping Fallback
+  const label = (poste.label || poste.nom_poste || "").toUpperCase();
+  if (label.includes("GUICHET") || label.includes("GAB")) return "GUICHET";
+  if (label.includes("FACTEUR") || label.includes("DISTRIBUTION")) return "TERRAIN";
+  if (label.includes("CHAUFFEUR")) return "CHAUFFEUR / COURSIER";
+  if (label.includes("TRI") || label.includes("ACHEMINEMENT") || label.includes("OPERATIONS") || label.includes("BRIGADE") || label.includes("CTD")) return "OPERATION CTD";
+  if (label.includes("ACCUEIL") || label.includes("CLIENTELE") || label.includes("ADMIN") || label.includes("RH") || label.includes("MOYENS")) return "OPERATION ADMIN";
+  if (label.includes("MANUTENTION")) return "MANUTENTION";
+
+  // Default
+  return "AUTRES";
+};
+
 
 export default function VueIntervenant({
   regions = [],
@@ -241,6 +268,35 @@ export default function VueIntervenant({
 }) {
   const fileInputRef = useRef(null);
 
+  // 🆕 État local pour les détails officiels du centre (Alignement Bandoeng)
+  const [internalCentreDetails, setInternalCentreDetails] = useState(null);
+
+  // 🆕 Effet pour charger les détails officiels quand le centre change
+  useEffect(() => {
+    if (!centre) {
+      setInternalCentreDetails(null);
+      return;
+    }
+
+    let cancelled = false;
+    const fetchDetails = async () => {
+      try {
+        // On utilise fetch directement pour éviter de modifier api.js global
+        const res = await fetch(`/api/bandoeng/centre-details/${centre}`);
+        if (res.ok && !cancelled) {
+          const data = await res.json();
+          setInternalCentreDetails(data);
+        }
+      } catch (e) {
+        console.warn("Erreur chargement détails centre:", e);
+      }
+    };
+
+    fetchDetails();
+
+    return () => { cancelled = true; };
+  }, [centre]);
+
   const handleFileSelect = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -278,8 +334,6 @@ export default function VueIntervenant({
   // 🆕 Filtre famille
   const [filterFamille, setFilterFamille] = useState("");
 
-  // 🆕 Paramètre Collecte (Local -> Global)
-  const [filterProduit, setFilterProduit] = useState("");
   // 🆕 State local pour Bandoeng UI (si non géré par parent)
   const [pctSac, setPctSac] = useState(60);
 
@@ -289,39 +343,6 @@ export default function VueIntervenant({
     return Array.from(s).sort();
   }, [referentiel]);
 
-  // 🆕 Helper: Grouper les produits
-  const getGroupeProduit = (produitRaw) => {
-    const p = String(produitRaw || "").toUpperCase();
-    if (p.includes("AMANA") || p.includes("COLIS")) return "AMANA";
-    if (p.includes("CO") || p.includes("ORDINAIRE")) return "CO";
-    if (p.includes("CR") || p.includes("RECOMMANDE") || p.includes("RECOMMANDÉ")) return "CR";
-    if (p.includes("BARKIA")) return "E-BARKIA";
-    if (p.includes("LRH") || p.includes("HYBRIDE")) return "LRH";
-    return "AUTRE";
-  };
-
-  // 🆕 Liste des produits uniques (GROUPÉS)
-  const uniqueProduits = useMemo(() => {
-    const groups = new Set();
-    (referentiel || []).forEach(r => {
-      const g = getGroupeProduit(r.produit);
-      if (g !== "AUTRE") groups.add(g);
-    });
-    // Ordre spécifique demandé
-    const order = ["AMANA", "CO", "CR", "E-BARKIA", "LRH"];
-    return Array.from(groups).sort((a, b) => {
-      const idxA = order.indexOf(a);
-      const idxB = order.indexOf(b);
-      // Si les deux sont dans l'ordre défini, on trie selon l'ordre
-      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-      // Si un seul est dans l'ordre, il passe avant
-      if (idxA !== -1) return -1;
-      if (idxB !== -1) return 1;
-      // Sinon tri alphabétique
-      return a.localeCompare(b);
-    });
-  }, [referentiel]);
-
   // 🆕 Paramètre Collecte (Local -> Global)
   // const [pctCollecte, setPctCollecte] = useState(5.0);
   // 🆕 Paramètre Retour (Local -> Global)
@@ -329,25 +350,16 @@ export default function VueIntervenant({
 
   // State for Import
   const [isImporting, setIsImporting] = useState(false);
-  const [hasAttemptedAutoImport, setHasAttemptedAutoImport] = useState(false);
 
-  // Reset auto-import flag when centre changes
-  useEffect(() => {
-    setHasAttemptedAutoImport(false);
-  }, [centre]);
-
-  const handleImportCanva = useCallback(async (isAuto = false) => {
+  const handleImportCanva = async () => {
     if (!centre) return;
 
     // Determine file based on Typology
     const cat = String(centreCategorie || "").toUpperCase();
     const isAmType = cat.includes("AM") || cat.includes("MESSAGERIE");
-    const fileName = isAmType ? "canva_AM.xlsx" : "Canvas.xlsx";
+    const fileName = isAmType ? "canva_CM_FES.xlsx" : "Canvas.xlsx";
 
-    // Skip confirm if auto
-    if (!isAuto) {
-      if (!confirm(`Voulez-vous importer les tâches par défaut depuis le fichier ${fileName} ?\nCela ajoutera les tâches par défaut à ce centre.`)) return;
-    }
+    if (!confirm(`Voulez-vous importer les tâches par défaut depuis le fichier ${fileName} ?\nCela ajoutera les tâches par défaut à ce centre.`)) return;
 
     try {
       setIsImporting(true);
@@ -363,6 +375,7 @@ export default function VueIntervenant({
       const res = await api.importTaches(centre, file);
 
       if (res.status === 'imported') {
+        // alert(`Import réussi : ${res.count} tâches importées.`);
         if (onRefresh) onRefresh();
       } else {
         throw new Error(res.message || "Erreur lors de l'import");
@@ -370,31 +383,11 @@ export default function VueIntervenant({
 
     } catch (err) {
       console.error(err);
-      if (!isAuto) alert("Erreur: " + err.message);
+      alert("Erreur: " + err.message);
     } finally {
       setIsImporting(false);
     }
-  }, [centre, centreCategorie, onRefresh]);
-
-  // Auto-import effect - Enabled with robust loading check (Step 1391)
-  const prevLoadingRepoRef = React.useRef(loading?.referentiel);
-
-  useEffect(() => {
-    const wasLoading = prevLoadingRepoRef.current;
-    const isLoading = loading?.referentiel;
-
-    // Detect transition from true -> false (Load Complete)
-    if (wasLoading && !isLoading) {
-      // Only if center selected, empty tasks, not importing, and not tried yet
-      if (centre && referentiel.length === 0 && !isImporting && !hasAttemptedAutoImport) {
-        console.log("🔄 Auto-importing tasks because referentiel is empty after load...");
-        setHasAttemptedAutoImport(true);
-        handleImportCanva(true);
-      }
-    }
-
-    prevLoadingRepoRef.current = isLoading;
-  }, [loading?.referentiel, centre, referentiel, isImporting, hasAttemptedAutoImport, handleImportCanva]);
+  };
 
   // ✅ OPTIMISATION : Debounce des valeurs pour éviter les recalculs excessifs
   const debouncedColis = useDebouncedValue(colis, 300);
@@ -655,16 +648,14 @@ export default function VueIntervenant({
     return 0;
   }
 
-  // 🔹 Filtrer le référentiel pour exclure les tâches avec moyenne_min = 0 ET filtrer par famille ET produit
+  // 🔹 Filtrer le référentiel pour exclure les tâches avec moyenne_min = 0 ET filtrer par famille
   const referentielFiltered = useMemo(() => {
-    return (referentiel || [])
-      .filter((row) => {
-        const matchFamille = !filterFamille || row.famille === filterFamille;
-        const matchProduit = !filterProduit || getGroupeProduit(row.produit) === filterProduit;
-        return matchFamille && matchProduit;
-      })
-      .sort((a, b) => (Number(a.ordre ?? 999) - Number(b.ordre ?? 999)));
-  }, [referentiel, filterFamille, filterProduit]);
+    return (referentiel || []).filter((row) => {
+      // const hasMin = Number(row.m ?? 0) > 0; // 🗑️ On garde meme si 0 selon demande
+      const matchFamille = !filterFamille || row.famille === filterFamille;
+      return matchFamille;
+    });
+  }, [referentiel, filterFamille]);
 
   const referentielDisplayData = useMemo(() => {
     // DEBUG: Check order values
@@ -705,20 +696,18 @@ export default function VueIntervenant({
     return sorted;
   }, [referentielFiltered]);
 
-  // ✅ OPTIMISATION : Memoization des résultats fusionnés
-  const mergedResults = useMemo(() => {
-    const res = referentielFiltered.map((row, i) => {
+  // ✅ OPTIMISATION : Memoization des résultats fusionnés ET du total brut
+  const [mergedResults, totalHeuresAffichees] = useMemo(() => {
+    const raw = referentielFiltered.map((row, i) => {
       const taskName = String(row.t || row.task || "").trim();
       const fromBack = (row.id && resIndex.get(String(row.id))) || resIndex.get(normalizeKey(taskName));
       const moyenneMin = Number(row.m ?? 0);
 
       // Si le backend a déjà calculé les heures, on les préfère !
-      // Le backend retourne maintenant des heures "chargées" (Raw/P)
       const hasBackResults = fromBack && (fromBack.heures !== undefined);
+      const isActive = String(row.etat || "A").trim().toUpperCase() !== "NA";
 
-      const isActive = String(row.etat || "A").trim().toUpperCase() !== "NA"; // ✅ Check état
-
-      const nbJour = isActive // ✅ Si NA => 0
+      const nbJour = isActive
         ? (fromBack?.nombre_unite ??
           fromBack?.nombre_Unite ??
           nombreUniteParUnite(row.u, taskName, row))
@@ -726,15 +715,12 @@ export default function VueIntervenant({
 
       let heuresLoc;
       if (!isActive) {
-        heuresLoc = 0; // ✅ Si NA => 0
+        heuresLoc = 0;
       } else if (hasBackResults) {
         heuresLoc = Number(fromBack.heures || 0);
       } else if (hasSimulated && (resultats || []).length > 0) {
-        // ✅ Si la simulation a eu lieu mais que le backend n'a pas renvoyé cette tâche,
-        // c'est qu'elle n'est pas applicable au poste (ou filtrée). On met 0.
         heuresLoc = 0;
       } else {
-        // Fallback local (uniquement avant la simulation ou si mode hors ligne)
         heuresLoc = +(
           Number(nbJour || 0) *
           (minutesAjustees(moyenneMin) / 60)
@@ -744,46 +730,47 @@ export default function VueIntervenant({
       return {
         seq: i + 1,
         task: (taskName || "").replace(/\s*\([^)]*\)/g, "").trim(),
-        formule: fromBack?.formule || "N/A",  // 🆕 Formule de calcul depuis le backend
+        formule: fromBack?.formule || "N/A",
         nombre_Unite: Number(nbJour || 0),
         heures: heuresLoc,
+        produit: (row.p || row.produit || "").replace(/Arrivé|Arrive|Reçu|Recu|Dépôt|Dépot|Depot|MED/gi, "").trim(),
+        moyenne_min: moyenneMin,
+        unite_mesure: row.u,
         _u: row.u,
         _type_flux: row.type_flux,
         _fromBack: fromBack,
       };
-    }).filter(r => Number(r.heures || 0) > 0.005);
+    });
+
+    // ✅ CALCUL DU TOTAL BRUT (Avant filtrage 0.005h) pour alignement avec le backend
+    const totalBrut = raw.reduce((acc, r) => acc + Number(r.heures || 0), 0);
+
+    // ✅ FILTRAGE POUR L'AFFICHAGE DU TABLEAU
+    let res = raw.filter(r => Number(r.heures || 0) > 0.005);
 
     // 🆕 Fallback pour postes MOI (Structurels)
-    // Si la simulation ne renvoie rien (car pas de tâches data-driven), on affiche un forfait
     if (res.length === 0 && hasSimulated && poste) {
       const pObj = (postesOptions || []).find(p => String(p.id) === String(poste));
-      // Détection basée sur le type_poste (si disponible) ou heuristique simple
       const isMoi = pObj?.type_poste === 'MOI' || pObj?.is_moi;
 
       if (isMoi) {
-        return [{
+        const hMoi = Number(heuresNet || 7.33);
+        const moiTask = {
           seq: 1,
           task: "Activité Structurelle (MOI)",
           formule: "Poste Forfaitaire (Non piloté par le volume)",
           nombre_Unite: 1,
-          heures: Number(heuresNet || 7.33), // Pour faire 1 ETP
+          heures: hMoi,
           _u: "Jour",
           _type_flux: "Structurel",
           _fromBack: null
-        }];
+        };
+        return [[moiTask], hMoi];
       }
     }
 
-    return res;
+    return [res, totalBrut];
   }, [referentielFiltered, resIndex, annualValues, debouncedColis, debouncedProductivite, colisAmanaParSac, courriersParSac, colisParCollecte, hasSimulated, poste, postesOptions, heuresNet]);
-
-  // ✅ OPTIMISATION : Memoization du total des heures
-  const totalHeuresAffichees = useMemo(() => {
-    return mergedResults.reduce(
-      (acc, r) => acc + Number(r.heures || 0),
-      0
-    );
-  }, [mergedResults]);
 
   // ✅ SECURITÉ : Utiliser le total heures du backend s'il est disponible (Data-Driven)
   const totalHeuresFinal = useMemo(() => {
@@ -918,39 +905,57 @@ export default function VueIntervenant({
   // 🆕 Helper pour formater petits nombres
   const formatSmallNumber = (v) => Number(v || 0).toFixed(2).replace('.', ',');
 
+  const formatSigned = (val) => {
+    const num = Number(val);
+    if (isNaN(num)) return "0";
+    return num > 0 ? `+${num}` : `${num}`;
+  };
+
   // 🆕 Logique d'affichage KPI alignée sur Bandoeng
   const kpiData = useMemo(() => {
+
+    const etpCalcValue = isGlobalView
+      ? (totaux?.total_heures ? totaux.fte_calcule : 0)
+      : fteCalcAffiche;
+
     let actualMOD = 0;
     let actualMOI = 0;
     let actualAPS = 0;
     let actualStatutaire = 0;
     let actualTotal = 0;
 
-    const excludedLabels = ["Gestionnaire clients en compte", "CHEF DE CENTRE"];
-    const currentLabel = (selectedPosteObj?.label || "").trim();
-    const isExcludedPoste = excludedLabels.some(x => x.toLowerCase() === currentLabel.toLowerCase());
-
-    const etpCalcValue = isGlobalView
-      ? (totaux?.total_heures ? totaux.fte_calcule : 0)
-      : (isExcludedPoste ? 0 : fteCalcAffiche);
-
-    if (selectedPosteObj) {
-      // Vue Individuelle
-      const val = Number(selectedPosteObj.effectif_actuel || 0);
-      if (isMoiPoste(selectedPosteObj)) {
-        actualMOI = val;
-      } else {
-        actualMOD = val;
-      }
+    // ✅ Priorité aux données officielles de la base (Logique BandoengSimulation)
+    if (isGlobalView && internalCentreDetails) {
+      actualMOD = Number(internalCentreDetails.mod_global || 0);
+      actualMOI = Number(internalCentreDetails.moi_global || 0);
+      actualAPS = Number(internalCentreDetails.aps || 0);
+      // Total Statutaire = MOD + MOI (sans APS)
       actualStatutaire = actualMOD + actualMOI;
-      actualTotal = actualStatutaire + (selectedPosteObj.effectif_aps || 0);
-    } else {
-      // Vue Globale
-      actualMOD = totalEffectifCentreStats.mod;
-      actualMOI = totalMoiGlobal;
-      actualAPS = apsGlobalCentre;
-      actualStatutaire = actualMOD + actualMOI;
+      // Total Général = Statutaire + APS
       actualTotal = actualStatutaire + actualAPS;
+    } else {
+      // 🔄 Fallback Standard ou Calcul par poste
+      if (selectedPosteObj) {
+        // Vue Individuelle
+        const val = Number(selectedPosteObj.effectif_actuel || 0);
+        if (isMoiPoste(selectedPosteObj)) {
+          actualMOI = val;
+          actualMOD = 0;
+        } else {
+          actualMOD = val;
+          actualMOI = 0;
+        }
+        actualStatutaire = actualMOD + actualMOI;
+        actualTotal = actualStatutaire; // APS ignorés en vue individuelle
+        actualAPS = 0;
+      } else {
+        // Vue Globale (Fallback si pas de détails chargés)
+        actualMOD = totalEffectifCentreStats.mod;
+        actualMOI = totalMoiGlobal;
+        actualAPS = apsGlobalCentre;
+        actualStatutaire = actualMOD + actualMOI;
+        actualTotal = actualStatutaire + actualAPS;
+      }
     }
 
     const targetCalculatedMOD = isGlobalView ? etpCalcValue : (isMOD ? fteCalcAffiche : 0);
@@ -958,7 +963,12 @@ export default function VueIntervenant({
     const totalCalculated = targetCalculatedMOD + targetCalculatedMOI;
 
     const targetFinalMOD = isGlobalView ? Math.round(etpCalcValue) : (isMOD ? fteArrondiAffiche : 0);
-    const targetFinalMOI = isGlobalView ? totalMoiGlobal : (isMoiPoste(selectedPosteObj) ? effectifActuel : 0);
+    // Pour MOI, si vue globale et details dispos, on prend la valeur officielle aussi pour la cible (souvent identique)
+    // Mais attention, la CIBLE MOI est généralement l'existant.
+    const targetFinalMOI = isGlobalView
+      ? (internalCentreDetails ? internalCentreDetails.moi_global : totalMoiGlobal)
+      : (isMoiPoste(selectedPosteObj) ? effectifActuel : 0);
+
     const totalFinal = targetFinalMOD + targetFinalMOI;
 
     // Logique APS
@@ -969,127 +979,138 @@ export default function VueIntervenant({
     // Ecarts
     const apsActual = actualAPS;
     const apsDelta = apsCalculeDisplay - apsActual;
-    const valToDisplay = apsDelta > 0 ? apsDelta : 0;
 
     const diffMOD = targetFinalMOD - actualMOD;
     const diffMOI = targetFinalMOI - actualMOI;
     const diffStatutaire = statutaireCible - actualStatutaire;
+
+    const isIndividual = !isGlobalView;
+    const valToDisplay = isIndividual ? diffStatutaire : (apsDelta > 0 ? apsDelta : 0);
+    const tone = valToDisplay > 0 ? "rose" : "emerald";
+    const totalDisplay = isIndividual ? formatSigned(Math.round(valToDisplay)) : (valToDisplay > 0 ? `+${Math.round(valToDisplay)}` : "0");
 
     return {
       actualMOD, actualMOI, actualAPS, actualStatutaire, actualTotal,
       targetCalculatedMOD, targetCalculatedMOI, totalCalculated,
       targetFinalMOD, targetFinalMOI, totalFinal,
       apsCalculeDisplay, valToDisplay, apsDelta,
-      diffMOD, diffMOI, diffStatutaire
+      diffMOD, diffMOI, diffStatutaire,
+      isIndividual, tone, totalDisplay
     };
-  }, [selectedPosteObj, totalEffectifCentreStats, totalMoiGlobal, apsGlobalCentre, isGlobalView, totaux, isMOD, fteCalcAffiche, effectifActuel, fteArrondiAffiche]);
-
-  const formatSigned = (val) => {
-    const num = Number(val);
-    if (isNaN(num)) return "0";
-    return num > 0 ? `+${num}` : `${num}`;
-  };
+  }, [selectedPosteObj, totalEffectifCentreStats, totalMoiGlobal, apsGlobalCentre, isGlobalView, totaux, isMOD, fteCalcAffiche, effectifActuel, fteArrondiAffiche, internalCentreDetails]);
 
   const handleSimuler = useCallback((overrides = {}) => {
     console.log("🖱️ [VueIntervenant] Click Simuler. State Taux:", tauxComplexite, "NatureGeo:", natureGeo);
-    const ratioCollecte = Math.max(1, parseNonNeg(colisParCollecte) ?? 1);
 
     onSimuler({
-      colis_amana_par_sac: parseNonNeg(colisAmanaParSac) ?? 5,
-      courriers_par_sac: parseNonNeg(courriersParSac) ?? 4500,
-      colis_par_collecte: ratioCollecte,
-      part_particuliers: partParticuliers,
-      taux_complexite: Number(tauxComplexite || 0),
-      nature_geo: Number(natureGeo || 0),
-      ed_percent: Number(edPercent || 0), // 🆕 % En dehors
-      pct_collecte: Number(pctCollecte || 0), // 🆕 % Collecte
-      pct_retour: Number(pctRetour || 0), // 🆕 % Retour
+      taux_complexite: Number(tauxComplexite || 1),
+      nature_geo: Number(natureGeo || 1),
+      pct_axes_arrivee: Number(pctAxesArrivee || 0),
+      pct_axes_depart: Number(pctAxesDepart || 0),
+      pct_national: Number(pctNational || 100),
+      pct_marche_ordinaire: Number(pctMarcheOrdinaire || 0),
+      pct_international: Number(pctInternational || 0),
+      colis_amana_par_canva_sac: Number(colisAmanaParCanvaSac || 35),
+      nbr_co_sac: Number(nbrCoSac || 350),
+      nbr_cr_sac: Number(nbrCrSac || 400),
+      productivite: Number(productivite ?? 100),
+      idle_minutes: Number(idleMinutes || 0),
+      shift: Number(shift || 1),
+      pct_collecte: Number(pctCollecte || 0),
+      pct_retour: Number(pctRetour || 0),
+      ...overrides
     });
-  }, [onSimuler, colisParCollecte, colisAmanaParSac, courriersParSac, partParticuliers, tauxComplexite, natureGeo, edPercent, pctCollecte, pctRetour, pctInternational]);
+  }, [
+    onSimuler,
+    tauxComplexite,
+    natureGeo,
+    pctAxesArrivee,
+    pctAxesDepart,
+    pctNational,
+    pctMarcheOrdinaire,
+    pctInternational,
+    colisAmanaParCanvaSac,
+    nbrCoSac,
+    nbrCrSac,
+    productivite,
+    idleMinutes,
+    shift,
+    pctCollecte,
+    pctRetour
+  ]);
 
-  // 🆕 Organigramme Data Logic (Aligné sur Bandoeng)
-  const orgChartData = useMemo(() => {
-    if (!hasSimulated || !postesOptions) return null;
-
-    // Helper for Chef
-    const isChef = (label) => {
-      const l = (label || "").toUpperCase();
-      return l.includes("CHEF DE CENTRE") || l.includes("RESPONSABLE DE CENTRE") || l.includes("DIRECTEUR");
-    };
-
-    // 1. Chef
-    const chefPoste = postesOptions.find(p => isChef(p.label));
-    const chef = {
-      name: chefPoste ? chefPoste.label : "Chef de Centre",
-      effectif: 1
-    };
-
-    // 2. MOI (Always based on Actual Postes structure)
-    const moiStaff = postesOptions
-      .filter(p => isMoiPoste(p) && !isChef(p.label))
-      .map(p => ({
-        name: p.label || p.nom_poste,
-        effectif: Math.round(Number(p.effectif_actuel || 0)),
-        type: p.type_poste,
-        category: "MOI"
-      }))
-      .filter(s => s.effectif > 0);
-
-    // 3. MOD (Task-Based or Scaled Actuals)
-    let modStaff = [];
-    const tasks = resultats || [];
-    const hasResponsibilities = tasks.some(t => t.responsable && t.responsable !== "0" && t.responsable.trim() !== "");
-
-    if (hasResponsibilities) {
-      // Task-Based Distribution (Like Bandoeng)
-      const modMap = new Map();
-      tasks.forEach(t => {
-        const resp = (t.responsable || "").trim();
-        if (resp && resp !== "0" && !isChef(resp)) {
-          if (!modMap.has(resp)) {
-            modMap.set(resp, {
-              name: resp,
-              heures: 0,
-              category: "MOD"
-            });
-          }
-          modMap.get(resp).heures += (t.heures_calculees || 0);
-        }
-      });
-
-      // Calculate total hours for MOD tasks specifically
-      const totalModHours = Array.from(modMap.values()).reduce((acc, s) => acc + s.heures, 0) || 1;
-      const targetFTE = kpiData.targetFinalMOD;
-
-      modStaff = Array.from(modMap.values())
-        .map(staff => {
-          // Proportional Share of Target FTE
-          const share = staff.heures / totalModHours;
-          return {
-            ...staff,
-            effectif: Math.round(share * targetFTE)
-          };
-        })
-        .filter(s => s.effectif > 0);
-
-    } else {
-      // Fallback: Scale Actual MOD Distribution
-      const actualModPostes = postesOptions.filter(p => !isMoiPoste(p) && !isChef(p.label));
-      const totalActualMod = actualModPostes.reduce((sum, p) => sum + Number(p.effectif_actuel || 0), 0);
-      const targetMod = kpiData.targetFinalMOD;
-
-      modStaff = actualModPostes.map(p => {
-        const share = totalActualMod > 0 ? (Number(p.effectif_actuel || 0) / totalActualMod) : 0;
-        return {
-          name: p.label || p.nom_poste,
-          effectif: Math.round(share * targetMod),
-          category: "MOD"
-        };
-      }).filter(s => s.effectif > 0);
+  const handleSimulateAnnual = async (monthlyPcts) => {
+    if (!centre) {
+      toast.error("Veuillez sélectionner un centre");
+      return null;
     }
 
-    return { chef, moiStaff, modStaff };
-  }, [hasSimulated, postesOptions, resultats, kpiData, isMoiPoste]);
+    // On utilise la même logique que handleSimulate mais dans une boucle
+    // Note: on utilise simulateBandoeng directement pour récupérer les résultats
+    const monthsData = [];
+    try {
+      for (let i = 0; i < 12; i++) {
+        const pct = monthlyPcts[i];
+
+        const payload = {
+          centre_id: centre,
+          poste_code: null, // Force full center simulation for seasonality (ignores page filter)
+          grid_values: JSON.parse(JSON.stringify(gridValues)),
+          parameters: {
+            taux_complexite: Number(tauxComplexite || 1),
+            nature_geo: Number(natureGeo || 1),
+            pct_axes_arrivee: Number(pctAxesArrivee || 0),
+            pct_axes_depart: Number(pctAxesDepart || 0),
+            pct_national: Number(pctNational || 100),
+            pct_marche_ordinaire: Number(pctMarcheOrdinaire || 0),
+            pct_international: Number(pctInternational || 0),
+            colis_amana_par_canva_sac: Number(colisAmanaParCanvaSac || 35),
+            nbr_co_sac: Number(nbrCoSac || 350),
+            nbr_cr_sac: Number(nbrCrSac || 400),
+            productivite: Number(productivite ?? 100),
+            idle_minutes: Number(idleMinutes || 0),
+            shift: Number(shift || 1),
+            pct_collecte: Number(pctCollecte || 0),
+            pct_retour: Number(pctRetour || 0),
+            ed_percent: Number(edPercent || 0),
+            pct_mois: pct // Passé au backend pour calcul (Vol * pct/100) / 22
+          }
+        };
+
+        const data = await api.simulateBandoengDirect(payload);
+        monthsData.push({
+          month: i,
+          totalEtp: data.total_ressources_humaines,
+          intervenants: data.ressources_par_poste || {}
+        });
+      }
+      return { months: monthsData };
+    } catch (error) {
+      console.error("Simulation annuelle error:", error);
+      return null;
+    }
+  };
+
+  const handleExportExcel = () => {
+    if (!mergedResults || mergedResults.length === 0) return;
+
+    const data = mergedResults.map(r => ({
+      "Tâche": r.task,
+      "Produit": r.produit,
+      "Unit. (/jour)": Number(r.nombre_Unite?.toFixed(2)),
+      "Unité": r.unite_mesure,
+      "Moy (min)": Number(r.moyenne_min?.toFixed(2)),
+      "Heures": Number(r.heures?.toFixed(4)),
+      "Formule": r.formule
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Résultats Simulation");
+    const safeCentre = (centre || "Bandoeng").replace(/[^a-z0-9]/gi, '_');
+    XLSX.writeFile(wb, `Simulation_Bandoeng_${safeCentre}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
   // ---------------------------------------------------------------------------
   // 🆕 ADAPTERS POUR COMPOSANTS UNIFIÉS (BandoengParameters / BandoengGrid)
   // ---------------------------------------------------------------------------
@@ -1383,134 +1404,95 @@ export default function VueIntervenant({
           setPctInternational={handlePctInternationalChange}
           pctNational={pctNational}
           setPctNational={handlePctNationalChange}
+          edPercent={edPercent}
+          setEdPercent={setEdPercent}
         />
+
+        {/* Module de Saisonnalité en Dialogue */}
+        <div className="mt-4">
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button
+                variant="outline"
+                className="w-full h-12 border-dashed border-slate-300 hover:border-[#005EA8] hover:bg-blue-50/50 group transition-all"
+              >
+                <CalendarDays className="w-5 h-5 mr-3 text-slate-400 group-hover:text-[#005EA8]" />
+                <div className="text-left">
+                  <div className="text-sm font-bold text-slate-700">Analyse de Saisonnalité</div>
+                  <div className="text-[10px] text-slate-400 font-medium">Visualiser la distribution mensuelle et l'évolution des effectifs</div>
+                </div>
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-[95vw] lg:max-w-6xl max-h-[95vh] h-fit p-0 overflow-hidden border-none shadow-2xl">
+              <SeasonalityModule
+                onSimulateAnnual={handleSimulateAnnual}
+                loading={loading.simulation}
+                intervenants={postesOptions.map(p => ({ id: p.id, label: p.label || p.name }))}
+                className="border-none shadow-none"
+              />
+            </DialogContent>
+          </Dialog>
+        </div>
 
         {/* Référentiel & résultats - Masquable */}
         {showDetails && (
           <div className="flex flex-col gap-2">
             {/* 🆕 Filtre Famille (Déplacé ici pour ne pas décaler les tableaux) */}
-            {/* 🆕 Filtres Famille & Produit */}
-            <div className="flex flex-wrap items-center gap-4 bg-slate-50/80 p-1.5 rounded-lg border border-slate-100 self-start">
-
-              {/* Filtre Famille */}
-              <div className="flex items-center gap-2">
-                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Filtre Famille:</span>
-                <select
-                  className="bg-white border text-ellipsis border-slate-200 text-xs text-slate-700 rounded px-2 py-1 focus:outline-none focus:border-blue-500 w-full max-w-[180px]"
-                  value={filterFamille}
-                  onChange={e => setFilterFamille(e.target.value)}
+            <div className="flex items-center gap-2 bg-slate-50/80 p-1.5 rounded-lg border border-slate-100 self-start">
+              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Filtre Famille:</span>
+              <select
+                className="bg-white border border-slate-200 text-xs text-slate-700 rounded px-2 py-1 focus:outline-none focus:border-blue-500 w-full max-w-[240px]"
+                value={filterFamille}
+                onChange={e => setFilterFamille(e.target.value)}
+              >
+                <option value="">Toutes les familles ({uniqueFamilles.length})</option>
+                {uniqueFamilles.map(f => (
+                  <option key={f} value={f}>{f}</option>
+                ))}
+              </select>
+              {filterFamille && (
+                <button
+                  onClick={() => setFilterFamille("")}
+                  className="text-[10px] text-red-500 hover:text-red-700 font-medium px-2 py-1 bg-red-50 rounded border border-red-100 transition-colors"
+                  title="Effacer le filtre"
                 >
-                  <option value="">Toutes les familles ({uniqueFamilles.length})</option>
-                  {uniqueFamilles.map(f => (
-                    <option key={f} value={f}>{f}</option>
-                  ))}
-                </select>
-                {filterFamille && (
-                  <button
-                    onClick={() => setFilterFamille("")}
-                    className="text-[10px] text-red-500 hover:text-red-700 font-medium px-2 py-1 bg-red-50 rounded border border-red-100 transition-colors"
-                    title="Effacer le filtre famille"
-                  >
-                    ✕
-                  </button>
-                )}
-              </div>
-
-              {/* Filtre Produit */}
-              <div className="flex items-center gap-2 border-l border-slate-200 pl-4">
-                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Filtre Produit:</span>
-                <select
-                  className="bg-white border text-ellipsis border-slate-200 text-xs text-slate-700 rounded px-2 py-1 focus:outline-none focus:border-blue-500 w-full max-w-[180px]"
-                  value={filterProduit}
-                  onChange={e => setFilterProduit(e.target.value)}
-                >
-                  <option value="">Tous les produits ({uniqueProduits.length})</option>
-                  {uniqueProduits.map(p => (
-                    <option key={p} value={p}>{p}</option>
-                  ))}
-                </select>
-                {filterProduit && (
-                  <button
-                    onClick={() => setFilterProduit("")}
-                    className="text-[10px] text-red-500 hover:text-red-700 font-medium px-2 py-1 bg-red-50 rounded border border-red-100 transition-colors"
-                    title="Effacer le filtre produit"
-                  >
-                    ✕
-                  </button>
-                )}
-              </div>
-
+                  ✕
+                </button>
+              )}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 relative items-start">
               {/* Référentiel */}
               {refDisplay === "tableau" ? (
                 referentiel.length === 0 && centre && !loading?.referentiel ? (
-                  <div className="bg-white rounded-l-lg p-6 min-h-[460px] flex flex-col items-center justify-center text-center border border-slate-200 relative overflow-hidden">
-                    {/* Background decorations */}
-                    <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none">
-                      <Upload className="w-64 h-64 text-blue-600" />
+                  <div className="bg-white rounded-l-lg p-6 min-h-[460px] flex flex-col items-center justify-center text-center border border-slate-200">
+                    <div className="mb-4 p-4 bg-slate-50 rounded-full">
+                      <Upload className="w-8 h-8 text-slate-400" />
                     </div>
-
-                    {isImporting ? (
-                      <div className="flex flex-col items-center w-full max-w-sm z-10 animate-in fade-in zoom-in duration-300">
-                        <div className="relative mb-8">
-                          <div className="absolute inset-0 bg-blue-100 rounded-full animate-ping opacity-75"></div>
-                          <div className="relative bg-white p-4 rounded-full shadow-lg border-4 border-blue-50">
-                            <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
-                          </div>
-                        </div>
-
-                        <h3 className="text-xl font-bold text-slate-800 mb-2">Importation en cours</h3>
-                        <p className="text-sm text-slate-500 mb-6">
-                          Nous configurons les tâches par défaut pour ce centre. <br />Cela peut prendre quelques secondes.
-                        </p>
-
-                        {/* Simulated Progress Bar */}
-                        <div className="w-full bg-slate-100 rounded-full h-2.5 mb-2 overflow-hidden">
-                          <div className="bg-blue-600 h-2.5 rounded-full animate-[progress_2s_ease-in-out_infinite] w-full origin-left scale-x-0" style={{ animationFillMode: 'forwards' }}></div>
-                        </div>
-                        <div className="flex justify-between w-full text-[10px] text-slate-400 font-medium px-1">
-                          <span>Initialisation</span>
-                          <span>Lecture fichier</span>
-                          <span>Finalisation</span>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center z-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        <div className="mb-6 p-5 bg-blue-50 rounded-2xl shadow-sm border border-blue-100">
-                          <Upload className="w-10 h-10 text-blue-600" />
-                        </div>
-                        <h3 className="text-xl font-bold text-slate-800 mb-3">Aucune tâche active</h3>
-                        <p className="text-sm text-slate-500 mb-8 max-w-xs leading-relaxed">
-                          Ce centre ne contient pas encore de tâches. <br />
-                          Importez le modèle par défaut pour commencer la simulation.
-                        </p>
-
-                        <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 w-full max-w-xs mb-6">
-                          <div className="flex items-center gap-3 mb-2">
-                            <div className="w-8 h-8 rounded bg-green-100 flex items-center justify-center shrink-0">
-                              <span className="text-xs font-bold text-green-700">XLS</span>
-                            </div>
-                            <div className="text-left">
-                              <div className="text-xs font-semibold text-slate-700">{isAM ? "Modèle Messagerie (AM)" : "Modèle Standard"}</div>
-                              <div className="text-[10px] text-slate-400">Configuration automatique</div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <button
-                          onClick={() => handleImportCanva(false)}
-                          className="group relative px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow-md hover:shadow-lg transition-all active:scale-95 overflow-hidden"
-                        >
-                          <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]"></div>
-                          <span className="flex items-center gap-2 relative z-10">
-                            <Upload className="w-4 h-4" />
-                            Lancer l'importation
-                          </span>
-                        </button>
-                      </div>
-                    )}
+                    <h3 className="text-lg font-semibold text-slate-800 mb-2">Aucune tâche définie</h3>
+                    <p className="text-sm text-slate-500 mb-6 max-w-xs mx-auto">
+                      Ce centre ne contient aucune tâche dans la base de données.
+                    </p>
+                    <button
+                      onClick={handleImportCanva}
+                      disabled={isImporting}
+                      className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white transition-colors bg-[#005EA8] border border-transparent rounded-md shadow-sm hover:bg-[#004E8A] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed gap-2"
+                    >
+                      {isImporting ? (
+                        <>
+                          <span className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                          Importation...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-4 h-4" />
+                          Importer {isAM ? "Canva CM FES" : "Canvas"}
+                        </>
+                      )}
+                    </button>
+                    <p className="text-xs text-slate-400 mt-4">
+                      Charge le fichier '{isAM ? "canva_CM_FES.xlsx" : "Canvas.xlsx"}' depuis le dossier public
+                    </p>
                   </div>
                 ) : (
                   <div className="bg-white rounded-l-lg p-1.5 min-h-[460px]">
@@ -1518,7 +1500,7 @@ export default function VueIntervenant({
                       title="Référentiel Temps"
                       subtitle={
                         <div className="flex items-center gap-2">
-                          <span>{(filterFamille || filterProduit) ? `Filtres: ${[filterFamille, filterProduit].filter(Boolean).join(" | ")}` : "Base de calcul"}</span>
+                          <span>{filterFamille ? `Filtre: ${filterFamille}` : "Base de calcul"}</span>
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200">
                             {referentielDisplayData.length} tâche{referentielDisplayData.length > 1 ? 's' : ''}
                           </span>
@@ -1539,7 +1521,7 @@ export default function VueIntervenant({
                       ]}
                       data={referentielDisplayData.map((r, i) => ({
                         seq: r.ordre || i + 1, // Utiliser l'ordre DB ou fallback sur séquentiel
-                        p: (r.produit || "").replace(/Arrivé|Arrive|Reçu|Recu|Dépôt|Dépot|Depot|MED|AXES|LOCAL/gi, "").trim(), // ✅ Clean Produit (sans Arrivé/Reçu/Dépôt/MED/AXES/LOCAL)
+                        p: (r.produit || "").replace(/Arrivé|Arrive|Reçu|Recu|Dépôt|Dépot|Depot|MED/gi, "").trim(), // ✅ Clean Produit (sans Arrivé/Reçu/Dépôt/MED)
                         f: r.famille || "",
                         t: (r.t || "").replace(/\s*\([^)]*\)/g, "").trim(),
                         ph: r.ph && String(r.ph).trim().toLowerCase() !== "n/a" ? r.ph : "",
@@ -1635,7 +1617,18 @@ export default function VueIntervenant({
                 ) : (
                   <EnterpriseTable
                     title="Résultats de Simulation"
-                    subtitle="Données calculées"
+                    subtitle={
+                      <div className="flex items-center gap-3">
+                        <span>Données calculées</span>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleExportExcel(); }}
+                          className="h-5 px-1.5 text-[9px] font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/50 rounded flex items-center gap-1 transition-colors"
+                          title="Exporter en Excel"
+                        >
+                          <Download className="w-2.5 h-2.5" /> Exporter Excel
+                        </button>
+                      </div>
+                    }
                     tooltip="Volumes × temps → heures nécessaires"
                     icon={CheckCircle2}
                     columns={[
@@ -1733,14 +1726,16 @@ export default function VueIntervenant({
                 emphasize
                 total={Math.round(kpiData.actualTotal)}
               >
-                <EffectifFooter
-                  totalLabel="Statutaire"
-                  totalValue={Math.round(kpiData.actualStatutaire)}
-                  modValue={Math.round(kpiData.actualMOD)}
-                  moiValue={Math.round(kpiData.actualMOI)}
-                  apsLabel="APS"
-                  apsValue={Math.round(kpiData.actualAPS)}
-                />
+                {(!poste || poste === "") && (
+                  <EffectifFooter
+                    totalLabel="Statutaire"
+                    totalValue={Math.round(kpiData.actualStatutaire)}
+                    modValue={Math.round(kpiData.actualMOD)}
+                    moiValue={Math.round(kpiData.actualMOI)}
+                    apsLabel="APS"
+                    apsValue={Math.round(kpiData.actualAPS)}
+                  />
+                )}
               </KPICardGlass>
 
               {/* ETP Calculé */}
@@ -1751,10 +1746,12 @@ export default function VueIntervenant({
                 emphasize
                 total={formatSmallNumber(kpiData.totalCalculated)}
               >
-                <EffectifFooter
-                  modValue={formatSmallNumber(kpiData.targetCalculatedMOD)}
-                  moiValue={formatSmallNumber(kpiData.targetCalculatedMOI)}
-                />
+                {(!poste || poste === "") && (
+                  <EffectifFooter
+                    modValue={formatSmallNumber(kpiData.targetCalculatedMOD)}
+                    moiValue={formatSmallNumber(kpiData.targetCalculatedMOI)}
+                  />
+                )}
               </KPICardGlass>
 
               {/* ETP Final */}
@@ -1765,39 +1762,43 @@ export default function VueIntervenant({
                 emphasize
                 total={Math.round(kpiData.totalFinal)}
               >
-                <EffectifFooter
-                  totalLabel="Statutaire"
-                  totalValue={Math.round(kpiData.actualStatutaire)}
-                  modValue={kpiData.targetFinalMOD}
-                  moiValue={formatSmallNumber(kpiData.targetFinalMOI)}
-                  apsLabel="APS"
-                  apsValue={Math.round(kpiData.apsCalculeDisplay)}
-                />
+                {(!poste || poste === "") && (
+                  <EffectifFooter
+                    totalLabel="Statutaire"
+                    totalValue={Math.round(kpiData.actualStatutaire)}
+                    modValue={kpiData.targetFinalMOD}
+                    moiValue={formatSmallNumber(kpiData.targetFinalMOI)}
+                    apsLabel="APS"
+                    apsValue={Math.round(kpiData.apsCalculeDisplay)}
+                  />
+                )}
               </KPICardGlass>
 
               {/* Besoin */}
               <KPICardGlass
                 label="Besoin"
                 icon={kpiData.valToDisplay > 0 ? TrendingUp : CheckCircle2}
-                tone={kpiData.valToDisplay > 0 ? "rose" : "emerald"}
+                tone={kpiData.tone}
                 emphasize
-                total={kpiData.valToDisplay > 0 ? `+${Math.round(kpiData.valToDisplay)}` : "0"}
+                total={kpiData.totalDisplay}
               >
-                <EffectifFooter
-                  totalLabel="Ecart Statutaire"
-                  totalValue={formatSigned(Math.round(kpiData.diffStatutaire))}
-                  modValue={formatSigned(kpiData.diffMOD)}
-                  moiValue={formatSigned(kpiData.diffMOI)}
-                  apsLabel="Var. APS"
-                  apsValue={formatSigned(Math.round(kpiData.apsDelta))}
-                />
+                {(!poste || poste === "") && (
+                  <EffectifFooter
+                    totalLabel="Ecart Statutaire"
+                    totalValue={formatSigned(Math.round(kpiData.diffStatutaire))}
+                    modValue={formatSigned(kpiData.diffMOD)}
+                    moiValue={formatSigned(kpiData.diffMOI)}
+                    apsLabel="Var. APS"
+                    apsValue={formatSigned(Math.round(kpiData.apsDelta))}
+                  />
+                )}
               </KPICardGlass>
             </div>
           </div>
         )}
 
         {/* 🆕 Organigramme Button & Dialog */}
-        {showDetails && hasSimulated && isGlobalView && (
+        {showDetails && hasSimulated && !poste && (
           <div className="flex justify-center mt-2">
             <Dialog>
               <DialogTrigger asChild>
@@ -1826,13 +1827,80 @@ export default function VueIntervenant({
                   </DialogTitle>
                 </DialogHeader>
                 <div className="flex-1 w-full min-h-0 relative bg-slate-50/30">
-                  {orgChartData && (
-                    <OrganizationalChart
-                      chefCentre={orgChartData.chef}
-                      moiStaff={orgChartData.moiStaff}
-                      modStaff={orgChartData.modStaff}
-                    />
-                  )}
+                  <OrganizationalChart
+                    chefCentre={(() => {
+                      const chef = (postesOptions || []).find(p => (p.label || "").toUpperCase().includes("CHEF"))?.label || "Chef de Centre";
+                      return { name: chef, effectif: 1 };
+                    })()}
+                    moiStaff={(() => {
+                      return (postesOptions || []).filter(p => isMoiPoste(p) && !(p.label || "").toUpperCase().includes("CHEF")).map(p => ({
+                        name: p.label || p.nom_poste,
+                        effectif: Math.round(Number(p.effectif_actuel || 0)),
+                        type: p.type_poste,
+                        category: getCategory(p)
+                      }));
+                    })()}
+                    modStaff={(() => {
+                      // 🟢 LOGIQUE BANDOENG STRICTE : Basée sur les tâches simulées
+                      if (!resultats || !Array.isArray(resultats)) return [];
+
+                      const modMap = new Map();
+                      const totalHeures = (totaux?.total_heures) || 1;
+                      const targetMOD = (totaux?.fte_calcule) || kpiData.targetFinalMOD || 0;
+
+                      resultats.forEach(task => {
+                        // On cherche le responsable (Nom du poste)
+                        // Priorité : responsable (back) > nom_poste (api)
+                        const responsable = (task.responsable || task.nom_poste || "").trim();
+
+                        // Filtres Bandoeng
+                        if (!responsable || responsable === "0" || responsable === "." || responsable.toUpperCase().includes("NON DÉFINI")) return;
+
+                        // Exclure Chef et MOI (déjà traités)
+                        if (responsable.toUpperCase().includes("CHEF") || responsable.toUpperCase().includes("DIRECTEUR") || responsable.toUpperCase().includes("RESPONSABLE DE CENTRE")) return;
+
+                        // Check if MOI based on postesOptions
+                        const isMoi = (postesOptions || []).some(p => (p.label === responsable || p.nom_poste === responsable) && isMoiPoste(p));
+                        if (isMoi) return;
+
+                        if (!modMap.has(responsable)) {
+                          // Retrouver le poste pour la catégorie
+                          const posteOrigine = (postesOptions || []).find(p => (p.label || p.nom_poste || "").trim().toUpperCase() === responsable.toUpperCase());
+
+                          modMap.set(responsable, {
+                            name: responsable,
+                            heures: 0,
+                            category: posteOrigine ? getCategory(posteOrigine) : "AUTRES"
+                          });
+                        }
+
+                        const entry = modMap.get(responsable);
+                        // resultats (api.js) : heures via 'heures' (mapped from heures_calculees)
+                        entry.heures += (task.heures || 0);
+                      });
+
+                      // Calcul final ETP
+                      const staff = Array.from(modMap.values())
+                        .filter(s => s.heures > 0)
+                        .map(s => {
+                          // Règle de 3 sur l'objectif MOD (Bandoeng Logic)
+                          // Effectif = (Heures Tache / Total Heures) * ETP Cible
+                          const part = totalHeures > 0 ? (s.heures / totalHeures) * targetMOD : 0;
+                          const roundedPart = Math.round(part);
+                          const isSmall = roundedPart === 0 && s.heures > 0;
+
+                          return {
+                            ...s,
+                            effectif: Math.round(part * 100) / 100, // Numeric for correct summation (2 decimals)
+                            displayEffectif: String(Math.round(part)) // Always integer (0 if <0.5)
+                          };
+                        });
+
+                      console.log("DEBUG ORG - MOD Staff Bandoeng Style:", staff);
+                      return staff;
+                    })()}
+
+                  />
                 </div>
               </DialogContent>
             </Dialog>

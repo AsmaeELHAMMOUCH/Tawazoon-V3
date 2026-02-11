@@ -1,8 +1,10 @@
-"use client";
 import { useState } from "react";
 import CentresUniquesNavbar from "@/components/CentresUniquesNavbar";
 import CNDPSimulation from "./centres_uniq/CNDPSimulation";
 import BandoengSimulation from "./centres_uniq/BandoengSimulation";
+import VueCCP from "./centres_uniq/VueCCP";
+import VueCNA from "./centres_uniq/VueCNA";
+import VueCCI from "./centres_uniq/VueCCI";
 
 export default function SimulationCentresUniques() {
     const [activeTab, setActiveTab] = useState("cndp");
@@ -16,11 +18,11 @@ export default function SimulationCentresUniques() {
             </div>
 
             <div className="w-full px-2 pt-2 pb-4 space-y-2 -mt-1">
-                {activeTab === "cndp" ? (
-                    <CNDPSimulation />
-                ) : (
-                    <BandoengSimulation />
-                )}
+                {activeTab === "cndp" && <CNDPSimulation />}
+                {activeTab === "bandoeng" && <BandoengSimulation />}
+                {activeTab === "cci" && <VueCCI />}
+                {activeTab === "ccp" && <VueCCP />}
+                {activeTab === "cna" && <VueCNA />}
             </div>
         </main>
     );

@@ -1070,7 +1070,7 @@ export default function VolumeParamsCard({
             </div>
             <div className="flex flex-col w-full">
               <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                % En dehors (ED)
+                % ED
               </label>
               <div className="flex items-center">
                 <input

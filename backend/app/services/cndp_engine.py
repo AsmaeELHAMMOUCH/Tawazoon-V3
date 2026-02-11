@@ -25,6 +25,8 @@ class CNDPTaskResult:
     volume_annuel: float
     volume_journalier: float
     heures_calculees: float
+    responsable: str
+    centre_poste_id: Optional[int]
     formule: str
 
 
@@ -178,6 +180,8 @@ def calculate_task_duration(
         volume_annuel=vol_annuel,
         volume_journalier=vol_jour,
         heures_calculees=heures_tache,  # Pas de round() pendant les calculs
+        responsable=responsable,
+        centre_poste_id=task.centre_poste_id,
         formule=formule
     )
 

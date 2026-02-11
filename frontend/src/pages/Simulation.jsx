@@ -35,6 +35,7 @@ import { createColumnHelper } from "@tanstack/react-table";
 import FluxNavbar from "@/components/FluxNavbar";
 import ReactECharts from "echarts-for-react";
 import useEchartAutoResize from "@/components/hooks/useEchartAutoResize";
+import toast, { Toaster } from 'react-hot-toast';
 
 import HeaderSimulation from "@/layout/HeaderSimulation";
 import VueIntervenant from "@/components/views/VueIntervenant";
@@ -1491,15 +1492,16 @@ export default function SimulationEffectifs() {
 
   // 🆕 Helper: Handle Import Bandoeng
   const handleImportBandoeng = useCallback(async (file) => {
+    const toastId = toast.loading("Importation en cours...");
     try {
       const data = await importBandoengVolumes(file);
       if (data) {
         setBandoengGridValues(data);
-        // alert("Données Bandoeng importées avec succès !");
+        toast.success("Volumes importés avec succès", { id: toastId });
       }
     } catch (e) {
       console.error("Import Error:", e);
-      alert("Erreur lors de l'import : " + e.message);
+      toast.error("Erreur lors de l'import : " + e.message, { id: toastId });
     }
   }, [setBandoengGridValues]);
 
@@ -2194,7 +2196,7 @@ export default function SimulationEffectifs() {
     } else {
       setReferentiel([]);
     }
-  }, [activeFlux, centre, poste, refreshTrigger]); // ✅ Added refreshTrigger to reload tasks after import
+  }, [activeFlux, centre, poste]);
 
   useEffect(() => {
     // Exemple : productivité (%) convertie en heures net sur 8h de base
@@ -2266,23 +2268,23 @@ export default function SimulationEffectifs() {
         poste_code: posteCode, // Optional
         grid_values: bandoengGridValues, // Directly from State
         parameters: {
-          taux_complexite: Number(tauxComplexite || 1),
-          nature_geo: Number(natureGeo || 1),
-          pct_axes_arrivee: Number(pctAxesArrivee || 0),
-          pct_axes_depart: Number(pctAxesDepart || 0),
-          pct_national: Number(pctNational || 100),
-          pct_marche_ordinaire: Number(pctMarcheOrdinaire || 0),
-          pct_international: Number(pctInternational || 0),
+          taux_complexite: Number(overrides.taux_complexite ?? tauxComplexite ?? 1),
+          nature_geo: Number(overrides.nature_geo ?? natureGeo ?? 1),
+          pct_axes_arrivee: Number(overrides.pct_axes_arrivee ?? pctAxesArrivee ?? 0),
+          pct_axes_depart: Number(overrides.pct_axes_depart ?? pctAxesDepart ?? 0),
+          pct_national: Number(overrides.pct_national ?? pctNational ?? 100),
+          pct_marche_ordinaire: Number(overrides.pct_marche_ordinaire ?? pctMarcheOrdinaire ?? 0),
+          pct_international: Number(overrides.pct_international ?? pctInternational ?? 0),
           // Bandoeng Specifics
           pct_sac: 60.0, // Fixed default for now as per legacy? Or add state?
-          colis_amana_par_canva_sac: Number(colisAmanaParSac || 35),
-          nbr_co_sac: Number(nbrCoSac || 350),
-          nbr_cr_sac: Number(nbrCrSac || 400),
-          productivite: Number(productivite),
-          idle_minutes: Number(idleMinutes || 0),
-          shift: Number(shift || 1),
-          pct_collecte: Number(pctCollecte || 0),
-          pct_retour: Number(pctRetour || 0)
+          colis_amana_par_canva_sac: Number(overrides.colis_amana_par_canva_sac ?? colisAmanaParSac ?? 35),
+          nbr_co_sac: Number(overrides.nbr_co_sac ?? nbrCoSac ?? 350),
+          nbr_cr_sac: Number(overrides.nbr_cr_sac ?? nbrCrSac ?? 400),
+          productivite: Number(overrides.productivite ?? productivite),
+          idle_minutes: Number(overrides.idle_minutes ?? idleMinutes ?? 0),
+          shift: Number((overrides.shift ?? shift) || 1),
+          pct_collecte: Number(overrides.pct_collecte ?? pctCollecte ?? 0),
+          pct_retour: Number(overrides.pct_retour ?? pctRetour ?? 0)
         }
       };
 
@@ -2453,10 +2455,54 @@ export default function SimulationEffectifs() {
 
         console.log(`%c✅ Résultats reçus (Data-Driven ${pid ? 'Poste' : 'Centre'}):`, "color: #2e7d32; font-weight: bold;", res);
 
-        // --- SHIFT LOGIC REMOVED (Handled by Backend) ---
-        // const shiftVal = Number(shift || 1);
-        // Logic removed to avoid double counting.
-        // ------------------------------------------------
+        // --- SHIFT LOGIC (Frontend Override) ---
+        // Liste des postes concernés par le multiplicateur de shift
+        const shiftTargets = [
+          "agent operation", "agent opération", "agent d'operation", "agent d'opération",
+          "controleur", "contrôleur",
+          "responsable operation", "responsable opération", "responsable d'operation", "responsable d'opération",
+          "manutentionnaire",
+          "trieur",
+          "agent traitement"
+        ];
+        const isShiftTarget = (lbl) => {
+          if (!lbl) return false;
+          const norm = lbl.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+          return shiftTargets.some(t => norm.includes(t.normalize("NFD").replace(/[\u0300-\u036f]/g, "")));
+        };
+
+        const shiftVal = Number(shift || 1);
+
+        if (shiftVal > 1) {
+          if (pid) {
+            // Mode Poste Unique (Data-Driven)
+            const pLabel = postesOptions.find(p => String(p.id) === String(pid))?.label;
+            if (isShiftTarget(pLabel)) {
+              console.log(`⚡ Application du Shift x${shiftVal} pour le poste: ${pLabel}`);
+              res.fte_calcule = (res.fte_calcule || 0) * shiftVal;
+              res.fte_arrondi = Math.round(res.fte_calcule);
+            }
+          } else if (res.postes && Array.isArray(res.postes)) {
+            // Mode Centre Complet -> On itère sur les postes retournés
+            console.log(`⚡ Vérification Shift x${shiftVal} pour tous les postes du centre...`);
+            let newTotalETP = 0;
+            res.postes.forEach(p => {
+              if (isShiftTarget(p.poste_label || p.label)) {
+                // Apply Shift
+                // Note: p.etp_calcule comes from backend. We assume it's "1 shift based" or regular volume.
+                p.etp_calcule = (p.etp_calcule || 0) * shiftVal;
+                p.etp_arrondi = Math.round(p.etp_calcule);
+              }
+              newTotalETP += (p.etp_calcule || 0);
+            });
+            // Recalcul du total global
+            res.fte_calcule = newTotalETP;
+            // On ne touche pas forcément à total_heures car Shift multiply FTE only (availability), not workload hours?
+            // Le prompt dit "effectif calculé ... par le nombre choisit".
+            // Donc FTE change.
+          }
+        }
+        // --- END SHIFT LOGIC ---
 
         const details_taches = Array.isArray(res?.details_taches) ? res.details_taches : [];
 
@@ -2691,9 +2737,40 @@ export default function SimulationEffectifs() {
           heures_net: res.heures_net ?? heures_net_calculees,
         };
 
-        // --- SHIFT LOGIC REMOVED (Handled by Backend) ---
-        // if (shiftVal > 1 && res.postes && Array.isArray(res.postes)) { ... }
-        // ------------------------------------------------
+        // --- SHIFT LOGIC (Vue Centre Optimisee) ---
+        // Liste des postes concernés par le multiplicateur de shift
+        const shiftTargets = [
+          "agent operation", "agent opération", "agent d'operation", "agent d'opération",
+          "controleur", "contrôleur",
+          "responsable operation", "responsable opération", "responsable d'operation", "responsable d'opération",
+          "manutentionnaire",
+          "trieur",
+          "agent traitement"
+        ];
+        const isShiftTarget = (lbl) => {
+          if (!lbl) return false;
+          const norm = lbl.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+          return shiftTargets.some(t => norm.includes(t.normalize("NFD").replace(/[\u0300-\u036f]/g, "")));
+        };
+
+        const shiftVal = Number(shift || 1);
+
+        if (shiftVal > 1 && res.postes && Array.isArray(res.postes)) {
+          console.log(`⚡ LEGACY Application du Shift x${shiftVal} pour les postes éligibles...`);
+          let newTotalETP = 0;
+          res.postes.forEach(p => {
+            // Pour VueCentreOptimisee, p a souvent p.label ou p.poste_label
+            if (isShiftTarget(p.label || p.poste_label)) {
+              p.etp_calcule = (p.etp_calcule || 0) * shiftVal;
+              p.etp_arrondi = Math.round(p.etp_calcule);
+            }
+            newTotalETP += (p.etp_calcule || 0);
+          });
+          res.total_etp_calcule = newTotalETP;
+          res.total_etp_arrondi = Math.round(newTotalETP);
+          tot.fte_calcule = newTotalETP;
+          tot.fte_arrondi = Math.round(newTotalETP);
+        }
 
         // Pour VueCentre, on garde la structure complète avec .postes
         setResultats(res);
@@ -2706,9 +2783,33 @@ export default function SimulationEffectifs() {
         console.log("📍 Appel endpoint: /simulate");
         res = await api.simulate(payload);
 
-        // --- SHIFT LOGIC REMOVED (Handled by Backend) ---
-        // if (shiftVal > 1 && pid) { ... }
-        // ------------------------------------------------
+        // --- SHIFT LOGIC (Legacy Single Post / Simulate) ---
+        // 'pid' indicates current post.
+        const shiftTargets = [
+          "agent operation", "agent opération", "agent d'operation", "agent d'opération",
+          "controleur", "contrôleur",
+          "responsable operation", "responsable opération", "responsable d'operation", "responsable d'opération",
+          "manutentionnaire",
+          "trieur",
+          "agent traitement"
+        ];
+        const isShiftTarget = (lbl) => {
+          if (!lbl) return false;
+          const norm = lbl.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+          return shiftTargets.some(t => norm.includes(t.normalize("NFD").replace(/[\u0300-\u036f]/g, "")));
+        };
+        const shiftVal = Number(shift || 1);
+
+        if (shiftVal > 1 && pid) {
+          const pLabel = postesOptions.find(p => String(p.id) === String(pid))?.label;
+          if (isShiftTarget(pLabel)) {
+            console.log(`⚡ Legacy Simulate: Application Shift x${shiftVal} sur ${pLabel}`);
+            if (res) {
+              res.fte_calcule = (res.fte_calcule || 0) * shiftVal;
+              res.fte_arrondi = Math.round(res.fte_calcule);
+            }
+          }
+        }
         // ---------------------------------------------------
 
         const details_taches = Array.isArray(res?.details_taches)
@@ -3011,9 +3112,6 @@ export default function SimulationEffectifs() {
             setPctNational={setPctNational}
             pctMarcheOrdinaire={pctMarcheOrdinaire}
             setPctMarcheOrdinaire={setPctMarcheOrdinaire}
-            pctMarcheOrdinaire={pctMarcheOrdinaire}
-            setPctMarcheOrdinaire={setPctMarcheOrdinaire}
-            onRefresh={() => setRefreshTrigger(prev => prev + 1)} // ✅ TRIGGER REFRESH AFTER IMPORT
           />
         )}
 
@@ -3199,6 +3297,7 @@ export default function SimulationEffectifs() {
           Rapport généré automatiquement — {new Date().toLocaleString()}
         </div>
       </div>
+      <Toaster position="top-right" />
     </main>
   );
 }

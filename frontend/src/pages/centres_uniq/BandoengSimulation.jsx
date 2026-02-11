@@ -34,13 +34,17 @@ import {
     Box, Gauge, CheckCircle2, Building2, Package, Mail, Clock,
     Download, Upload, Info, ChevronDown, ChevronUp, TrendingUp, TrendingDown,
     Building, RefreshCw, Map as MapIcon, Undo2, Move, MapPin, HelpCircle,
-    Users, Briefcase, Layers, Globe, Flag
+    Users, Briefcase, Layers, Globe, Flag,
+    CalendarDays
 } from "lucide-react";
 import toast, { Toaster } from 'react-hot-toast';
 
 import { simulateBandoeng, downloadBandoengTemplate, importBandoengVolumes, downloadBandoengTasksTemplate, importBandoengTasks } from "@/services/api";
 import BandoengGrid from "@/components/centres_uniq/BandoengGrid";
+import BandoengAdditionalParams from "@/components/centres_uniq/BandoengAdditionalParams";
+import SimulationHeader from "@/components/centres_uniq/SimulationHeader";
 import BandoengParameters from "@/components/centres_uniq/BandoengParameters";
+import SeasonalityModule from "@/components/centres_uniq/SeasonalityModule";
 import OrganizationalChart from "@/components/centres_uniq/OrganizationalChart";
 import Tooltip from "@/components/ui/Tooltip";
 import { formatHoursMinutes } from "@/utils/formatters";
@@ -51,6 +55,7 @@ const baseInputClass = "text-[10px] text-center !px-0.5 !py-0 leading-none h-5 f
 
 const DEFAULT_PARAMS = {
     pct_sac: 60,
+    ed_percent: 0,
     colis_amana_par_canva_sac: 35, // Colis/Sac
     courriers_par_sac: 350,
     nbr_co_sac: 350,   // Courrier/Sac
@@ -182,20 +187,25 @@ export default function BandoengSimulation() {
     const [results, setResults] = useState(null);
     const [postes, setPostes] = useState([]);
     const [selectedPoste, setSelectedPoste] = useState("");
+    const selectedPosteObj = postes.find(p => String(p.id) === String(selectedPoste));
     const [loadingPostes, setLoadingPostes] = useState(true);
     const fileInputRef = useRef(null);
     const taskFileInputRef = useRef(null);
 
     const [centreDetails, setCentreDetails] = useState(null);
+    const [allCentres, setAllCentres] = useState([]);
+    const [importTargetCentreId, setImportTargetCentreId] = useState(String(BANDOENG_CENTRE_ID));
+    const [isImportTasksOpen, setIsImportTasksOpen] = useState(false);
 
     useEffect(() => {
         const loadInitialData = async () => {
             setLoadingPostes(true);
             try {
                 // Fetch Postes (Simultané)
-                const [postesRes, detailsRes] = await Promise.all([
+                const [postesRes, detailsRes, centresRes] = await Promise.all([
                     fetch(`/api/bandoeng/postes?centre_id=${BANDOENG_CENTRE_ID}`),
-                    fetch(`/api/bandoeng/centre-details/${BANDOENG_CENTRE_ID}`)
+                    fetch(`/api/bandoeng/centre-details/${BANDOENG_CENTRE_ID}`),
+                    fetch(`/api/centres/`)
                 ]);
 
                 if (!postesRes.ok) throw new Error("Failed to fetch postes");
@@ -209,6 +219,12 @@ export default function BandoengSimulation() {
                 if (detailsRes.ok) {
                     const detailsData = await detailsRes.json();
                     setCentreDetails(detailsData);
+                }
+
+                // Process All Centres for Import
+                if (centresRes.ok) {
+                    const centresData = await centresRes.json();
+                    setAllCentres(Array.isArray(centresData) ? centresData : []);
                 }
 
             } catch (e) {
@@ -253,7 +269,6 @@ export default function BandoengSimulation() {
 
     // UI State
     const [isDetailsOpen, setIsDetailsOpen] = useState(false);
-    const [isImportTasksOpen, setIsImportTasksOpen] = useState(false);
 
     const [params, setParams] = useState(DEFAULT_PARAMS);
 
@@ -316,7 +331,7 @@ export default function BandoengSimulation() {
         }
     };
 
-  
+
 
     const heuresNettesJourCalculees = React.useMemo(() => {
         const hBase = 8; // Convention standard
@@ -422,6 +437,71 @@ export default function BandoengSimulation() {
         }
     };
 
+    const handleSimulateAnnual = async (monthlyPcts) => {
+        setLoading(true);
+        try {
+            const co_export_total = sumValues([["co", "med", "global"], ["co", "med", "local"], ["co", "med", "axes"]]);
+            const co_import_total = sumValues([["co", "arrive", "global"], ["co", "arrive", "local"], ["co", "arrive", "axes"]]);
+            const cr_export_total = sumValues([["cr", "med", "global"], ["cr", "med", "local"], ["cr", "med", "axes"]]);
+            const cr_import_total = sumValues([["cr", "arrive", "global"], ["cr", "arrive", "local"], ["cr", "arrive", "axes"]]);
+            const colis_export = sumValues([
+                ["amana", "depot", "gc", "global"], ["amana", "depot", "gc", "local"], ["amana", "depot", "gc", "axes"],
+                ["amana", "depot", "part", "global"], ["amana", "depot", "part", "local"], ["amana", "depot", "part", "axes"]
+            ]);
+            const colis_import = sumValues([
+                ["amana", "recu", "gc", "global"], ["amana", "recu", "gc", "local"], ["amana", "recu", "gc", "axes"],
+                ["amana", "recu", "part", "global"], ["amana", "recu", "part", "local"], ["amana", "recu", "part", "axes"]
+            ]);
+            const gare_export = parseFloat(gridValues.ebarkia?.med || 0);
+            const gare_import = parseFloat(gridValues.ebarkia?.arrive || 0);
+
+            const monthsData = [];
+
+            // Simulation pour chaque mois
+            for (let i = 0; i < 12; i++) {
+                const pct = monthlyPcts[i];
+
+                const payload = {
+                    centre_id: BANDOENG_CENTRE_ID,
+                    poste_code: null, // Force full center simulation for seasonality (ignores page filter)
+                    volumes: {
+                        amana_import: colis_import,
+                        amana_export: colis_export,
+                        courrier_ordinaire_import: co_import_total,
+                        courrier_ordinaire_export: co_export_total,
+                        courrier_recommande_import: cr_import_total,
+                        courrier_recommande_export: cr_export_total,
+                        gare_import: gare_import,
+                        gare_export: gare_export,
+                        grid_values: gridValues
+                    },
+                    params: {
+                        ...params,
+                        pct_mois: pct // Le backend fera (Vol * pct/100) / 22
+                    }
+                };
+
+                console.log(`[BandoengSimulation] Simulating Month ${i} with pct ${pct}`, payload);
+                const data = await simulateBandoeng(payload);
+                console.log(`[BandoengSimulation] Month ${i} Result:`, data);
+                monthsData.push({
+                    month: i,
+                    totalEtp: data.total_ressources_humaines,
+                    intervenants: data.ressources_par_poste || {}
+                });
+            }
+
+            toast.success("Simulation annuelle terminée");
+            return { months: monthsData };
+        } catch (error) {
+            console.error("Annual simulation error:", error);
+            toast.error("Échec de la simulation annuelle");
+            return null;
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleDownloadTemplate = async () => {
         try {
             await downloadBandoengTemplate();
@@ -485,8 +565,8 @@ export default function BandoengSimulation() {
 
         const toastId = toast.loading("Importation des tâches en cours...");
         try {
-            // Pass the BANDOENG_CENTRE_ID to the API
-            const data = await importBandoengTasks(file, BANDOENG_CENTRE_ID);
+            // Use the selected importTargetCentreId
+            const data = await importBandoengTasks(file, importTargetCentreId);
             if (data && data.success) {
                 const dupMsg = data.duplicate_count > 0 ? `, ${data.duplicate_count} dupliquée(s)` : "";
                 toast.success(
@@ -545,10 +625,10 @@ export default function BandoengSimulation() {
         }, 0);
     }, [postes]);
 
-    const selectedPosteObj = React.useMemo(() => {
-        if (!selectedPoste || selectedPoste === "all") return null;
-        return postes.find(p => String(p.id) === String(selectedPoste));
-    }, [selectedPoste, postes]);
+    // const selectedPosteObj = React.useMemo(() => {
+    //     if (!selectedPoste || selectedPoste === "all") return null;
+    //     return postes.find(p => String(p.id) === String(selectedPoste));
+    // }, [selectedPoste, postes]);
 
     const isMOD = selectedPosteObj ? !isMoiPoste(selectedPosteObj) : true;
 
@@ -678,22 +758,11 @@ export default function BandoengSimulation() {
 
                 {/* Header Style VueIntervenant sticky */}
                 <div className="sticky top-[57px] z-20 grid grid-cols-1 xl:grid-cols-2 gap-2">
-                    {/* Barre de sélection */}
-                    <div className="bg-white/80 backdrop-blur-md border border-slate-200/60 shadow-sm rounded-lg px-3 py-1.5 flex flex-wrap items-center gap-2 transition-all duration-300 relative overflow-hidden">
-                        <div className="absolute top-0 left-0 w-1 h-full bg-[#005EA8]" />
-                        <div className="flex flex-col pl-1 pr-4">
-                            <h1 className="text-sm font-bold text-[#005EA8] tracking-tight leading-none mb-0.5">
-                                Simulation des Effectifs-Bandoeng
-                            </h1>
-                            <div className="text-[9px] font-semibold text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                                <span className="text-[#0A6BBC]">Region Casa</span>
-                                <span className="w-1 h-1 rounded-full bg-slate-300" />
-                                Agence Courrier Bandoeung
-                            </div>
-                        </div>
-
-                        <div className="w-px h-5 bg-slate-200 hidden md:block" />
-
+                    <SimulationHeader
+                        title="Simulation des Effectifs-Bandoeng"
+                        region="Region Casa"
+                        subtitle="Agence Courrier Bandoeung"
+                    >
                         <div className="flex items-center gap-2 min-w-[180px] flex-1">
                             <div className="flex flex-col flex-1 relative group">
                                 <label className="absolute -top-1.5 left-2 px-1 text-[8px] font-bold text-[#005EA8] uppercase tracking-wider bg-white/50 backdrop-blur z-10 transition-colors group-hover:text-[#0A6BBC]">
@@ -719,7 +788,7 @@ export default function BandoengSimulation() {
                                 </Select>
                             </div>
                         </div>
-                    </div>
+                    </SimulationHeader>
 
                     {/* Configuration & Performance */}
                     <BandoengParameters
@@ -786,192 +855,35 @@ export default function BandoengSimulation() {
                             </CardContent>
                         </Card>
                         {/* Params Bar (Horizontal) */}
-                        <Card className="bg-white/80 backdrop-blur-md border-slate-200/60 shadow-sm shrink-0">
-                            <CardContent className="px-2 py-1">
-                                <div className="flex items-center gap-4 w-full">
-                                    {/* Groupe 1: Sacs & Contenants */}
-                                    <div className="flex gap-1 border-r border-slate-200 pr-1 flex-[3]">
-                                        <div className="flex flex-col gap-1 flex-1">
-                                            <Label className="text-[9px] uppercase text-slate-500 font-bold text-center">Colis/Sac</Label>
-                                            <div className="flex items-center gap-1">
-                                                <div className="w-5 h-5 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
-                                                    <Package className="w-3 h-3" />
-                                                </div>
-                                                <FormattedInput
-                                                    className={baseInputClass + " w-full"}
-                                                    value={params.colis_amana_par_canva_sac}
-                                                    onChange={(val) => handleParamChange('colis_amana_par_canva_sac', val)}
-                                                />
-                                            </div>
-                                        </div>
-                                        <div className="flex flex-col gap-1 flex-1">
-                                            <Label className="text-[9px] uppercase text-slate-500 font-bold text-center">Courrier/Sac</Label>
-                                            <div className="flex items-center gap-1">
-                                                <div className="w-5 h-5 rounded-full bg-sky-50 text-sky-600 flex items-center justify-center shrink-0">
-                                                    <Mail className="w-3 h-3" />
-                                                </div>
-                                                <FormattedInput
-                                                    className={baseInputClass + " w-full"}
-                                                    value={params.nbr_co_sac}
-                                                    onChange={(val) => handleParamChange('nbr_co_sac', val)}
-                                                />
-                                            </div>
-                                        </div>
-                                        <div className="flex flex-col gap-1 flex-1">
-                                            <Label className="text-[9px] uppercase text-slate-500 font-bold text-center">CR/Caisson</Label>
-                                            <div className="flex items-center gap-1">
-                                                <div className="w-5 h-5 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
-                                                    <Box className="w-3 h-3" />
-                                                </div>
-                                                <FormattedInput
-                                                    className={baseInputClass + " w-full"}
-                                                    value={params.nbr_cr_sac}
-                                                    onChange={(val) => handleParamChange('nbr_cr_sac', val)}
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Groupe 2: Coefficients */}
-                                    <div className="flex gap-1 border-r border-slate-200 pr-1 flex-[2]">
-                                        <div className="flex flex-col gap-1 flex-1">
-                                            <Label className="text-[9px] uppercase text-slate-500 font-bold text-center">Coeff Circ</Label>
-                                            <div className="flex items-center gap-1">
-                                                <div className="w-5 h-5 rounded-full bg-violet-50 text-violet-600 flex items-center justify-center shrink-0">
-                                                    <RefreshCw className="w-3 h-3" />
-                                                </div>
-                                                <Select
-                                                    value={String(params.coeff_circ)}
-                                                    onValueChange={(val) => handleParamChange('coeff_circ', val)}
-                                                >
-                                                    <SelectTrigger className={baseInputClass + " w-full px-2 text-center justify-center"}>
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="0.5">0,5</SelectItem>
-                                                        <SelectItem value="1">1</SelectItem>
-                                                        <SelectItem value="1.25">1,25</SelectItem>
-                                                        <SelectItem value="1.5">1,5</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                        </div>
-                                        <div className="flex flex-col gap-1 flex-1">
-                                            <Label className="text-[9px] uppercase text-slate-500 font-bold text-center">Coeff GEO</Label>
-                                            <div className="flex items-center gap-1">
-                                                <div className="w-5 h-5 rounded-full bg-pink-50 text-pink-600 flex items-center justify-center shrink-0">
-                                                    <MapIcon className="w-3 h-3" />
-                                                </div>
-                                                <Select
-                                                    value={String(params.coeff_geo)}
-                                                    onValueChange={(val) => handleParamChange('coeff_geo', val)}
-                                                >
-                                                    <SelectTrigger className={baseInputClass + " w-full px-2 text-center justify-center"}>
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="0.5">0,5</SelectItem>
-                                                        <SelectItem value="1">1</SelectItem>
-                                                        <SelectItem value="1.25">1,25</SelectItem>
-                                                        <SelectItem value="1.5">1,5</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Groupe 3: Pourcentages */}
-                                    <div className="flex gap-1 border-r border-slate-200 pr-1 flex-[6]">
-                                        <div className="flex flex-col gap-1 flex-1">
-                                            <Label className="text-[9px] uppercase text-slate-500 font-bold text-center">% Retour</Label>
-                                            <div className="flex items-center gap-1">
-                                                <div className="w-5 h-5 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-                                                    <Undo2 className="w-3 h-3" />
-                                                </div>
-                                                <FormattedInput
-                                                    className={baseInputClass + " w-full"}
-                                                    value={params.pct_retour}
-                                                    onChange={(val) => handleParamChange('pct_retour', val)}
-                                                    suffix="%"
-                                                />
-                                            </div>
-                                        </div>
-                                        <div className="flex flex-col gap-1 flex-1">
-                                            <Label className="text-[9px] uppercase text-slate-500 font-bold text-center">% Collecte</Label>
-                                            <div className="flex items-center gap-1">
-                                                <div className="w-5 h-5 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-                                                    <Briefcase className="w-3 h-3" />
-                                                </div>
-                                                <FormattedInput
-                                                    className={baseInputClass + " w-full"}
-                                                    value={params.pct_collecte}
-                                                    onChange={(val) => handleParamChange('pct_collecte', val)}
-                                                    suffix="%"
-                                                />
-                                            </div>
-                                        </div>
-                                        <div className="flex flex-col gap-1 flex-1">
-                                            <Label className="text-[9px] uppercase text-slate-500 font-bold text-center">% Axes</Label>
-                                            <div className="flex items-center gap-1">
-                                                <div className="w-5 h-5 rounded-full bg-orange-50 text-orange-600 flex items-center justify-center shrink-0">
-                                                    <Move className="w-3 h-3" />
-                                                </div>
-                                                <FormattedInput
-                                                    className={baseInputClass + " w-full"}
-                                                    value={params.pct_axes}
-                                                    onChange={(val) => handleParamChange('pct_axes', val)}
-                                                    suffix="%"
-                                                />
-                                            </div>
-                                        </div>
-                                        <div className="flex flex-col gap-1 flex-1">
-                                            <Label className="text-[9px] uppercase text-slate-500 font-bold text-center">% Local</Label>
-                                            <div className="flex items-center gap-1">
-                                                <div className="w-5 h-5 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
-                                                    <MapPin className="w-3 h-3" />
-                                                </div>
-                                                <FormattedInput
-                                                    className={baseInputClass + " w-full"}
-                                                    value={params.pct_local}
-                                                    onChange={(val) => handleParamChange('pct_local', val)}
-                                                    suffix="%"
-                                                />
-                                            </div>
-                                        </div>
-                                        <div className="flex flex-col gap-1 flex-1">
-                                            <Label className="text-[9px] uppercase text-slate-500 font-bold text-center">% March Ord</Label>
-                                            <div className="flex items-center gap-1">
-                                                <div className="w-5 h-5 rounded-full bg-slate-50 text-slate-600 flex items-center justify-center shrink-0">
-                                                    <Box className="w-3 h-3" />
-                                                </div>
-                                                <FormattedInput
-                                                    className={baseInputClass + " w-full"}
-                                                    value={params.pct_march_ordinaire}
-                                                    onChange={(val) => handleParamChange('pct_march_ordinaire', val)}
-                                                    suffix="%"
-                                                />
-                                            </div>
-                                        </div>
-                                        {/* % Nat input hidden as per request (default 100%) */}
-                                        <div className="flex flex-col gap-1 flex-1">
-                                            <Label className="text-[9px] uppercase text-slate-500 font-bold text-center">% Inter</Label>
-                                            <div className="flex items-center gap-1">
-                                                <div className="w-5 h-5 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
-                                                    <Globe className="w-3 h-3" />
-                                                </div>
-                                                <FormattedInput
-                                                    className={baseInputClass + " w-full"}
-                                                    value={params.pct_international}
-                                                    onChange={(val) => handleParamChange('pct_international', val)}
-                                                    suffix="%"
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </CardContent>
-
-                        </Card>
+                        <BandoengAdditionalParams
+                            colisAmanaParCanvaSac={params.colis_amana_par_canva_sac}
+                            setColisAmanaParCanvaSac={(v) => handleParamChange('colis_amana_par_canva_sac', v)}
+                            nbrCoSac={params.nbr_co_sac}
+                            setNbrCoSac={(v) => handleParamChange('nbr_co_sac', v)}
+                            nbrCrSac={params.nbr_cr_sac}
+                            setNbrCrSac={(v) => handleParamChange('nbr_cr_sac', v)}
+                            pctCollecte={params.pct_collecte}
+                            setPctCollecte={(v) => handleParamChange('pct_collecte', v)}
+                            pctRetour={params.pct_retour}
+                            setPctRetour={(v) => handleParamChange('pct_retour', v)}
+                            tauxComplexite={params.coeff_circ}
+                            setTauxComplexite={(v) => handleParamChange('coeff_circ', v)}
+                            natureGeo={params.coeff_geo}
+                            setNatureGeo={(v) => handleParamChange('coeff_geo', v)}
+                            pctAxesArrivee={params.pct_axes}
+                            setPctAxesArrivee={(v) => handleParamChange('pct_axes', v)}
+                            pctAxesDepart={params.pct_local}
+                            setPctAxesDepart={(v) => handleParamChange('pct_local', v)}
+                            pctMarcheOrdinaire={params.pct_march_ordinaire}
+                            setPctMarcheOrdinaire={(v) => handleParamChange('pct_march_ordinaire', v)}
+                            pctInternational={params.pct_international}
+                            setPctInternational={(v) => handleParamChange('pct_international', v)}
+                            pctNational={params.pct_national}
+                            setPctNational={(v) => handleParamChange('pct_national', v)}
+                            edPercent={params.ed_percent}
+                            setEdPercent={(v) => handleParamChange('ed_percent', v)}
+                            className="shrink-0"
+                        />
                         <div className="flex justify-end shrink-0">
                             <Button
                                 onClick={handleSimulate}
@@ -1011,23 +923,6 @@ export default function BandoengSimulation() {
 
                                     {/* Effectif Actuel */}
                                     {(() => {
-                                        if (selectedPosteObj) {
-                                            const val = Number(selectedPosteObj.effectif_actuel || 0);
-                                            return (
-                                                <KPICardGlass
-                                                    label="Effectif Actuel"
-                                                    icon={User}
-                                                    tone="cyan"
-                                                    emphasize
-                                                    total={val}
-                                                >
-                                                    <div className="text-[10px] text-slate-500 mt-1 flex justify-center">
-                                                        {selectedPosteObj.label}
-                                                    </div>
-                                                </KPICardGlass>
-                                            );
-                                        }
-
                                         // Determine Actuals respecting selection
                                         let actualMOD = 0;
                                         let actualMOI = 0;
@@ -1063,32 +958,22 @@ export default function BandoengSimulation() {
                                                 emphasize
                                                 total={Math.round(actualTotal)}
                                             >
-                                                <EffectifFooter
-                                                    totalLabel="Statutaire"
-                                                    totalValue={Math.round(actualStatutaire)}
-                                                    modValue={Math.round(actualMOD)}
-                                                    moiValue={Math.round(actualMOI)}
-                                                    apsLabel="APS"
-                                                    apsValue={Math.round(actualAPS)}
-                                                />
+                                                {(!selectedPoste || selectedPoste === "all") && (
+                                                    <EffectifFooter
+                                                        totalLabel="Statutaire"
+                                                        totalValue={Math.round(actualStatutaire)}
+                                                        modValue={Math.round(actualMOD)}
+                                                        moiValue={Math.round(actualMOI)}
+                                                        apsLabel="APS"
+                                                        apsValue={Math.round(actualAPS)}
+                                                    />
+                                                )}
                                             </KPICardGlass>
                                         );
                                     })()}
 
                                     {/* ETP Calculé */}
                                     {(() => {
-                                        if (selectedPosteObj) {
-                                            return (
-                                                <KPICardGlass
-                                                    label="ETP Calculé"
-                                                    icon={Calculator}
-                                                    tone="blue"
-                                                    emphasize
-                                                    total={formatSmallNumber(fteCalculated)}
-                                                />
-                                            );
-                                        }
-
                                         const targetCalculatedMOD = isMOD ? fteCalculated : 0;
                                         const targetCalculatedMOI = selectedPosteObj
                                             ? (isMoiPoste(selectedPosteObj) ? Number(selectedPosteObj.effectif_actuel || 0) : 0)
@@ -1104,28 +989,18 @@ export default function BandoengSimulation() {
                                                 emphasize
                                                 total={formatSmallNumber(totalCalculated)}
                                             >
-                                                <EffectifFooter
-                                                    modValue={formatSmallNumber(targetCalculatedMOD)}
-                                                    moiValue={formatSmallNumber(targetCalculatedMOI)}
-                                                />
+                                                {(!selectedPoste || selectedPoste === "all") && (
+                                                    <EffectifFooter
+                                                        modValue={formatSmallNumber(targetCalculatedMOD)}
+                                                        moiValue={formatSmallNumber(targetCalculatedMOI)}
+                                                    />
+                                                )}
                                             </KPICardGlass>
                                         );
                                     })()}
 
                                     {/* ETP Final */}
                                     {(() => {
-                                        if (selectedPosteObj) {
-                                            return (
-                                                <KPICardGlass
-                                                    label="ETP Final"
-                                                    icon={CheckCircle2}
-                                                    tone="amber"
-                                                    emphasize
-                                                    total={fteArrondi}
-                                                />
-                                            );
-                                        }
-
                                         // Targets
                                         const targetFinalMOD = isMOD ? fteArrondi : 0;
                                         const targetFinalMOI = selectedPosteObj
@@ -1154,38 +1029,27 @@ export default function BandoengSimulation() {
                                                 emphasize
                                                 total={Math.round(totalFinal)}
                                             >
-                                                <EffectifFooter
-                                                    totalLabel="Statutaire"
-                                                    totalValue={Math.round(actualStatutaire)}
-                                                    modValue={targetFinalMOD}
-                                                    moiValue={formatSmallNumber(targetFinalMOI)}
-                                                    apsLabel="APS"
-                                                    apsValue={apsDisplay}
-                                                />
+                                                {(!selectedPoste || selectedPoste === "all") && (
+                                                    <EffectifFooter
+                                                        totalLabel="Statutaire"
+                                                        totalValue={Math.round(actualStatutaire)}
+                                                        modValue={targetFinalMOD}
+                                                        moiValue={formatSmallNumber(targetFinalMOI)}
+                                                        apsLabel="APS"
+                                                        apsValue={apsDisplay}
+                                                    />
+                                                )}
                                             </KPICardGlass>
                                         );
                                     })()}
 
-                                    {/* Besoin / Ecart */}
+                                    {/* Besoin */}
                                     {(() => {
-                                        if (selectedPosteObj) {
-                                            const actuel = Number(selectedPosteObj.effectif_actuel || 0);
-                                            const ecart = fteArrondi - actuel;
-                                            const isPositive = ecart > 0;
-                                            return (
-                                                <KPICardGlass
-                                                    label="Ecart"
-                                                    icon={isPositive ? TrendingUp : CheckCircle2}
-                                                    tone={isPositive ? "rose" : "emerald"}
-                                                    emphasize
-                                                    total={ecart > 0 ? `+${ecart}` : `${ecart}`}
-                                                >
-                                                    <div className="text-[10px] text-slate-500 mt-1 flex justify-center">
-                                                        {fteArrondi} (Cible) - {actuel} (Actuel)
-                                                    </div>
-                                                </KPICardGlass>
-                                            );
-                                        }
+                                        const formatSigned = (val) => {
+                                            const num = Number(val);
+                                            if (isNaN(num)) return "0";
+                                            return num > 0 ? `+${num}` : `${num}`;
+                                        };
 
                                         // Cibles (Final)
                                         const targetFinalMOD = isMOD ? fteArrondi : 0;
@@ -1211,69 +1075,34 @@ export default function BandoengSimulation() {
                                         const apsActual = Math.round(displayAPS);
                                         const apsDelta = apsTarget - apsActual;
 
-                                        // Global Diff Calculation
-                                        // Cible globale est statutaireCible.
-                                        // Actuel global est (actualStatutaire + apsActual)
-                                        const globalDiff = statutaireCible - (actualStatutaire + apsActual);
+                                        // Footer Ecarts
+                                        const diffMOD = targetFinalMOD - actualMOD;
+                                        const diffMOI = targetFinalMOI - actualMOI;
+                                        const diffStatutaire = statutaireCible - actualStatutaire;
 
-                                        // Footer Ecarts Logic
-                                        let diffMOD = 0;
-                                        let diffMOI = 0;
-                                        // diffStatutaire will be calculated as sum of MOD+MOI at the end
-                                        let finalApsValue = apsDelta;
-
-                                        if (selectedPosteObj) {
-                                            // Selection Case
-                                            diffMOD = targetFinalMOD - actualMOD;
-                                            diffMOI = targetFinalMOI - actualMOI;
-                                            finalApsValue = 0; // No APS in individual
-                                        } else {
-                                            // Global Case
-                                            // Surplus doit inclure l'APS pour représenter l'excédent TOTAL
-                                            const surplus = (actualStatutaire + apsActual) - statutaireCible;
-
-                                            if (surplus > 0) {
-                                                // Need to release people (Surplus)
-                                                // Priority: Reduce APS first, then MOD
-                                                const apsCut = Math.min(surplus, displayAPS);
-                                                const modCut = surplus - apsCut;
-
-                                                diffMOD = -modCut;
-                                                diffMOI = 0;
-                                                finalApsValue = -apsCut;
-                                            } else {
-                                                // Need to recruit (Deficit)
-                                                // User Request: "garde toujours MOD=0 et MOI=0"
-                                                diffMOD = 0;
-                                                diffMOI = 0;
-                                                // finalApsValue remains apsDelta
-                                            }
-                                        }
-
-                                        const diffStatutaire = diffMOD + diffMOI;
-
-                                        const formatSigned = (val) => {
-                                            const num = Number(val);
-                                            if (isNaN(num)) return "0";
-                                            return num > 0 ? `+${num}` : `${num}`;
-                                        };
+                                        const isIndividual = selectedPoste && selectedPoste !== "all";
+                                        const valToDisplay = isIndividual ? diffStatutaire : (apsDelta > 0 ? apsDelta : 0);
+                                        const tone = valToDisplay > 0 ? "rose" : "emerald";
+                                        const displayTotal = isIndividual ? formatSigned(Math.round(valToDisplay)) : (valToDisplay > 0 ? `+${Math.round(valToDisplay)}` : "0");
 
                                         return (
                                             <KPICardGlass
                                                 label="Besoin"
-                                                icon={globalDiff > 0 ? TrendingUp : CheckCircle2}
-                                                tone={globalDiff > 0 ? "rose" : "emerald"}
+                                                icon={valToDisplay > 0 ? TrendingUp : CheckCircle2}
+                                                tone={tone}
                                                 emphasize
-                                                total={formatSigned(Math.round(globalDiff))}
+                                                total={displayTotal}
                                             >
-                                                <EffectifFooter
-                                                    totalLabel="Ecart Statutaire"
-                                                    totalValue={formatSigned(Math.round(diffStatutaire))}
-                                                    modValue={formatSigned(Math.round(diffMOD))}
-                                                    moiValue={formatSigned(Math.round(diffMOI))}
-                                                    apsLabel="Var. APS"
-                                                    apsValue={formatSigned(Math.round(finalApsValue))}
-                                                />
+                                                {(!selectedPoste || selectedPoste === "all") && (
+                                                    <EffectifFooter
+                                                        totalLabel="Ecart Statutaire"
+                                                        totalValue={formatSigned(Math.round(diffStatutaire))}
+                                                        modValue={formatSigned(diffMOD)}
+                                                        moiValue={formatSigned(diffMOI)}
+                                                        apsLabel="Var. APS"
+                                                        apsValue={formatSigned(Math.round(apsDelta))}
+                                                    />
+                                                )}
                                             </KPICardGlass>
                                         );
                                     })()}
@@ -1506,10 +1335,35 @@ export default function BandoengSimulation() {
 
                                     </div>
                                 )}
+
+                                {/* Module de Saisonnalité en Dialogue */}
+                                <div className="mt-4">
+                                    <Dialog>
+                                        <DialogTrigger asChild>
+                                            <Button
+                                                variant="outline"
+                                                className="w-full h-12 border-dashed border-slate-300 hover:border-[#005EA8] hover:bg-blue-50/50 group transition-all"
+                                            >
+                                                <CalendarDays className="w-5 h-5 mr-3 text-slate-400 group-hover:text-[#005EA8]" />
+                                                <div className="text-left">
+                                                    <div className="text-sm font-bold text-slate-700">Analyse de Saisonnalité</div>
+                                                    <div className="text-[10px] text-slate-400 font-medium">Visualiser la distribution mensuelle et l'évolution des effectifs</div>
+                                                </div>
+                                            </Button>
+                                        </DialogTrigger>
+                                        <DialogContent className="max-w-[95vw] lg:max-w-6xl max-h-[95vh] h-fit p-0 overflow-hidden border-none shadow-2xl">
+                                            <SeasonalityModule
+                                                onSimulateAnnual={handleSimulateAnnual}
+                                                loading={loading}
+                                                intervenants={postes.map(p => ({ id: p.id, label: p.label || p.name }))}
+                                                className="border-none shadow-none"
+                                            />
+                                        </DialogContent>
+                                    </Dialog>
+                                </div>
                             </>
                         )}
                     </div>
-
                 </div>
             </div>
             {/* Import Tasks Dialog */}
@@ -1523,6 +1377,29 @@ export default function BandoengSimulation() {
                     </DialogHeader>
                     <div className="flex flex-col gap-6 py-4">
                         <div className="space-y-4">
+                            {/* Étape 0: Sélection du Centre */}
+                            <div className="flex items-start gap-3 p-3 bg-amber-50/50 rounded-lg border border-amber-100">
+                                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-amber-100 text-amber-700 text-xs font-bold shrink-0">0</span>
+                                <div className="space-y-2 w-full">
+                                    <h4 className="text-sm font-semibold text-slate-800">Sélectionner le centre cible</h4>
+                                    <p className="text-[11px] text-slate-500">
+                                        Choisissez le centre pour lequel vous souhaitez importer les tâches.
+                                    </p>
+                                    <Select value={importTargetCentreId} onValueChange={setImportTargetCentreId}>
+                                        <SelectTrigger className="h-8 text-xs bg-white border-amber-200">
+                                            <SelectValue placeholder="Choisir un centre..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {allCentres.map(c => (
+                                                <SelectItem key={c.id} value={String(c.id)} className="text-xs">
+                                                    {c.nom || c.label || `Centre ${c.id}`}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+
                             <div className="flex items-start gap-3 p-3 bg-blue-50/50 rounded-lg border border-blue-100">
                                 <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold shrink-0">1</span>
                                 <div className="space-y-1">

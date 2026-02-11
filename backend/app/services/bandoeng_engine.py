@@ -33,6 +33,7 @@ class BandoengSimulationResult:
     besoin_preparateur: float = 0.0
     besoin_magasinier: float = 0.0
     total_ressources_humaines: float = 0.0
+    ressources_par_poste: Dict[str, float] = field(default_factory=dict)
     debug_info: Dict[str, Any] = field(default_factory=dict)
 
 @dataclass
@@ -70,6 +71,7 @@ class BandoengParameters:
     ratio_preparateur: float = 1000.0
     ratio_magasinier: float = 800.0
     shift: int = 1
+    pct_mois: Optional[float] = None  # Nouveau paramètre pour la saisonnalité
 
 def safe_float(val: Any) -> float:
     try:
@@ -266,10 +268,15 @@ def calculate_task_duration(
     
     # 2. Determine Day Divisor (Annual -> Daily)
     # User Request: "on garde Calcul du Volume Journalier comme précedemment on divise par 264 ensuite en divise par 350 ou 24 ça depend phase"
+    # Seasonal Request: "en saisonalité on va multiplier par le prct mois et diviser par 22"
     
-    # Step 1: Always divide by 264 first
-    vol_jour_brut = volume_source_val / 264.0
-    days_divisor_str = "264"
+    # Step 1: Divide by 264 (default) or use Seasonality (pct_mois / 22)
+    if params.pct_mois is not None:
+        vol_jour_brut = (volume_source_val * (params.pct_mois / 100.0)) / 22.0
+        days_divisor_str = f"({params.pct_mois}% / 22)"
+    else:
+        vol_jour_brut = volume_source_val / 264.0
+        days_divisor_str = "264"
     
     # Step 2: Apply specific phase divisors IF present (cumulative/sequential)
     if "day_350" in phase:
@@ -507,6 +514,15 @@ def run_bandoeng_simulation(
     # ETP Calculé = Total Heures Nécessaires / Capacité Nette d'un agent
     fte_calcule = total_heures / capacite_nette
     
+    # Calcul des ressources par poste (Intervenant)
+    ressources_par_poste = {}
+    for res in task_results:
+        resp = res.responsable
+        if resp not in ressources_par_poste:
+            ressources_par_poste[resp] = 0.0
+        # ETP pour cette tâche = Heures / Capacité Nette
+        ressources_par_poste[resp] += (res.heures_calculees / capacite_nette)
+
     # Calcul des besoins spécifiques (Sommaire - Legacy/Global logic, might need adjustment if filtered)
     vol_total_colis = get_volume_by_product("AMANA REÇU TOTAL", volumes) + get_volume_by_product("AMANA DÉPÔT TOTAL", volumes)
     besoin_trieur = (vol_total_colis / 264.0) / max(1, params.ratio_trieur)
@@ -523,5 +539,6 @@ def run_bandoeng_simulation(
         besoin_preparateur=besoin_preparateur,
         besoin_magasinier=besoin_magasinier,
         total_ressources_humaines=fte_calcule,
+        ressources_par_poste=ressources_par_poste,
         debug_info={}
     )
