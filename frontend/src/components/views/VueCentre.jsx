@@ -553,6 +553,9 @@ export default function VueCentre({
   const navigate = useNavigate();
   const replayData = location.state?.replayData;
 
+  // 🆕 État local pour les détails officiels (Alignement VueIntervenant)
+  const [internalCentreDetails, setInternalCentreDetails] = useState(null);
+
   const [error, setError] = useState("");
 
   const [partParticuliers, setPartParticuliers] = useState(75);
@@ -631,6 +634,30 @@ export default function VueCentre({
     }
     return Number(centre) || null;
   }, [centre]);
+
+  // 🆕 Effet pour charger les détails officiels quand le centre change
+  useEffect(() => {
+    if (!centreId) {
+      setInternalCentreDetails(null);
+      return;
+    }
+
+    let cancelled = false;
+    const fetchDetails = async () => {
+      try {
+        const res = await fetch(`/api/bandoeng/centre-details/${centreId}`);
+        if (res.ok && !cancelled) {
+          const data = await res.json();
+          setInternalCentreDetails(data);
+        }
+      } catch (e) {
+        console.warn("Erreur chargement détails centre (VueCentre):", e);
+      }
+    };
+
+    fetchDetails();
+    return () => { cancelled = true; };
+  }, [centreId]);
 
   // --- TEST MODE LOGIC ---
   // --- Corrected Logic ---
@@ -983,9 +1010,9 @@ export default function VueCentre({
 
   /* ===================== KPI ===================== */
   const kpi = useMemo(() => {
-    const effMOD = totalsMOD.effectif ?? 0;
-    const effMOI = totalsMOI.effectif ?? 0;
-    const effTotal = effMOD + effMOI;
+    let effMOD = totalsMOD.effectif ?? 0;
+    let effMOI = totalsMOI.effectif ?? 0;
+    let effTotal = effMOD + effMOI;
 
     const etpCalcMOD = totalsMOD.etpCalcule ?? 0;
     const etpCalcMOI = totalsMOI.etpCalcule ?? 0;
@@ -1012,7 +1039,18 @@ export default function VueCentre({
     const finalAPS = apsFromMapping ?? valAPS;
 
     let apsGlobal = (finalAPS !== undefined && finalAPS !== null) ? Number(finalAPS) : null;
-    const effAPSMOD = apsGlobal !== null ? apsGlobal : (totalsMOD.effectifAPS ?? 0);
+    let effAPSMOD = apsGlobal !== null ? apsGlobal : (totalsMOD.effectifAPS ?? 0);
+
+    // 🆕 OVERRIDE OFFICIEL (Alignement Bandoeng/VueIntervenant)
+    if (internalCentreDetails) {
+      effMOD = Number(internalCentreDetails.mod_global || 0);
+      effMOI = Number(internalCentreDetails.moi_global || 0);
+      effTotal = effMOD + effMOI; // Statutaire
+
+      effAPSMOD = Number(internalCentreDetails.aps || 0);
+      // apsGlobal sert aussi pour apsBrut
+      apsGlobal = effAPSMOD;
+    }
 
     // ✅ NOUVELLE LOGIQUE D'ARRONDI (Demande User)
     // MOD_arrondi = round(MOD_calculé)
@@ -1067,7 +1105,7 @@ export default function VueCentre({
       ecartAPS,
       apsBrut: apsGlobal ?? 0,
     };
-  }, [totalsMOD, totalsMOI, centreObj]);
+  }, [totalsMOD, totalsMOI, centreObj, internalCentreDetails]);
   const formatSigned = (n) => {
     const v = Number(n || 0);
     if (!Number.isFinite(v) || v === 0) return "0";

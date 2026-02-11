@@ -47,13 +47,13 @@ export function useSimulationParams() {
 
   // Paramètres ED et ratios
   const [edPercent, setEdPercent] = usePersistedState('sim_edPercent', 60);
-  const [colisAmanaParSac, setColisAmanaParSac] = usePersistedState('sim_colisAmanaParSac', 10);
-  const [courriersParSac, setCourriersParSac] = usePersistedState('sim_courriersParSac', 4500);
+  const [colisAmanaParSac, setColisAmanaParSac] = usePersistedState('sim_colisAmanaParSac', 35);
+  const [courriersParSac, setCourriersParSac] = usePersistedState('sim_courriersParSac', 350);
   const [colisParCollecte, setColisParCollecte] = usePersistedState('sim_colisParCollecte', 1);
 
   // 🆕 Axes vs Distribution (pourcentages UI 0-100)
-  const [pctAxesArrivee, setPctAxesArrivee] = usePersistedState('sim_pctAxesArrivee', 40);
-  const [pctAxesDepart, setPctAxesDepart] = usePersistedState('sim_pctAxesDepart', 30);
+  const [pctAxesArrivee, setPctAxesArrivee] = usePersistedState('sim_pctAxesArrivee', 0);
+  const [pctAxesDepart, setPctAxesDepart] = usePersistedState('sim_pctAxesDepart', 0);
 
   // 🆕 Amana Specific (Image Request)
   const [pctRetenue, setPctRetenue] = usePersistedState('sim_pctRetenue', 1);
@@ -70,10 +70,10 @@ export function useSimulationParams() {
   const [shift, setShift] = usePersistedState('sim_shift', 1);
 
   // Helpers UI (sacs)
-  const [nbrCoSac, setNbrCoSac] = usePersistedState('sim_nbrCoSac', 4500);
-  const [nbrCrSac, setNbrCrSac] = usePersistedState('sim_nbrCrSac', 500);
+  const [nbrCoSac, setNbrCoSac] = usePersistedState('sim_nbrCoSac', 350);
+  const [nbrCrSac, setNbrCrSac] = usePersistedState('sim_nbrCrSac', 400);
   // 🆕 Helpers UI (caisson)
-  const [crParCaisson, setCrParCaisson] = usePersistedState('sim_crParCaisson', 500);
+  const [crParCaisson, setCrParCaisson] = usePersistedState('sim_crParCaisson', 400);
 
   // Volumes journaliers (legacy)
   const [sacs, setSacs] = usePersistedState('sim_sacs', 0);

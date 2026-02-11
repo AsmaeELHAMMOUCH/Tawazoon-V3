@@ -68,6 +68,8 @@ class CNDPTaskOut(BaseModel):
     volume_annuel: float
     volume_journalier: float
     heures_calculees: float
+    responsable: str
+    centre_poste_id: Optional[int]
     formule: str
 
 
@@ -135,6 +137,8 @@ def simulate_cndp(request: CNDPSimulateRequest, db: Session = Depends(get_db)):
                 volume_annuel=t.volume_annuel,
                 volume_journalier=t.volume_journalier,
                 heures_calculees=t.heures_calculees,
+                responsable=t.responsable,
+                centre_poste_id=t.centre_poste_id,
                 formule=t.formule
             )
             for t in result.tasks

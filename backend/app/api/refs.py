@@ -312,9 +312,11 @@ def list_postes(
                 p.label,
                 p.type_poste,
                 p.Code,
-                SUM(COALESCE(cp.effectif_actuel, 0)) AS effectif_actuel
+                SUM(COALESCE(cp.effectif_actuel, 0)) AS effectif_actuel,
+                MAX(hp.label) AS categorie
             FROM dbo.postes p
-            INNER JOIN dbo.centre_postes cp ON cp.poste_id = p.id
+            INNER JOIN dbo.centre_postes cp ON cp.code_resp = p.Code
+            LEFT JOIN dbo.Hierarchie_postes hp ON hp.code = p.hie_poste
             WHERE cp.centre_id = :centre_id
             GROUP BY p.id, p.label, p.type_poste, p.Code
             ORDER BY p.label
@@ -330,7 +332,8 @@ def list_postes(
                 p.label,
                 p.type_poste AS type_poste,
                 p.Code,
-                0 AS effectif_actuel
+                0 AS effectif_actuel,
+                NULL AS categorie
             FROM dbo.postes p
             ORDER BY p.label
         """
@@ -350,6 +353,7 @@ def list_postes(
             "code": r.get("Code"),
             "type_poste": r.get("type_poste"),
             "effectif_actuel": r.get("effectif_actuel", 0),
+            "category": r.get("categorie"), # ✅ Expose category (mapped from HierarchiePostes)
         })
     
     return result
@@ -398,7 +402,7 @@ def get_taches(
             p.type_poste -- ✅ Ajout type_poste
         FROM dbo.taches t
         INNER JOIN dbo.centre_postes cp ON cp.id = t.centre_poste_id
-        INNER JOIN dbo.postes p ON p.id = cp.poste_id
+        INNER JOIN dbo.postes p ON p.Code = cp.code_resp 
         WHERE cp.centre_id = :centre_id
     """
     params = {"centre_id": centre_id}

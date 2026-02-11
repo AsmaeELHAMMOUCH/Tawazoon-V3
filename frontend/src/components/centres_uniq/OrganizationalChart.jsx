@@ -175,7 +175,7 @@ const StaffGroupRenderer = ({ staffList }) => {
                                                 type="leaf"
                                                 role=""
                                                 name={staff.name}
-                                                count={staff.effectif || 0}
+                                                count={staff.displayEffectif || staff.effectif || 0}
                                                 icon={User}
                                             />
 
@@ -289,7 +289,7 @@ const OrganizationalChart = ({ chefCentre, moiStaff = [], modStaff = [] }) => {
                                     type="mod"
                                     role=""
                                     name="MOD (Direct)"
-                                    count={totalMOD}
+                                    count={Math.round(totalMOD)}
                                     icon={Users}
                                 />
                                 {/* Connector to children */}
@@ -309,7 +309,7 @@ const OrganizationalChart = ({ chefCentre, moiStaff = [], modStaff = [] }) => {
                                     type="moi"
                                     role=""
                                     name="MOI (Indirect)"
-                                    count={totalMOI}
+                                    count={Math.round(totalMOI)}
                                     icon={Users}
                                 />
                                 {/* Connector to children */}

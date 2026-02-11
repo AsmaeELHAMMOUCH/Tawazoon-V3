@@ -14,9 +14,9 @@ import ChoixActivitePage from "./pages/ChoixActivitePage";
 import Sidebar from "./layout/Sidebar";
 import SimulationEffectifs from "./pages/Simulation";
 import SimulationDirectionV2 from "./pages/SimulationDirectionV2";
-import VueCCP from "./pages/VueCCP";
-import VueCNA from "./pages/VueCNA";
-import VueCCI from "./pages/VueCCI";
+import VueCCP from "./pages/centres_uniq/VueCCP";
+import VueCNA from "./pages/centres_uniq/VueCNA";
+import VueCCI from "./pages/centres_uniq/VueCCI";
 
 // Simple error boundary to catch rendering errors in routes
 import React from "react";

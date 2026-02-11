@@ -97,6 +97,8 @@ export default function BandoengAdditionalParams({
     setPctInternational,
     pctNational = 100,
     setPctNational,
+    edPercent,
+    setEdPercent,
     className = ""
 }) {
 
@@ -219,6 +221,15 @@ export default function BandoengAdditionalParams({
                             suffix="%"
                             iconColor="text-indigo-600"
                             iconBg="bg-indigo-50"
+                        />
+                        <ParamField
+                            icon={Box}
+                            label="% ED"
+                            value={edPercent}
+                            onChange={setEdPercent}
+                            suffix="%"
+                            iconColor="text-slate-600"
+                            iconBg="bg-slate-50"
                         />
                     </div>
                 </div>

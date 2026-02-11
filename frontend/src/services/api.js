@@ -26,6 +26,16 @@ export const simulateBandoeng = async (payload) => {
     }
 }
 
+export const simulateBandoengDirect = async (payload) => {
+    try {
+        const response = await axios.post(`${API_BASE_URL}/bandoeng/simulate-bandoeng`, payload);
+        return response.data;
+    } catch (error) {
+        console.error("API Call Error (Bandoeng Direct):", error);
+        throw error;
+    }
+}
+
 export const downloadBandoengTemplate = async () => {
     try {
         const response = await axios.get(`${API_BASE_URL}/export/bandoeng/template`, {
@@ -97,6 +107,16 @@ export const importBandoengTasks = async (file, centreId) => {
         return response.data;
     } catch (error) {
         console.error("Import Error:", error);
+        throw error;
+    }
+};
+
+export const fetchCentres = async () => {
+    try {
+        const response = await axios.get(`${API_BASE_URL}/centres/`);
+        return response.data;
+    } catch (error) {
+        console.error("Fetch Centres Error:", error);
         throw error;
     }
 };

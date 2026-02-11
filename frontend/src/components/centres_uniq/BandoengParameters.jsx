@@ -76,7 +76,7 @@ export default function BandoengParameters({ params, handleParamChange, classNam
                     </div>
                     <div className="flex flex-col w-full">
                         <label className="text-[8px] font-bold text-slate-400 uppercase tracking-wider text-center">
-                            Prod.
+                            Productivité
                         </label>
                         <div className="relative">
                             <input
@@ -104,7 +104,7 @@ export default function BandoengParameters({ params, handleParamChange, classNam
                     </div>
                     <div className="flex flex-col w-full">
                         <label className="text-[8px] font-bold text-slate-400 uppercase tracking-wider text-center">
-                            Retard
+                            Temps mort
                         </label>
                         <div className="relative">
                             <input

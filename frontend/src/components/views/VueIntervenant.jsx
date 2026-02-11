@@ -1,6 +1,7 @@
 ﻿/* VueIntervenant.jsx - normalisation /jour + productivité + formatage */
 "use client";
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import * as XLSX from 'xlsx';
 import { useDebouncedValue } from "../../hooks/useDebounce";
 import {
   MapPin,
@@ -28,6 +29,7 @@ import {
   Download,
   Box,
   Play,
+  CalendarDays
 } from "lucide-react";
 
 import { api } from "../../lib/api";
@@ -55,7 +57,13 @@ import { Input } from "@/components/ui/input";
 import BandoengGrid from "@/components/centres_uniq/BandoengGrid";
 import BandoengAdditionalParams from "@/components/centres_uniq/BandoengAdditionalParams";
 import BandoengParameters from "@/components/centres_uniq/BandoengParameters";
+import SeasonalityModule from "@/components/centres_uniq/SeasonalityModule";
 
+
+const MONTHS = [
+  "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+  "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"
+];
 
 /* ===================== KPI COMPONENTS (COPIED FROM VUECENTRE) ===================== */
 const KPICardGlass = ({
@@ -143,6 +151,25 @@ import Tooltip from "../ui/Tooltip";
 import "../tables/EnterpriseTable.css";
 import "../../styles/tooltips.css";
 import { CardContent } from "../card";
+
+// 🆕 Helper pour catégoriser les postes (Généralisation Bandoeng)
+const getCategory = (poste) => {
+  // 1. API Category (from HierarchiePostes)
+  if (poste.category) return poste.category;
+
+  // 2. Keyword Mapping Fallback
+  const label = (poste.label || poste.nom_poste || "").toUpperCase();
+  if (label.includes("GUICHET") || label.includes("GAB")) return "GUICHET";
+  if (label.includes("FACTEUR") || label.includes("DISTRIBUTION")) return "TERRAIN";
+  if (label.includes("CHAUFFEUR")) return "CHAUFFEUR / COURSIER";
+  if (label.includes("TRI") || label.includes("ACHEMINEMENT") || label.includes("OPERATIONS") || label.includes("BRIGADE") || label.includes("CTD")) return "OPERATION CTD";
+  if (label.includes("ACCUEIL") || label.includes("CLIENTELE") || label.includes("ADMIN") || label.includes("RH") || label.includes("MOYENS")) return "OPERATION ADMIN";
+  if (label.includes("MANUTENTION")) return "MANUTENTION";
+
+  // Default
+  return "AUTRES";
+};
+
 
 export default function VueIntervenant({
   regions = [],
@@ -240,6 +267,35 @@ export default function VueIntervenant({
   onDownloadTemplate,
 }) {
   const fileInputRef = useRef(null);
+
+  // 🆕 État local pour les détails officiels du centre (Alignement Bandoeng)
+  const [internalCentreDetails, setInternalCentreDetails] = useState(null);
+
+  // 🆕 Effet pour charger les détails officiels quand le centre change
+  useEffect(() => {
+    if (!centre) {
+      setInternalCentreDetails(null);
+      return;
+    }
+
+    let cancelled = false;
+    const fetchDetails = async () => {
+      try {
+        // On utilise fetch directement pour éviter de modifier api.js global
+        const res = await fetch(`/api/bandoeng/centre-details/${centre}`);
+        if (res.ok && !cancelled) {
+          const data = await res.json();
+          setInternalCentreDetails(data);
+        }
+      } catch (e) {
+        console.warn("Erreur chargement détails centre:", e);
+      }
+    };
+
+    fetchDetails();
+
+    return () => { cancelled = true; };
+  }, [centre]);
 
   const handleFileSelect = (e) => {
     const file = e.target.files?.[0];
@@ -640,20 +696,18 @@ export default function VueIntervenant({
     return sorted;
   }, [referentielFiltered]);
 
-  // ✅ OPTIMISATION : Memoization des résultats fusionnés
-  const mergedResults = useMemo(() => {
-    const res = referentielFiltered.map((row, i) => {
+  // ✅ OPTIMISATION : Memoization des résultats fusionnés ET du total brut
+  const [mergedResults, totalHeuresAffichees] = useMemo(() => {
+    const raw = referentielFiltered.map((row, i) => {
       const taskName = String(row.t || row.task || "").trim();
       const fromBack = (row.id && resIndex.get(String(row.id))) || resIndex.get(normalizeKey(taskName));
       const moyenneMin = Number(row.m ?? 0);
 
       // Si le backend a déjà calculé les heures, on les préfère !
-      // Le backend retourne maintenant des heures "chargées" (Raw/P)
       const hasBackResults = fromBack && (fromBack.heures !== undefined);
+      const isActive = String(row.etat || "A").trim().toUpperCase() !== "NA";
 
-      const isActive = String(row.etat || "A").trim().toUpperCase() !== "NA"; // ✅ Check état
-
-      const nbJour = isActive // ✅ Si NA => 0
+      const nbJour = isActive
         ? (fromBack?.nombre_unite ??
           fromBack?.nombre_Unite ??
           nombreUniteParUnite(row.u, taskName, row))
@@ -661,15 +715,12 @@ export default function VueIntervenant({
 
       let heuresLoc;
       if (!isActive) {
-        heuresLoc = 0; // ✅ Si NA => 0
+        heuresLoc = 0;
       } else if (hasBackResults) {
         heuresLoc = Number(fromBack.heures || 0);
       } else if (hasSimulated && (resultats || []).length > 0) {
-        // ✅ Si la simulation a eu lieu mais que le backend n'a pas renvoyé cette tâche,
-        // c'est qu'elle n'est pas applicable au poste (ou filtrée). On met 0.
         heuresLoc = 0;
       } else {
-        // Fallback local (uniquement avant la simulation ou si mode hors ligne)
         heuresLoc = +(
           Number(nbJour || 0) *
           (minutesAjustees(moyenneMin) / 60)
@@ -679,46 +730,47 @@ export default function VueIntervenant({
       return {
         seq: i + 1,
         task: (taskName || "").replace(/\s*\([^)]*\)/g, "").trim(),
-        formule: fromBack?.formule || "N/A",  // 🆕 Formule de calcul depuis le backend
+        formule: fromBack?.formule || "N/A",
         nombre_Unite: Number(nbJour || 0),
         heures: heuresLoc,
+        produit: (row.p || row.produit || "").replace(/Arrivé|Arrive|Reçu|Recu|Dépôt|Dépot|Depot|MED/gi, "").trim(),
+        moyenne_min: moyenneMin,
+        unite_mesure: row.u,
         _u: row.u,
         _type_flux: row.type_flux,
         _fromBack: fromBack,
       };
-    }).filter(r => Number(r.heures || 0) > 0.005);
+    });
+
+    // ✅ CALCUL DU TOTAL BRUT (Avant filtrage 0.005h) pour alignement avec le backend
+    const totalBrut = raw.reduce((acc, r) => acc + Number(r.heures || 0), 0);
+
+    // ✅ FILTRAGE POUR L'AFFICHAGE DU TABLEAU
+    let res = raw.filter(r => Number(r.heures || 0) > 0.005);
 
     // 🆕 Fallback pour postes MOI (Structurels)
-    // Si la simulation ne renvoie rien (car pas de tâches data-driven), on affiche un forfait
     if (res.length === 0 && hasSimulated && poste) {
       const pObj = (postesOptions || []).find(p => String(p.id) === String(poste));
-      // Détection basée sur le type_poste (si disponible) ou heuristique simple
       const isMoi = pObj?.type_poste === 'MOI' || pObj?.is_moi;
 
       if (isMoi) {
-        return [{
+        const hMoi = Number(heuresNet || 7.33);
+        const moiTask = {
           seq: 1,
           task: "Activité Structurelle (MOI)",
           formule: "Poste Forfaitaire (Non piloté par le volume)",
           nombre_Unite: 1,
-          heures: Number(heuresNet || 7.33), // Pour faire 1 ETP
+          heures: hMoi,
           _u: "Jour",
           _type_flux: "Structurel",
           _fromBack: null
-        }];
+        };
+        return [[moiTask], hMoi];
       }
     }
 
-    return res;
+    return [res, totalBrut];
   }, [referentielFiltered, resIndex, annualValues, debouncedColis, debouncedProductivite, colisAmanaParSac, courriersParSac, colisParCollecte, hasSimulated, poste, postesOptions, heuresNet]);
-
-  // ✅ OPTIMISATION : Memoization du total des heures
-  const totalHeuresAffichees = useMemo(() => {
-    return mergedResults.reduce(
-      (acc, r) => acc + Number(r.heures || 0),
-      0
-    );
-  }, [mergedResults]);
 
   // ✅ SECURITÉ : Utiliser le total heures du backend s'il est disponible (Data-Driven)
   const totalHeuresFinal = useMemo(() => {
@@ -853,39 +905,57 @@ export default function VueIntervenant({
   // 🆕 Helper pour formater petits nombres
   const formatSmallNumber = (v) => Number(v || 0).toFixed(2).replace('.', ',');
 
+  const formatSigned = (val) => {
+    const num = Number(val);
+    if (isNaN(num)) return "0";
+    return num > 0 ? `+${num}` : `${num}`;
+  };
+
   // 🆕 Logique d'affichage KPI alignée sur Bandoeng
   const kpiData = useMemo(() => {
+
+    const etpCalcValue = isGlobalView
+      ? (totaux?.total_heures ? totaux.fte_calcule : 0)
+      : fteCalcAffiche;
+
     let actualMOD = 0;
     let actualMOI = 0;
     let actualAPS = 0;
     let actualStatutaire = 0;
     let actualTotal = 0;
 
-    const excludedLabels = ["Gestionnaire clients en compte", "CHEF DE CENTRE"];
-    const currentLabel = (selectedPosteObj?.label || "").trim();
-    const isExcludedPoste = excludedLabels.some(x => x.toLowerCase() === currentLabel.toLowerCase());
-
-    const etpCalcValue = isGlobalView
-      ? (totaux?.total_heures ? totaux.fte_calcule : 0)
-      : (isExcludedPoste ? 0 : fteCalcAffiche);
-
-    if (selectedPosteObj) {
-      // Vue Individuelle
-      const val = Number(selectedPosteObj.effectif_actuel || 0);
-      if (isMoiPoste(selectedPosteObj)) {
-        actualMOI = val;
-      } else {
-        actualMOD = val;
-      }
+    // ✅ Priorité aux données officielles de la base (Logique BandoengSimulation)
+    if (isGlobalView && internalCentreDetails) {
+      actualMOD = Number(internalCentreDetails.mod_global || 0);
+      actualMOI = Number(internalCentreDetails.moi_global || 0);
+      actualAPS = Number(internalCentreDetails.aps || 0);
+      // Total Statutaire = MOD + MOI (sans APS)
       actualStatutaire = actualMOD + actualMOI;
-      actualTotal = actualStatutaire + (selectedPosteObj.effectif_aps || 0);
-    } else {
-      // Vue Globale
-      actualMOD = totalEffectifCentreStats.mod;
-      actualMOI = totalMoiGlobal;
-      actualAPS = apsGlobalCentre;
-      actualStatutaire = actualMOD + actualMOI;
+      // Total Général = Statutaire + APS
       actualTotal = actualStatutaire + actualAPS;
+    } else {
+      // 🔄 Fallback Standard ou Calcul par poste
+      if (selectedPosteObj) {
+        // Vue Individuelle
+        const val = Number(selectedPosteObj.effectif_actuel || 0);
+        if (isMoiPoste(selectedPosteObj)) {
+          actualMOI = val;
+          actualMOD = 0;
+        } else {
+          actualMOD = val;
+          actualMOI = 0;
+        }
+        actualStatutaire = actualMOD + actualMOI;
+        actualTotal = actualStatutaire; // APS ignorés en vue individuelle
+        actualAPS = 0;
+      } else {
+        // Vue Globale (Fallback si pas de détails chargés)
+        actualMOD = totalEffectifCentreStats.mod;
+        actualMOI = totalMoiGlobal;
+        actualAPS = apsGlobalCentre;
+        actualStatutaire = actualMOD + actualMOI;
+        actualTotal = actualStatutaire + actualAPS;
+      }
     }
 
     const targetCalculatedMOD = isGlobalView ? etpCalcValue : (isMOD ? fteCalcAffiche : 0);
@@ -893,7 +963,12 @@ export default function VueIntervenant({
     const totalCalculated = targetCalculatedMOD + targetCalculatedMOI;
 
     const targetFinalMOD = isGlobalView ? Math.round(etpCalcValue) : (isMOD ? fteArrondiAffiche : 0);
-    const targetFinalMOI = isGlobalView ? totalMoiGlobal : (isMoiPoste(selectedPosteObj) ? effectifActuel : 0);
+    // Pour MOI, si vue globale et details dispos, on prend la valeur officielle aussi pour la cible (souvent identique)
+    // Mais attention, la CIBLE MOI est généralement l'existant.
+    const targetFinalMOI = isGlobalView
+      ? (internalCentreDetails ? internalCentreDetails.moi_global : totalMoiGlobal)
+      : (isMoiPoste(selectedPosteObj) ? effectifActuel : 0);
+
     const totalFinal = targetFinalMOD + targetFinalMOI;
 
     // Logique APS
@@ -904,43 +979,137 @@ export default function VueIntervenant({
     // Ecarts
     const apsActual = actualAPS;
     const apsDelta = apsCalculeDisplay - apsActual;
-    const valToDisplay = apsDelta > 0 ? apsDelta : 0;
 
     const diffMOD = targetFinalMOD - actualMOD;
     const diffMOI = targetFinalMOI - actualMOI;
     const diffStatutaire = statutaireCible - actualStatutaire;
+
+    const isIndividual = !isGlobalView;
+    const valToDisplay = isIndividual ? diffStatutaire : (apsDelta > 0 ? apsDelta : 0);
+    const tone = valToDisplay > 0 ? "rose" : "emerald";
+    const totalDisplay = isIndividual ? formatSigned(Math.round(valToDisplay)) : (valToDisplay > 0 ? `+${Math.round(valToDisplay)}` : "0");
 
     return {
       actualMOD, actualMOI, actualAPS, actualStatutaire, actualTotal,
       targetCalculatedMOD, targetCalculatedMOI, totalCalculated,
       targetFinalMOD, targetFinalMOI, totalFinal,
       apsCalculeDisplay, valToDisplay, apsDelta,
-      diffMOD, diffMOI, diffStatutaire
+      diffMOD, diffMOI, diffStatutaire,
+      isIndividual, tone, totalDisplay
     };
-  }, [selectedPosteObj, totalEffectifCentreStats, totalMoiGlobal, apsGlobalCentre, isGlobalView, totaux, isMOD, fteCalcAffiche, effectifActuel, fteArrondiAffiche]);
-
-  const formatSigned = (val) => {
-    const num = Number(val);
-    if (isNaN(num)) return "0";
-    return num > 0 ? `+${num}` : `${num}`;
-  };
+  }, [selectedPosteObj, totalEffectifCentreStats, totalMoiGlobal, apsGlobalCentre, isGlobalView, totaux, isMOD, fteCalcAffiche, effectifActuel, fteArrondiAffiche, internalCentreDetails]);
 
   const handleSimuler = useCallback((overrides = {}) => {
     console.log("🖱️ [VueIntervenant] Click Simuler. State Taux:", tauxComplexite, "NatureGeo:", natureGeo);
-    const ratioCollecte = Math.max(1, parseNonNeg(colisParCollecte) ?? 1);
 
     onSimuler({
-      colis_amana_par_sac: parseNonNeg(colisAmanaParSac) ?? 5,
-      courriers_par_sac: parseNonNeg(courriersParSac) ?? 4500,
-      colis_par_collecte: ratioCollecte,
-      part_particuliers: partParticuliers,
-      taux_complexite: Number(tauxComplexite || 0),
-      nature_geo: Number(natureGeo || 0),
-      ed_percent: Number(edPercent || 0), // 🆕 % En dehors
-      pct_collecte: Number(pctCollecte || 0), // 🆕 % Collecte
-      pct_retour: Number(pctRetour || 0), // 🆕 % Retour
+      taux_complexite: Number(tauxComplexite || 1),
+      nature_geo: Number(natureGeo || 1),
+      pct_axes_arrivee: Number(pctAxesArrivee || 0),
+      pct_axes_depart: Number(pctAxesDepart || 0),
+      pct_national: Number(pctNational || 100),
+      pct_marche_ordinaire: Number(pctMarcheOrdinaire || 0),
+      pct_international: Number(pctInternational || 0),
+      colis_amana_par_canva_sac: Number(colisAmanaParCanvaSac || 35),
+      nbr_co_sac: Number(nbrCoSac || 350),
+      nbr_cr_sac: Number(nbrCrSac || 400),
+      productivite: Number(productivite ?? 100),
+      idle_minutes: Number(idleMinutes || 0),
+      shift: Number(shift || 1),
+      pct_collecte: Number(pctCollecte || 0),
+      pct_retour: Number(pctRetour || 0),
+      ...overrides
     });
-  }, [onSimuler, colisParCollecte, colisAmanaParSac, courriersParSac, partParticuliers, tauxComplexite, natureGeo, edPercent, pctCollecte, pctRetour, pctInternational]);
+  }, [
+    onSimuler,
+    tauxComplexite,
+    natureGeo,
+    pctAxesArrivee,
+    pctAxesDepart,
+    pctNational,
+    pctMarcheOrdinaire,
+    pctInternational,
+    colisAmanaParCanvaSac,
+    nbrCoSac,
+    nbrCrSac,
+    productivite,
+    idleMinutes,
+    shift,
+    pctCollecte,
+    pctRetour
+  ]);
+
+  const handleSimulateAnnual = async (monthlyPcts) => {
+    if (!centre) {
+      toast.error("Veuillez sélectionner un centre");
+      return null;
+    }
+
+    // On utilise la même logique que handleSimulate mais dans une boucle
+    // Note: on utilise simulateBandoeng directement pour récupérer les résultats
+    const monthsData = [];
+    try {
+      for (let i = 0; i < 12; i++) {
+        const pct = monthlyPcts[i];
+
+        const payload = {
+          centre_id: centre,
+          poste_code: null, // Force full center simulation for seasonality (ignores page filter)
+          grid_values: JSON.parse(JSON.stringify(gridValues)),
+          parameters: {
+            taux_complexite: Number(tauxComplexite || 1),
+            nature_geo: Number(natureGeo || 1),
+            pct_axes_arrivee: Number(pctAxesArrivee || 0),
+            pct_axes_depart: Number(pctAxesDepart || 0),
+            pct_national: Number(pctNational || 100),
+            pct_marche_ordinaire: Number(pctMarcheOrdinaire || 0),
+            pct_international: Number(pctInternational || 0),
+            colis_amana_par_canva_sac: Number(colisAmanaParCanvaSac || 35),
+            nbr_co_sac: Number(nbrCoSac || 350),
+            nbr_cr_sac: Number(nbrCrSac || 400),
+            productivite: Number(productivite ?? 100),
+            idle_minutes: Number(idleMinutes || 0),
+            shift: Number(shift || 1),
+            pct_collecte: Number(pctCollecte || 0),
+            pct_retour: Number(pctRetour || 0),
+            ed_percent: Number(edPercent || 0),
+            pct_mois: pct // Passé au backend pour calcul (Vol * pct/100) / 22
+          }
+        };
+
+        const data = await api.simulateBandoengDirect(payload);
+        monthsData.push({
+          month: i,
+          totalEtp: data.total_ressources_humaines,
+          intervenants: data.ressources_par_poste || {}
+        });
+      }
+      return { months: monthsData };
+    } catch (error) {
+      console.error("Simulation annuelle error:", error);
+      return null;
+    }
+  };
+
+  const handleExportExcel = () => {
+    if (!mergedResults || mergedResults.length === 0) return;
+
+    const data = mergedResults.map(r => ({
+      "Tâche": r.task,
+      "Produit": r.produit,
+      "Unit. (/jour)": Number(r.nombre_Unite?.toFixed(2)),
+      "Unité": r.unite_mesure,
+      "Moy (min)": Number(r.moyenne_min?.toFixed(2)),
+      "Heures": Number(r.heures?.toFixed(4)),
+      "Formule": r.formule
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Résultats Simulation");
+    const safeCentre = (centre || "Bandoeng").replace(/[^a-z0-9]/gi, '_');
+    XLSX.writeFile(wb, `Simulation_Bandoeng_${safeCentre}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
 
   // ---------------------------------------------------------------------------
   // 🆕 ADAPTERS POUR COMPOSANTS UNIFIÉS (BandoengParameters / BandoengGrid)
@@ -1235,7 +1404,35 @@ export default function VueIntervenant({
           setPctInternational={handlePctInternationalChange}
           pctNational={pctNational}
           setPctNational={handlePctNationalChange}
+          edPercent={edPercent}
+          setEdPercent={setEdPercent}
         />
+
+        {/* Module de Saisonnalité en Dialogue */}
+        <div className="mt-4">
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button
+                variant="outline"
+                className="w-full h-12 border-dashed border-slate-300 hover:border-[#005EA8] hover:bg-blue-50/50 group transition-all"
+              >
+                <CalendarDays className="w-5 h-5 mr-3 text-slate-400 group-hover:text-[#005EA8]" />
+                <div className="text-left">
+                  <div className="text-sm font-bold text-slate-700">Analyse de Saisonnalité</div>
+                  <div className="text-[10px] text-slate-400 font-medium">Visualiser la distribution mensuelle et l'évolution des effectifs</div>
+                </div>
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-[95vw] lg:max-w-6xl max-h-[95vh] h-fit p-0 overflow-hidden border-none shadow-2xl">
+              <SeasonalityModule
+                onSimulateAnnual={handleSimulateAnnual}
+                loading={loading.simulation}
+                intervenants={postesOptions.map(p => ({ id: p.id, label: p.label || p.name }))}
+                className="border-none shadow-none"
+              />
+            </DialogContent>
+          </Dialog>
+        </div>
 
         {/* Référentiel & résultats - Masquable */}
         {showDetails && (
@@ -1420,7 +1617,18 @@ export default function VueIntervenant({
                 ) : (
                   <EnterpriseTable
                     title="Résultats de Simulation"
-                    subtitle="Données calculées"
+                    subtitle={
+                      <div className="flex items-center gap-3">
+                        <span>Données calculées</span>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleExportExcel(); }}
+                          className="h-5 px-1.5 text-[9px] font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/50 rounded flex items-center gap-1 transition-colors"
+                          title="Exporter en Excel"
+                        >
+                          <Download className="w-2.5 h-2.5" /> Exporter Excel
+                        </button>
+                      </div>
+                    }
                     tooltip="Volumes × temps → heures nécessaires"
                     icon={CheckCircle2}
                     columns={[
@@ -1518,14 +1726,16 @@ export default function VueIntervenant({
                 emphasize
                 total={Math.round(kpiData.actualTotal)}
               >
-                <EffectifFooter
-                  totalLabel="Statutaire"
-                  totalValue={Math.round(kpiData.actualStatutaire)}
-                  modValue={Math.round(kpiData.actualMOD)}
-                  moiValue={Math.round(kpiData.actualMOI)}
-                  apsLabel="APS"
-                  apsValue={Math.round(kpiData.actualAPS)}
-                />
+                {(!poste || poste === "") && (
+                  <EffectifFooter
+                    totalLabel="Statutaire"
+                    totalValue={Math.round(kpiData.actualStatutaire)}
+                    modValue={Math.round(kpiData.actualMOD)}
+                    moiValue={Math.round(kpiData.actualMOI)}
+                    apsLabel="APS"
+                    apsValue={Math.round(kpiData.actualAPS)}
+                  />
+                )}
               </KPICardGlass>
 
               {/* ETP Calculé */}
@@ -1536,10 +1746,12 @@ export default function VueIntervenant({
                 emphasize
                 total={formatSmallNumber(kpiData.totalCalculated)}
               >
-                <EffectifFooter
-                  modValue={formatSmallNumber(kpiData.targetCalculatedMOD)}
-                  moiValue={formatSmallNumber(kpiData.targetCalculatedMOI)}
-                />
+                {(!poste || poste === "") && (
+                  <EffectifFooter
+                    modValue={formatSmallNumber(kpiData.targetCalculatedMOD)}
+                    moiValue={formatSmallNumber(kpiData.targetCalculatedMOI)}
+                  />
+                )}
               </KPICardGlass>
 
               {/* ETP Final */}
@@ -1550,32 +1762,36 @@ export default function VueIntervenant({
                 emphasize
                 total={Math.round(kpiData.totalFinal)}
               >
-                <EffectifFooter
-                  totalLabel="Statutaire"
-                  totalValue={Math.round(kpiData.actualStatutaire)}
-                  modValue={kpiData.targetFinalMOD}
-                  moiValue={formatSmallNumber(kpiData.targetFinalMOI)}
-                  apsLabel="APS"
-                  apsValue={Math.round(kpiData.apsCalculeDisplay)}
-                />
+                {(!poste || poste === "") && (
+                  <EffectifFooter
+                    totalLabel="Statutaire"
+                    totalValue={Math.round(kpiData.actualStatutaire)}
+                    modValue={kpiData.targetFinalMOD}
+                    moiValue={formatSmallNumber(kpiData.targetFinalMOI)}
+                    apsLabel="APS"
+                    apsValue={Math.round(kpiData.apsCalculeDisplay)}
+                  />
+                )}
               </KPICardGlass>
 
               {/* Besoin */}
               <KPICardGlass
                 label="Besoin"
                 icon={kpiData.valToDisplay > 0 ? TrendingUp : CheckCircle2}
-                tone={kpiData.valToDisplay > 0 ? "rose" : "emerald"}
+                tone={kpiData.tone}
                 emphasize
-                total={kpiData.valToDisplay > 0 ? `+${Math.round(kpiData.valToDisplay)}` : "0"}
+                total={kpiData.totalDisplay}
               >
-                <EffectifFooter
-                  totalLabel="Ecart Statutaire"
-                  totalValue={formatSigned(Math.round(kpiData.diffStatutaire))}
-                  modValue={formatSigned(kpiData.diffMOD)}
-                  moiValue={formatSigned(kpiData.diffMOI)}
-                  apsLabel="Var. APS"
-                  apsValue={formatSigned(Math.round(kpiData.apsDelta))}
-                />
+                {(!poste || poste === "") && (
+                  <EffectifFooter
+                    totalLabel="Ecart Statutaire"
+                    totalValue={formatSigned(Math.round(kpiData.diffStatutaire))}
+                    modValue={formatSigned(kpiData.diffMOD)}
+                    moiValue={formatSigned(kpiData.diffMOI)}
+                    apsLabel="Var. APS"
+                    apsValue={formatSigned(Math.round(kpiData.apsDelta))}
+                  />
+                )}
               </KPICardGlass>
             </div>
           </div>
@@ -1612,20 +1828,78 @@ export default function VueIntervenant({
                 </DialogHeader>
                 <div className="flex-1 w-full min-h-0 relative bg-slate-50/30">
                   <OrganizationalChart
-                    chefCentre={{
-                      name: (postesOptions || []).find(p => (p.label || "").toUpperCase().includes("CHEF"))?.label || "Chef de Centre",
-                      effectif: 1
-                    }}
-                    moiStaff={(postesOptions || []).filter(p => isMoiPoste(p) && !(p.label || "").toUpperCase().includes("CHEF")).map(p => ({
-                      name: p.label || p.nom_poste,
-                      effectif: Math.round(Number(p.effectif_actuel || 0)),
-                      type: p.type_poste
-                    }))}
-                    modStaff={(postesOptions || []).filter(p => !isMoiPoste(p)).map(p => ({
-                      name: p.label || p.nom_poste,
-                      effectif: Math.round((Number(p.effectif_actuel || 0) / (totalEffectifCentreStats.mod || 1)) * kpiData.targetFinalMOD), // Distribute calculated MOD
-                      heures: 0 // Placeholder
-                    })).filter(s => s.effectif > 0)}
+                    chefCentre={(() => {
+                      const chef = (postesOptions || []).find(p => (p.label || "").toUpperCase().includes("CHEF"))?.label || "Chef de Centre";
+                      return { name: chef, effectif: 1 };
+                    })()}
+                    moiStaff={(() => {
+                      return (postesOptions || []).filter(p => isMoiPoste(p) && !(p.label || "").toUpperCase().includes("CHEF")).map(p => ({
+                        name: p.label || p.nom_poste,
+                        effectif: Math.round(Number(p.effectif_actuel || 0)),
+                        type: p.type_poste,
+                        category: getCategory(p)
+                      }));
+                    })()}
+                    modStaff={(() => {
+                      // 🟢 LOGIQUE BANDOENG STRICTE : Basée sur les tâches simulées
+                      if (!resultats || !Array.isArray(resultats)) return [];
+
+                      const modMap = new Map();
+                      const totalHeures = (totaux?.total_heures) || 1;
+                      const targetMOD = (totaux?.fte_calcule) || kpiData.targetFinalMOD || 0;
+
+                      resultats.forEach(task => {
+                        // On cherche le responsable (Nom du poste)
+                        // Priorité : responsable (back) > nom_poste (api)
+                        const responsable = (task.responsable || task.nom_poste || "").trim();
+
+                        // Filtres Bandoeng
+                        if (!responsable || responsable === "0" || responsable === "." || responsable.toUpperCase().includes("NON DÉFINI")) return;
+
+                        // Exclure Chef et MOI (déjà traités)
+                        if (responsable.toUpperCase().includes("CHEF") || responsable.toUpperCase().includes("DIRECTEUR") || responsable.toUpperCase().includes("RESPONSABLE DE CENTRE")) return;
+
+                        // Check if MOI based on postesOptions
+                        const isMoi = (postesOptions || []).some(p => (p.label === responsable || p.nom_poste === responsable) && isMoiPoste(p));
+                        if (isMoi) return;
+
+                        if (!modMap.has(responsable)) {
+                          // Retrouver le poste pour la catégorie
+                          const posteOrigine = (postesOptions || []).find(p => (p.label || p.nom_poste || "").trim().toUpperCase() === responsable.toUpperCase());
+
+                          modMap.set(responsable, {
+                            name: responsable,
+                            heures: 0,
+                            category: posteOrigine ? getCategory(posteOrigine) : "AUTRES"
+                          });
+                        }
+
+                        const entry = modMap.get(responsable);
+                        // resultats (api.js) : heures via 'heures' (mapped from heures_calculees)
+                        entry.heures += (task.heures || 0);
+                      });
+
+                      // Calcul final ETP
+                      const staff = Array.from(modMap.values())
+                        .filter(s => s.heures > 0)
+                        .map(s => {
+                          // Règle de 3 sur l'objectif MOD (Bandoeng Logic)
+                          // Effectif = (Heures Tache / Total Heures) * ETP Cible
+                          const part = totalHeures > 0 ? (s.heures / totalHeures) * targetMOD : 0;
+                          const roundedPart = Math.round(part);
+                          const isSmall = roundedPart === 0 && s.heures > 0;
+
+                          return {
+                            ...s,
+                            effectif: Math.round(part * 100) / 100, // Numeric for correct summation (2 decimals)
+                            displayEffectif: String(Math.round(part)) // Always integer (0 if <0.5)
+                          };
+                        });
+
+                      console.log("DEBUG ORG - MOD Staff Bandoeng Style:", staff);
+                      return staff;
+                    })()}
+
                   />
                 </div>
               </DialogContent>

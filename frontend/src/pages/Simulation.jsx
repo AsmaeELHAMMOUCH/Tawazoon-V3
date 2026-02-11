@@ -35,6 +35,7 @@ import { createColumnHelper } from "@tanstack/react-table";
 import FluxNavbar from "@/components/FluxNavbar";
 import ReactECharts from "echarts-for-react";
 import useEchartAutoResize from "@/components/hooks/useEchartAutoResize";
+import toast, { Toaster } from 'react-hot-toast';
 
 import HeaderSimulation from "@/layout/HeaderSimulation";
 import VueIntervenant from "@/components/views/VueIntervenant";
@@ -1491,15 +1492,16 @@ export default function SimulationEffectifs() {
 
   // 🆕 Helper: Handle Import Bandoeng
   const handleImportBandoeng = useCallback(async (file) => {
+    const toastId = toast.loading("Importation en cours...");
     try {
       const data = await importBandoengVolumes(file);
       if (data) {
         setBandoengGridValues(data);
-        // alert("Données Bandoeng importées avec succès !");
+        toast.success("Volumes importés avec succès", { id: toastId });
       }
     } catch (e) {
       console.error("Import Error:", e);
-      alert("Erreur lors de l'import : " + e.message);
+      toast.error("Erreur lors de l'import : " + e.message, { id: toastId });
     }
   }, [setBandoengGridValues]);
 
@@ -2266,23 +2268,23 @@ export default function SimulationEffectifs() {
         poste_code: posteCode, // Optional
         grid_values: bandoengGridValues, // Directly from State
         parameters: {
-          taux_complexite: Number(tauxComplexite || 1),
-          nature_geo: Number(natureGeo || 1),
-          pct_axes_arrivee: Number(pctAxesArrivee || 0),
-          pct_axes_depart: Number(pctAxesDepart || 0),
-          pct_national: Number(pctNational || 100),
-          pct_marche_ordinaire: Number(pctMarcheOrdinaire || 0),
-          pct_international: Number(pctInternational || 0),
+          taux_complexite: Number(overrides.taux_complexite ?? tauxComplexite ?? 1),
+          nature_geo: Number(overrides.nature_geo ?? natureGeo ?? 1),
+          pct_axes_arrivee: Number(overrides.pct_axes_arrivee ?? pctAxesArrivee ?? 0),
+          pct_axes_depart: Number(overrides.pct_axes_depart ?? pctAxesDepart ?? 0),
+          pct_national: Number(overrides.pct_national ?? pctNational ?? 100),
+          pct_marche_ordinaire: Number(overrides.pct_marche_ordinaire ?? pctMarcheOrdinaire ?? 0),
+          pct_international: Number(overrides.pct_international ?? pctInternational ?? 0),
           // Bandoeng Specifics
           pct_sac: 60.0, // Fixed default for now as per legacy? Or add state?
-          colis_amana_par_canva_sac: Number(colisAmanaParSac || 35),
-          nbr_co_sac: Number(nbrCoSac || 350),
-          nbr_cr_sac: Number(nbrCrSac || 400),
-          productivite: Number(productivite),
-          idle_minutes: Number(idleMinutes || 0),
-          shift: Number(shift || 1),
-          pct_collecte: Number(pctCollecte || 0),
-          pct_retour: Number(pctRetour || 0)
+          colis_amana_par_canva_sac: Number(overrides.colis_amana_par_canva_sac ?? colisAmanaParSac ?? 35),
+          nbr_co_sac: Number(overrides.nbr_co_sac ?? nbrCoSac ?? 350),
+          nbr_cr_sac: Number(overrides.nbr_cr_sac ?? nbrCrSac ?? 400),
+          productivite: Number(overrides.productivite ?? productivite),
+          idle_minutes: Number(overrides.idle_minutes ?? idleMinutes ?? 0),
+          shift: Number((overrides.shift ?? shift) || 1),
+          pct_collecte: Number(overrides.pct_collecte ?? pctCollecte ?? 0),
+          pct_retour: Number(overrides.pct_retour ?? pctRetour ?? 0)
         }
       };
 
@@ -3295,6 +3297,7 @@ export default function SimulationEffectifs() {
           Rapport généré automatiquement — {new Date().toLocaleString()}
         </div>
       </div>
+      <Toaster position="top-right" />
     </main>
   );
 }

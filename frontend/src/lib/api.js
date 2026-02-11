@@ -139,6 +139,7 @@ function normalizePostes(payload) {
     centre_poste_id: p.centre_poste_id ?? null,
     effectif_actuel: Number(p.effectif_actuel ?? p.effectif ?? 0),
     type_poste: p.type_poste ?? null,
+    category: p.category ?? p.categorie ?? null, // ✅ Capture category
   }));
 }
 
@@ -162,6 +163,7 @@ function normalizeTaches(payload) {
       produit: t.produit ?? "",
       base_calcul: t.base_calcul ?? null,
       nom_poste: t.nom_poste ?? t.poste_label ?? null, // ✅ Ajout du nom du poste
+      responsable: t.responsable ?? null, // ✅ Ajout responsable (Bandoeng logic)
       type_poste: t.type_poste ?? null, // ✅ Type de poste
       unit: cleanUnit, // ✅ Unité nettoyée
       avg_sec: t.avg_sec ?? (t.moyenne_min ? t.moyenne_min * 60 : 0),
@@ -617,7 +619,7 @@ export const api = {
     const headers = {};
     if (t) headers.Authorization = `Bearer ${t}`;
 
-    const res = await fetch(`${API_BASE}/bandoeng/import-template`, {
+    const res = await fetch(`${API_BASE}/export/bandoeng/template`, {
       method: "GET",
       headers
     });
