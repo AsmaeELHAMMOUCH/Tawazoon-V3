@@ -95,6 +95,33 @@ const getEffectifResult = (value) => {
     return found || rules[rules.length - 1];
 }
 
+// Aligne la récupération des volumes avec VueCentre/VueIntervenant : si une grille (volumesFluxGrid) est fournie,
+// on dérive les volumes annuels directement depuis cette grille, sinon on retombe sur les valeurs passées.
+const deriveVolumesFromGrid = (gridValues, fallback = {}) => {
+    if (!Array.isArray(gridValues) || gridValues.length === 0) return null;
+
+    const getSum = (tag) => {
+        const sum = gridValues
+            .filter((row) => {
+                const f = (row.flux || row.code || row.type || '').toLowerCase();
+                if (tag === 'ebarkia') return f === 'ebarkia' || f === 'eb';
+                return f === tag;
+            })
+            .reduce((acc, cur) => acc + (Number(cur.volume) || 0), 0);
+        return sum > 0 ? sum : null;
+    };
+
+    return {
+        cOrd: getSum('co') ?? fallback.cOrd ?? 0,
+        cReco: getSum('cr') ?? fallback.cReco ?? 0,
+        amana: getSum('amana') ?? fallback.amana ?? 0,
+        eBarkia: getSum('ebarkia') ?? fallback.eBarkia ?? 0,
+        lrh: getSum('lrh') ?? fallback.lrh ?? 0,
+        sacs: fallback.sacs ?? 0,
+        colis: fallback.colis ?? 0,
+    };
+};
+
 
 const BLOCKS = [
     {
@@ -145,7 +172,17 @@ export default function CategorisationCentre() {
     const navigate = useNavigate();
     const location = useLocation();
 
-    const { simulationData, centreInfo: navCentreInfo, volumes } = location.state || {};
+    const locationState = location.state || {};
+    const { simulationData, centreInfo: navCentreInfo, volumes } = locationState;
+
+    // Volumes pré-calculés envoyés depuis VueIntervenant / VueCentre (privilégiés)
+    const derivedNavVolumes = useMemo(() => {
+        if (locationState?.gridValues?.length) {
+            return deriveVolumesFromGrid(locationState.gridValues, locationState.volumes);
+        }
+        if (locationState?.volumes) return locationState.volumes;
+        return null;
+    }, [locationState]);
     const [fetchedCentreInfo, setFetchedCentreInfo] = useState(null);
 
     // On privilégie les données fraîches si disponibles
@@ -187,15 +224,33 @@ export default function CategorisationCentre() {
     });
 
     // Inputs Bloc 2 (Volumes) - Pre-filled from Vue Centre navigation state
-    const [volumeInputs, setVolumeInputs] = useState({
-        cOrd: volumes?.cOrd || 0,
-        cReco: volumes?.cReco || 0,
-        amana: volumes?.amana || 0,
-        eBarkia: volumes?.eBarkia || 0,
-        lrh: volumes?.lrh || 0,
-        sacs: volumes?.sacs || 0,
-        colis: volumes?.colis || 0,
+    const [volumeInputs, setVolumeInputs] = useState(() => {
+        const v = derivedNavVolumes || volumes || {};
+        return {
+            cOrd: v.cOrd || 0,
+            cReco: v.cReco || 0,
+            amana: v.amana || 0,
+            eBarkia: v.eBarkia || 0,
+            lrh: v.lrh || 0,
+            sacs: v.sacs || 0,
+            colis: v.colis || 0,
+        };
     });
+
+    // Sync dès que de nouvelles valeurs pré-calculées arrivent depuis la navigation
+    useEffect(() => {
+        if (derivedNavVolumes) {
+            setVolumeInputs({
+                cOrd: derivedNavVolumes.cOrd || 0,
+                cReco: derivedNavVolumes.cReco || 0,
+                amana: derivedNavVolumes.amana || 0,
+                eBarkia: derivedNavVolumes.eBarkia || 0,
+                lrh: derivedNavVolumes.lrh || 0,
+                sacs: derivedNavVolumes.sacs || 0,
+                colis: derivedNavVolumes.colis || 0,
+            });
+        }
+    }, [derivedNavVolumes]);
 
     // Inputs Bloc 3 (Territorial)
     const [territorialInputs, setTerritorialInputs] = useState({
@@ -225,9 +280,9 @@ export default function CategorisationCentre() {
     // Fetch categorisation data - either from navigation state or from API
     useEffect(() => {
         const fetchData = async () => {
-            // 1. Volumes - Priority to location.state, then DB
-            if (location.state?.volumes) {
-                const vols = location.state.volumes;
+            // 1. Volumes - priorité aux données envoyées par Intervenant/Centre (grille > volumes simples)
+            if (derivedNavVolumes) {
+                const vols = derivedNavVolumes;
                 setVolumeInputs({
                     cOrd: vols.cOrd || 0,
                     cReco: vols.cReco || 0,
@@ -255,8 +310,8 @@ export default function CategorisationCentre() {
             }
 
             // 2. Simulation Results
-            if (location.state?.simulationResults) {
-                const simData = location.state.simulationResults;
+            if (locationState?.simulationResults) {
+                const simData = locationState.simulationResults;
                 console.log("✅ Simulation data received from navigation:", simData);
 
                 setSimResults({
@@ -307,7 +362,7 @@ export default function CategorisationCentre() {
         };
 
         fetchData();
-    }, [centreId, location.state]);
+    }, [centreId, locationState, derivedNavVolumes]);
 
     // Apple Rule: Distribution Finale
     useEffect(() => {

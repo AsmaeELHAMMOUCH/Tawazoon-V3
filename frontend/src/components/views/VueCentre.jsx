@@ -1,4 +1,4 @@
-﻿// VueCentre.jsx
+// VueCentre.jsx
 "use client";
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -850,7 +850,8 @@ export default function VueCentre({
       state: {
         simulationResults,
         centreInfo: enrichedCentreInfo,
-        volumes: currentVolumes
+        volumes: currentVolumes,
+        gridValues: volumesFluxGrid || []
       }
     });
   }, [centreId, calculateVolFromGrid, resultats, pctAxesArrivee, pctAxesDepart, centreObj, navigate]);
@@ -910,10 +911,36 @@ export default function VueCentre({
 
   const handleNavigateToCapaciteNominale = useCallback(() => {
     if (!centreId) return;
+    const centreLabelNav = centreObj?.label || centreObj?.name || resultats?.centre_label || "Centre";
+    const simulationResults = resultats ? {
+      postes: Array.isArray(resultats) ? resultats : (resultats.postes || []),
+      total_heures: totaux?.total_heures || resultats.total_heures || 0,
+      total_etp_calcule: totaux?.total_etp_calcule || resultats.total_etp_calcule || 0,
+      total_etp_arrondi: totaux?.total_etp_arrondi || resultats.total_etp_arrondi || 0,
+    } : null;
+    const currentVolumes = volumesFluxGrid || calculateVolFromGrid();
+    const simulationParams = {
+      joursOuvres: 264,
+      heuresNet: Number(heuresNet || 0),
+      productivite: Number(productivite || 100),
+      idleMinutes: Number(idleMinutes || 0),
+    };
+    const resultatsTasks = Array.isArray(resultats?.taches) ? resultats.taches : (Array.isArray(resultats?.tasks) ? resultats.tasks : []);
+    const postesOptions = Array.isArray(resultats?.postes) ? resultats.postes : [];
+
     navigate("/app/simulation/capacite_nominale", {
-      state: { centreId, centreLabel: centreObj?.label || centreObj?.name || "Centre" },
+      state: {
+        centreId,
+        centreLabel: centreLabelNav,
+        simulationResults,
+        volumes: currentVolumes,
+        simulationParams,
+        resultatsTasks,
+        postesOptions,
+        gridValues: volumesFluxGrid || currentVolumes,
+      },
     });
-  }, [centreId, centreObj, navigate]);
+  }, [centreId, centreObj, resultats, totaux, calculateVolFromGrid, volumesFluxGrid, heuresNet, productivite, idleMinutes, navigate]);
 
   const handleNavigateToComparatifs = useCallback(() => {
     if (!centreId) return;

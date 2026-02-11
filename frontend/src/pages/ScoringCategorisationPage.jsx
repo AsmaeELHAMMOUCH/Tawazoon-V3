@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect, useState, useMemo } from "react";
+import { useLocation } from "react-router-dom";
 import { api } from "@/lib/api";
 import { Calculator, Settings2 } from "lucide-react";
 
@@ -10,6 +11,7 @@ import CentreScoringDetailsDrawer from "@/components/scoring/CentreScoringDetail
 import CampaignBadge from "@/components/scoring/CampaignBadge";
 
 export default function ScoringCategorisationPage() {
+    const location = useLocation();
     const [data, setData] = useState([]);
     const [stats, setStats] = useState(null);
     const [scenarioId, setScenarioId] = useState("");
@@ -26,6 +28,17 @@ export default function ScoringCategorisationPage() {
     // Load Data
     useEffect(() => {
         (async () => {
+            // 1) Priorité : données envoyées par la page Intervenant / navigation state
+            const incoming = location.state?.scoring || location.state?.scoringData;
+            if (incoming) {
+                setData(incoming.results || []);
+                setStats(incoming.summary || {});
+                setScenarioId(incoming.scenario_id || `DRAFT-${Date.now()}`);
+                setLoading(false);
+                return;
+            }
+
+            // 2) Sinon, fallback API
             try {
                 setLoading(true);
                 const response = await api.scoring.run();
@@ -40,7 +53,7 @@ export default function ScoringCategorisationPage() {
                 setLoading(false);
             }
         })();
-    }, []);
+    }, [location.state]);
 
     // Filter Logic
     const filteredData = useMemo(() => {

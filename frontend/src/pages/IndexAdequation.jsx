@@ -41,6 +41,7 @@ export default function IndexAdequation() {
   const simulationResults = location.state?.simulationResults;
   const centreInfo = location.state?.centreInfo;
   const volumes = location.state?.volumes;
+  const simulationParams = location.state?.simulationParams;
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -308,10 +309,11 @@ export default function IndexAdequation() {
           <button
             onClick={() => navigate('/app/simulation/capacite_nominale', {
               state: {
-                centreId,
-                centreLabel,
                 simulationResults,
-                volumes
+                volumes,
+                simulationParams,
+                centreId,
+                centreLabel
               }
             })}
             className="w-full sm:w-auto p-4 rounded-xl border border-blue-200 bg-white hover:bg-blue-50 transition-all shadow-sm hover:shadow text-left flex items-center gap-4 group"
@@ -334,22 +336,26 @@ export default function IndexAdequation() {
       </div>
 
       {/* Modals */}
-      {showIndiceModal && calculations && (
-        <IndiceModal
-          indices={calculations.indices}
-          onClose={() => setShowIndiceModal(false)}
-          getBadgeColor={getBadgeColor}
-        />
-      )}
+      {
+        showIndiceModal && calculations && (
+          <IndiceModal
+            indices={calculations.indices}
+            onClose={() => setShowIndiceModal(false)}
+            getBadgeColor={getBadgeColor}
+          />
+        )
+      }
 
-      {showChartModal && data?.positions && (
-        <ChartModal
-          type={showChartModal}
-          positions={data.positions}
-          onClose={() => setShowChartModal(null)}
-        />
-      )}
-    </div>
+      {
+        showChartModal && data?.positions && (
+          <ChartModal
+            type={showChartModal}
+            positions={data.positions}
+            onClose={() => setShowChartModal(null)}
+          />
+        )
+      }
+    </div >
   );
 }
 

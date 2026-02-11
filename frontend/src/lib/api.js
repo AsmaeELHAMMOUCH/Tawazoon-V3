@@ -137,7 +137,22 @@ function normalizePostes(payload) {
     code: p.code ?? p.Code ?? null,
     centre_id: p.centre_id ?? null,
     centre_poste_id: p.centre_poste_id ?? null,
-    effectif_actuel: Number(p.effectif_actuel ?? p.effectif ?? 0),
+    effectif_actuel: Number(
+      p.effectif_actuel ??
+      p.effectif_Actuel ??      // casse différente renvoyée par certains backends
+      p.effectifActuel ??       // camelCase
+      p.effectifStatutaire ??   // parfois nommé ainsi
+      p.effectif_statutaire ??
+      p.effectif_total ??
+      p.effectif ??
+      p.etp_actuel ??
+      p.etpActuel ??
+      p.fte_actuel ??
+      p.fteActuel ??
+      p.etp ??
+      p.fte ??
+      0
+    ),
     type_poste: p.type_poste ?? null,
   }));
 }

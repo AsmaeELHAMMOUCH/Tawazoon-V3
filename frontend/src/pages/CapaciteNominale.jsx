@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
     ArrowLeft,
@@ -15,6 +15,9 @@ import {
     Tooltip,
     Legend,
 } from "chart.js";
+import api from "../lib/api";
+import CapaciteNominaleTable from "../components/tables/CapaciteNominaleTable";
+import { computeCapaciteNominalePositions } from "../utils/capaciteNominale";
 
 // Register ChartJS components
 ChartJS.register(
@@ -31,43 +34,149 @@ export default function CapaciteNominale() {
     const navigate = useNavigate();
     const centreLabel = location.state?.centreLabel || "Centre non sélectionné";
     const centreId = location.state?.centreId;
+    const resultatsTasks = location.state?.resultatsTasks || [];
 
     // Récupérer les données passées via le state (comme IndexAdequation)
     const simulationResults = location.state?.simulationResults;
     const volumes = location.state?.volumes;
+    const simulationParams = location.state?.simulationParams;
+
+    const calculateTaskVolume = (task, globalVolumes, params) => {
+        if (!task || !globalVolumes) return 0;
+
+        const {
+            colisAmanaParSac = 5, courriersParSac = 4500, colisParCollecte = 1,
+            edPercent = 60, joursOuvres = 264
+        } = params || {};
+
+        const uRaw = String(task.unit || task.unite || "").trim().toLowerCase();
+        const typeFlux = String(task.type_flux || "").toLowerCase();
+        const nom = String(task.task || task.nom_tache || "").toLowerCase();
+
+        // Volumes Annuels
+        const annualCO = Number(globalVolumes.cOrd || 0);
+        const annualCR = Number(globalVolumes.cReco || 0);
+        const annualEB = Number(globalVolumes.eBarkia || 0);
+        const annualLRH = Number(globalVolumes.lrh || 0);
+        const annualAmana = Number(globalVolumes.amana || 0);
+
+        // Volumes Journaliers
+        const dailyColis = Number(globalVolumes.colis || 0);
+        const dailySacs = Number(globalVolumes.sacs || 0);
+
+        const dailyAmanaColis = annualAmana / joursOuvres;
+        const dailyAmanaSacs = dailyAmanaColis / colisAmanaParSac;
+
+        // 1. Collecte Colis
+        if (nom.includes("collecte") && nom.includes("colis")) {
+            if (dailyColis <= 0) return 0;
+            const ratio = Math.max(1, Number(task.colis_par_collecte || colisParCollecte || 1));
+            return dailyColis / ratio;
+        }
+
+        // 2. Colis / Amana
+        if (uRaw.includes("colis") || uRaw === "amana") {
+            if (dailyAmanaColis > 0 && (nom.includes("amana") || typeFlux === "amana")) return dailyAmanaColis;
+            return dailyColis;
+        }
+
+        // 3. Sacs
+        if (uRaw.includes("sac")) {
+            const isAmana = nom.includes("amana") || typeFlux === "amana" || uRaw.includes("amana");
+            if (isAmana) return dailyAmanaSacs;
+
+            if (uRaw.includes("courrier")) {
+                let vol = 0;
+                if (typeFlux.includes("ordinaire")) vol = annualCO;
+                else if (typeFlux.includes("recommande")) vol = annualCR;
+                else if (typeFlux.includes("ebarkia")) vol = annualEB;
+                else if (typeFlux.includes("lrh")) vol = annualLRH;
+                else vol = annualCO + annualCR + annualEB + annualLRH;
+
+                return vol / joursOuvres / courriersParSac;
+            }
+
+            if (dailySacs > 0) return dailySacs;
+
+            const tauxSac = edPercent / 100;
+            return (dailyColis * tauxSac) / colisAmanaParSac;
+        }
+
+        // 4. Courrier
+        if (uRaw.includes("courrier") || uRaw.includes("lettre") || uRaw.includes("pli") || typeFlux.includes("ordinaire") || typeFlux.includes("recommande")) {
+            let vol = 0;
+            if (typeFlux.includes("ordinaire")) vol = annualCO;
+            else if (typeFlux.includes("recommande")) vol = annualCR;
+            else if (typeFlux.includes("ebarkia")) vol = annualEB;
+            else if (typeFlux.includes("lrh")) vol = annualLRH;
+            else vol = annualCO + annualCR;
+
+            return vol / joursOuvres;
+        }
+
+        return 0;
+    };
 
     const [data, setData] = useState(null);
     const [showChartModal, setShowChartModal] = useState(null); // 'mois', 'jour', 'heure'
+    const [filterProduit, setFilterProduit] = useState(""); // (gardé si besoin pour modales)
 
-    // Process data similar to IndexAdequation but focused on volumes
+    // Normalisation effectif (même logique que VueIntervenant)
+    const getEff = (p) => Number(
+        p?.effectif_actuel ??
+        p?.effectif_Actuel ??
+        p?.effectifActuel ??
+        p?.effectif_statutaire ??
+        p?.effectifStatutaire ??
+        p?.effectif_total ??
+        p?.effectif ??
+        p?.etp_actuel ??
+        p?.etpActuel ??
+        p?.fte_actuel ??
+        p?.fteActuel ??
+        p?.etp ??
+        p?.fte ??
+        p?.actuel ??
+        p?.eff_actuel ??
+        p?.eff ??
+        0
+    );
+
+    const gridValuesState = location.state?.gridValues || volumes || {};
+    const postesOptionsState = location.state?.postesOptions || simulationResults?.postes || [];
+    const resultatsTasksState = location.state?.resultatsTasks || resultatsTasks || [];
+    const simulationParamsState = location.state?.simulationParams || simulationParams || {};
+
+    const positionsFromState = location.state?.positions;
+
+    const positionsMemo = useMemo(() => {
+        if (Array.isArray(positionsFromState) && positionsFromState.length) {
+            return positionsFromState;
+        }
+        const hasSim = !!(postesOptionsState && postesOptionsState.length);
+        return computeCapaciteNominalePositions({
+            hasSimulated: hasSim,
+            postesOptions: postesOptionsState,
+            poste: null,
+            idleMinutes: simulationParamsState?.idleMinutes ?? 0,
+            productivite: simulationParamsState?.productivite ?? 100,
+            mergedResults: resultatsTasksState,
+            backendResults: resultatsTasksState,
+            gridValues: gridValuesState,
+            getGroupeProduit: (p) => p || "AUTRE",
+            getEff,
+            heuresNet: simulationParamsState?.heuresNet ?? 0,
+        });
+    }, [positionsFromState, postesOptionsState, resultatsTasksState, gridValuesState, simulationParamsState]);
+
     useEffect(() => {
-        if (simulationResults?.postes && Array.isArray(simulationResults.postes)) {
-            const positions = simulationResults.postes.map((poste) => {
-                // VOLUMES PAR POSTE (Page Intervenant)
-                // On récupère les volumes spécifiques calculés pour ce poste
-                const dossiers_mois = volumes?.[poste.poste_id]?.mensuel || 0;
-                const dossiers_par_jour = volumes?.[poste.poste_id]?.journalier || 0;
-                const volume_heure = volumes?.[poste.poste_id]?.horaire || 0;
-
-                return {
-                    poste: poste.poste_label || poste.label || `Poste ${poste.poste_id}`,
-                    dossiers_mois,
-                    dossiers_par_jour,
-                    volume_activites_par_heure_total: volume_heure,
-
-                    // Effectifs
-                    effectif_actuel: poste.effectif_actuel || poste.actuel || 0,
-                    effectif_calcule: poste.effectif_calcule || poste.calcule || 0,
-                    effectif_recommande: poste.effectif_recommande || poste.recommande || 0,
-                };
-            });
-
+        if (positionsMemo && positionsMemo.length > 0) {
             setData({
                 centre_label: centreLabel,
-                positions,
+                positions: positionsMemo,
             });
         }
-    }, [simulationResults, volumes, centreLabel]);
+    }, [positionsMemo, centreLabel]);
 
     // Si pas de données, afficher un message
     if (!data && !location.state) {
@@ -86,187 +195,83 @@ export default function CapaciteNominale() {
     }
 
     return (
-        <div className="min-h-screen bg-slate-50/50 p-6 font-sans">
-            <div className="max-w-7xl mx-auto space-y-6">
+        <div className="min-h-screen bg-slate-50/50 p-4 font-sans">
+            <div className="max-w-7xl mx-auto space-y-4">
                 {/* Header */}
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+                        <h1 className="text-xl font-bold text-slate-900 tracking-tight">
                             Capacité Nominale
                         </h1>
-                        <p className="text-slate-500 text-sm mt-1">
+                        <p className="text-slate-500 text-xs mt-0.5">
                             Analyse des volumes : {centreLabel}
                         </p>
                     </div>
                     <button
                         onClick={() => navigate(-1)}
-                        className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
                     >
-                        <ArrowLeft className="w-4 h-4" />
+                        <ArrowLeft className="w-3.5 h-3.5" />
                         Retour
                     </button>
                 </div>
 
                 {/* Content: The Chart Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <button
                         onClick={() => setShowChartModal("mois")}
-                        className="p-6 rounded-xl border border-blue-200 bg-white hover:bg-blue-50 transition-all shadow-sm hover:shadow-md text-left flex flex-col items-center justify-center gap-4 h-48"
+                        className="p-4 rounded-lg border border-blue-200 bg-white hover:bg-blue-50 transition-all shadow-sm hover:shadow-md text-left flex flex-col items-center justify-center gap-2 h-28"
                     >
-                        <div className="p-3 rounded-full bg-blue-100 text-blue-600">
-                            <BarChart3 className="w-8 h-8" />
+                        <div className="p-2 rounded-full bg-blue-100 text-blue-600">
+                            <BarChart3 className="w-5 h-5" />
                         </div>
                         <div className="text-center">
-                            <h3 className="font-bold text-lg text-slate-800">Volume Moyen / Mois</h3>
-                            <p className="text-sm text-slate-500 mt-1">Analyse Mensuelle</p>
+                            <h3 className="font-bold text-sm text-slate-800">Volume Moyen / Mois</h3>
+                            <p className="text-xs text-slate-500 mt-0.5">Analyse Mensuelle</p>
                         </div>
                     </button>
 
                     <button
                         onClick={() => setShowChartModal("jour")}
-                        className="p-6 rounded-xl border border-emerald-200 bg-white hover:bg-emerald-50 transition-all shadow-sm hover:shadow-md text-left flex flex-col items-center justify-center gap-4 h-48"
+                        className="p-4 rounded-lg border border-emerald-200 bg-white hover:bg-emerald-50 transition-all shadow-sm hover:shadow-md text-left flex flex-col items-center justify-center gap-2 h-28"
                     >
-                        <div className="p-3 rounded-full bg-emerald-100 text-emerald-600">
-                            <BarChart3 className="w-8 h-8" />
+                        <div className="p-2 rounded-full bg-emerald-100 text-emerald-600">
+                            <BarChart3 className="w-5 h-5" />
                         </div>
                         <div className="text-center">
-                            <h3 className="font-bold text-lg text-slate-800">Volume Moyen / Jour</h3>
-                            <p className="text-sm text-slate-500 mt-1">Analyse Journalière</p>
+                            <h3 className="font-bold text-sm text-slate-800">Volume Moyen / Jour</h3>
+                            <p className="text-xs text-slate-500 mt-0.5">Analyse Journalière</p>
                         </div>
                     </button>
 
                     <button
                         onClick={() => setShowChartModal("heure")}
-                        className="p-6 rounded-xl border border-amber-200 bg-white hover:bg-amber-50 transition-all shadow-sm hover:shadow-md text-left flex flex-col items-center justify-center gap-4 h-48"
+                        className="p-4 rounded-lg border border-amber-200 bg-white hover:bg-amber-50 transition-all shadow-sm hover:shadow-md text-left flex flex-col items-center justify-center gap-2 h-28"
                     >
-                        <div className="p-3 rounded-full bg-amber-100 text-amber-600">
-                            <BarChart3 className="w-8 h-8" />
+                        <div className="p-2 rounded-full bg-amber-100 text-amber-600">
+                            <BarChart3 className="w-5 h-5" />
                         </div>
                         <div className="text-center">
-                            <h3 className="font-bold text-lg text-slate-800">Volume Moyen / Heure</h3>
-                            <p className="text-sm text-slate-500 mt-1">Analyse Horaire</p>
+                            <h3 className="font-bold text-sm text-slate-800">Volume Moyen / Heure</h3>
+                            <p className="text-xs text-slate-500 mt-0.5">Analyse Horaire</p>
                         </div>
                     </button>
                 </div>
 
-                {/* Tableau Détaillé */}
-                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mb-6">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm text-left">
-                            <thead className="bg-slate-50 border-b border-slate-200">
-                                <tr>
-                                    <th className="px-4 py-3 font-semibold text-slate-700 border-r border-slate-200 w-32">Centre</th>
-                                    <th className="px-4 py-3 font-semibold text-slate-700 border-r border-slate-200 min-w-[150px]">Intervenant</th>
-                                    <th className="px-4 py-3 font-semibold text-slate-700 border-r border-slate-200 text-center w-20">Nature</th>
-                                    <th className="px-4 py-3 font-semibold text-red-700 bg-red-50/30 border-r border-slate-200 text-right w-28">Vol Mensuel</th>
-
-                                    {/* Groupe Jour */}
-                                    <th colSpan="4" className="px-2 py-2 font-bold text-center text-slate-800 bg-slate-100/50 border-r border-slate-200 border-b border-slate-200">
-                                        Volume Moyen / Jour
-                                    </th>
-
-                                    {/* Groupe Heure */}
-                                    <th colSpan="4" className="px-2 py-2 font-bold text-center text-slate-800 bg-slate-100/50 border-b border-slate-200">
-                                        Volume Moyen / Heure
-                                    </th>
-                                </tr>
-                                <tr className="text-xs bg-slate-50/50">
-                                    <th colSpan="4" className="border-r border-slate-200"></th>
-
-                                    {/* Sub-headers Jour */}
-                                    <th className="px-2 py-1.5 font-semibold text-red-600 text-center border-r border-slate-200 w-20">Actuel</th>
-                                    <th className="px-2 py-1.5 font-semibold text-red-600 text-center border-r border-slate-200 w-20">Calculé</th>
-                                    <th className="px-2 py-1.5 font-semibold text-red-600 text-center border-r border-slate-200 w-20">Recommandé</th>
-                                    <th className="px-2 py-1.5 font-semibold text-red-600 text-center border-r border-slate-200 w-20">Optimisé</th>
-
-                                    {/* Sub-headers Heure */}
-                                    <th className="px-2 py-1.5 font-semibold text-red-600 text-center border-r border-slate-200 w-20">Actuel</th>
-                                    <th className="px-2 py-1.5 font-semibold text-red-600 text-center border-r border-slate-200 w-20">Calculé</th>
-                                    <th className="px-2 py-1.5 font-semibold text-red-600 text-center border-r border-slate-200 w-20">Recommandé</th>
-                                    <th className="px-2 py-1.5 font-semibold text-red-600 text-center w-20">Optimisé</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                                {data?.positions?.map((pos, idx) => {
-                                    const label = (pos.poste || "").toUpperCase();
-                                    const isMOI = label.includes("CHEF") ||
-                                        label.includes("RESPONSABLE") ||
-                                        label.includes("ADJOINT") ||
-                                        label.includes("SUPPORT") ||
-                                        label.includes("RH") ||
-                                        label.includes("ASSISTANT") ||
-                                        label.includes("SECRETAIRE") ||
-                                        label.includes("ADMIN");
-                                    const nature = isMOI ? "MOI" : "MOD";
-
-                                    const volMois = pos.dossiers_mois || 0;
-                                    const volJour = pos.dossiers_par_jour || 0;
-                                    const volHeure = pos.volume_activites_par_heure_total || 0;
-
-                                    const effActuel = pos.effectif_actuel || 1;
-                                    const effCalc = pos.effectif_calcule || 1;
-                                    const effReco = pos.effectif_recommande || 1;
-
-                                    // Calcul Cadences (Volume / Effectif)
-                                    const calc = (v, e) => e > 0 ? Math.round(v / e) : 0;
-
-                                    const jAct = calc(volJour, effActuel);
-                                    const jCal = calc(volJour, effCalc);
-                                    const jRec = calc(volJour, effReco);
-                                    const jOpt = Math.round(jRec * 1.1);
-
-                                    const hAct = calc(volHeure, effActuel);
-                                    const hCal = calc(volHeure, effCalc);
-                                    const hRec = calc(volHeure, effReco);
-                                    const hOpt = Math.round(hRec * 1.1);
-
-                                    const fmt = (n) => n.toLocaleString('fr-FR');
-
-                                    return (
-                                        <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                                            <td className="px-4 py-2 font-medium text-slate-900 border-r border-slate-100 whitespace-nowrap">{data.centre_label}</td>
-                                            <td className="px-4 py-2 text-slate-700 border-r border-slate-100">{pos.poste}</td>
-                                            <td className="px-4 py-2 text-center text-slate-600 border-r border-slate-100">
-                                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${nature === 'MOD' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
-                                                    {nature}
-                                                </span>
-                                            </td>
-                                            <td className="px-4 py-2 text-right font-mono font-bold text-red-700 bg-red-50/10 border-r border-slate-100">
-                                                {fmt(volMois)}
-                                            </td>
-
-                                            <td className="px-2 py-2 text-center font-mono text-slate-600 border-r border-slate-100">{fmt(jAct)}</td>
-                                            <td className="px-2 py-2 text-center font-mono text-slate-600 border-r border-slate-100">{fmt(jCal)}</td>
-                                            <td className="px-2 py-2 text-center font-mono text-slate-600 border-r border-slate-100">{fmt(jRec)}</td>
-                                            <td className="px-2 py-2 text-center font-mono text-emerald-600 font-bold border-r border-slate-100">{fmt(jOpt)}</td>
-
-                                            <td className="px-2 py-2 text-center font-mono text-slate-600 border-r border-slate-100">{fmt(hAct)}</td>
-                                            <td className="px-2 py-2 text-center font-mono text-slate-600 border-r border-slate-100">{fmt(hCal)}</td>
-                                            <td className="px-2 py-2 text-center font-mono text-slate-600 border-r border-slate-100">{fmt(hRec)}</td>
-                                            <td className="px-2 py-2 text-center font-mono text-emerald-600 font-bold">{fmt(hOpt)}</td>
-                                        </tr>
-                                    );
-                                })}
-                                {/* Total Row */}
-                                <tr className="bg-slate-100 border-t-2 border-slate-300 font-bold text-slate-900">
-                                    <td colSpan="3" className="px-4 py-2 text-right uppercase text-xs tracking-wider">Total</td>
-                                    <td className="px-4 py-2 text-right font-mono border-r border-slate-300">
-                                        {(data?.positions?.reduce((acc, curr) => acc + (curr.dossiers_mois || 0), 0) || 0).toLocaleString('fr-FR')}
-                                    </td>
-                                    <td colSpan="8"></td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                {/* Modals */}
+                
                 {showChartModal && data?.positions && (
                     <ChartModal
                         type={showChartModal}
-                        positions={data.positions}
+                        positions={data.positions.filter(pos => !filterProduit || (pos.produit && pos.produit.includes(filterProduit)))}
                         onClose={() => setShowChartModal(null)}
                     />
+                )}
+
+                {/* Tableau CapacitÃ© Nominale (version commune) */}
+                {data?.positions && (
+                    <div className="mt-6">
+                        <CapaciteNominaleTable positions={data.positions} centreLabel={centreLabel} />
+                    </div>
                 )}
             </div>
         </div>
@@ -349,3 +354,7 @@ function ChartModal({ type, positions, onClose }) {
         </div>
     );
 }
+
+
+
+

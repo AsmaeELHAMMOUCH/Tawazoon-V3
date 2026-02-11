@@ -546,39 +546,62 @@ def export_centre_template(centre_id: int, db: Session = Depends(get_db)):
 
 @router.get("/export-template")
 def export_template(db: Session = Depends(get_db)):
-    """Génère un template Excel global"""
+    """Génère un template Excel global pour l'import en masse.
+    - Toutes les combinaisons Centre x Poste (même si aucune affectation n'existe encore)
+    - Colonnes : REGION, centre_label, POSTE, EFFECTIF_ACTUEL, APS
+    - EFFECTIF_ACTUEL pré-rempli avec la valeur existante si présente, sinon 0
+    - APS pré-rempli avec la valeur du centre (aps/t_aps) si présente, sinon 0
+    """
     try:
-        query = text("""
-            SELECT 
-                r.label as region,
-                c.label as centre_label,
-                p.label as poste,
-                COALESCE(cp.effectif_actuel, 0) as effectif_actuel
-            FROM dbo.centre_postes cp
-            JOIN dbo.centres c ON c.id = cp.centre_id
-            JOIN dbo.regions r ON r.id = c.region_id
-            JOIN dbo.postes p ON p.id = cp.poste_id
-            ORDER BY r.label, c.label, p.label
-        """)
-        rows = db.execute(query).mappings().all()
-        
-        df = pd.DataFrame([{
-            "REGION": r["region"],
-            "centre_label": r["centre_label"],
-            "POSTE": r["poste"],
-            "EFFECTIF_ACTUEL": r["effectif_actuel"]
-        } for r in rows])
-        
+        from sqlalchemy.orm import joinedload
+
+        centres = db.query(Centre).options(joinedload(Centre.region)).all()
+        postes = db.query(Poste).order_by(Poste.label).all()
+
+        existing = {
+            (cp.centre_id, cp.poste_id): cp.effectif_actuel or 0
+            for cp in db.query(CentrePoste).all()
+        }
+
+        data = []
+        for centre in centres:
+            region_label = centre.region.label if centre.region else ""
+            aps_val = centre.aps if centre.aps is not None else 0
+
+            for poste in postes:
+                eff = existing.get((centre.id, poste.id), 0)
+                data.append({
+                    "REGION": region_label,
+                    "centre_label": centre.label,
+                    "POSTE": poste.label,
+                    "EFFECTIF_ACTUEL": eff,
+                    "APS": aps_val
+                })
+
+        if not data:
+            data = [{
+                "REGION": "",
+                "centre_label": "",
+                "POSTE": "",
+                "EFFECTIF_ACTUEL": 0,
+                "APS": 0
+            }]
+
+        import pandas as pd, io
+        df = pd.DataFrame(data, columns=["REGION", "centre_label", "POSTE", "EFFECTIF_ACTUEL", "APS"])
+
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             df.to_excel(writer, index=False, sheet_name='Effectifs')
-        
+
         output.seek(0)
-        return StreamingResponse(output, headers={'Content-Disposition': 'attachment; filename="template_effectifs_global.xlsx"'}, media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        return StreamingResponse(
+            output,
+            headers={'Content-Disposition': 'attachment; filename="template_effectifs_global.xlsx"'},
+            media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-
 
 class ApsUpdate(BaseModel):
     aps: float

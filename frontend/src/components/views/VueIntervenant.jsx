@@ -1,4 +1,4 @@
-﻿/* VueIntervenant.jsx - normalisation /jour + productivité + formatage */
+/* VueIntervenant.jsx - normalisation /jour + productivit� + formatage */
 "use client";
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useDebouncedValue } from "../../hooks/useDebounce";
@@ -21,7 +21,7 @@ import {
   Calculator,
   TrendingUp,
   TrendingDown,
-  Users, // 🆕 Add Users
+  Users, // ?? Add Users
   Eye,
   EyeOff,
   Upload,
@@ -41,20 +41,22 @@ import VolumeParamsCard from "../intervenant/VolumeParamsCard";
 import VirtualizedResultsTable from "../VirtualizedResultsTable";
 import ResultHeroCardCompact from "../results/ResultHeroCardCompact";
 import EnterpriseTable from "../tables/EnterpriseTable";
-import OrganizationalChart from "@/components/centres_uniq/OrganizationalChart"; // 🆕 Import Organigramme
+import OrganizationalChart from "@/components/centres_uniq/OrganizationalChart"; // ?? Import Organigramme
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog"; // 🆕 Import Dialog
+} from "@/components/ui/dialog"; // ?? Import Dialog
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 import BandoengGrid from "@/components/centres_uniq/BandoengGrid";
 import BandoengAdditionalParams from "@/components/centres_uniq/BandoengAdditionalParams";
 import BandoengParameters from "@/components/centres_uniq/BandoengParameters";
+import CapaciteNominaleTable from "../tables/CapaciteNominaleTable";
+import { computeCapaciteNominalePositions } from "../../utils/capaciteNominale";
 
 
 /* ===================== KPI COMPONENTS (COPIED FROM VUECENTRE) ===================== */
@@ -96,10 +98,10 @@ const KPICardGlass = ({
         <div className="mt-1.5 border-t border-slate-100 pt-1">{children}</div>
       ) : ((MOD !== undefined || MOI !== undefined || extraValue !== undefined) && (
         <div className="flex justify-center gap-3 mt-0.5 text-[10px] font-medium text-slate-600">
-          {/* Tag Cas Spécial ajouté */}
+          {/* Tag Cas Sp�cial ajout� */}
           {casValue && (
             <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[9px] font-bold mr-2">
-              Cas Spécial : {casValue}
+              Cas Sp�cial : {casValue}
             </span>
           )}
           {MOD !== undefined && <div>{leftLabel}: {MOD}</div>}
@@ -200,17 +202,17 @@ export default function VueIntervenant({
   EmptyStateDirty,
   GraphReferentiel,
   GraphResultats,
-  // ➕ Nouveaux props pour synchronisation globale
+  // ? Nouveaux props pour synchronisation globale
   idleMinutes,
   setIdleMinutes,
   colisAmanaParSac,
   setColisAmanaParSac,
   courriersParSac,
   setCourriersParSac,
-  // 🆕 Grille Flux (persistance detailed grid)
+  // ?? Grille Flux (persistance detailed grid)
   volumesFluxGrid = null,
   setVolumesFluxGrid = () => { },
-  // 🆕 Unified Grid Props
+  // ?? Unified Grid Props
   gridValues,
   handleGridChange,
   colisAmanaParCanvaSac,
@@ -253,78 +255,78 @@ export default function VueIntervenant({
   const JOURS_OUVRES_AN = 264;
   const PAGE_SCALE = 0.8;
 
-  // 🗑️ États locaux supprimés car maintenant globaux (via props)
+  // ??? �tats locaux supprim�s car maintenant globaux (via props)
   // const [colisAmanaParSac, setColisAmanaParSac] = useState(5);
   // const [courriersParSac, setCourriersParSac] = useState(4500);
-  // 🗑️ États locaux supprimés car maintenant globaux (via props)
+  // ??? �tats locaux supprim�s car maintenant globaux (via props)
   // const [colisAmanaParSac, setColisAmanaParSac] = useState(5);
   // const [courriersParSac, setCourriersParSac] = useState(4500);
   // const [nbrCoSac, setNbrCoSac] = useState(0);
   // const [nbrCrSac, setNbrCrSac] = useState(0);
-  // const [edPercent, setEdPercent] = useState(0); // 🆕 % En dehors (ED)
+  // const [edPercent, setEdPercent] = useState(0); // ?? % En dehors (ED)
 
   const [partParticuliers, setPartParticuliers] = useState(75);
   const partProfessionnels = 100 - partParticuliers;
 
-  // 🗑️ idleMinutes maintenant global
+  // ??? idleMinutes maintenant global
   // const [idleMinutes, setIdleMinutes] = useState(0);
   // const [tauxComplexite, setTauxComplexite] = useState(1);
   // const [natureGeo, setNatureGeo] = useState(1);
   const [heuresBrutes, setHeuresBrutes] = useState(8.0); // avant temps mort
 
-  // 🎨 UX : État pour afficher/masquer les détails
+  // ?? UX : �tat pour afficher/masquer les d�tails
   const [showDetails, setShowDetails] = useState(true);
 
-  // 🆕 Filtre famille
+  // ?? Filtre famille
   const [filterFamille, setFilterFamille] = useState("");
 
-  // 🆕 Paramètre Collecte (Local -> Global)
+  // ?? Param�tre Collecte (Local -> Global)
   const [filterProduit, setFilterProduit] = useState("");
-  // 🆕 State local pour Bandoeng UI (si non géré par parent)
+  // ?? State local pour Bandoeng UI (si non g�r� par parent)
   const [pctSac, setPctSac] = useState(60);
 
-  // 🆕 Liste des familles uniques
+  // ?? Liste des familles uniques
   const uniqueFamilles = useMemo(() => {
     const s = new Set((referentiel || []).map(r => r.famille).filter(Boolean));
     return Array.from(s).sort();
   }, [referentiel]);
 
-  // 🆕 Helper: Grouper les produits
+  // ?? Helper: Grouper les produits
   const getGroupeProduit = (produitRaw) => {
     const p = String(produitRaw || "").toUpperCase();
     if (p.includes("AMANA") || p.includes("COLIS")) return "AMANA";
     if (p.includes("CO") || p.includes("ORDINAIRE")) return "CO";
-    if (p.includes("CR") || p.includes("RECOMMANDE") || p.includes("RECOMMANDÉ")) return "CR";
+    if (p.includes("CR") || p.includes("RECOMMANDE") || p.includes("RECOMMAND�")) return "CR";
     if (p.includes("BARKIA")) return "E-BARKIA";
     if (p.includes("LRH") || p.includes("HYBRIDE")) return "LRH";
     return "AUTRE";
   };
 
-  // 🆕 Liste des produits uniques (GROUPÉS)
+  // ?? Liste des produits uniques (GROUP�S)
   const uniqueProduits = useMemo(() => {
     const groups = new Set();
     (referentiel || []).forEach(r => {
       const g = getGroupeProduit(r.produit);
       if (g !== "AUTRE") groups.add(g);
     });
-    // Ordre spécifique demandé
+    // Ordre sp�cifique demand�
     const order = ["AMANA", "CO", "CR", "E-BARKIA", "LRH"];
     return Array.from(groups).sort((a, b) => {
       const idxA = order.indexOf(a);
       const idxB = order.indexOf(b);
-      // Si les deux sont dans l'ordre défini, on trie selon l'ordre
+      // Si les deux sont dans l'ordre d�fini, on trie selon l'ordre
       if (idxA !== -1 && idxB !== -1) return idxA - idxB;
       // Si un seul est dans l'ordre, il passe avant
       if (idxA !== -1) return -1;
       if (idxB !== -1) return 1;
-      // Sinon tri alphabétique
+      // Sinon tri alphab�tique
       return a.localeCompare(b);
     });
   }, [referentiel]);
 
-  // 🆕 Paramètre Collecte (Local -> Global)
+  // ?? Param�tre Collecte (Local -> Global)
   // const [pctCollecte, setPctCollecte] = useState(5.0);
-  // 🆕 Paramètre Retour (Local -> Global)
+  // ?? Param�tre Retour (Local -> Global)
   // const [pctRetour, setPctRetour] = useState(0.0);
 
   // State for Import
@@ -346,14 +348,14 @@ export default function VueIntervenant({
 
     // Skip confirm if auto
     if (!isAuto) {
-      if (!confirm(`Voulez-vous importer les tâches par défaut depuis le fichier ${fileName} ?\nCela ajoutera les tâches par défaut à ce centre.`)) return;
+      if (!confirm(`Voulez-vous importer les taches par défaut depuis le fichier ${fileName} ?\nCela ajoutera les taches par défaut a ce centre.`)) return;
     }
 
     try {
       setIsImporting(true);
       // 1. Fetch from public folder
       const response = await fetch(`/${fileName}`);
-      if (!response.ok) throw new Error(`Le fichier modèle '${fileName}' est introuvable sur le serveur.`);
+      if (!response.ok) throw new Error(`Le fichier modéle '${fileName}' est introuvable sur le serveur.`);
 
       const blob = await response.blob();
       const file = new File([blob], fileName, { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
@@ -387,7 +389,7 @@ export default function VueIntervenant({
     if (wasLoading && !isLoading) {
       // Only if center selected, empty tasks, not importing, and not tried yet
       if (centre && referentiel.length === 0 && !isImporting && !hasAttemptedAutoImport) {
-        console.log("🔄 Auto-importing tasks because referentiel is empty after load...");
+        console.log("?? Auto-importing tasks because referentiel is empty after load...");
         setHasAttemptedAutoImport(true);
         handleImportCanva(true);
       }
@@ -396,7 +398,7 @@ export default function VueIntervenant({
     prevLoadingRepoRef.current = isLoading;
   }, [loading?.referentiel, centre, referentiel, isImporting, hasAttemptedAutoImport, handleImportCanva]);
 
-  // ✅ OPTIMISATION : Debounce des valeurs pour éviter les recalculs excessifs
+  // ? OPTIMISATION : Debounce des valeurs pour �viter les recalculs excessifs
   const debouncedColis = useDebouncedValue(colis, 300);
   const debouncedCourrierOrdinaire = useDebouncedValue(courrierOrdinaire, 300);
   const debouncedCourrierRecommande = useDebouncedValue(courrierRecommande, 300);
@@ -406,13 +408,13 @@ export default function VueIntervenant({
   const debouncedProductivite = useDebouncedValue(productivite, 500);
   const debouncedIdleMinutes = useDebouncedValue(idleMinutes, 500);
 
-  // 🔍 LOG TEMPORAIRE : Pour voir le debounce en action
+  // ?? LOG TEMPORAIRE : Pour voir le debounce en action
   React.useEffect(() => {
-    console.log('✅ OPTIMISATION ACTIVE : Valeur immédiate (colis):', colis);
-    console.log('⏱️ DEBOUNCE : Valeur debouncée (300ms après):', debouncedColis);
+    console.log('? OPTIMISATION ACTIVE : Valeur imm�diate (colis):', colis);
+    console.log('?? DEBOUNCE : Valeur debounc�e (300ms apr�s):', debouncedColis);
   }, [debouncedColis, colis]);
 
-  // ✍️ Synchronisation des facteurs de conversion (locaux -> globaux)
+  // ?? Synchronisation des facteurs de conversion (locaux -> globaux)
   const updateColisAmanaParSac = (v) => setColisAmanaParSac(v);
   const updateCourriersParSac = (v) => setCourriersParSac(v);
 
@@ -455,15 +457,15 @@ export default function VueIntervenant({
     return { part: v * ratioPart, prof: v * ratioProf };
   };
 
-  // 🔹 Productivité + temps mort → heures nettes
-  // ✅ OPTIMISATION : Utilise les valeurs debouncées pour éviter les recalculs excessifs
-  // 🔹 Capacité Nette (SANS REDUCTION PAR PRODUCTIVITE car déjà intégrée dans les charges tâches)
+  // ?? Productivit� + temps mort ? heures nettes
+  // ? OPTIMISATION : Utilise les valeurs debounc�es pour �viter les recalculs excessifs
+  // ?? Capacit� Nette (SANS REDUCTION PAR PRODUCTIVITE car d�j� int�gr�e dans les charges t�ches)
   useEffect(() => {
     const heuresBase = 8.0;
     const p = Number(debouncedProductivite ?? 100) / 100; // 0..infinity
     const idleH = Number(debouncedIdleMinutes || 0) / 60;
 
-    // Formule demandée : La productivité augmente la capacité horaire apparente
+    // Formule demand�e : La productivit� augmente la capacit� horaire apparente
     // (8h * 120%) - 30min = 9.6h - 0.5h = 9.1h
     const heuresProductives = heuresBase * (p > 0 ? p : 1);
 
@@ -473,7 +475,7 @@ export default function VueIntervenant({
     setHeuresNet(heuresNettes.toFixed(2));
   }, [debouncedIdleMinutes, debouncedProductivite, setHeuresNet]);
 
-  // 🆕 AUTO-BALANCE LOGIC for Bandoeng Parameters
+  // ?? AUTO-BALANCE LOGIC for Bandoeng Parameters
   // Wrapper functions to auto-balance complementary percentages
   // Using useCallback to prevent recreation on each render (fixes input focus loss)
   const handlePctAxesArriveeChange = React.useCallback((val) => {
@@ -502,7 +504,7 @@ export default function VueIntervenant({
 
   const posteValue = poste == null ? "" : String(poste);
 
-  // 🆕 Détection Typologie AM (Agence Messagerie) pour désactivation
+  // ?? D�tection Typologie AM (Agence Messagerie) pour d�sactivation
   const isAM = useMemo(() => {
     const c = String(centreCategorie || "").toUpperCase();
     return c.includes("AM") || c.includes("MESSAGERIE");
@@ -513,7 +515,7 @@ export default function VueIntervenant({
     return "input";
   };
 
-  // ✅ Vérifie si un poste spécifique est sélectionné (pas "__ALL__" ou vide)
+  // ? V�rifie si un poste sp�cifique est s�lectionn� (pas "__ALL__" ou vide)
   const isPosteSpecifique = Boolean(poste && String(poste) !== "__ALL__");
 
   const minutesAjustees = (min) => {
@@ -521,7 +523,7 @@ export default function VueIntervenant({
     return p > 0 ? min / (p / 100) : min;
   };
 
-  // ✅ OPTIMISATION : Memoization des valeurs annuelles
+  // ? OPTIMISATION : Memoization des valeurs annuelles
   const annualValues = useMemo(() => ({
     courrierOrdinaire: parseNonNeg(debouncedCourrierOrdinaire) ?? 0,
     courrierRecommande: parseNonNeg(debouncedCourrierRecommande) ?? 0,
@@ -545,17 +547,43 @@ export default function VueIntervenant({
     annualIfAllowed("amana") > 0 ||
     (parseNonNeg(colis) ?? 0) > 0;
 
-  // ✅ Normalisation robuste pour le matching des noms de tâches
+  // ? Normalisation robuste pour le matching des noms de t�ches
   const normalizeKey = (str) => String(str || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase().replace(/\s+/g, " ");
 
   const resIndex = new Map();
   (resultats || []).forEach((r) => {
     if (r.id) resIndex.set(String(r.id), r);
-    // Indexer aussi par nom normalisé pour le fallback
+    // Indexer aussi par nom normalis� pour le fallback
     resIndex.set(normalizeKey(r.task || r.nom_tache), r);
   });
 
+  // R�sultats bruts backend (t�ches) pour la capacit� nominale
+  const backendResults = useMemo(() => {
+    const out = [];
+    const pushAll = (arr) => Array.isArray(arr) && out.push(...arr);
 
+    pushAll(Array.isArray(resultats) ? resultats : null);
+    pushAll(resultats?.resultats);
+    pushAll(resultats?.details_postes);
+    pushAll(resultats?.taches);
+    pushAll(resultats?.details);
+
+    if (Array.isArray(resultats?.postes)) {
+      resultats.postes.forEach(p => {
+        if (Array.isArray(p.taches)) {
+          p.taches.forEach(t => {
+            out.push({
+              ...t,
+              poste_id: t.poste_id || p.poste_id || p.id,
+              centre_poste_id: t.centre_poste_id || p.centre_poste_id || p.id,
+            });
+          });
+        }
+      });
+    }
+
+    return out;
+  }, [resultats]);
   function nombreUniteParUnite(unite, taskName, taskData = {}) {
     if (!hasAnyVolume) {
       const u0 = String(unite || "")
@@ -608,7 +636,7 @@ export default function VueIntervenant({
       if (uRaw.includes("courrier")) {
         let annualCourrier = 0;
         if (typeFlux === "ordinaire") annualCourrier = annualCO;
-        else if (typeFlux === "recommande" || typeFlux === "recommandé")
+        else if (typeFlux === "recommande" || typeFlux === "recommand�")
           annualCourrier = annualCR;
         else if (typeFlux === "ebarkia") annualCourrier = annualEB;
         else if (typeFlux === "lrh") annualCourrier = annualLRH;
@@ -624,8 +652,8 @@ export default function VueIntervenant({
 
       const colisInput = parseNonNeg(debouncedColis) ?? 0;
       if (colisInput > 0) {
-        // 🆕 Estimation Frontend : Appliquer le taux de mise en sac (edPercent)
-        // edPercent est par convention le % SAC (selon demande récente)
+        // ?? Estimation Frontend : Appliquer le taux de mise en sac (edPercent)
+        // edPercent est par convention le % SAC (selon demande r�cente)
         const tauxSac = (edPercent ?? 100) / 100;
         return (colisInput * tauxSac) / colisAmanaParSac;
       }
@@ -637,12 +665,12 @@ export default function VueIntervenant({
       uRaw === "courrier" ||
       uRaw === "courriers" ||
       uRaw === "courrier_recommande" ||
-      uRaw === "courrier recommandé"
+      uRaw === "courrier recommand�"
     ) {
       let annualCourrier = 0;
 
       if (typeFlux === "ordinaire") annualCourrier = annualCO;
-      else if (typeFlux === "recommande" || typeFlux === "recommandé")
+      else if (typeFlux === "recommande" || typeFlux === "recommand�")
         annualCourrier = annualCR;
       else if (typeFlux === "ebarkia") annualCourrier = annualEB;
       else if (typeFlux === "lrh") annualCourrier = annualLRH;
@@ -655,7 +683,7 @@ export default function VueIntervenant({
     return 0;
   }
 
-  // 🔹 Filtrer le référentiel pour exclure les tâches avec moyenne_min = 0 ET filtrer par famille ET produit
+  // ?? Filtrer le r�f�rentiel pour exclure les t�ches avec moyenne_min = 0 ET filtrer par famille ET produit
   const referentielFiltered = useMemo(() => {
     return (referentiel || [])
       .filter((row) => {
@@ -669,11 +697,11 @@ export default function VueIntervenant({
   const referentielDisplayData = useMemo(() => {
     // DEBUG: Check order values
     if (referentielFiltered.length > 0) {
-      console.log("🔍 [VueIntervenant] Referentiel Sample:", referentielFiltered.slice(0, 3).map(r => ({ t: r.t, ordre: r.ordre })));
+      console.log("?? [VueIntervenant] Referentiel Sample:", referentielFiltered.slice(0, 3).map(r => ({ t: r.t, ordre: r.ordre })));
     }
     const groups = new Map();
     referentielFiltered.forEach((r) => {
-      // Clé de regroupement : Nom Tâche + Famille + Phase + Unité
+      // Cl� de regroupement : Nom T�che + Famille + Phase + Unit�
       // On groupe pour fusionner les responsables
       const key = `${(r.t || "").trim()}|${r.famille || ""}|${r.ph || ""}|${r.u || ""}`;
 
@@ -689,9 +717,9 @@ export default function VueIntervenant({
       }
     });
 
-    // DEBUG: Vérifier l'ordre AVANT le tri
+    // DEBUG: V�rifier l'ordre AVANT le tri
     const beforeSort = Array.from(groups.values());
-    console.log("🔍 [AVANT TRI] Premières tâches:", beforeSort.slice(0, 5).map(r => ({ t: r.t, ordre: r.ordre })));
+    console.log("?? [AVANT TRI] Premi�res t�ches:", beforeSort.slice(0, 5).map(r => ({ t: r.t, ordre: r.ordre })));
 
     // Trier par ordre croissant
     const sorted = beforeSort.sort((a, b) => {
@@ -701,24 +729,24 @@ export default function VueIntervenant({
       return orderA - orderB;
     });
 
-    console.log("🔍 [APRÈS TRI] Premières tâches:", sorted.slice(0, 10).map(r => ({ t: r.t, ordre: r.ordre })));
+    console.log("?? [APR�S TRI] Premi�res t�ches:", sorted.slice(0, 10).map(r => ({ t: r.t, ordre: r.ordre })));
     return sorted;
   }, [referentielFiltered]);
 
-  // ✅ OPTIMISATION : Memoization des résultats fusionnés
+  // ? OPTIMISATION : Memoization des r�sultats fusionn�s
   const mergedResults = useMemo(() => {
     const res = referentielFiltered.map((row, i) => {
       const taskName = String(row.t || row.task || "").trim();
       const fromBack = (row.id && resIndex.get(String(row.id))) || resIndex.get(normalizeKey(taskName));
       const moyenneMin = Number(row.m ?? 0);
 
-      // Si le backend a déjà calculé les heures, on les préfère !
-      // Le backend retourne maintenant des heures "chargées" (Raw/P)
+      // Si le backend a d�j� calcul� les heures, on les pr�f�re !
+      // Le backend retourne maintenant des heures "charg�es" (Raw/P)
       const hasBackResults = fromBack && (fromBack.heures !== undefined);
 
-      const isActive = String(row.etat || "A").trim().toUpperCase() !== "NA"; // ✅ Check état
+      const isActive = String(row.etat || "A").trim().toUpperCase() !== "NA"; // ? Check �tat
 
-      const nbJour = isActive // ✅ Si NA => 0
+      const nbJour = isActive // ? Si NA => 0
         ? (fromBack?.nombre_unite ??
           fromBack?.nombre_Unite ??
           nombreUniteParUnite(row.u, taskName, row))
@@ -726,12 +754,12 @@ export default function VueIntervenant({
 
       let heuresLoc;
       if (!isActive) {
-        heuresLoc = 0; // ✅ Si NA => 0
+        heuresLoc = 0; // ? Si NA => 0
       } else if (hasBackResults) {
         heuresLoc = Number(fromBack.heures || 0);
       } else if (hasSimulated && (resultats || []).length > 0) {
-        // ✅ Si la simulation a eu lieu mais que le backend n'a pas renvoyé cette tâche,
-        // c'est qu'elle n'est pas applicable au poste (ou filtrée). On met 0.
+        // ? Si la simulation a eu lieu mais que le backend n'a pas renvoy� cette t�che,
+        // c'est qu'elle n'est pas applicable au poste (ou filtr�e). On met 0.
         heuresLoc = 0;
       } else {
         // Fallback local (uniquement avant la simulation ou si mode hors ligne)
@@ -744,7 +772,7 @@ export default function VueIntervenant({
       return {
         seq: i + 1,
         task: (taskName || "").replace(/\s*\([^)]*\)/g, "").trim(),
-        formule: fromBack?.formule || "N/A",  // 🆕 Formule de calcul depuis le backend
+        formule: fromBack?.formule || "N/A",  // ?? Formule de calcul depuis le backend
         nombre_Unite: Number(nbJour || 0),
         heures: heuresLoc,
         _u: row.u,
@@ -753,18 +781,18 @@ export default function VueIntervenant({
       };
     }).filter(r => Number(r.heures || 0) > 0.005);
 
-    // 🆕 Fallback pour postes MOI (Structurels)
-    // Si la simulation ne renvoie rien (car pas de tâches data-driven), on affiche un forfait
+    // ?? Fallback pour postes MOI (Structurels)
+    // Si la simulation ne renvoie rien (car pas de t�ches data-driven), on affiche un forfait
     if (res.length === 0 && hasSimulated && poste) {
       const pObj = (postesOptions || []).find(p => String(p.id) === String(poste));
-      // Détection basée sur le type_poste (si disponible) ou heuristique simple
+      // D�tection bas�e sur le type_poste (si disponible) ou heuristique simple
       const isMoi = pObj?.type_poste === 'MOI' || pObj?.is_moi;
 
       if (isMoi) {
         return [{
           seq: 1,
-          task: "Activité Structurelle (MOI)",
-          formule: "Poste Forfaitaire (Non piloté par le volume)",
+          task: "Activit� Structurelle (MOI)",
+          formule: "Poste Forfaitaire (Non pilot� par le volume)",
           nombre_Unite: 1,
           heures: Number(heuresNet || 7.33), // Pour faire 1 ETP
           _u: "Jour",
@@ -777,7 +805,7 @@ export default function VueIntervenant({
     return res;
   }, [referentielFiltered, resIndex, annualValues, debouncedColis, debouncedProductivite, colisAmanaParSac, courriersParSac, colisParCollecte, hasSimulated, poste, postesOptions, heuresNet]);
 
-  // ✅ OPTIMISATION : Memoization du total des heures
+  // ? OPTIMISATION : Memoization du total des heures
   const totalHeuresAffichees = useMemo(() => {
     return mergedResults.reduce(
       (acc, r) => acc + Number(r.heures || 0),
@@ -785,7 +813,7 @@ export default function VueIntervenant({
     );
   }, [mergedResults]);
 
-  // ✅ SECURITÉ : Utiliser le total heures du backend s'il est disponible (Data-Driven)
+  // ? SECURIT� : Utiliser le total heures du backend s'il est disponible (Data-Driven)
   const totalHeuresFinal = useMemo(() => {
     if (totaux && typeof totaux.total_heures === 'number') {
       return totaux.total_heures;
@@ -793,12 +821,12 @@ export default function VueIntervenant({
     return totalHeuresAffichees;
   }, [totalHeuresAffichees, totaux]);
 
-  // 🆕 Calcul du suffixe de titre (Poste ou Centre)
+  // ?? Calcul du suffixe de titre (Poste ou Centre)
   const titleSuffix = useMemo(() => {
-    // Recalcul local pour éviter ReferenceError sur selectedPosteObj
+    // Recalcul local pour �viter ReferenceError sur selectedPosteObj
     const locPoste = (postesOptions || []).find(p => String(p.id) === String(poste));
 
-    // Cas 1: Poste sélectionné (et pas "Tous")
+    // Cas 1: Poste s�lectionn� (et pas "Tous")
     // Note: "__ALL__" est often l'ID pour "Tous"
     if (locPoste && String(locPoste.id) !== "__ALL__" && locPoste.label !== "Tous") {
       return ` - ${locPoste.label || locPoste.name}`;
@@ -811,19 +839,57 @@ export default function VueIntervenant({
     return "";
   }, [postesOptions, poste, centres, centre]);
 
-  // 🆕 Détection Mode Test
-  const isTestMode = useMemo(() => String(titleSuffix || "").toLowerCase().includes("test"), [titleSuffix]);
-
+  // Heures nettes et ETP calculé global (disponible pour VM calculé)
   const baseHeuresNet = Number(heuresNet || 0);
-
-  // ✅ OPTIMISATION : Memoization du calcul FTE
   const fteCalcAffiche = useMemo(() => {
-    // Si le backend fournit le total calculé (Data-Driven), on l'utilise pour garantir la cohérence
+    // Si le backend fournit le total calculé (Data-Driven), on l'utilise
     if (totaux && typeof totaux.fte_calcule === 'number') {
       return totaux.fte_calcule;
     }
+    // Sinon, on calcule à partir des heures totales / capacité horaire
     return baseHeuresNet > 0 ? totalHeuresFinal / baseHeuresNet : 0;
   }, [totalHeuresFinal, baseHeuresNet, totaux]);
+
+  // Normalise l'effectif actuel quelles que soient les clés renvoyées par l'API
+  const getEff = useCallback((p) => Number(
+    p?.effectif_actuel ??
+    p?.effectif_Actuel ??
+    p?.effectifActuel ??
+    p?.effectif_statutaire ??
+    p?.effectifStatutaire ??
+    p?.effectif_total ??
+    p?.effectif ??
+    p?.etp_actuel ??
+    p?.etpActuel ??
+    p?.fte_actuel ??
+    p?.fteActuel ??
+    p?.etp ??
+    p?.fte ??
+    p?.actuel ??
+    p?.eff_actuel ??
+    p?.eff ??
+    0
+  ), []);
+
+  // Agrégation Capacité Nominale (utilitaire commun)
+  const capaciteNominalePositions = useMemo(() => {
+    return computeCapaciteNominalePositions({
+      hasSimulated,
+      postesOptions,
+      poste,
+      idleMinutes,
+      productivite,
+      mergedResults,
+      backendResults,
+      gridValues,
+      getGroupeProduit,
+      getEff,
+      heuresNet,
+    });
+  }, [hasSimulated, postesOptions, poste, idleMinutes, productivite, mergedResults, backendResults, gridValues, getGroupeProduit, getEff, heuresNet]);
+  // ?? D�tection Mode Test
+  const isTestMode = useMemo(() => String(titleSuffix || "").toLowerCase().includes("test"), [titleSuffix]);
+
 
 
 
@@ -832,22 +898,22 @@ export default function VueIntervenant({
     return Math.floor(n * f + 0.5) / f;
   };
 
-  // ✅ OPTIMISATION : Memoization du handler de simulation
+  // ? OPTIMISATION : Memoization du handler de simulation
   const fteArrondiAffiche = useMemo(() => {
-    // Force l'arrondi mathématique standard (cohérent avec VueCentre)
+    // Force l'arrondi math�matique standard (coh�rent avec VueCentre)
     return fteCalcAffiche <= 0.1 ? 0 : Math.round(fteCalcAffiche);
   }, [fteCalcAffiche]);
 
-  // 🆕 Calcul de l'écart
+  // ?? Calcul de l'écart
   const selectedPosteObj = useMemo(() => {
     if (!poste) return null;
     return (postesOptions || []).find(p => String(p.id) === String(poste));
   }, [postesOptions, poste]);
 
-  const effectifActuel = selectedPosteObj?.effectif_actuel ? Number(selectedPosteObj.effectif_actuel) : 0;
+  const effectifActuel = getEff(selectedPosteObj);
   const ecart = effectifActuel - fteCalcAffiche;
 
-  // 🆕 Typologie et Décomposition (pour KPICardGlass) - ALIGNEMENT VUE CENTRE (Détection Agressive)
+  // ?? Typologie et Décomposition (pour KPICardGlass) - ALIGNEMENT VUE CENTRE (D�tection Agressive)
   const isMoiPoste = (p) => {
     if (!p) return false;
     const type = (p.type_poste || "").toUpperCase();
@@ -876,24 +942,24 @@ export default function VueIntervenant({
   const flagMoi = isMoiPoste(selectedPosteObj);
   const isMOD = !flagMoi;
 
-  // 🆕 Calcul du MOI Global (Centre) - Demande Utilisateur : Afficher MOI comme page centre
+  // ?? Calcul du MOI Global (Centre) - Demande Utilisateur : Afficher MOI comme page centre
   const totalMoiGlobal = useMemo(() => {
     if (!postesOptions || postesOptions.length === 0) return 0;
 
     const total = postesOptions.reduce((acc, p) => {
       const isM = isMoiPoste(p);
-      return acc + (isM ? Number(p.effectif_actuel || 0) : 0);
+      return acc + (isM ? getEff(p) : 0);
     }, 0);
 
-    // 🚨 ALIGNEMENT VUE CENTRE : Si le total est 0 (même si des postes MOI existent mais vides), on force 1
+    // ?? ALIGNEMENT VUE CENTRE : Si le total est 0 (m�me si des postes MOI existent mais vides), on force 1
     return total;
   }, [postesOptions]);
 
-  // 🆕 Calcul des totaux globaux du centre (pour affichage quand "Tous" est sélectionné)
+  // ?? Calcul des totaux globaux du centre (pour affichage quand "Tous" est s�lectionn�)
   const totalEffectifCentreStats = useMemo(() => {
     if (!postesOptions || postesOptions.length === 0) return { total: 0, mod: 0, moi: 0 };
     return postesOptions.reduce((acc, p) => {
-      const eff = Number(p.effectif_actuel || 0);
+      const eff = getEff(p);
       acc.total += eff;
       if (isMoiPoste(p)) {
         acc.moi += eff;
@@ -908,17 +974,17 @@ export default function VueIntervenant({
 
   const effAPS = Number(selectedPosteObj?.effectif_aps || selectedPosteObj?.eff_aps || 0);
   const selectedCentreWithAPS = centres ? centres.find(c => String(c.id) === String(centre)) : null;
-  // ✅ APS : Priorité à la valeur globale T_APS du centre (Database)
-  // ✅ APS : Valeur globale APS du centre (Database)
+  // ? APS : Priorit� � la valeur globale T_APS du centre (Database)
+  // ? APS : Valeur globale APS du centre (Database)
   const apsGlobalCentre = selectedCentreWithAPS?.aps ? Number(selectedCentreWithAPS.aps) : 0;
 
-  // 🆕 Récupération du Cas Spécial
+  // ?? R�cup�ration du Cas Sp�cial
   const casValue = selectedCentreWithAPS?.cas;
 
-  // 🆕 Helper pour formater petits nombres
+  // ?? Helper pour formater petits nombres
   const formatSmallNumber = (v) => Number(v || 0).toFixed(2).replace('.', ',');
 
-  // 🆕 Logique d'affichage KPI alignée sur Bandoeng
+  // ?? Logique d'affichage KPI align�e sur Bandoeng
   const kpiData = useMemo(() => {
     let actualMOD = 0;
     let actualMOI = 0;
@@ -936,7 +1002,7 @@ export default function VueIntervenant({
 
     if (selectedPosteObj) {
       // Vue Individuelle
-      const val = Number(selectedPosteObj.effectif_actuel || 0);
+      const val = getEff(selectedPosteObj);
       if (isMoiPoste(selectedPosteObj)) {
         actualMOI = val;
       } else {
@@ -991,7 +1057,7 @@ export default function VueIntervenant({
   };
 
   const handleSimuler = useCallback((overrides = {}) => {
-    console.log("🖱️ [VueIntervenant] Click Simuler. State Taux:", tauxComplexite, "NatureGeo:", natureGeo);
+    console.log("??? [VueIntervenant] Click Simuler. State Taux:", tauxComplexite, "NatureGeo:", natureGeo);
     const ratioCollecte = Math.max(1, parseNonNeg(colisParCollecte) ?? 1);
 
     onSimuler({
@@ -1001,13 +1067,13 @@ export default function VueIntervenant({
       part_particuliers: partParticuliers,
       taux_complexite: Number(tauxComplexite || 0),
       nature_geo: Number(natureGeo || 0),
-      ed_percent: Number(edPercent || 0), // 🆕 % En dehors
-      pct_collecte: Number(pctCollecte || 0), // 🆕 % Collecte
-      pct_retour: Number(pctRetour || 0), // 🆕 % Retour
+      ed_percent: Number(edPercent || 0), // ?? % En dehors
+      pct_collecte: Number(pctCollecte || 0), // ?? % Collecte
+      pct_retour: Number(pctRetour || 0), // ?? % Retour
     });
   }, [onSimuler, colisParCollecte, colisAmanaParSac, courriersParSac, partParticuliers, tauxComplexite, natureGeo, edPercent, pctCollecte, pctRetour, pctInternational]);
 
-  // 🆕 Organigramme Data Logic (Aligné sur Bandoeng)
+  // ?? Organigramme Data Logic (Align� sur Bandoeng)
   const orgChartData = useMemo(() => {
     if (!hasSimulated || !postesOptions) return null;
 
@@ -1091,7 +1157,7 @@ export default function VueIntervenant({
     return { chef, moiStaff, modStaff };
   }, [hasSimulated, postesOptions, resultats, kpiData, isMoiPoste]);
   // ---------------------------------------------------------------------------
-  // 🆕 ADAPTERS POUR COMPOSANTS UNIFIÉS (BandoengParameters / BandoengGrid)
+  // ?? ADAPTERS POUR COMPOSANTS UNIFI�S (BandoengParameters / BandoengGrid)
   // ---------------------------------------------------------------------------
 
   const paramsBandoeng = {
@@ -1120,7 +1186,7 @@ export default function VueIntervenant({
     }
   };
 
-  // Calcul Capacité Nette Formattée
+  // Calcul Capacit� Nette Formatt�e
   const netCapacityStr = useMemo(() => {
     const val = Number(heuresNet || 0); // Note: prop is heuresNet, previous code used baseHeuresNet? Checks needed.
     // Checking props: heuresNet is passed.
@@ -1131,9 +1197,9 @@ export default function VueIntervenant({
 
   return (
     <div className="flex flex-col gap-6 w-full max-w-[1600px] mx-auto pb-20" style={{ zoom: "90%" }}>
-      {/* 🔹 BARRES STICKY EN HAUT - Sélection + Productivité côte à côte */}
+      {/* ?? BARRES STICKY EN HAUT - S�lection + Productivit� c�te � c�te */}
       <div className="sticky top-[57px] z-20 grid grid-cols-1 xl:grid-cols-2 gap-2">
-        {/* Barre de sélection */}
+        {/* Barre de s�lection */}
         <div className="bg-white/80 backdrop-blur-md border border-slate-200/60 shadow-sm rounded-lg px-3 py-2 flex flex-wrap items-center gap-3 transition-all duration-300">
           <div className="flex items-center gap-1.5 min-w-[140px] flex-1">
             <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
@@ -1142,14 +1208,14 @@ export default function VueIntervenant({
             <div className="flex flex-col w-full">
 
               <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                Région
+                R�gion
               </label>
               <select
                 className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer w-full truncate text-left"
                 value={region ?? ""}
                 onChange={(e) => setRegion(e.target.value)}
               >
-                <option value="">Sélectionner...</option>
+                <option value="">S�lectionner...</option>
                 {regions.map((r) => (
                   <option key={r.id} value={r.id}>
                     {r.label}
@@ -1161,7 +1227,7 @@ export default function VueIntervenant({
 
           <div className="w-px h-6 bg-slate-200 hidden md:block" />
 
-          {/* 🆕 Sélecteur Typologie */}
+          {/* ?? S�lecteur Typologie */}
           <div className="flex items-center gap-1.5 min-w-[140px] flex-1">
             <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
               <Tag className="w-3 h-3" />
@@ -1203,7 +1269,7 @@ export default function VueIntervenant({
                 disabled={!region}
               >
                 <option value="">
-                  {loading.centres ? "Chargement..." : "Sélectionner..."}
+                  {loading.centres ? "Chargement..." : "S�lectionner..."}
                 </option>
                 {centres.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -1230,7 +1296,7 @@ export default function VueIntervenant({
                 onChange={(e) => setPoste(e.target.value)}
                 disabled={!centre || loading.postes}
               >
-                <option value="">Sélectionner...</option>
+                <option value="">S�lectionner...</option>
                 {postesOptions.map((p) => (
                   <option key={p.id} value={String(p.id)}>
                     {p.label ?? p.name}
@@ -1247,7 +1313,7 @@ export default function VueIntervenant({
           </div>
         </div>
 
-        {/* 🆕 Calculate formatted net capacity for BandoengParameters */}
+        {/* ?? Calculate formatted net capacity for BandoengParameters */}
         {(() => {
           const p = Number(productivite ?? 100) / 100;
           const idleH = Number(idleMinutes || 0) / 60;
@@ -1260,7 +1326,7 @@ export default function VueIntervenant({
 
           return (
             <>
-              {/* 🆕 Unified Parameters Component */}
+              {/* ?? Unified Parameters Component */}
               <BandoengParameters
                 params={{
                   shift: shift,
@@ -1283,7 +1349,7 @@ export default function VueIntervenant({
       <div className="w-full space-y-1">
 
         <Card className="bg-white border-slate-200 shadow-sm shrink-0">
-          {/* Paramètres de volume */}
+          {/* Param�tres de volume */}
           <div className="flex items-center justify-between px-4 py-0 border-b border-slate-100 bg-slate-50/50">
             <div className="flex items-center gap-2">
               <Box className="w-4 h-4 text-[#005EA8]" />
@@ -1319,7 +1385,7 @@ export default function VueIntervenant({
                 className="h-8 text-xs gap-2"
               >
                 <Download className="w-3.5 h-3.5" />
-                Modèle Import
+                Mod�le Import
               </Button>
 
               <div className="relative">
@@ -1354,10 +1420,10 @@ export default function VueIntervenant({
         </Card>
 
 
-        {/* 🆕 GRILLE UNIFIÉE BANDOENG */}
+        {/* ?? GRILLE UNIFI�E BANDOENG */}
 
 
-        {/* 🆕 PARAMÈTRES ADDITIONNELS BANDOENG */}
+        {/* ?? PARAM�TRES ADDITIONNELS BANDOENG */}
         <BandoengAdditionalParams
           colisAmanaParCanvaSac={colisAmanaParCanvaSac}
           setColisAmanaParCanvaSac={setColisAmanaParCanvaSac}
@@ -1385,11 +1451,11 @@ export default function VueIntervenant({
           setPctNational={handlePctNationalChange}
         />
 
-        {/* Référentiel & résultats - Masquable */}
+        {/* R�f�rentiel & r�sultats - Masquable */}
         {showDetails && (
           <div className="flex flex-col gap-2">
-            {/* 🆕 Filtre Famille (Déplacé ici pour ne pas décaler les tableaux) */}
-            {/* 🆕 Filtres Famille & Produit */}
+            {/* ?? Filtre Famille (D�plac� ici pour ne pas d�caler les tableaux) */}
+            {/* ?? Filtres Famille & Produit */}
             <div className="flex flex-wrap items-center gap-4 bg-slate-50/80 p-1.5 rounded-lg border border-slate-100 self-start">
 
               {/* Filtre Famille */}
@@ -1411,7 +1477,7 @@ export default function VueIntervenant({
                     className="text-[10px] text-red-500 hover:text-red-700 font-medium px-2 py-1 bg-red-50 rounded border border-red-100 transition-colors"
                     title="Effacer le filtre famille"
                   >
-                    ✕
+                    ?
                   </button>
                 )}
               </div>
@@ -1435,7 +1501,7 @@ export default function VueIntervenant({
                     className="text-[10px] text-red-500 hover:text-red-700 font-medium px-2 py-1 bg-red-50 rounded border border-red-100 transition-colors"
                     title="Effacer le filtre produit"
                   >
-                    ✕
+                    ?
                   </button>
                 )}
               </div>
@@ -1443,7 +1509,7 @@ export default function VueIntervenant({
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 relative items-start">
-              {/* Référentiel */}
+              {/* R�f�rentiel */}
               {refDisplay === "tableau" ? (
                 referentiel.length === 0 && centre && !loading?.referentiel ? (
                   <div className="bg-white rounded-l-lg p-6 min-h-[460px] flex flex-col items-center justify-center text-center border border-slate-200 relative overflow-hidden">
@@ -1463,7 +1529,7 @@ export default function VueIntervenant({
 
                         <h3 className="text-xl font-bold text-slate-800 mb-2">Importation en cours</h3>
                         <p className="text-sm text-slate-500 mb-6">
-                          Nous configurons les tâches par défaut pour ce centre. <br />Cela peut prendre quelques secondes.
+                          Nous configurons les t�ches par d�faut pour ce centre. <br />Cela peut prendre quelques secondes.
                         </p>
 
                         {/* Simulated Progress Bar */}
@@ -1481,10 +1547,10 @@ export default function VueIntervenant({
                         <div className="mb-6 p-5 bg-blue-50 rounded-2xl shadow-sm border border-blue-100">
                           <Upload className="w-10 h-10 text-blue-600" />
                         </div>
-                        <h3 className="text-xl font-bold text-slate-800 mb-3">Aucune tâche active</h3>
+                        <h3 className="text-xl font-bold text-slate-800 mb-3">Aucune t�che active</h3>
                         <p className="text-sm text-slate-500 mb-8 max-w-xs leading-relaxed">
-                          Ce centre ne contient pas encore de tâches. <br />
-                          Importez le modèle par défaut pour commencer la simulation.
+                          Ce centre ne contient pas encore de t�ches. <br />
+                          Importez le mod�le par d�faut pour commencer la simulation.
                         </p>
 
                         <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 w-full max-w-xs mb-6">
@@ -1493,7 +1559,7 @@ export default function VueIntervenant({
                               <span className="text-xs font-bold text-green-700">XLS</span>
                             </div>
                             <div className="text-left">
-                              <div className="text-xs font-semibold text-slate-700">{isAM ? "Modèle Messagerie (AM)" : "Modèle Standard"}</div>
+                              <div className="text-xs font-semibold text-slate-700">{isAM ? "Mod�le Messagerie (AM)" : "Mod�le Standard"}</div>
                               <div className="text-[10px] text-slate-400">Configuration automatique</div>
                             </div>
                           </div>
@@ -1515,36 +1581,36 @@ export default function VueIntervenant({
                 ) : (
                   <div className="bg-white rounded-l-lg p-1.5 min-h-[460px]">
                     <EnterpriseTable
-                      title="Référentiel Temps"
+                      title="R�f�rentiel Temps"
                       subtitle={
                         <div className="flex items-center gap-2">
                           <span>{(filterFamille || filterProduit) ? `Filtres: ${[filterFamille, filterProduit].filter(Boolean).join(" | ")}` : "Base de calcul"}</span>
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200">
-                            {referentielDisplayData.length} tâche{referentielDisplayData.length > 1 ? 's' : ''}
+                            {referentielDisplayData.length} t�che{referentielDisplayData.length > 1 ? 's' : ''}
                           </span>
                         </div>
                       }
-                      tooltip="Temps moyen nécessaire pour traiter une unité (colis, sac…)"
+                      tooltip="Temps moyen n�cessaire pour traiter une unit� (colis, sac�)"
                       icon={Clock}
                       columns={[
-                        { key: 'p', label: 'Produit', align: 'left', width: '110px', ellipsis: true }, // ✅ Ajout colonne Produit
+                        { key: 'p', label: 'Produit', align: 'left', width: '110px', ellipsis: true }, // ? Ajout colonne Produit
                         { key: 'f', label: 'Famille', align: 'left', width: '120px', ellipsis: true },
-                        { key: 't', label: 'Tâche', align: 'left', ellipsis: true },
+                        { key: 't', label: 'T�che', align: 'left', ellipsis: true },
 
-                        { key: 'resp', label: 'Responsable 1', align: 'left', width: '130px', ellipsis: true }, // ✅ Nom du poste responsable (1)
-                        { key: 'resp2', label: 'Responsable 2', align: 'left', width: '130px', ellipsis: true }, // ✅ Responsable 2 (Placeholder)
-                        { key: 'u', label: 'Unité', align: 'left', width: '100px', ellipsis: true },
+                        { key: 'resp', label: 'Responsable 1', align: 'left', width: '130px', ellipsis: true }, // ? Nom du poste responsable (1)
+                        { key: 'resp2', label: 'Responsable 2', align: 'left', width: '130px', ellipsis: true }, // ? Responsable 2 (Placeholder)
+                        { key: 'u', label: 'Unit�', align: 'left', width: '100px', ellipsis: true },
                         { key: 's', label: 'Sec', align: 'right', width: '80px', render: (val) => Number(val || 0).toFixed(0) },
                         { key: 'm', label: 'Min', align: 'right', width: '80px', render: (val) => Number(val || 0).toFixed(2) }
                       ]}
                       data={referentielDisplayData.map((r, i) => ({
-                        seq: r.ordre || i + 1, // Utiliser l'ordre DB ou fallback sur séquentiel
-                        p: (r.produit || "").replace(/Arrivé|Arrive|Reçu|Recu|Dépôt|Dépot|Depot|MED|AXES|LOCAL/gi, "").trim(), // ✅ Clean Produit (sans Arrivé/Reçu/Dépôt/MED/AXES/LOCAL)
+                        seq: r.ordre || i + 1, // Utiliser l'ordre DB ou fallback sur s�quentiel
+                        p: (r.produit || "").replace(/Arriv�|Arrive|Re�u|Recu|D�p�t|D�pot|Depot|MED|AXES|LOCAL/gi, "").trim(), // ? Clean Produit (sans Arriv�/Re�u/D�p�t/MED/AXES/LOCAL)
                         f: r.famille || "",
                         t: (r.t || "").replace(/\s*\([^)]*\)/g, "").trim(),
                         ph: r.ph && String(r.ph).trim().toLowerCase() !== "n/a" ? r.ph : "",
-                        resp: (r.responsibles?.[0] || "-").replace(/\s*\([^)]*\)/g, "").trim(), // ✅ Responsable 1
-                        resp2: (r.responsibles?.[1] || "-").replace(/\s*\([^)]*\)/g, "").trim(), // ✅ Responsable 2
+                        resp: (r.responsibles?.[0] || "-").replace(/\s*\([^)]*\)/g, "").trim(), // ? Responsable 1
+                        resp2: (r.responsibles?.[1] || "-").replace(/\s*\([^)]*\)/g, "").trim(), // ? Responsable 2
                         u: r.u,
                         m: r.m,
                         s: (Number(r.m) || 0) * 60
@@ -1552,13 +1618,13 @@ export default function VueIntervenant({
                       currentView="table"
                       onViewChange={(view) => setRefDisplay(view === 'table' ? 'tableau' : 'graphe')}
                       showViewToggle={true}
-                      enableExport={true} // ✅ Activation Export
+                      enableExport={true} // ? Activation Export
                       height={450}
                     />
                   </div>
                 )) : (
                 <Card
-                  title={<span className="text-[11px] font-semibold">Référentiel Temps</span>}
+                  title={<span className="text-[11px] font-semibold">R�f�rentiel Temps</span>}
                   actions={
                     <div className="flex rounded border border-slate-300 overflow-hidden">
                       <button
@@ -1587,7 +1653,7 @@ export default function VueIntervenant({
                 </Card>
               )}
 
-              {/* Flèche de séparation - Visible uniquement sur grand écran */}
+              {/* Fl�che de s�paration - Visible uniquement sur grand �cran */}
               <div className="hidden lg:flex flex-col items-center justify-center absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 pointer-events-none">
                 <ArrowRight className="w-6 h-6 text-[#005EA8]" />
                 <span className="text-[10px] font-medium text-[#005EA8] mt-2 bg-white/80 backdrop-blur px-1 rounded">
@@ -1595,20 +1661,20 @@ export default function VueIntervenant({
                 </span>
               </div>
 
-              {/* Résultats */}
+              {/* R�sultats */}
               {display === "tableau" ? (
                 loading?.simulation ? (
                   <Card
-                    title={<span className="text-[11px] font-semibold">Résultats de Simulation</span>}
+                    title={<span className="text-[11px] font-semibold">R�sultats de Simulation</span>}
                     bodyClassName="!p-1"
                   >
                     <div className="px-2 py-1 text-slate-500 text-[10px]">
-                      Calcul en cours…
+                      Calcul en cours�
                     </div>
                   </Card>
                 ) : !hasSimulated ? (
                   <Card
-                    title={<span className="text-[11px] font-semibold">Résultats de Simulation</span>}
+                    title={<span className="text-[11px] font-semibold">R�sultats de Simulation</span>}
                     bodyClassName="!p-1"
                   >
                     <EmptyStateFirstRun
@@ -1618,28 +1684,28 @@ export default function VueIntervenant({
                   </Card>
                 ) : simDirty ? (
                   <Card
-                    title={<span className="text-[11px] font-semibold">Résultats de Simulation</span>}
+                    title={<span className="text-[11px] font-semibold">R�sultats de Simulation</span>}
                     bodyClassName="!p-1"
                   >
                     <EmptyStateDirty onSimuler={handleSimuler} disabled={!centre} />
                   </Card>
                 ) : (mergedResults?.length ?? 0) === 0 ? (
                   <Card
-                    title={<span className="text-[11px] font-semibold">Résultats de Simulation</span>}
+                    title={<span className="text-[11px] font-semibold">R�sultats de Simulation</span>}
                     bodyClassName="!p-1"
                   >
                     <div className="px-2 py-1 text-slate-500 text-[10px]">
-                      Aucune donnée.
+                      Aucune donn�e.
                     </div>
                   </Card>
                 ) : (
                   <EnterpriseTable
-                    title="Résultats de Simulation"
-                    subtitle="Données calculées"
-                    tooltip="Volumes × temps → heures nécessaires"
+                    title="R�sultats de Simulation"
+                    subtitle="Donn�es calcul�es"
+                    tooltip="Volumes � temps ? heures n�cessaires"
                     icon={CheckCircle2}
                     columns={[
-                      { key: 'task', label: 'Tâche', align: 'left', ellipsis: true },
+                      { key: 'task', label: 'T�che', align: 'left', ellipsis: true },
 
                       { key: 'nombre_Unite', label: 'Unit. (/jour)', align: 'right', width: '100px', render: (val) => formatUnit(val) },
                       { key: 'heures', label: 'Heures', align: 'right', width: '80px', bold: true, render: (val) => Number(val || 0).toFixed(2) }
@@ -1654,7 +1720,7 @@ export default function VueIntervenant({
                 )
               ) : (
                 <Card
-                  title={<span className="text-[11px] font-semibold">Résultats de Simulation</span>}
+                  title={<span className="text-[11px] font-semibold">R�sultats de Simulation</span>}
                   actions={
                     <div className="flex rounded border border-slate-300 overflow-hidden">
                       <button
@@ -1676,7 +1742,7 @@ export default function VueIntervenant({
                   <div className="p-1.5 h-[450px]">
                     {loading?.simulation ? (
                       <div className="px-2 py-1 text-slate-500 text-[10px]">
-                        Calcul en cours…
+                        Calcul en cours�
                       </div>
                     ) : !hasSimulated ? (
                       <EmptyStateFirstRun
@@ -1707,13 +1773,13 @@ export default function VueIntervenant({
           </div>
         )}
 
-        {/* Zone de Synthèse des Résultats */}
+        {/* Zone de Synth�se des R�sultats */}
         {showDetails && hasSimulated && (
           <div className="bg-gradient-to-r from-blue-50/50 to-blue-50 border border-blue-100 rounded-lg p-2 mt-2 animate-fadeIn">
             <div className="flex items-center gap-2 mb-2">
               <Gauge className="w-4 h-4 text-[#005EA8]" />
               <h3 className="text-sm font-semibold text-[#005EA8]">
-                Synthèse des Résultats {titleSuffix}
+                Synth�se des R�sultats {titleSuffix}
               </h3>
             </div>
 
@@ -1743,9 +1809,9 @@ export default function VueIntervenant({
                 />
               </KPICardGlass>
 
-              {/* ETP Calculé */}
+              {/* ETP Calcul� */}
               <KPICardGlass
-                label="ETP Calculé"
+                label="ETP Calcul�"
                 icon={Calculator}
                 tone="blue"
                 emphasize
@@ -1796,7 +1862,7 @@ export default function VueIntervenant({
           </div>
         )}
 
-        {/* 🆕 Organigramme Button & Dialog */}
+        {/* ?? Organigramme Button & Dialog */}
         {showDetails && hasSimulated && isGlobalView && (
           <div className="flex justify-center mt-2">
             <Dialog>
@@ -1838,7 +1904,25 @@ export default function VueIntervenant({
             </Dialog>
           </div>
         )}
+        {/* Tableau Capacit� Nominale Int�gr� */}
+        {hasSimulated && capaciteNominalePositions && capaciteNominalePositions.length > 0 && (
+          <div className="mt-8">
+            <CapaciteNominaleTable
+              positions={capaciteNominalePositions}
+              centreLabel={centre?.label || "Simulation"}
+            />
+          </div>
+        )}
+
       </div>
     </div>
   );
 }
+
+
+
+
+
+
+
+
