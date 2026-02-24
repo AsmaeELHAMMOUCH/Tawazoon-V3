@@ -13,6 +13,7 @@ export default function ForecastingDialog({
     gridValues = null,
     postes = [],
     tasks = [],
+    wizardData = null,
 }) {
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -23,6 +24,7 @@ export default function ForecastingDialog({
                     gridValues={gridValues}
                     postes={postes}
                     tasks={tasks}
+                    wizardData={wizardData}
                     className="border-none shadow-none"
                 />
             </DialogContent>

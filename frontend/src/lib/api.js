@@ -616,6 +616,10 @@ export const api = {
     return await http("/bandoeng/simulate-bandoeng", { method: "POST", body: payload });
   },
 
+  bandoengForecast: async (payload) => {
+    return await http("/bandoeng/forecast", { method: "POST", body: payload });
+  },
+
   autoImportTasks: async (centreId) => {
     return await http(`/bandoeng/auto-import-tasks?centre_id=${centreId}`, { method: "POST" });
   },

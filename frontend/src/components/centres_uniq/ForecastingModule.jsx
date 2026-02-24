@@ -20,9 +20,12 @@ import {
     Minus,
     Package,
     Users,
+    RefreshCcw,
 } from "lucide-react";
 import ReactECharts from "echarts-for-react";
 import useEchartAutoResize from "@/components/hooks/useEchartAutoResize";
+import { api } from "@/lib/api";
+import toast from "react-hot-toast";
 
 // ─── helpers ───────────────────────────────────────────────────────────────────
 const fmt = (n) => Math.round(n).toLocaleString("fr-FR");
@@ -49,38 +52,31 @@ export default function ForecastingModule({
     gridValues = null,
     postes = [],
     tasks = [],
+    wizardData = null,
     className = "",
 }) {
     const currentYear = new Date().getFullYear();
     const [growthRates, setGrowthRates] = useState([0, 0, 0, 0]);
     const [calculatedData, setCalculatedData] = useState(null);
     const [selectedPoste, setSelectedPoste] = useState("all");
+    const [loading, setLoading] = useState(false);
     const refChart = useEchartAutoResize();
 
-    const baseVolumes = useMemo(() => flattenGridValues(gridValues), [gridValues]);
-    const hasVolumes = baseVolumes.length > 0;
+    // Base products labels for the table (calculated from Year N)
+    const productLabels = useMemo(() => {
+        const flattened = flattenGridValues(gridValues);
+        return flattened.map(v => v.label);
+    }, [gridValues]);
 
-    // Compute base ETP/Load for selected intervenant
-    const { baseEtp, baseLoad } = useMemo(() => {
-        if (selectedPoste === "all" || !selectedPoste) {
-            return { baseEtp: initialFte, baseLoad: initialLoad };
-        }
-        const poste = postes.find((p) => String(p.id) === selectedPoste);
-        if (!poste) return { baseEtp: initialFte, baseLoad: initialLoad };
+    const hasVolumes = productLabels.length > 0;
 
-        const label = (poste.label || poste.nom || "").trim().toUpperCase();
-        const filtered = tasks.filter(
-            (t) => (t.responsable || "").trim().toUpperCase() === label
-        );
-        const load = filtered.reduce((s, t) => s + (t.heures_calculees || 0), 0);
-        // ETP from ressources_par_poste is not available here; derive from load / heuresNet (7.33h)
-        const etp = load > 0 ? load / 8 : 0;
-        return { baseEtp: etp, baseLoad: load };
-    }, [selectedPoste, postes, tasks, initialFte, initialLoad]);
-
-    // Reset results when selection changes
+    // Reset results when selection changes (since selection is frontend only for now)
+    // Actually, if the backend returns the full simulation, we might need to filter tasks for the selected poste too.
+    // However, the user asked for the "calculation" (volume growth + simulation) at the backend.
     useEffect(() => {
-        setCalculatedData(null);
+        if (calculatedData) {
+            // Keep it for now, user might want to re-run if selection changes
+        }
     }, [selectedPoste]);
 
     const handleRateChange = (index, value) => {
@@ -92,46 +88,91 @@ export default function ForecastingModule({
         }
     };
 
-    const handleCalculate = () => {
-        const parsedRates = growthRates.map((r) => (parseFloat(r) || 0) / 100);
-
-        const results = [
-            {
-                year: currentYear,
-                fte: baseEtp,
-                load: baseLoad,
-                growth: 0,
-                volumes: baseVolumes.map((v) => ({ ...v })),
-            },
-        ];
-
-        let prevFte = baseEtp;
-        let prevLoad = baseLoad;
-        let prevVolumes = baseVolumes.map((v) => ({ ...v }));
-
-        for (let i = 0; i < 4; i++) {
-            const rate = parsedRates[i];
-            const nextFte = prevFte * (1 + rate);
-            const nextLoad = prevLoad * (1 + rate);
-            const nextVolumes = prevVolumes.map((v) => ({
-                ...v,
-                value: v.value * (1 + rate),
-            }));
-
-            results.push({
-                year: currentYear + i + 1,
-                fte: nextFte,
-                load: nextLoad,
-                growth: parseFloat(growthRates[i]) || 0,
-                volumes: nextVolumes,
-            });
-
-            prevFte = nextFte;
-            prevLoad = nextLoad;
-            prevVolumes = nextVolumes;
+    const handleCalculate = async () => {
+        if (!wizardData?.centre) {
+            toast.error("Données du centre manquantes");
+            return;
         }
 
-        setCalculatedData(results);
+        setLoading(true);
+        try {
+            const parsedRates = growthRates.map((r) => parseFloat(r) || 0);
+
+            const payload = {
+                centre_id: wizardData.centre,
+                grid_values: wizardData.gridValues,
+                parameters: {
+                    productivite: wizardData.productivite,
+                    idle_minutes: wizardData.idleMinutes,
+                    shift: wizardData.shift,
+                    nature_geo: wizardData.natureGeo,
+                    taux_complexite: wizardData.tauxComplexite,
+                    duree_trajet: wizardData.dureeTrajet,
+                    pct_axes_arrivee: wizardData.pctAxesArrivee,
+                    pct_axes_depart: wizardData.pctAxesDepart,
+                    pct_national: wizardData.pctNational,
+                    pct_international: wizardData.pctInternational,
+                    pct_collecte: wizardData.pctCollecte,
+                    pct_retour: wizardData.pctRetour,
+                    pct_marche_ordinaire: wizardData.pctMarcheOrdinaire,
+                    colis_amana_par_canva_sac: wizardData.colisAmanaParCanvaSac,
+                    nbr_co_sac: wizardData.nbrCoSac,
+                    nbr_cr_sac: wizardData.nbrCrSac,
+                    cr_par_caisson: wizardData.crParCaisson,
+                    ed_percent: wizardData.edPercent,
+
+                    // Individual flux overrides
+                    amana_pct_collecte: wizardData.amana_pct_collecte,
+                    amana_pct_retour: wizardData.amana_pct_retour,
+                    amana_pct_axes_arrivee: wizardData.amana_pct_axes_arrivee,
+                    amana_pct_axes_depart: wizardData.amana_pct_axes_depart,
+                    amana_pct_national: wizardData.amana_pct_national,
+                    amana_pct_international: wizardData.amana_pct_international,
+                    amana_pct_marche_ordinaire: wizardData.amana_pct_marche_ordinaire,
+                    amana_pct_crbt: wizardData.amana_pct_crbt,
+                    amana_pct_hors_crbt: wizardData.amana_pct_hors_crbt,
+                    co_pct_collecte: wizardData.co_pct_collecte,
+                    co_pct_retour: wizardData.co_pct_retour,
+                    co_pct_axes_arrivee: wizardData.co_pct_axes_arrivee,
+                    co_pct_axes_depart: wizardData.co_pct_axes_depart,
+                    co_pct_national: wizardData.co_pct_national,
+                    co_pct_international: wizardData.co_pct_international,
+                    cr_pct_collecte: wizardData.cr_pct_collecte,
+                    cr_pct_retour: wizardData.cr_pct_retour,
+                    cr_pct_axes_arrivee: wizardData.cr_pct_axes_arrivee,
+                    cr_pct_axes_depart: wizardData.cr_pct_axes_depart,
+                    cr_pct_national: wizardData.cr_pct_national,
+                    cr_pct_international: wizardData.cr_pct_international
+                },
+                growth_rates: parsedRates
+            };
+
+            const response = await api.bandoengForecast(payload);
+
+            // Map labels and years correctly
+            const mapped = response.forecast.map((step, idx) => {
+                const yearLabel = idx === 0 ? currentYear : currentYear + idx;
+
+                // Flatten volumes for each year
+                const flattenedVol = flattenGridValues(step.grid_values);
+
+                return {
+                    year: yearLabel,
+                    fte: step.fte,
+                    load: step.load,
+                    growth: step.growth,
+                    volumes: flattenedVol
+                };
+            });
+
+            setCalculatedData(mapped);
+            toast.success("Prévisions calculées avec succès");
+        } catch (error) {
+            console.error("Forecast error:", error);
+            toast.error("Erreur lors du calcul des prévisions");
+        } finally {
+            setLoading(false);
+        }
     };
 
     const chartOptions = useMemo(() => {
@@ -210,12 +251,6 @@ export default function ForecastingModule({
         };
     }, [calculatedData]);
 
-    const selectedPosteLabel = useMemo(() => {
-        if (selectedPoste === "all") return "Tous les intervenants";
-        const p = postes.find((p) => String(p.id) === selectedPoste);
-        return p ? (p.label || p.nom || "") : "";
-    }, [selectedPoste, postes]);
-
     return (
         <Card className={`overflow-hidden border-slate-200/60 shadow-xl bg-white/80 backdrop-blur-md ${className}`}>
             {/* Header */}
@@ -228,12 +263,12 @@ export default function ForecastingModule({
                         </CardTitle>
                     </div>
 
-                    {/* Filtre intervenant */}
+                    {/* Filtre intervenant (Frontend only context for now) */}
                     {postes.length > 0 && (
                         <div className="flex items-center gap-2">
                             <Users className="w-4 h-4 text-slate-400" />
                             <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">
-                                Intervenant
+                                Intervenant (Visuel uniquement)
                             </Label>
                             <Select value={selectedPoste} onValueChange={setSelectedPoste}>
                                 <SelectTrigger className="h-7 text-xs bg-white border-slate-200 min-w-[180px] max-w-xs">
@@ -252,16 +287,10 @@ export default function ForecastingModule({
                     )}
                 </div>
 
-                {/* Valeurs de base */}
                 <div className="flex items-center gap-4 mt-1">
                     <span className="text-[10px] text-slate-500 italic">
-                        Base {currentYear} — ETP : <strong>{Math.round(baseEtp * 100) / 100}</strong>
-                        {" · "}Charge : <strong>{Math.round(baseLoad * 100) / 100} h/j</strong>
-                        {selectedPoste !== "all" && (
-                            <span className="ml-2 px-2 py-0.5 bg-blue-50 text-[#005EA8] rounded-full font-semibold text-[9px]">
-                                {selectedPosteLabel}
-                            </span>
-                        )}
+                        Base {currentYear} — ETP : <strong>{Math.round(initialFte * 100) / 100}</strong>
+                        {" · "}Charge : <strong>{Math.round(initialLoad * 100) / 100} h/j</strong>
                     </span>
                 </div>
             </CardHeader>
@@ -273,7 +302,7 @@ export default function ForecastingModule({
                         <div>
                             <h4 className="text-[11px] font-bold text-slate-500 uppercase mb-3 tracking-wider flex items-center gap-2">
                                 <ArrowUpRight className="w-3.5 h-3.5" />
-                                Taux de Croissance Annuel
+                                Croissance Volume Annuelle
                             </h4>
 
                             <div className="flex items-center justify-between gap-4 mb-3 p-2 bg-white rounded-lg border border-slate-200">
@@ -306,14 +335,20 @@ export default function ForecastingModule({
                         <Button
                             className="w-full h-10 gap-2 font-bold text-xs uppercase tracking-wider bg-[#005EA8] hover:bg-[#004E8A] text-white shadow-lg shadow-blue-100"
                             onClick={handleCalculate}
+                            disabled={loading}
                         >
-                            <Play className="w-4 h-4 fill-current" />
-                            Calculer Projections
+                            {loading ? (
+                                <RefreshCcw className="w-4 h-4 animate-spin" />
+                            ) : (
+                                <Play className="w-4 h-4 fill-current" />
+                            )}
+                            {loading ? "Calcul en cours..." : "Calculer Projections"}
                         </Button>
 
                         <div className="p-3 bg-blue-50/50 rounded-xl border border-blue-100">
                             <p className="text-[10px] text-slate-500 leading-relaxed italic">
-                                * Croissance composée : chaque année s'applique sur le volume de l'année précédente.
+                                * Simulation complète effectuée par le serveur pour chaque année
+                                en appliquant la croissance composée sur tous les types de volumes.
                             </p>
                         </div>
                     </div>
@@ -329,7 +364,7 @@ export default function ForecastingModule({
                             <>
                                 {/* ETP cards */}
                                 <div>
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">ETP Final projeté</p>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">ETP Final projeté (Simulé)</p>
                                     <div className="grid grid-cols-5 gap-2">
                                         {calculatedData.map((d, i) => (
                                             <div
@@ -338,7 +373,7 @@ export default function ForecastingModule({
                                                     }`}
                                             >
                                                 <p className="text-[9px] font-bold text-slate-400 uppercase">{d.year}</p>
-                                                <p className="text-lg font-black text-slate-800">
+                                                <p className="text-sm font-black text-slate-800">
                                                     {(Math.round(d.fte * 100) / 100).toLocaleString("fr-FR")}
                                                 </p>
                                                 <div className="flex items-center justify-center gap-0.5">
@@ -362,11 +397,11 @@ export default function ForecastingModule({
                                 </div>
 
                                 {/* Volume table */}
-                                {hasVolumes && selectedPoste === "all" && (
+                                {hasVolumes && (
                                     <div>
                                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                                             <Package className="w-3.5 h-3.5" />
-                                            Volumes projetés par produit
+                                            Volumes projetés simulés
                                         </p>
                                         <div className="overflow-x-auto rounded-xl border border-slate-100">
                                             <table className="w-full text-[10px]">
@@ -376,24 +411,22 @@ export default function ForecastingModule({
                                                         {calculatedData.map((d) => (
                                                             <th key={d.year} className="text-right px-3 py-2 font-bold text-slate-600 whitespace-nowrap">
                                                                 {d.year}
-                                                                {d.year !== currentYear && (
-                                                                    <span className={`ml-1 text-[8px] font-bold ${d.growth > 0 ? "text-emerald-500" : d.growth < 0 ? "text-rose-500" : "text-slate-400"}`}>
-                                                                        {d.growth > 0 ? "+" : ""}{d.growth}%
-                                                                    </span>
-                                                                )}
                                                             </th>
                                                         ))}
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    {baseVolumes.map((vol, ri) => (
-                                                        <tr key={vol.label} className={`border-b border-slate-100 last:border-0 ${ri % 2 === 0 ? "bg-white" : "bg-slate-50/40"}`}>
-                                                            <td className="px-3 py-2 font-medium text-slate-700 truncate max-w-[180px]">{vol.label}</td>
-                                                            {calculatedData.map((d) => (
-                                                                <td key={d.year} className={`px-3 py-2 text-right ${d.year === currentYear ? "text-slate-500 font-medium" : "text-slate-800 font-bold"}`}>
-                                                                    {fmt(d.volumes[ri]?.value ?? 0)}
-                                                                </td>
-                                                            ))}
+                                                    {productLabels.map((label, ri) => (
+                                                        <tr key={label} className={`border-b border-slate-100 last:border-0 ${ri % 2 === 0 ? "bg-white" : "bg-slate-50/40"}`}>
+                                                            <td className="px-3 py-2 font-medium text-slate-700 truncate max-w-[180px]">{label}</td>
+                                                            {calculatedData.map((d) => {
+                                                                const vol = d.volumes.find(v => v.label === label);
+                                                                return (
+                                                                    <td key={d.year} className={`px-3 py-2 text-right ${d.year === currentYear ? "text-slate-500 font-medium" : "text-slate-800 font-bold"}`}>
+                                                                        {fmt(vol?.value ?? 0)}
+                                                                    </td>
+                                                                );
+                                                            })}
                                                         </tr>
                                                     ))}
                                                     <tr className="bg-blue-50/60 border-t-2 border-blue-200">

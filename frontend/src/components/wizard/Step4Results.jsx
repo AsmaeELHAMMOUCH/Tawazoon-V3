@@ -1090,6 +1090,7 @@ export default function Step4Results({
                 gridValues={data?.gridValues || null}
                 postes={postes}
                 tasks={simulationResults?.tasks || []}
+                wizardData={data}
             />
 
             <OrganigrammeDialog
