@@ -20,6 +20,7 @@ router = APIRouter(prefix="/bandoeng", tags=["Bandoeng Simulation"])
 # Constants
 BANDOENG_CENTRE_ID = 1942
 
+from app.models.db_models import normalize_ws, sql_normalize_ws
 
 # --- Pydantic Models for API ---
 
@@ -37,7 +38,7 @@ class BandoengVolumesIn(BaseModel):
     grid_values: dict = {}
 
 class BandoengParamsIn(BaseModel):
-    pct_sac: float = 60.0
+    ed_percent: float = 40.0
     colis_amana_par_canva_sac: float = 35.0
     nbr_co_sac: float = 350.0
     nbr_cr_sac: float = 400.0
@@ -49,14 +50,41 @@ class BandoengParamsIn(BaseModel):
     pct_local: float = 0.0
     pct_international: float = 0.0
     pct_national: float = 0.0
-    pct_march_ordinaire: float = 0.0
+    pct_marche_ordinaire: float = 0.0
     productivite: float = 100.0
     idle_minutes: float = 0.0
-    ratio_trieur: float = 1200.0
-    ratio_preparateur: float = 1000.0
-    ratio_magasinier: float = 800.0
     shift: int = 1
+    duree_trajet: float = 0.0
+    has_guichet: int = 1
+    cr_par_caisson: float = 40.0
     pct_mois: Optional[float] = None
+    
+    # --- Flux specific overrides (amana_) ---
+    amana_pct_collecte: Optional[float] = None
+    amana_pct_retour: Optional[float] = None
+    amana_pct_axes_arrivee: Optional[float] = None
+    amana_pct_axes_depart: Optional[float] = None
+    amana_pct_national: Optional[float] = None
+    amana_pct_international: Optional[float] = None
+    amana_pct_marche_ordinaire: Optional[float] = None
+    amana_pct_crbt: Optional[float] = None
+    amana_pct_hors_crbt: Optional[float] = None
+
+    # --- Flux specific overrides (co_) ---
+    co_pct_collecte: Optional[float] = None
+    co_pct_retour: Optional[float] = None
+    co_pct_axes_arrivee: Optional[float] = None
+    co_pct_axes_depart: Optional[float] = None
+    co_pct_national: Optional[float] = None
+    co_pct_international: Optional[float] = None
+
+    # --- Flux specific overrides (cr_) ---
+    cr_pct_collecte: Optional[float] = None
+    cr_pct_retour: Optional[float] = None
+    cr_pct_axes_arrivee: Optional[float] = None
+    cr_pct_axes_depart: Optional[float] = None
+    cr_pct_national: Optional[float] = None
+    cr_pct_international: Optional[float] = None
 
 class BandoengSimulateRequest(BaseModel):
     centre_id: int = 1942
@@ -87,11 +115,9 @@ class BandoengSimulateResponse(BaseModel):
     heures_net_jour: float
     fte_calcule: float
     fte_arrondi: int
-    besoin_trieur: float
-    besoin_preparateur: float
-    besoin_magasinier: float
     total_ressources_humaines: float
     ressources_par_poste: dict = {}
+    debug_info: dict = {}
 
 @router.post("/simulate", response_model=BandoengSimulateResponse)
 def simulate_bandoeng(request: BandoengSimulateRequest, db: Session = Depends(get_db)):
@@ -112,7 +138,7 @@ def simulate_bandoeng(request: BandoengSimulateRequest, db: Session = Depends(ge
         )
         
         params = BandoengParameters(
-            pct_sac=request.params.pct_sac,
+            ed_percent=request.params.ed_percent,
             colis_amana_par_canva_sac=request.params.colis_amana_par_canva_sac,
             nbr_co_sac=request.params.nbr_co_sac,
             nbr_cr_sac=request.params.nbr_cr_sac,
@@ -124,14 +150,38 @@ def simulate_bandoeng(request: BandoengSimulateRequest, db: Session = Depends(ge
             pct_local=request.params.pct_local,
             pct_international=request.params.pct_international,
             pct_national=request.params.pct_national,
-            pct_march_ordinaire=request.params.pct_march_ordinaire,
+            pct_marche_ordinaire=request.params.pct_marche_ordinaire,
             productivite=request.params.productivite,
             idle_minutes=request.params.idle_minutes,
-            ratio_trieur=request.params.ratio_trieur,
-            ratio_preparateur=request.params.ratio_preparateur,
-            ratio_magasinier=request.params.ratio_magasinier,
             shift=request.params.shift,
-            pct_mois=request.params.pct_mois
+            duree_trajet=request.params.duree_trajet if hasattr(request.params, 'duree_trajet') else 0.0,
+            has_guichet=request.params.has_guichet,
+            cr_par_caisson=request.params.cr_par_caisson,
+            pct_mois=request.params.pct_mois,
+            # AMANA
+            amana_pct_collecte=request.params.amana_pct_collecte,
+            amana_pct_retour=request.params.amana_pct_retour,
+            amana_pct_axes_arrivee=request.params.amana_pct_axes_arrivee,
+            amana_pct_axes_depart=request.params.amana_pct_axes_depart,
+            amana_pct_national=request.params.amana_pct_national,
+            amana_pct_international=request.params.amana_pct_international,
+            amana_pct_marche_ordinaire=request.params.amana_pct_marche_ordinaire,
+            amana_pct_crbt=request.params.amana_pct_crbt,
+            amana_pct_hors_crbt=request.params.amana_pct_hors_crbt,
+            # CO
+            co_pct_collecte=request.params.co_pct_collecte,
+            co_pct_retour=request.params.co_pct_retour,
+            co_pct_axes_arrivee=request.params.co_pct_axes_arrivee,
+            co_pct_axes_depart=request.params.co_pct_axes_depart,
+            co_pct_national=request.params.co_pct_national,
+            co_pct_international=request.params.co_pct_international,
+            # CR
+            cr_pct_collecte=request.params.cr_pct_collecte,
+            cr_pct_retour=request.params.cr_pct_retour,
+            cr_pct_axes_arrivee=request.params.cr_pct_axes_arrivee,
+            cr_pct_axes_depart=request.params.cr_pct_axes_depart,
+            cr_pct_national=request.params.cr_pct_national,
+            cr_pct_international=request.params.cr_pct_international
         )
         
         print(f"DEBUG: simulate_bandoeng received grid_values: {request.volumes.grid_values}")
@@ -164,9 +214,6 @@ def simulate_bandoeng(request: BandoengSimulateRequest, db: Session = Depends(ge
             heures_net_jour=result.heures_net_jour,
             fte_calcule=result.fte_calcule,
             fte_arrondi=result.fte_arrondi,
-            besoin_trieur=result.besoin_trieur,
-            besoin_preparateur=result.besoin_preparateur,
-            besoin_magasinier=result.besoin_magasinier,
             total_ressources_humaines=result.total_ressources_humaines,
             ressources_par_poste=result.ressources_par_poste
         )
@@ -214,7 +261,7 @@ def simulate_bandoeng_direct(request: SimplifiedBandoengRequest, db: Session = D
         # 2. Construire BandoengParameters depuis le dict parameters
         p = request.parameters
         params = BandoengParameters(
-            pct_sac=p.get('pct_sac', 60.0),
+            ed_percent=p.get('ed_percent', p.get('pct_sac', 60.0)),
             colis_amana_par_canva_sac=p.get('colis_amana_par_canva_sac', 35.0),
             nbr_co_sac=p.get('nbr_co_sac', 350.0),
             nbr_cr_sac=p.get('nbr_cr_sac', 400.0),
@@ -226,14 +273,38 @@ def simulate_bandoeng_direct(request: SimplifiedBandoengRequest, db: Session = D
             pct_local=p.get('pct_axes_depart', 0.0),  # Alias frontend
             pct_international=p.get('pct_international', 0.0),
             pct_national=p.get('pct_national', 100.0),
-            pct_march_ordinaire=p.get('pct_marche_ordinaire', 0.0),
+            pct_marche_ordinaire=p.get('pct_marche_ordinaire', 0.0),
             productivite=p.get('productivite', 100.0),
             idle_minutes=p.get('idle_minutes', 0.0),
-            ratio_trieur=p.get('ratio_trieur', 1200.0),
-            ratio_preparateur=p.get('ratio_preparateur', 1000.0),
-            ratio_magasinier=p.get('ratio_magasinier', 800.0),
             shift=int(p.get('shift', 1)),
-            pct_mois=p.get('pct_mois')
+            duree_trajet=float(p.get('duree_trajet', 0.0)), # Use 'duree_trajet' key.
+            has_guichet=int(p.get('has_guichet', 1)),
+            pct_mois=p.get('pct_mois'),
+            cr_par_caisson=p.get('cr_par_caisson', 40.0),
+            # AMANA
+            amana_pct_collecte=p.get('amana_pct_collecte'),
+            amana_pct_retour=p.get('amana_pct_retour'),
+            amana_pct_axes_arrivee=p.get('amana_pct_axes_arrivee'),
+            amana_pct_axes_depart=p.get('amana_pct_axes_depart'),
+            amana_pct_national=p.get('amana_pct_national'),
+            amana_pct_international=p.get('amana_pct_international'),
+            amana_pct_marche_ordinaire=p.get('amana_pct_marche_ordinaire'),
+            amana_pct_crbt=p.get('amana_pct_crbt'),
+            amana_pct_hors_crbt=p.get('amana_pct_hors_crbt'),
+            # CO
+            co_pct_collecte=p.get('co_pct_collecte'),
+            co_pct_retour=p.get('co_pct_retour'),
+            co_pct_axes_arrivee=p.get('co_pct_axes_arrivee'),
+            co_pct_axes_depart=p.get('co_pct_axes_depart'),
+            co_pct_national=p.get('co_pct_national'),
+            co_pct_international=p.get('co_pct_international'),
+            # CR
+            cr_pct_collecte=p.get('cr_pct_collecte'),
+            cr_pct_retour=p.get('cr_pct_retour'),
+            cr_pct_axes_arrivee=p.get('cr_pct_axes_arrivee'),
+            cr_pct_axes_depart=p.get('cr_pct_axes_depart'),
+            cr_pct_national=p.get('cr_pct_national'),
+            cr_pct_international=p.get('cr_pct_international')
         )
         
         print(f"DEBUG: simulate_bandoeng_direct received grid_values: {request.grid_values}")
@@ -273,9 +344,6 @@ def simulate_bandoeng_direct(request: SimplifiedBandoengRequest, db: Session = D
             heures_net_jour=result.heures_net_jour,
             fte_calcule=result.fte_calcule,
             fte_arrondi=result.fte_arrondi,
-            besoin_trieur=result.besoin_trieur,
-            besoin_preparateur=result.besoin_preparateur,
-            besoin_magasinier=result.besoin_magasinier,
             total_ressources_humaines=result.total_ressources_humaines,
             ressources_par_poste=result.ressources_par_poste
         )
@@ -295,6 +363,7 @@ class BandoengCentreDetailsResponse(BaseModel):
     moi_global: int
     mod_global: int
     total_global: int
+    task_count: int = 0
 
 # Importer les modèles nécessaires
 from app.models.db_models import Centre, CentrePoste, Poste, Tache, HierarchiePostes
@@ -323,23 +392,26 @@ def get_bandoeng_centre_details(centre_id: int, db: Session = Depends(get_db)):
         
         for cp, type_poste, poste_label, poste_code in centre_postes:
             eff = cp.effectif_actuel or 0
-            # Logique MOI : Type 'MOI', 'INDIRECT', 'STRUCTURE' ou label contenant 'RESPONSABLE'
+            # Logique MOI : Type 'MOI', 'INDIRECT' ou 'STRUCTURE'
             t = (type_poste or "").upper()
-            l = (poste_label or "").upper()
-            is_moi = t in ["MOI", "INDIRECT", "STRUCTURE"] or "RESPONSABLE" in l
+            is_moi = t in ["MOI", "INDIRECT", "STRUCTURE"]
             
             if is_moi:
                 moi_sum += eff
             else:
                 mod_sum += eff
+        
+        # 3. Compter les tâches du centre
+        task_count = db.query(Tache).join(CentrePoste).filter(CentrePoste.centre_id == centre_id).count()
                 
         return BandoengCentreDetailsResponse(
             centre_id=centre.id,
             centre_name=centre.label,
-            aps=centre.aps or 0.0,
-            moi_global=moi_sum,
-            mod_global=mod_sum,
-            total_global=moi_sum + mod_sum
+            aps=float(centre.aps or 0),
+            moi_global=int(moi_sum),
+            mod_global=int(mod_sum),
+            total_global=int(moi_sum + mod_sum),
+            task_count=task_count
         )
 
     except Exception as e:
@@ -507,7 +579,7 @@ def get_import_template():
     ws.title = "Modele Import"
     headers = [
         "Nom de tâche", "Produit", "Famille", "Unité de mesure", 
-        "Responsable 1", "Responsable 2", "Temps_min", "Temps_sec"
+        "Responsable 1", "Responsable 2", "Temps_min", "Temps_sec", "Base de calcul"
     ]
     ws.append(headers)
     
@@ -518,7 +590,7 @@ def get_import_template():
     return Response(
         content=buffer.getvalue(),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": "attachment; filename=modele_import_taches.xlsx"}
+        headers={"Content-Disposition": "attachment; filename=Modele_Mise_a_jour_Taches.xlsx"}
     )
 
 @router.post("/import/tasks")
@@ -539,28 +611,32 @@ async def import_bandoeng_tasks(
         updated_count = 0
         duplicate_count = 0
         not_found_count = 0
-        errors = []
+        failed_rows = [] 
         
+        # --- Header for error report ---
+        error_headers = [
+            "Nom de tâche", "Produit", "Famille", "Unité de mesure", 
+            "Responsable 1", "Responsable 2", "Temps_min", "Temps_sec", "base de calcul",
+            "Raison du rejet"
+        ]
+
         # --- Helper: Resolve CentrePoste ---
         from app.models.db_models import Tache, CentrePoste, Poste
         from sqlalchemy import func, or_
         
         def resolve_centre_poste(session, c_id, resp_name):
             if not resp_name:
-                return None
+                return None, None
                 
-            l_resp = resp_name.strip()
-            # 1. Trouver le Poste (Exact match on Label, slightly loose)
-            # Utilisation de ILIKE via func.lower pour etre insensible a la casse
-            poste = session.query(Poste).filter(func.lower(func.trim(Poste.label)) == l_resp.lower()).first()
-            
+            l_resp = normalize_ws(resp_name)
+            # 1. Trouver le Poste
+            poste = session.query(Poste).filter(sql_normalize_ws(Poste.label) == l_resp).first()
             if not poste:
-                return None
+                return None, f"Poste '{resp_name}' non trouvé"
             
             # 2. Trouver CentrePoste via Code
             if not poste.Code:
-                # Fallback: try finding by ID if possible? No, user said "par le nom... table postes... code de postes... table centres_poste (code_resp)"
-                return None
+                return None, f"Poste '{resp_name}' sans code"
                 
             cp = (
                 session.query(CentrePoste)
@@ -570,70 +646,81 @@ async def import_bandoeng_tasks(
             )
             
             if cp:
-                return cp.id
+                return cp.id, None
             else:
                 # 3. Créer CentrePoste
                 new_cp = CentrePoste(
                     centre_id=c_id,
-                    poste_id=poste.id,  # "poste_id le meme de la ligne trouvée"
+                    poste_id=poste.id,
                     code_resp=poste.Code,
                     effectif_actuel=0
                 )
                 session.add(new_cp)
                 session.flush()
-                return new_cp.id
+                return new_cp.id, None
+
+        def parse_num(val, default=0.0):
+            if val is None: return default
+            try:
+                return float(str(val).replace(',', '.'))
+            except:
+                return default
 
         # --- Main Loop ---
         for row_idx in range(2, ws.max_row + 1):
-            # Lecture
-            nom_tache = str(ws.cell(row=row_idx, column=1).value or "").strip()
-            produit = str(ws.cell(row=row_idx, column=2).value or "").strip()
-            famille = str(ws.cell(row=row_idx, column=3).value or "").strip()
-            unite_mesure = str(ws.cell(row=row_idx, column=4).value or "").strip()
-            
-            resp1_raw = str(ws.cell(row=row_idx, column=5).value or "").strip()
-            resp2_raw = str(ws.cell(row=row_idx, column=6).value or "").strip()
-            
-            t_min_raw = ws.cell(row=row_idx, column=7).value
-            t_sec_raw = ws.cell(row=row_idx, column=8).value
+            row_vals = [ws.cell(row=row_idx, column=i).value for i in range(1, 10)]
+            if not any(row_vals): continue
+
+            nom_tache, produit, famille, unite_mesure = [str(x or "").strip() for x in row_vals[:4]]
+            resp1_raw, resp2_raw = [str(x or "").strip() for x in row_vals[4:6]]
+            t_min_raw, t_sec_raw, bc_val = row_vals[6:9]
+            # base_calcul logic with percentage detection
+            cell_bc = ws.cell(row=row_idx, column=9)
+            base_calcul = None
+            if bc_val is not None:
+                # Si Excel a formaté en pourcentage (ex: 40% -> 0.4), on multiplie par 100 pour avoir "40"
+                if isinstance(bc_val, (int, float)) and cell_bc.number_format and '%' in str(cell_bc.number_format):
+                    base_calcul = str(int(round(bc_val * 100)))
+                else:
+                    base_calcul = str(bc_val)
             
             if not nom_tache or nom_tache == "None":
                 continue
                 
             # Parsing Temps
-            try:
-                t_min = float(str(t_min_raw).replace(',', '.')) if t_min_raw is not None else 0.0
-                t_sec = float(str(t_sec_raw).replace(',', '.')) if t_sec_raw is not None else 0.0
-            except:
-                errors.append(f"Ligne {row_idx}: Temps invalide")
-                continue
+            t_min = parse_num(t_min_raw)
+            t_sec = parse_num(t_sec_raw)
                 
             # Recherche Tâches
             q = (
                 db.query(Tache)
                 .join(CentrePoste, Tache.centre_poste_id == CentrePoste.id)
                 .filter(CentrePoste.centre_id == centre_id)
-                .filter(func.lower(func.trim(Tache.nom_tache)) == nom_tache.lower())
-                .filter(func.lower(func.trim(Tache.famille_uo)) == famille.lower())
-                .filter(func.lower(func.trim(Tache.unite_mesure)) == unite_mesure.lower())
+                .filter(sql_normalize_ws(Tache.nom_tache) == normalize_ws(nom_tache))
+                .filter(sql_normalize_ws(Tache.famille_uo) == normalize_ws(famille))
+                .filter(sql_normalize_ws(Tache.unite_mesure) == normalize_ws(unite_mesure))
             )
             
             # Filtre Produit (LIKE)
             if produit:
-                 q = q.filter(func.lower(Tache.produit).like(f"%{produit.lower()}%"))
+                 q = q.filter(sql_normalize_ws(Tache.produit).like(f"%{normalize_ws(produit)}%"))
             
             found_tasks = q.all()
             
             if not found_tasks:
                 not_found_count += 1
-                errors.append(f"Avertissement Ligne {row_idx}: Tâche '{nom_tache}' (Fam: {famille}, Unit: {unite_mesure}) non trouvée.")
+                failed_rows.append(list(row_vals) + ["Tâche non trouvée"])
                 continue
                 
             # --- Application Règles ---
-            cp_id_1 = resolve_centre_poste(db, centre_id, resp1_raw) if resp1_raw else None
-            # Pour resp2, on ne le cherche que si resp2_raw existe
-            cp_id_2 = resolve_centre_poste(db, centre_id, resp2_raw) if resp2_raw else None
+            cp_id_1, err1 = resolve_centre_poste(db, centre_id, resp1_raw) if resp1_raw else (None, None)
+            cp_id_2, err2 = resolve_centre_poste(db, centre_id, resp2_raw) if resp2_raw else (None, None)
             
+            if (resp1_raw and not cp_id_1) or (resp2_raw and not cp_id_2):
+                reason = err1 or err2
+                failed_rows.append(list(row_vals) + [reason])
+                continue
+
             # Cas A : Deux Responsables
             if resp1_raw and resp2_raw:
                 if len(found_tasks) == 1:
@@ -642,15 +729,13 @@ async def import_bandoeng_tasks(
                     
                     # Update T1
                     if cp_id_1: t1.centre_poste_id = cp_id_1
-                    t1.moyenne_min = t_min
-                    t1.moy_sec = t_sec
+                    t1.moyenne_min = str(t_min)
+                    t1.moy_sec = str(t_sec)
+                    if base_calcul is not None: t1.base_calcul = base_calcul
                     updated_count += 1
                     
                     # Create T2 (Duplicate)
                     if cp_id_2:
-                        # On doit copier l'objet Tache. 
-                        # SQLAlchemy ne supporte pas deepcopy directement sur les instances attachées facilement sans détacher.
-                        # On crée une nouvelle instance manuellement
                         t2 = Tache(
                             centre_poste_id=cp_id_2,
                             nom_tache=t1.nom_tache,
@@ -659,82 +744,88 @@ async def import_bandoeng_tasks(
                             unite_mesure=t1.unite_mesure,
                             etat=t1.etat,
                             produit=t1.produit,
-                            base_calcul=t1.base_calcul,
-                            flux_id=t1.flux_id,
-                            sens_id=t1.sens_id,
                             segment_id=t1.segment_id,
-                            moyenne_min=t_min,
-                            moy_sec=t_sec
+                            moyenne_min=str(t_min),
+                            moy_sec=str(t_sec),
+                            base_calcul=base_calcul if base_calcul is not None else t1.base_calcul
                         )
                         db.add(t2)
                         duplicate_count += 1
                     else:
-                        errors.append(f"Ligne {row_idx}: Resp2 '{resp2_raw}' introuvable/création impossible. Duplication annulée.")
+                        failed_rows.append(list(row_vals) + ["Resp2 introuvable"])
                 
                 elif len(found_tasks) >= 2:
                     # 2+ tâches -> Update T1 et T2
                     # Tâche 1 -> Resp 1
                     t1 = found_tasks[0]
                     if cp_id_1: t1.centre_poste_id = cp_id_1
-                    t1.moyenne_min = t_min
-                    t1.moy_sec = t_sec
+                    t1.moyenne_min = str(t_min)
+                    t1.moy_sec = str(t_sec)
+                    if base_calcul is not None: t1.base_calcul = base_calcul
                     updated_count += 1
                     
                     # Tâche 2 -> Resp 2
                     t2 = found_tasks[1]
                     if cp_id_2: t2.centre_poste_id = cp_id_2
-                    t2.moyenne_min = t_min
-                    t2.moy_sec = t_sec
+                    t2.moyenne_min = str(t_min)
+                    t2.moy_sec = str(t_sec)
+                    if base_calcul is not None: t2.base_calcul = base_calcul
                     updated_count += 1
                     
-                    # Les autres ? (Si > 2) - Le plan dit "Mettre chrono à 0" pour les doublons en Cas B, mais pour Cas A "Update T1, Update T2". 
-                    # On assume que les autres (T3...) ne sont pas touchés ou mis à 0?
-                    # Dans le doute du commentaire "on modifie ni le chrono ni le responsable" qui s'appliquait avant modif,
-                    # je vais appliquer la logique Cas B aux extras : Chrono 0
+                    # Les autres -> Supprimer
                     for t_extra in found_tasks[2:]:
-                         t_extra.moyenne_min = 0
-                         t_extra.moy_sec = 0
+                         db.delete(t_extra)
 
-            # Cas B : Un Seul Responsable (Resp1)
+            # Cas B : Un Seul Responsable
             elif resp1_raw and not resp2_raw:
-                if len(found_tasks) == 1:
-                     # Simple update
-                     t1 = found_tasks[0]
-                     if cp_id_1: t1.centre_poste_id = cp_id_1
-                     t1.moyenne_min = t_min
-                     t1.moy_sec = t_sec
-                     updated_count += 1
+                t1 = found_tasks[0]
+                if cp_id_1: t1.centre_poste_id = cp_id_1
+                t1.moyenne_min = str(t_min)
+                t1.moy_sec = str(t_sec)
+                if base_calcul is not None: t1.base_calcul = base_calcul
+                updated_count += 1
                 
-                elif len(found_tasks) >= 2:
-                    # Règle modifiée : T1 -> Update Resp/Chrono, T2..TN -> Chrono=0
-                    t1 = found_tasks[0]
-                    if cp_id_1: t1.centre_poste_id = cp_id_1
-                    t1.moyenne_min = t_min
-                    t1.moy_sec = t_sec
-                    updated_count += 1
-                    
-                    # Les autres -> Chrono 0
+                if len(found_tasks) >= 2:
                     for t_other in found_tasks[1:]:
-                        t_other.moyenne_min = 0
-                        t_other.moy_sec = 0
-                        # Pas de modif de responsable
+                        db.delete(t_other)
             
             else:
-                 # Aucun responsable fourni ? On met juste à jour le chrono ?
-                 # Pas spécifié, on assume update chrono sur tous
                  for t in found_tasks:
-                     t.moyenne_min = t_min
-                     t.moy_sec = t_sec
+                     t.moyenne_min = str(t_min)
+                     t.moy_sec = str(t_sec)
+                     if base_calcul is not None: t.base_calcul = base_calcul
                      updated_count += 1
 
         db.commit()
+
+        if failed_rows:
+            ewb = Workbook()
+            ews = ewb.active
+            ews.title = "Rejets Mise à jour"
+            ews.append(error_headers)
+            for fr in failed_rows:
+                ews.append(fr)
+            
+            eout = io.BytesIO()
+            ewb.save(eout)
+            eout.seek(0)
+            
+            return Response(
+                content=eout.read(),
+                headers={
+                    'Content-Disposition': 'attachment; filename="rejet_mise_a_jour_taches.xlsx"',
+                    'X-Error-Count': str(len(failed_rows)),
+                    'X-Updated-Count': str(updated_count)
+                },
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
         
         return {
             "success": True,
             "updated_count": updated_count,
             "duplicate_count": duplicate_count,
             "not_found_count": not_found_count,
-            "errors": errors
+            "failed_count": 0
         }
 
     except Exception as e:
@@ -742,3 +833,334 @@ async def import_bandoeng_tasks(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=400, detail=f"Erreur import: {str(e)}")
+
+
+@router.get("/new-tasks-template")
+def get_new_tasks_template():
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Modele Nouvelles Taches"
+    headers = [
+        "Nom de tâche", "Produit", "Famille", "Phase", 
+        "Unité de mesure", "base de calcul", 
+        "Responsable 1", "Responsable 2", 
+        "Temps_min", "Temps_sec"
+    ]
+    ws.append(headers)
+    
+    # Optional: adjust column widths
+    for col in ws.columns:
+        max_length = 0
+        column = col[0].column_letter
+        for cell in col:
+            try:
+                if len(str(cell.value)) > max_length:
+                    max_length = len(str(cell.value))
+            except: pass
+        adjusted_width = (max_length + 2)
+        ws.column_dimensions[column].width = adjusted_width if adjusted_width > 15 else 15
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    headers_resp = {
+        'Content-Disposition': 'attachment; filename="modele_nouvelles_taches.xlsx"'
+    }
+    return Response(content=output.read(), headers=headers_resp, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+
+
+def _process_task_import_workbook(db: Session, centre_id: int, ws):
+    from app.models.db_models import Tache, CentrePoste, Poste
+    
+    created_count = 0
+    failed_rows = []
+    
+    def resolve_cp(session, c_id, resp_name):
+        if not resp_name: return None, None
+        l_resp = normalize_ws(resp_name)
+        # 1. Check in Postes
+        poste = session.query(Poste).filter(sql_normalize_ws(Poste.label) == l_resp).first()
+        if not poste:
+            return None, f"Poste '{resp_name}' non trouvé dans le référentiel"
+        
+        if not poste.Code:
+            return None, f"Le poste '{resp_name}' n'a pas de code associé"
+        
+        # 2. Check in CentrePoste
+        cp = (
+            session.query(CentrePoste)
+            .filter(CentrePoste.centre_id == c_id)
+            .filter(CentrePoste.code_resp == poste.Code)
+            .first()
+        )
+        
+        if cp:
+            return cp.id, None
+        else:
+            # 3. Create CentrePoste
+            new_cp = CentrePoste(
+                centre_id=c_id,
+                poste_id=poste.id,
+                code_resp=poste.Code,
+                effectif_actuel=0
+            )
+            session.add(new_cp)
+            session.flush()
+            return new_cp.id, None
+
+    def parse_numeric(val, default="0.0"):
+        if val is None: return default
+        try:
+            # Convertir en float pour nettoyer (gère les formats bizarres d'Excel)
+            clean_val = float(str(val).replace(',', '.'))
+            return str(clean_val)
+        except:
+            return default
+
+    # Main loop
+    for row_idx in range(2, ws.max_row + 1):
+        row_data = [ws.cell(row=row_idx, column=i).value for i in range(1, 11)]
+        if not any(row_data): continue # Skip empty rows
+        
+        nom_tache, produit, famille, phase, unit, base, r1_name, r2_name, t_min, t_sec = row_data
+        
+        # Resolution Resp 1
+        cp_id_1, err1 = resolve_cp(db, centre_id, r1_name)
+        
+        # Resolution Resp 2
+        cp_id_2, err2 = (None, None)
+        if r2_name:
+            cp_id_2, err2 = resolve_cp(db, centre_id, r2_name)
+        
+        # Error handling
+        if (r1_name and not cp_id_1) or (r2_name and not cp_id_2):
+            reason = err1 if (r1_name and not cp_id_1) else err2
+            failed_rows.append(list(row_data) + [reason])
+            continue
+        
+        if not cp_id_1 and not cp_id_2:
+            failed_rows.append(list(row_data) + ["Aucun responsable valide fourni"])
+            continue
+
+        # Insertion
+        tasks_to_create = []
+        if cp_id_1:
+            tasks_to_create.append(cp_id_1)
+        if cp_id_2:
+            tasks_to_create.append(cp_id_2)
+        
+        # Parsing numeric values properly
+        parsed_min = parse_numeric(t_min)
+        parsed_sec = parse_numeric(t_sec)
+        
+        # Base de calcul with percentage detection
+        cell_base = ws.cell(row=row_idx, column=6)
+        if base is not None:
+            if isinstance(base, (int, float)) and cell_base.number_format and '%' in str(cell_base.number_format):
+                parsed_base = str(int(round(base * 100)))
+            else:
+                parsed_base = parse_numeric(base, "100")
+        else:
+            parsed_base = "100"
+
+        for cp_id in tasks_to_create:
+            new_t = Tache(
+                nom_tache=str(nom_tache or ""),
+                produit=str(produit or ""),
+                famille_uo=str(famille or ""),
+                phase=str(phase or ""),
+                unite_mesure=str(unit or ""),
+                base_calcul=parsed_base,
+                moyenne_min=parsed_min,
+                moy_sec=parsed_sec,
+                centre_poste_id=cp_id,
+                etat="ACTIF"
+            )
+            db.add(new_t)
+            created_count += 1
+    
+    return created_count, failed_rows
+
+@router.post("/import-new-tasks")
+async def import_new_tasks(
+    centre_id: int = Query(..., description="ID du centre cible"),
+    file: UploadFile = File(...), 
+    db: Session = Depends(get_db)
+):
+    import openpyxl
+    from openpyxl import Workbook
+    
+    try:
+        content = await file.read()
+        wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
+        ws = wb.active
+        
+        created_count, failed_rows = _process_task_import_workbook(db, centre_id, ws)
+        
+        db.commit()
+
+        # If errors, return Excel file
+        if failed_rows:
+            error_headers = [
+                "Nom de tâche", "Produit", "Famille", "Phase", 
+                "Unité de mesure", "base de calcul", 
+                "Responsable 1", "Responsable 2", 
+                "Temps_min", "Temps_sec", "Raison du rejet"
+            ]
+            ewb = Workbook()
+            ews = ewb.active
+            ews.title = "Taches non creees"
+            ews.append(error_headers)
+            for fr in failed_rows:
+                ews.append(fr)
+            
+            # Style errors
+            for cell in ews[1]:
+                cell.font = openpyxl.styles.Font(bold=True)
+            
+            eout = io.BytesIO()
+            ewb.save(eout)
+            eout.seek(0)
+            
+            return Response(
+                content=eout.read(),
+                headers={
+                    'Content-Disposition': 'attachment; filename="rejet_import_taches.xlsx"',
+                    'X-Error-Count': str(len(failed_rows)),
+                    'X-Created-Count': str(created_count)
+                },
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
+        return {
+            "success": True,
+            "created_count": created_count,
+            "failed_count": 0
+        }
+
+    except Exception as e:
+        db.rollback()
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=400, detail=f"Erreur import: {str(e)}")
+
+@router.post("/auto-import-tasks")
+async def auto_import_tasks(
+    centre_id: int = Query(..., description="ID du centre cible"),
+    db: Session = Depends(get_db)
+):
+    from app.models.db_models import Centre, Categorie
+    import openpyxl
+    import os
+    
+    try:
+        # 1. Vérifier si le centre existe et récupérer sa typologie
+        centre = db.query(Centre).filter(Centre.id == centre_id).first()
+        if not centre:
+            raise HTTPException(status_code=404, detail="Centre non trouvé")
+        
+        # 2. Déterminer le fichier Excel à utiliser
+        typology_label = ""
+        if centre.categorie:
+            typology_label = str(centre.categorie.label).upper()
+        
+        # Mapping simple basé sur les préfixes ou mots clés
+        filename = "Standard.xlsx"
+        if "AGENCE MESSAGERIE" in typology_label or typology_label.startswith("AM"):
+            filename = "AM.xlsx"
+        elif "CENTRE MESSAGERIE" in typology_label or typology_label.startswith("CM"):
+            filename = "CM.xlsx"
+        elif "CENTRE DE DISTRIBUTION" in typology_label or typology_label.startswith("CD"):
+            filename = "CD.xlsx"
+        elif "CENTRE COURRIER COLIS" in typology_label or typology_label.startswith("CCC"):
+            filename = "CCC.xlsx"
+        elif "CELLULE DE DISTRIBUTION" in typology_label or typology_label.startswith("CLD"):
+            filename = "CLD.xlsx"
+        elif "CENTRE DE TRAITEMENT ET DISTRIBUTION" in typology_label or typology_label.startswith("CTD"):
+            filename = "CTD.xlsx"
+            
+        resources_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "resources", "typologies")
+        file_path = os.path.join(resources_dir, filename)
+        
+        if not os.path.exists(file_path):
+            # Fallback to Standard.xlsx if exists
+            file_path = os.path.join(resources_dir, "Standard.xlsx")
+            if not os.path.exists(file_path):
+                raise HTTPException(status_code=404, detail=f"Fichier de typologie non trouvé pour {typology_label}")
+
+        # 3. Charger le workbook et importer les tâches
+        wb = openpyxl.load_workbook(file_path, data_only=True)
+        ws = wb.active
+        
+        created_count, failed_rows = _process_task_import_workbook(db, centre_id, ws)
+        
+        db.commit()
+        
+        return {
+            "success": True,
+            "created_count": created_count,
+            "failed_count": len(failed_rows),
+            "typology_used": filename,
+            "failed_rows": failed_rows # Return all failed rows for the report
+        }
+
+    except Exception as e:
+        db.rollback()
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Erreur lors de l'auto-import : {str(e)}")
+
+class ExportRejectionsRequest(BaseModel):
+    failed_rows: List[list]
+
+@router.post("/export-rejections")
+async def export_rejections(request: ExportRejectionsRequest):
+    """
+    Génère un fichier Excel à partir des lignes en échec.
+    """
+    try:
+        from openpyxl import Workbook
+        import io
+        
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Tâches rejetées"
+        
+        headers = [
+            "Nom de tâche", "Produit", "Famille", "Phase", 
+            "Unité de mesure", "base de calcul", 
+            "Responsable 1", "Responsable 2", 
+            "Temps_min", "Temps_sec", "Raison du rejet"
+        ]
+        ws.append(headers)
+        
+        for row in request.failed_rows:
+            ws.append(row)
+            
+        # Optional: adjust column widths
+        for col in ws.columns:
+            max_length = 0
+            column = col[0].column_letter
+            for cell in col:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except: pass
+            adjusted_width = (max_length + 2)
+            ws.column_dimensions[column].width = adjusted_width if adjusted_width > 15 else 15
+
+        buffer = io.BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
+        
+        return Response(
+            content=buffer.read(),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": "attachment; filename=rejet_auto_import.xlsx"}
+        )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Erreur lors de l'export des rejets : {str(e)}")

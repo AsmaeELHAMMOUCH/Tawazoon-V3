@@ -199,7 +199,7 @@ export default function SimulationIntervenantAvancee() {
                     pct_local: params.pct_local || 0,
                     pct_international: params.pct_international || 0,
                     pct_national: params.pct_national || 100,
-                    pct_march_ordinaire: params.pct_march_ordinaire || 0
+                    pct_marche_ordinaire: params.pct_marche_ordinaire || 0
                 }
             };
 

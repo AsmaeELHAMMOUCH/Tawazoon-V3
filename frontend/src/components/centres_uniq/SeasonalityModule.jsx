@@ -41,7 +41,7 @@ export default function SeasonalityModule({
         return Math.round(sum * 100) / 100;
     }, [pcts]);
 
-    const isValid = Math.abs(totalPct - 100) < 0.1;
+    const isValid = Math.abs(totalPct - 100) <= 0;
 
     const handlePctChange = (index, value) => {
         const newPcts = [...pcts];
@@ -53,7 +53,10 @@ export default function SeasonalityModule({
     };
 
     const handleEqualDistribution = () => {
-        setPcts(Array(12).fill(8.33));
+        // 8 * 8.33 + 4 * 8.34 = 100.00
+        const newPcts = Array(12).fill(8.33);
+        for (let i = 0; i < 4; i++) newPcts[i] = 8.34;
+        setPcts(newPcts);
     };
 
     const handleClear = () => {

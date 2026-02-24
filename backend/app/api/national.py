@@ -11,7 +11,7 @@ from app.schemas.direction_sim import VolumeMatriciel, GlobalParams, CentreSimul
 from app.services.national_simulation_service import process_national_simulation
 
 router = APIRouter(tags=["national"])
-print("🔹 [NATIONAL] Loading National API Router...")
+print(">>> [NATIONAL] Loading National API Router...")
 
 class NationalSimRequest(BaseModel):
     """Request pour simulation nationale"""

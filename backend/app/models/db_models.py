@@ -16,6 +16,15 @@ class Activite(Base):
     code_activite = Column(String(10), nullable=False)
 
 
+def normalize_ws(s: str) -> str:
+    if not s: return ""
+    return "".join(str(s).split()).lower()
+
+def sql_normalize_ws(col):
+    from sqlalchemy import func
+    return func.replace(func.lower(col), ' ', '')
+
+
 class Region(Base):
     __tablename__ = "regions"
     __table_args__ = {"schema": "dbo"}

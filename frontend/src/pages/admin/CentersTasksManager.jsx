@@ -16,10 +16,12 @@ import {
     Building,
     Tag,
     Loader2,
-    FileDown
+    Upload
 } from "lucide-react";
 import FlexNavbar from "@/components/FluxNavbar";
 import { useSimulationParams } from "@/hooks/usePersistedState";
+import TaskImportDialog from '@/components/common/TaskImportDialog';
+import NewTaskImportDialog from '@/components/common/NewTaskImportDialog';
 
 export default function CentersTasksManager() {
     // --- Etats de sélection ---
@@ -62,6 +64,9 @@ export default function CentersTasksManager() {
         centre_poste_id: "",
         centre_poste_id_2: "",
     });
+
+    const [isImportOpen, setIsImportOpen] = useState(false);
+    const [isNewImportOpen, setIsNewImportOpen] = useState(false);
 
     // --- Chargement initial ---
     useEffect(() => {
@@ -394,77 +399,6 @@ export default function CentersTasksManager() {
         </div>
     );
 
-    const handleDownloadTemplate = async () => {
-        try {
-            // Utiliser les tâches filtrées (visibles) ou fallback sur un tableau vide pour générer un modèle vierge si besoin
-            const dataToExport = filteredTasks.length > 0 ? filteredTasks : [];
-
-            // Chargement dynamique des librairies
-            const ExcelJS = await import('exceljs');
-            const { saveAs } = await import('file-saver');
-
-            const workbook = new ExcelJS.Workbook();
-            const worksheet = workbook.addWorksheet('Taches');
-
-            // Colonnes (Doit matcher le format d'import du backend)
-            // Format attendu: Seq, Etat, Produit, Famille, Phase, Min, Sec, Taches, Unité, Base, Resp1, Resp2 (Ordre optionnel)
-            worksheet.columns = [
-                { header: 'Seq', key: 'seq', width: 8 },
-                { header: 'Ordre', key: 'ordre', width: 8 },
-                { header: 'ETAT', key: 'etat', width: 10 },
-                { header: 'Produit', key: 'produit', width: 20 },
-                { header: 'Famille', key: 'famille', width: 25 },
-                { header: 'Phase', key: 'phase', width: 15 }, // 🆕 Ajout Colonne Phase
-                { header: 'Tache', key: 'nom_tache', width: 40 },
-                { header: 'Unité Mesure', key: 'unite', width: 15 },
-                { header: 'Base de calcul', key: 'base', width: 12 },
-                { header: 'Responsable 1', key: 'resp1', width: 20 },
-                { header: 'Responsable 2', key: 'resp2', width: 20 },
-                { header: 'Min', key: 'min', width: 10 },
-                { header: 'Sec', key: 'sec', width: 10 },
-            ];
-
-            // Style Header
-            worksheet.getRow(1).font = { bold: true };
-
-            if (dataToExport.length > 0) {
-                // Remplissage avec les données existantes pour faciliter l'édition
-                dataToExport.forEach((t, index) => {
-                    worksheet.addRow({
-                        seq: index + 1,
-                        ordre: t.ordre || (index + 1) * 10,
-                        etat: t.etat || "ACTIF",
-                        produit: t.produit || "",
-                        famille: t.famille || t.famille_uo || "",
-                        phase: t.phase || "", // 🆕 Mapping Phase
-                        nom_tache: t.task || t.nom_tache || "",
-                        unite: t.unit || t.unite_mesure || "",
-                        base: t.base_calcul || 100,
-                        // Utilisation des responsables groupés (logique frontend)
-                        resp1: t.displayResps?.[0]?.label || "",
-                        resp2: t.displayResps?.[1]?.label || "",
-                        min: t.min_min || 0,
-                        sec: t.moy_sec || t.min_sec || 0
-                    });
-                });
-            } else {
-                // Ligne d'exemple si vide
-                worksheet.addRow({
-                    seq: 1, ordre: 10, etat: "ACTIF", produit: "Exemple", famille: "Famille", phase: "Phase A",
-                    nom_tache: "Nom de la tâche", unite: "uo", base: 100, resp1: "RESP1", resp2: "RESP2", min: 1, sec: 30
-                });
-            }
-
-            const buffer = await workbook.xlsx.writeBuffer();
-            const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-            const filename = `export_taches_${centre ? centre : 'all'}_${new Date().toISOString().slice(0, 10)}.xlsx`;
-            saveAs(blob, filename);
-
-        } catch (err) {
-            console.error(err);
-            setError("Erreur technique lors de la génération du fichier : " + err.message);
-        }
-    };
 
     return (
         <div className="min-h-screen bg-slate-50/50 p-4 space-y-4 font-sans text-slate-600">
@@ -599,67 +533,32 @@ export default function CentersTasksManager() {
                     </div>
                     {/* Actions */}
                     <div className="flex items-center gap-2">
-                        {/* Input File caché */}
-                        <input
-                            type="file"
-                            accept=".xlsx, .xls"
-                            id="import-tasks"
-                            className="hidden"
-                            onChange={async (e) => {
-                                const file = e.target.files[0];
-                                if (!file || !centre) return;
-
-                                if (!window.confirm(`Vous êtes sur le point d'importer des tâches pour le centre sélectionné.\nCela peut ajouter de nouvelles tâches.\nContinuer ?`)) {
-                                    e.target.value = null;
-                                    return;
-                                }
-
-                                setLoading(true);
-                                try {
-                                    // Appel import avec (centreId, file, posteId)
-                                    // Si un poste est sélectionné, on le passe pour cibler l'import
-                                    const res = await api.importTaches(centre, file, poste || null);
-                                    showSuccess(`Import terminé avec succès ! ${res.count} tâches traitées. ` + (res.errors?.length ? `(${res.errors.length} erreurs)` : ""));
-
-                                    if (res.errors && res.errors.length > 0) {
-                                        console.warn("Import Errors:", res.errors);
-                                    }
-
-                                    // Rafraichir
-                                    const data = await api.taches({ centreId: centre, posteId: poste || null });
-                                    setTasks(data);
-                                } catch (error) {
-                                    console.error(error);
-                                    setError("Erreur lors de l'import : " + error.message);
-                                } finally {
-                                    setLoading(false);
-                                    e.target.value = null; // Reset input
-                                }
-                            }}
-                        />
-
                         {centre && (
-                            <>
-                                <button
-                                    onClick={handleDeleteAll}
-                                    className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-red-200 text-red-600 rounded-lg text-xs font-medium hover:bg-red-50 transition cursor-pointer"
-                                    title="Supprimer toutes les tâches"
-                                >
-                                    <Trash2 size={14} /> Tout supprimer
-                                </button>
-                                <button
-                                    onClick={handleDownloadTemplate}
-                                    className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-slate-300 text-slate-700 rounded-lg text-xs font-medium hover:bg-slate-50 transition cursor-pointer"
-                                >
-                                    <FileDown size={14} /> Modèle
-                                </button>
-                                <label
-                                    htmlFor="import-tasks"
-                                    className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-slate-300 text-slate-700 rounded-lg text-xs font-medium hover:bg-slate-50 transition cursor-pointer"
-                                >
-                                    <Save size={14} /> Importer
-                                </label>
-                            </>
+                            <button
+                                onClick={handleDeleteAll}
+                                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-red-200 text-red-600 rounded-lg text-xs font-medium hover:bg-red-50 transition cursor-pointer"
+                                title="Supprimer toutes les tâches"
+                            >
+                                <Trash2 size={14} /> Tout supprimer
+                            </button>
+                        )}
+                        {centre && (
+                            <button
+                                onClick={() => setIsImportOpen(true)}
+                                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-green-200 text-green-600 rounded-lg text-xs font-medium hover:bg-green-50 transition cursor-pointer"
+                                title="Mettre à jour les tâches (Import Excel)"
+                            >
+                                <Upload size={14} /> Mise à jour
+                            </button>
+                        )}
+                        {centre && (
+                            <button
+                                onClick={() => setIsNewImportOpen(true)}
+                                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-blue-200 text-blue-600 rounded-lg text-xs font-medium hover:bg-blue-50 transition cursor-pointer"
+                                title="Ajouter de nouvelles tâches (Import Excel)"
+                            >
+                                <Plus size={14} /> Nouvelles tâches
+                            </button>
                         )}
                     </div>
                 </div>
@@ -934,6 +833,29 @@ export default function CentersTasksManager() {
                     </table>
                 </div>
             </div>
+
+            <TaskImportDialog
+                open={isImportOpen}
+                onOpenChange={setIsImportOpen}
+                onSuccess={() => {
+                    // Refetch tasks
+                    api.taches({ centreId: centre, posteId: poste || null })
+                        .then((data) => setTasks(data))
+                        .catch((err) => console.error("Erreur second refresh:", err));
+                }}
+                centreId={centre}
+            />
+
+            <NewTaskImportDialog
+                open={isNewImportOpen}
+                onOpenChange={setIsNewImportOpen}
+                onSuccess={() => {
+                    api.taches({ centreId: centre, posteId: poste || null })
+                        .then((data) => setTasks(data))
+                        .catch((err) => console.error("Erreur refresh:", err));
+                }}
+                centreId={centre}
+            />
         </div>
     );
 }

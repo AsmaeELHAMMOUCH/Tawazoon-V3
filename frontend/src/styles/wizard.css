@@ -1,0 +1,84 @@
+/* Wizard Specific Styles */
+
+.wizard-container {
+  min-height: 100vh;
+  background: linear-gradient(to bottom, #ffffff, #f8fafc);
+}
+
+.wizard-step-content {
+  animation: fadeInUp 0.3s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.wizard-card {
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(226, 232, 240, 0.6);
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  border-radius: 0.75rem;
+}
+
+.wizard-section-title {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: rgb(51, 65, 85);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.wizard-param-block {
+  padding: 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgb(226, 232, 240);
+  background: rgba(248, 250, 252, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.wizard-param-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgb(71, 85, 105);
+  margin-bottom: 0.25rem;
+}
+
+.wizard-param-input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  border: 1px solid rgb(226, 232, 240);
+  border-radius: 0.5rem;
+  transition: all 0.2s;
+}
+
+.wizard-param-input:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  border-color: rgb(59, 130, 246);
+}
+
+.wizard-calculated-value {
+  padding: 0.5rem 0.75rem;
+  background: rgb(239, 246, 255);
+  border: 1px solid rgb(191, 219, 254);
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: rgb(29, 78, 216);
+}

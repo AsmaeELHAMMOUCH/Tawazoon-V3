@@ -236,12 +236,11 @@ export default function CNDPSimulation() {
         return Math.max(0, baseProductivity - idleH);
     }, [params]);
 
-    // const isMoiPoste = (p) => {
-    //     if (!p) return false;
-    //     const type = (p.type_poste || "").toUpperCase();
-    //     const label = (p.poste_label || p.label || "").toUpperCase();
-    //     return type === "MOI" || type === "INDIRECT" || type === "STRUCTURE" || label.includes("RESPONSABLE") || !!p.is_moi;
-    // };
+    const isMoiPoste = (p) => {
+        if (!p) return false;
+        const type = (p.type_poste || "").toUpperCase();
+        return type === "MOI" || type === "INDIRECT" || type === "STRUCTURE" || !!p.is_moi;
+    };
 
 
     const handleSimulate = async () => {
@@ -837,16 +836,39 @@ export default function CNDPSimulation() {
                                         ? (isMoiPoste(selectedPosteObj) ? Number(selectedPosteObj.effectif_actuel || 0) : 0)
                                         : displayMOI;
 
-                                    const totalFinal = targetFinalMOD + targetFinalMOI;
-
-                                    let actualStatutaire = 0;
+                                    let actualMOD = 0;
+                                    let actualMOI = 0;
                                     if (selectedPosteObj) {
-                                        actualStatutaire = Number(selectedPosteObj.effectif_actuel || 0);
+                                        actualMOD = isMOD ? Number(selectedPosteObj.effectif_actuel || 0) : 0;
+                                        actualMOI = isMoiPoste(selectedPosteObj) ? Number(selectedPosteObj.effectif_actuel || 0) : 0;
                                     } else {
-                                        actualStatutaire = displayStatutaire;
+                                        actualMOD = displayMOD;
+                                        actualMOI = displayMOI;
+                                    }
+                                    const actualStatutaire = actualMOD + actualMOI;
+                                    const gapStatutaire = targetFinalMOD + targetFinalMOI - actualStatutaire;
+
+                                    let diffStatutaire = 0;
+                                    let apsDelta = 0;
+                                    const actualAPS = Math.round(displayAPS);
+
+                                    if (gapStatutaire > 0) {
+                                        diffStatutaire = 0;
+                                        apsDelta = gapStatutaire;
+                                    } else if (gapStatutaire < 0) {
+                                        const surplus = Math.abs(gapStatutaire);
+                                        if (surplus <= actualAPS) {
+                                            apsDelta = -surplus;
+                                            diffStatutaire = 0;
+                                        } else {
+                                            apsDelta = -actualAPS;
+                                            diffStatutaire = actualAPS - surplus;
+                                        }
                                     }
 
-                                    const apsDisplay = Math.round(apsCalculeDisplay);
+                                    const apsDisplay = actualAPS + apsDelta;
+                                    const statutaireCible = actualStatutaire + diffStatutaire;
+                                    const totalFinal = statutaireCible + apsDisplay;
 
                                     return (
                                         <KPICardGlass
@@ -859,11 +881,11 @@ export default function CNDPSimulation() {
                                             {(!selectedPoste || selectedPoste === "all") && (
                                                 <EffectifFooter
                                                     totalLabel="Statutaire"
-                                                    totalValue={Math.round(actualStatutaire)}
+                                                    totalValue={Math.round(statutaireCible)}
                                                     modValue={targetFinalMOD}
                                                     moiValue={formatSmallNumber(targetFinalMOI)}
                                                     apsLabel="APS"
-                                                    apsValue={apsDisplay}
+                                                    apsValue={Math.round(apsDisplay)}
                                                 />
                                             )}
                                         </KPICardGlass>
@@ -882,7 +904,6 @@ export default function CNDPSimulation() {
                                     const targetFinalMOI = selectedPosteObj
                                         ? (isMoiPoste(selectedPosteObj) ? Number(selectedPosteObj.effectif_actuel || 0) : 0)
                                         : displayMOI;
-                                    const statutaireCible = targetFinalMOD + targetFinalMOI;
 
                                     let actualMOD = 0;
                                     let actualMOI = 0;
@@ -894,19 +915,37 @@ export default function CNDPSimulation() {
                                         actualMOI = displayMOI;
                                     }
                                     const actualStatutaire = actualMOD + actualMOI;
-                                    const diffStatutaire = statutaireCible - actualStatutaire;
+                                    const gapStatutaire = targetFinalMOD + targetFinalMOI - actualStatutaire;
 
-                                    const apsTarget = Math.round(apsCalculeDisplay);
-                                    const apsActual = Math.round(displayAPS);
-                                    const apsDelta = apsTarget - apsActual;
+                                    let diffStatutaire = 0;
+                                    let apsDelta = 0;
+                                    const actualAPS = Math.round(displayAPS);
+
+                                    if (gapStatutaire > 0) {
+                                        diffStatutaire = 0;
+                                        apsDelta = gapStatutaire;
+                                    } else if (gapStatutaire < 0) {
+                                        const surplus = Math.abs(gapStatutaire);
+                                        if (surplus <= actualAPS) {
+                                            apsDelta = -surplus;
+                                            diffStatutaire = 0;
+                                        } else {
+                                            apsDelta = -actualAPS;
+                                            diffStatutaire = actualAPS - surplus;
+                                        }
+                                    }
 
                                     const isIndividual = selectedPoste && selectedPoste !== "all";
-                                    const valToDisplay = isIndividual ? diffStatutaire : (apsDelta > 0 ? apsDelta : 0);
-                                    const tone = valToDisplay > 0 ? "rose" : "emerald";
-                                    const displayTotal = isIndividual ? formatSigned(Math.round(valToDisplay)) : (valToDisplay > 0 ? `+${Math.round(valToDisplay)}` : "0");
+                                    const valToDisplay = isIndividual
+                                        ? gapStatutaire
+                                        : (gapStatutaire > 0 ? apsDelta : (diffStatutaire !== 0 ? diffStatutaire : apsDelta));
 
-                                    const diffMOD = targetFinalMOD - actualMOD;
-                                    const diffMOI = targetFinalMOI - actualMOI;
+                                    const tone = valToDisplay > 0 ? "rose" : "emerald";
+                                    const displayTotal = isIndividual
+                                        ? formatSigned(Math.round(valToDisplay))
+                                        : (valToDisplay === 0 ? "0" : formatSigned(Math.round(valToDisplay)));
+
+                                    const diffMOD = diffStatutaire - (targetFinalMOI - actualMOI);
 
                                     return (
                                         <KPICardGlass
@@ -920,8 +959,8 @@ export default function CNDPSimulation() {
                                                 <EffectifFooter
                                                     totalLabel="Ecart Statutaire"
                                                     totalValue={formatSigned(Math.round(diffStatutaire))}
-                                                    modValue={formatSigned(diffMOD)}
-                                                    moiValue={formatSigned(diffMOI)}
+                                                    modValue={formatSigned(Math.round(diffMOD))}
+                                                    moiValue={formatSigned(Math.round(targetFinalMOI - actualMOI))}
                                                     apsLabel="Var. APS"
                                                     apsValue={formatSigned(Math.round(apsDelta))}
                                                 />

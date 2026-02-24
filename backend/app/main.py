@@ -103,7 +103,7 @@ app.include_router(builder_router, prefix="/api/builder")
 
 
 app.include_router(national_router, prefix="/api") # ✅ Simulation nationale
-print(f"✅ [MAIN] National Router included. Routes starting with /api/simulation/template:")
+print(f"[OK] [MAIN] National Router included. Routes starting with /api/simulation/template:")
 for route in app.routes:
     if hasattr(route, "path") and "/simulation/template" in route.path:
         print(f"   -> {route.path} [{route.methods}]")

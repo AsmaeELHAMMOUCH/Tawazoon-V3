@@ -5,7 +5,6 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from pydantic import BaseModel
 import openpyxl
-import pandas as pd
 import io
 from io import BytesIO
 import os
@@ -407,54 +406,7 @@ def _process_import_taches(content: bytes, centre_id: int, db: Session, poste_id
         "errors": errors[:10] # Top 10 errors
     }
 
-@router.post("/taches/import/{centre_id}")
-async def import_taches(
-    centre_id: int, 
-    poste_id: Optional[int] = Query(None),
-    file: UploadFile = File(...), 
-    db: Session = Depends(get_db)
-):
-    """
-    Importe les tâches depuis un fichier Excel (Format spécifique).
-    """
-    content = await file.read()
-    return _process_import_taches(content, centre_id, db, poste_id)
 
-@router.get("/taches/export-template")
-def export_template():
-    """Génère un template Excel pour l'import des tâches"""
-    try:
-        data = [{
-            "Seq": 1,
-            "Ordre": 10,
-            "ETAT": "ACTIF",
-            "Produit": "Exemple Produit",
-            "Famille": "Exemple Famille",
-            "Phase": "Exemple Phase",
-            "min": 1,
-            "sec": 30,
-            "taches": "Exemple de tâche",
-            "Unité Mesure": "uo",
-            "base de calcul": 100,
-            "Responsable 1": "CAB",
-            "Responsable 2": "GUICHET"
-        }]
-            
-        df = pd.DataFrame(data)
-        
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df.to_excel(writer, index=False, sheet_name='Taches')
-        
-        output.seek(0)
-        return StreamingResponse(
-            output,
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={"Content-Disposition": "attachment; filename=modele_import_taches.xlsx"}
-        )
-    except Exception as e:
-        print(f"Error generating template: {e}")
-        return {"error": str(e)}
     
 
 class InitTemplateInput(BaseModel):

@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 import {
-    Layers, Upload, Trash2, Edit2, Check, X, Download
+    Layers, Trash2, Edit2, Check, X, Upload
 } from 'lucide-react';
+
+import TaskImportDialog from '@/components/common/TaskImportDialog';
+import NewTaskImportDialog from '@/components/common/NewTaskImportDialog';
+import { Plus } from 'lucide-react';
 
 export default function CentersTasksManager() {
     const [regions, setRegions] = useState([]);
@@ -25,6 +29,8 @@ export default function CentersTasksManager() {
     const [editFormData, setEditFormData] = useState({
         nom: '', region_id: '', direction_id: '', categorie_id: ''
     });
+    const [isImportOpen, setIsImportOpen] = useState(false);
+    const [isNewImportOpen, setIsNewImportOpen] = useState(false);
 
     useEffect(() => {
         Promise.all([
@@ -73,48 +79,6 @@ export default function CentersTasksManager() {
             .then(setTaches)
             .catch(e => setError(e.message))
             .finally(() => setLoading(false));
-    };
-
-    const handleDownloadTemplate = async () => {
-        try {
-            const blob = await api.getImportTemplate();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = "modele_taches_centre.xlsx";
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-        } catch (e) {
-            alert("Erreur téléchargement modèle: " + e.message);
-        }
-    };
-
-    const handleImport = async (e) => {
-        const file = e.target.files[0];
-
-        if (!file || !selectedCentre) return;
-
-        // No check for selectedPoste anymore (it's global for centre)
-        if (!window.confirm("Cet import mettra à jour les tâches pour ce centre en utilisant le modèle Excel (colonnes Responsable 1/2). \nCela peut modifier les chronos et responsables existants. Continuer ?")) {
-            e.target.value = null;
-            return;
-        }
-
-        try {
-            setLoading(true);
-            const res = await api.importTasksFromTemplate(selectedCentre, file);
-            alert(`Import Réussi :\n- ${res.updated_count} tâches mises à jour\n- ${res.duplicate_count} doublons gérés\n- ${res.not_found_count} non trouvées\n\n(Détails dans la console si erreurs)`);
-            if (res.errors && res.errors.length > 0) {
-                console.warn("Import Errors:", res.errors);
-            }
-            loadTaches();
-        } catch (e) {
-            alert("Erreur import: " + e.message);
-        } finally {
-            setLoading(false);
-            e.target.value = null;
-        }
     };
 
     const handleDelete = async (id) => {
@@ -248,15 +212,6 @@ export default function CentersTasksManager() {
 
                             <div className="flex gap-2">
                                 <button
-                                    onClick={handleDownloadTemplate}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm transition-all"
-                                    title="Télécharger le modèle Excel"
-                                >
-                                    <Download className="w-3.5 h-3.5 text-green-600" />
-                                    <span>Modèle</span>
-                                </button>
-
-                                <button
                                     onClick={handleEditClick}
                                     className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm transition-all"
                                     title="Modifier les informations du centre"
@@ -265,19 +220,27 @@ export default function CentersTasksManager() {
                                     <span>Centre</span>
                                 </button>
 
-                                <label className={`
-                                    flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all shadow-sm border
-                                    bg-white border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer hover:border-slate-300
-                                `}>
-                                    <Upload className="w-3.5 h-3.5" />
-                                    <span>Import Global</span>
-                                    <input
-                                        type="file"
-                                        accept=".xlsx"
-                                        className="hidden"
-                                        onChange={handleImport}
-                                    />
-                                </label>
+                                {selectedCentre && (
+                                    <button
+                                        onClick={() => setIsImportOpen(true)}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm transition-all"
+                                        title="Mettre à jour les tâches (Import Excel)"
+                                    >
+                                        <Upload className="w-3.5 h-3.5 text-green-600" />
+                                        <span>Mise à jour</span>
+                                    </button>
+                                )}
+
+                                {selectedCentre && (
+                                    <button
+                                        onClick={() => setIsNewImportOpen(true)}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm transition-all"
+                                        title="Ajouter de nouvelles tâches (Import Excel)"
+                                    >
+                                        <Plus className="w-3.5 h-3.5 text-blue-600" />
+                                        <span>Nouvelles tâches</span>
+                                    </button>
+                                )}
                             </div>
                         </div>
 
@@ -321,11 +284,12 @@ export default function CentersTasksManager() {
                                                     {formatNumber(t.moyenne_min || (t.avg_sec / 60))}
                                                 </td>
                                                 <td className="px-3 py-2">
-                                                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold border
+                                                    <span className={`px - 1.5 py - 0.5 rounded text - [10px] font - bold border
                                                         ${t.produit === 'CO' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' :
                                                             t.produit === 'CR' ? 'bg-purple-50 text-purple-700 border-purple-100' :
-                                                                'bg-slate-50 text-slate-600 border-slate-200'}
-                                                     `}>
+                                                                'bg-slate-50 text-slate-600 border-slate-200'
+                                                        }
+`}>
                                                         {t.produit}
                                                     </span>
                                                 </td>
@@ -457,6 +421,20 @@ export default function CentersTasksManager() {
                     </div>
                 </div>
             )}
+
+            <TaskImportDialog
+                open={isImportOpen}
+                onOpenChange={setIsImportOpen}
+                onSuccess={loadTaches}
+                centreId={selectedCentre}
+            />
+
+            <NewTaskImportDialog
+                open={isNewImportOpen}
+                onOpenChange={setIsNewImportOpen}
+                onSuccess={loadTaches}
+                centreId={selectedCentre}
+            />
         </div>
     );
 }

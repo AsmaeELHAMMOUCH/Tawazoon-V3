@@ -709,14 +709,7 @@ export default function VueCNA() {
   const isMoiPoste = (p) => {
     if (!p) return false;
     const type = (p.type_poste || "").toUpperCase();
-    const label = (p.poste_label || p.label || "").toUpperCase();
-    const isKeyword = label.includes("RECEVEUR") ||
-      label.includes("CHEF DE CENTRE") ||
-      label.includes("CHEF ETABLISSEMENT") ||
-      label.includes("DIRECTEUR") ||
-      label.includes("GERANT") ||
-      label.includes("RESPONSABLE");
-    return type === "MOI" || type === "INDIRECT" || type === "STRUCTURE" || isKeyword || !!p.is_moi;
+    return type === "MOI" || type === "INDIRECT" || type === "STRUCTURE" || !!p.is_moi;
   };
 
   const isApsPoste = (p) => {

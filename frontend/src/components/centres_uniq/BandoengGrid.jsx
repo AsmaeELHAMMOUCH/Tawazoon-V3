@@ -76,108 +76,108 @@ export default function BandoengGrid({ gridValues, handleGridChange }) {
 
     return (
             <div className="flex gap-4">
-                {/* COLUMN 1: LABELS */}
+            {/* COLUMN 1: LABELS */}
                 <div className="w-[80px] flex-shrink-0 pt-[88px] flex flex-col">
-                    <LabelCell>Amana</LabelCell>
-                    <LabelCell>CR</LabelCell>
-                    <LabelCell>CO</LabelCell>
-                    <LabelCell>El Barkia</LabelCell>
-                    <LabelCell>LRH</LabelCell>
-                </div>
+                <LabelCell>Amana</LabelCell>
+                <LabelCell>CR</LabelCell>
+                <LabelCell>CO</LabelCell>
+                <LabelCell>El Barkia</LabelCell>
+                <LabelCell>LRH</LabelCell>
+            </div>
 
-                {/* COLUMN 2: DEPART BLOCK */}
+            {/* COLUMN 2: DEPART BLOCK */}
                 <div className="flex-1 bg-white rounded-lg shadow-md border border-slate-200 overflow-hidden">
                     <div className="bg-slate-100 py-1 text-center text-xs font-bold text-slate-700 border-b border-slate-200">Départ</div>
 
-                    <div className="grid grid-cols-6">
-                        {/* Sub Headers GC / Part */}
-                        <SubHeaderCell colSpan={3}>GC</SubHeaderCell>
+                <div className="grid grid-cols-6">
+                    {/* Sub Headers GC / Part */}
+                    <SubHeaderCell colSpan={3}>GC</SubHeaderCell>
                         <SubHeaderCell colSpan={3}>Particuliers</SubHeaderCell>
 
-                        {/* Col Headers */}
-                        <SubHeaderCell>Global</SubHeaderCell>
-                        <SubHeaderCell>Local</SubHeaderCell>
-                        <SubHeaderCell>Axes</SubHeaderCell>
-                        <SubHeaderCell>Global</SubHeaderCell>
-                        <SubHeaderCell>Local</SubHeaderCell>
-                        <SubHeaderCell>Axes</SubHeaderCell>
+                    {/* Col Headers */}
+                    <SubHeaderCell>Global</SubHeaderCell>
+                    <SubHeaderCell>Local</SubHeaderCell>
+                    <SubHeaderCell>Axes</SubHeaderCell>
+                    <SubHeaderCell>Global</SubHeaderCell>
+                    <SubHeaderCell>Local</SubHeaderCell>
+                    <SubHeaderCell>Axes</SubHeaderCell>
 
-                        {/* AMANA */}
-                        <InputCell value={gridValues.amana.depot.gc.global} onChange={(e) => handleGridChange(["amana", "depot", "gc", "global"], e.target.value)} />
-                        <InputCell value={gridValues.amana.depot.gc.local} onChange={(e) => handleGridChange(["amana", "depot", "gc", "local"], e.target.value)} />
-                        <InputCell value={gridValues.amana.depot.gc.axes} onChange={(e) => handleGridChange(["amana", "depot", "gc", "axes"], e.target.value)} />
-                        <InputCell value={gridValues.amana.depot.part.global} onChange={(e) => handleGridChange(["amana", "depot", "part", "global"], e.target.value)} />
-                        <InputCell value={gridValues.amana.depot.part.local} onChange={(e) => handleGridChange(["amana", "depot", "part", "local"], e.target.value)} />
-                        <InputCell value={gridValues.amana.depot.part.axes} onChange={(e) => handleGridChange(["amana", "depot", "part", "axes"], e.target.value)} />
+                    {/* AMANA */}
+                    <InputCell value={gridValues.amana.depot.gc.global} onChange={(e) => handleGridChange(["amana", "depot", "gc", "global"], e.target.value)} />
+                    <InputCell value={gridValues.amana.depot.gc.local} onChange={(e) => handleGridChange(["amana", "depot", "gc", "local"], e.target.value)} />
+                    <InputCell value={gridValues.amana.depot.gc.axes} onChange={(e) => handleGridChange(["amana", "depot", "gc", "axes"], e.target.value)} />
+                    <InputCell value={gridValues.amana.depot.part.global} onChange={(e) => handleGridChange(["amana", "depot", "part", "global"], e.target.value)} />
+                    <InputCell value={gridValues.amana.depot.part.local} onChange={(e) => handleGridChange(["amana", "depot", "part", "local"], e.target.value)} />
+                    <InputCell value={gridValues.amana.depot.part.axes} onChange={(e) => handleGridChange(["amana", "depot", "part", "axes"], e.target.value)} />
 
-                        {/* CR */}
-                        <InputCell value={gridValues.cr.med.global} onChange={(e) => handleGridChange(["cr", "med", "global"], e.target.value)} />
-                        <InputCell value={gridValues.cr.med.local} onChange={(e) => handleGridChange(["cr", "med", "local"], e.target.value)} />
-                        <InputCell value={gridValues.cr.med.axes} onChange={(e) => handleGridChange(["cr", "med", "axes"], e.target.value)} />
-                        <EmptyCell colSpan={3} />
+                    {/* CR */}
+                    <InputCell value={gridValues.cr.med.global} onChange={(e) => handleGridChange(["cr", "med", "global"], e.target.value)} />
+                    <InputCell value={gridValues.cr.med.local} onChange={(e) => handleGridChange(["cr", "med", "local"], e.target.value)} />
+                    <InputCell value={gridValues.cr.med.axes} onChange={(e) => handleGridChange(["cr", "med", "axes"], e.target.value)} />
+                    <EmptyCell colSpan={3} />
 
-                        {/* CO */}
-                        <InputCell value={gridValues.co.med.global} onChange={(e) => handleGridChange(["co", "med", "global"], e.target.value)} />
-                        <InputCell value={gridValues.co.med.local} onChange={(e) => handleGridChange(["co", "med", "local"], e.target.value)} />
-                        <InputCell value={gridValues.co.med.axes} onChange={(e) => handleGridChange(["co", "med", "axes"], e.target.value)} />
-                        <EmptyCell colSpan={3} />
+                    {/* CO */}
+                    <InputCell value={gridValues.co.med.global} onChange={(e) => handleGridChange(["co", "med", "global"], e.target.value)} />
+                    <InputCell value={gridValues.co.med.local} onChange={(e) => handleGridChange(["co", "med", "local"], e.target.value)} />
+                    <InputCell value={gridValues.co.med.axes} onChange={(e) => handleGridChange(["co", "med", "axes"], e.target.value)} />
+                    <EmptyCell colSpan={3} />
 
-                        {/* El Barkia */}
-                        <InputCell value={gridValues.ebarkia?.med || ""} onChange={(e) => handleGridChange(["ebarkia", "med"], e.target.value)} />
-                        <EmptyCell colSpan={5} />
+                    {/* El Barkia */}
+                    <InputCell value={gridValues.ebarkia?.med || ""} onChange={(e) => handleGridChange(["ebarkia", "med"], e.target.value)} />
+                    <EmptyCell colSpan={5} />
 
-                        {/* LRH */}
-                        <InputCell value={gridValues.lrh?.med || ""} onChange={(e) => handleGridChange(["lrh", "med"], e.target.value)} />
-                        <EmptyCell colSpan={5} />
-                    </div>
+                    {/* LRH */}
+                    <InputCell value={gridValues.lrh?.med || ""} onChange={(e) => handleGridChange(["lrh", "med"], e.target.value)} />
+                    <EmptyCell colSpan={5} />
                 </div>
+            </div>
 
-                {/* COLUMN 3: ARRIVE BLOCK */}
+            {/* COLUMN 3: ARRIVE BLOCK */}
                 <div className="flex-1 bg-white rounded-lg shadow-md border border-slate-200 overflow-hidden">
                     <div className="bg-slate-100 py-1 text-center text-xs font-bold text-slate-700 border-b border-slate-200">Arrivé</div>
 
-                    <div className="grid grid-cols-6">
-                        {/* Sub Headers GC / Part */}
-                        <SubHeaderCell colSpan={3}>GC</SubHeaderCell>
+                <div className="grid grid-cols-6">
+                    {/* Sub Headers GC / Part */}
+                    <SubHeaderCell colSpan={3}>GC</SubHeaderCell>
                         <SubHeaderCell colSpan={3}>Particuliers</SubHeaderCell>
 
-                        {/* Col Headers */}
-                        <SubHeaderCell>Global</SubHeaderCell>
-                        <SubHeaderCell>Local</SubHeaderCell>
-                        <SubHeaderCell>Axes</SubHeaderCell>
-                        <SubHeaderCell>Global</SubHeaderCell>
-                        <SubHeaderCell>Local</SubHeaderCell>
-                        <SubHeaderCell>Axes</SubHeaderCell>
+                    {/* Col Headers */}
+                    <SubHeaderCell>Global</SubHeaderCell>
+                    <SubHeaderCell>Local</SubHeaderCell>
+                    <SubHeaderCell>Axes</SubHeaderCell>
+                    <SubHeaderCell>Global</SubHeaderCell>
+                    <SubHeaderCell>Local</SubHeaderCell>
+                    <SubHeaderCell>Axes</SubHeaderCell>
 
-                        {/* AMANA */}
-                        <InputCell value={gridValues.amana.recu.gc.global} onChange={(e) => handleGridChange(["amana", "recu", "gc", "global"], e.target.value)} />
-                        <InputCell value={gridValues.amana.recu.gc.local} onChange={(e) => handleGridChange(["amana", "recu", "gc", "local"], e.target.value)} />
-                        <InputCell value={gridValues.amana.recu.gc.axes} onChange={(e) => handleGridChange(["amana", "recu", "gc", "axes"], e.target.value)} />
-                        <InputCell value={gridValues.amana.recu.part.global} onChange={(e) => handleGridChange(["amana", "recu", "part", "global"], e.target.value)} />
-                        <InputCell value={gridValues.amana.recu.part.local} onChange={(e) => handleGridChange(["amana", "recu", "part", "local"], e.target.value)} />
-                        <InputCell value={gridValues.amana.recu.part.axes} onChange={(e) => handleGridChange(["amana", "recu", "part", "axes"], e.target.value)} />
+                    {/* AMANA */}
+                    <InputCell value={gridValues.amana.recu.gc.global} onChange={(e) => handleGridChange(["amana", "recu", "gc", "global"], e.target.value)} />
+                    <InputCell value={gridValues.amana.recu.gc.local} onChange={(e) => handleGridChange(["amana", "recu", "gc", "local"], e.target.value)} />
+                    <InputCell value={gridValues.amana.recu.gc.axes} onChange={(e) => handleGridChange(["amana", "recu", "gc", "axes"], e.target.value)} />
+                    <InputCell value={gridValues.amana.recu.part.global} onChange={(e) => handleGridChange(["amana", "recu", "part", "global"], e.target.value)} />
+                    <InputCell value={gridValues.amana.recu.part.local} onChange={(e) => handleGridChange(["amana", "recu", "part", "local"], e.target.value)} />
+                    <InputCell value={gridValues.amana.recu.part.axes} onChange={(e) => handleGridChange(["amana", "recu", "part", "axes"], e.target.value)} />
 
-                        {/* CR */}
-                        <InputCell value={gridValues.cr.arrive.global} onChange={(e) => handleGridChange(["cr", "arrive", "global"], e.target.value)} />
-                        <InputCell value={gridValues.cr.arrive.local} onChange={(e) => handleGridChange(["cr", "arrive", "local"], e.target.value)} />
-                        <InputCell value={gridValues.cr.arrive.axes} onChange={(e) => handleGridChange(["cr", "arrive", "axes"], e.target.value)} />
-                        <EmptyCell colSpan={3} />
+                    {/* CR */}
+                    <InputCell value={gridValues.cr.arrive.global} onChange={(e) => handleGridChange(["cr", "arrive", "global"], e.target.value)} />
+                    <InputCell value={gridValues.cr.arrive.local} onChange={(e) => handleGridChange(["cr", "arrive", "local"], e.target.value)} />
+                    <InputCell value={gridValues.cr.arrive.axes} onChange={(e) => handleGridChange(["cr", "arrive", "axes"], e.target.value)} />
+                    <EmptyCell colSpan={3} />
 
-                        {/* CO */}
-                        <InputCell value={gridValues.co.arrive.global} onChange={(e) => handleGridChange(["co", "arrive", "global"], e.target.value)} />
-                        <InputCell value={gridValues.co.arrive.local} onChange={(e) => handleGridChange(["co", "arrive", "local"], e.target.value)} />
-                        <InputCell value={gridValues.co.arrive.axes} onChange={(e) => handleGridChange(["co", "arrive", "axes"], e.target.value)} />
-                        <EmptyCell colSpan={3} />
+                    {/* CO */}
+                    <InputCell value={gridValues.co.arrive.global} onChange={(e) => handleGridChange(["co", "arrive", "global"], e.target.value)} />
+                    <InputCell value={gridValues.co.arrive.local} onChange={(e) => handleGridChange(["co", "arrive", "local"], e.target.value)} />
+                    <InputCell value={gridValues.co.arrive.axes} onChange={(e) => handleGridChange(["co", "arrive", "axes"], e.target.value)} />
+                    <EmptyCell colSpan={3} />
 
-                        {/* El Barkia */}
-                        <InputCell value={gridValues.ebarkia?.arrive || ""} onChange={(e) => handleGridChange(["ebarkia", "arrive"], e.target.value)} />
-                        <EmptyCell colSpan={5} />
+                    {/* El Barkia */}
+                    <InputCell value={gridValues.ebarkia?.arrive || ""} onChange={(e) => handleGridChange(["ebarkia", "arrive"], e.target.value)} />
+                    <EmptyCell colSpan={5} />
 
-                        {/* LRH */}
-                        <InputCell value={gridValues.lrh?.arrive || ""} onChange={(e) => handleGridChange(["lrh", "arrive"], e.target.value)} />
-                        <EmptyCell colSpan={5} />
-                    </div>
+                    {/* LRH */}
+                    <InputCell value={gridValues.lrh?.arrive || ""} onChange={(e) => handleGridChange(["lrh", "arrive"], e.target.value)} />
+                    <EmptyCell colSpan={5} />
                 </div>
             </div>
+        </div>
     );
 }

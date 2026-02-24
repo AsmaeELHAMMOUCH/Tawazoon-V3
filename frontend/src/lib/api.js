@@ -616,6 +616,32 @@ export const api = {
     return await http("/bandoeng/simulate-bandoeng", { method: "POST", body: payload });
   },
 
+  autoImportTasks: async (centreId) => {
+    return await http(`/bandoeng/auto-import-tasks?centre_id=${centreId}`, { method: "POST" });
+  },
+
+  exportRejections: async (failedRows) => {
+    const t = getToken();
+    const headers = { 'Content-Type': 'application/json' };
+    if (t) headers.Authorization = `Bearer ${t}`;
+
+    const res = await fetch(`${API_BASE}/bandoeng/export-rejections`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ failed_rows: failedRows })
+    });
+
+    if (!res.ok) throw new Error("Erreur export rejets");
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'rejet_auto_import.xlsx');
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  },
+
   downloadBandoengVolumesTemplate: async () => {
     const t = getToken();
     const headers = {};
@@ -698,6 +724,52 @@ export const api = {
     });
   },
 
+  exportCentresTypologies: async (regionId = null) => {
+    const t = getToken();
+    const headers = {};
+    if (t) headers.Authorization = `Bearer ${t}`;
+
+    let url = `${API_BASE}/centres/export-typologies`;
+    if (regionId) url += `?region_id=${regionId}`;
+
+    const res = await fetch(url, {
+      method: "GET",
+      headers
+    });
+
+    if (!res.ok) throw new Error("Erreur export centres");
+    const blob = await res.blob();
+
+    const urlDownload = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = urlDownload;
+    link.setAttribute('download', `Expor_Typologies_${regionId || 'Global'}.xlsx`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  },
+
+  importCentresTypologies: async (file) => {
+    const t = getToken();
+    const headers = {};
+    if (t) headers.Authorization = `Bearer ${t}`;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const res = await fetch(`${API_BASE}/centres/import-typologies`, {
+      method: 'POST',
+      headers,
+      body: formData
+    });
+
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error(txt || "Import Failed");
+    }
+    return await res.json();
+  },
+
   /**
    * Sauvegarde une simulation pour la catégorisation
    */
@@ -724,27 +796,8 @@ export const api = {
   deleteTachesByCentre: (centreId) => http(`/taches/centre/${centreId}`, { method: 'DELETE' }),
 
   importTaches: async (centreId, file, posteId = null) => {
-    const t = getToken();
-    const headers = {};
-    if (t) headers.Authorization = `Bearer ${t}`;
-
-    const formData = new FormData();
-    formData.append('file', file);
-
-    let url = `${API_BASE}/taches/import/${centreId}`;
-    if (posteId) url += `?poste_id=${posteId}`;
-
-    const res = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: formData
-    });
-
-    if (!res.ok) {
-      const txt = await res.text();
-      throw new Error(txt || "Import Failed");
-    }
-    return await res.json();
+    // Supprimé car non utilisé dans CentersTasksManager
+    throw new Error("Fonctionnalité d'importation supprimée.");
   },
 
   /**
@@ -757,6 +810,13 @@ export const api = {
   ping: async () => {
     return await http("/ping");
   },
+
+  // --- Helper aliases for wizard compatibility ---
+  getRegions: async () => api.regions(),
+  getCategories: async (regionId = null) => api.categories(regionId),
+  getCentres: async (regionId = null, categorieId = null) => api.centres(regionId, categorieId),
+  getPostes: async (centreId = null, regionId = null) => api.postes(centreId, regionId),
+  bandoengSimulate: async (payload) => await http("/bandoeng/simulate-bandoeng", { method: "POST", body: payload }),
 };
 
 // Export par défaut pour compatibilité
@@ -765,5 +825,7 @@ export default api;
 // Export des méthodes individuelles pour l'import destructuré
 export const {
   downloadBandoengVolumesTemplate,
-  importBandoengVolumes
+  importBandoengVolumes,
+  autoImportTasks,
+  exportRejections
 } = api;

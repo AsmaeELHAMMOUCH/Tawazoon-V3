@@ -53,7 +53,7 @@ const DEFAULT_PARAMS = {
     pct_local: 0,
     pct_international: 0,
     pct_national: 100,
-    pct_march_ordinaire: 0,
+    pct_marche_ordinaire: 0,
     productivite: 100,
     idle_minutes: 0,
     shift: 1

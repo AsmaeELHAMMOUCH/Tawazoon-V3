@@ -2,9 +2,13 @@
 from typing import List, Optional, Literal
 from pydantic import BaseModel
 
-from fastapi import APIRouter, Depends, Query, HTTPException, Body
+from fastapi import APIRouter, Depends, Query, HTTPException, Body, UploadFile, File
+from fastapi.responses import StreamingResponse
+import pandas as pd
+import io
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from openpyxl.worksheet.datavalidation import DataValidation
 
 from app.core.db import get_db
 from app.models import db_models
@@ -617,3 +621,194 @@ def update_centre_typology(
         "centre_id": centre_id, 
         "categorie_id": centre.categorie_id
     }
+
+@router.get("/centres/export-typologies")
+def export_typologies(
+    region_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """
+    Exporte la liste des centres (par région ou tous) pour modification de typologie par Excel.
+    """
+    try:
+        sql = """
+            SELECT 
+                c.id AS centre_id,
+                c.label AS centre_name,
+                r.label AS region_name,
+                cat.id AS current_typology_id,
+                cat.label AS current_typology_name,
+                c.id_categorisation AS current_categ_id,
+                categ.label AS current_categ_name
+            FROM dbo.centres c
+            LEFT JOIN dbo.regions r ON r.id = c.region_id
+            LEFT JOIN dbo.categories cat ON cat.id = c.categorie_id
+            LEFT JOIN dbo.Categorisation categ ON categ.id_categorisation = c.id_categorisation
+            WHERE (:region_id IS NULL OR c.region_id = :region_id)
+            ORDER BY r.label, c.label
+        """
+        rows = db.execute(text(sql), {"region_id": region_id}).mappings().all()
+        
+        df = pd.DataFrame([dict(r) for r in rows])
+        
+        # Colonnes pour l'utilisateur
+        export_df = pd.DataFrame()
+        export_df["Nom Centre"] = df["centre_name"]
+        export_df["Région"] = df["region_name"]
+        export_df["Nouvelle Typologie"] = df["current_typology_name"]
+        export_df["Nouvelle Classe"] = df["current_categ_name"]
+
+        # Récupérer toutes les typologies pour le dropdown
+        all_typs = db.execute(text("SELECT label FROM dbo.categories ORDER BY label")).scalars().all()
+        typs_list = '"' + ",".join(all_typs) + '"'
+        
+        all_categs = db.execute(text("SELECT label FROM dbo.Categorisation ORDER BY label")).scalars().all()
+        categs_list = '"' + ",".join(all_categs) + '"'
+
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            export_df.to_excel(writer, index=False, sheet_name='Centres')
+            
+            # Formater l'onglet Centres avec Dropdown
+            workbook = writer.book
+            worksheet = writer.sheets['Centres']
+            
+            # Typologie : Colonne C (3ème colonne) est "Nouvelle Typologie"
+            dv = DataValidation(type="list", formula1=typs_list, allow_blank=True)
+            dv.error ='La typologie saisie n\'est pas dans la liste autorisée.'
+            dv.errorTitle = 'Typologie Invalide'
+            dv.prompt = 'Veuillez choisir une typologie dans la liste.'
+            dv.promptTitle = 'Sélection de Typologie'
+            worksheet.add_data_validation(dv)
+            for row_idx in range(2, len(export_df) + 2):
+                dv.add(f'C{row_idx}')
+
+            # Classe : Colonne D (4ème colonne) est "Nouvelle Classe"
+            dv_c = DataValidation(type="list", formula1=categs_list, allow_blank=True)
+            dv_c.error ='La classe saisie n\'est pas dans la liste autorisée.'
+            dv_c.errorTitle = 'Classe Invalide'
+            dv_c.prompt = 'Veuillez choisir une classe dans la liste.'
+            dv_c.promptTitle = 'Sélection de Classe'
+            worksheet.add_data_validation(dv_c)
+            for row_idx in range(2, len(export_df) + 2):
+                dv_c.add(f'D{row_idx}')
+
+            # Ajuster la largeur des colonnes
+            for col in ['A', 'B', 'C', 'D']:
+                worksheet.column_dimensions[col].width = 25
+
+            # Ajouter un deuxième onglet avec la liste des typologies (ID + LIBELLE) pour référence
+            sql_typs = "SELECT id, label FROM dbo.categories ORDER BY label"
+            typs_data = db.execute(text(sql_typs)).mappings().all()
+            df_typs = pd.DataFrame([dict(t) for t in typs_data])
+            df_typs.columns = ["ID", "Typologie"]
+            df_typs.to_excel(writer, index=False, sheet_name='Referentiel_Typologies')
+            
+            # Onglet Référentiel Classes
+            sql_categs = "SELECT id_categorisation as id, label FROM dbo.Categorisation ORDER BY label"
+            categs_data = db.execute(text(sql_categs)).mappings().all()
+            df_categs = pd.DataFrame([dict(t) for t in categs_data])
+            df_categs.columns = ["ID", "Classe"]
+            df_categs.to_excel(writer, index=False, sheet_name='Referentiel_Classes')
+        
+        output.seek(0)
+        filename = f"export_typologies_{region_id if region_id else 'global'}.xlsx"
+        
+        return StreamingResponse(
+            output,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/centres/import-typologies")
+async def import_typologies(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Importe les modifications de typologies depuis un fichier Excel.
+    """
+    try:
+        content = await file.read()
+        df = pd.read_excel(io.BytesIO(content))
+        
+        # Normalisation des noms de colonnes (Minuscules + Strip)
+        df.columns = [str(c).strip().lower() for c in df.columns]
+        
+        # Mapping des colonnes attendues
+        col_map = {
+            "nom_centre": ["nom centre", "nom_centre", "centre", "centre_name"],
+            "new_label_typ": ["nouvelle typologie", "libellé_typ", "label_typ", "typologie"],
+            "new_label_categ": ["nouvelle classe", "libellé_classe", "label_classe", "classe"]
+        }
+        
+        def find_col(keys):
+            for k in keys:
+                if k in df.columns: return k
+            return None
+
+        name_col = find_col(col_map["nom_centre"])
+        label_typ_col = find_col(col_map["new_label_typ"])
+        label_categ_col = find_col(col_map["new_label_categ"])
+
+        if not name_col:
+            raise HTTPException(status_code=400, detail="Colonne 'Nom Centre' manquante.")
+            
+        updated_count = 0
+        errors = []
+        
+        # Caches
+        typology_cache = {t.label.upper().strip(): t.id for t in db.query(db_models.Categorie).all()}
+        categ_cache = {r["label"].upper().strip(): r["id"] for r in db.execute(text("SELECT id_categorisation as id, label FROM dbo.Categorisation")).mappings().all()}
+        
+        for index, row in df.iterrows():
+            c_name = row[name_col]
+            if pd.isna(c_name): continue
+            
+            c_name = str(c_name).strip().upper()
+
+            new_typ_label = row.get(label_typ_col) if label_typ_col else None
+            new_categ_label = row.get(label_categ_col) if label_categ_col else None
+                
+            final_typ_id = None
+            final_categ_id = None
+            
+            # --- Résolution Typologie ---
+            if not pd.isna(new_typ_label):
+                final_typ_id = typology_cache.get(str(new_typ_label).upper().strip())
+            
+            # --- Résolution Catégorisation ---
+            if not pd.isna(new_categ_label):
+                final_categ_id = categ_cache.get(str(new_categ_label).upper().strip())
+                
+            try:
+                # Recherche par nom (insensible à la casse et espaces)
+                centre = db.query(db_models.Centre).filter(db_models.sql_normalize_ws(db_models.Centre.label) == db_models.normalize_ws(c_name)).first()
+                if centre:
+                    changed = False
+                    if final_typ_id is not None and centre.categorie_id != final_typ_id:
+                        centre.categorie_id = final_typ_id
+                        changed = True
+                    if final_categ_id is not None and centre.id_categorisation != final_categ_id:
+                        centre.id_categorisation = final_categ_id
+                        changed = True
+                    
+                    if changed:
+                        updated_count += 1
+                else:
+                    errors.append(f"Centre '{c_name}' non trouvé en base.")
+            except Exception as e:
+                errors.append(f"Erreur Centre '{c_name}': {str(e)}")
+                
+        db.commit()
+        
+        return {
+            "status": "success",
+            "updated": updated_count,
+            "errors": errors
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))

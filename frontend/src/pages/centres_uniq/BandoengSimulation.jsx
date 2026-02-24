@@ -72,10 +72,35 @@ const DEFAULT_PARAMS = {
     pct_local: 0,
     pct_international: 0,
     pct_national: 100,
-    pct_march_ordinaire: 0,
+    pct_marche_ordinaire: 0,
     productivite: 100,
     idle_minutes: 0,
-    shift: 1
+    shift: 1,
+    cr_par_caisson: 40,
+    // AMANA
+    amana_pct_collecte: null,
+    amana_pct_retour: null,
+    amana_pct_axes_arrivee: null,
+    amana_pct_axes_depart: null,
+    amana_pct_national: null,
+    amana_pct_international: null,
+    amana_pct_marche_ordinaire: null,
+    amana_pct_crbt: null,
+    amana_pct_hors_crbt: null,
+    // CO
+    co_pct_collecte: null,
+    co_pct_retour: null,
+    co_pct_axes_arrivee: null,
+    co_pct_axes_depart: null,
+    co_pct_national: null,
+    co_pct_international: null,
+    // CR
+    cr_pct_collecte: null,
+    cr_pct_retour: null,
+    cr_pct_axes_arrivee: null,
+    cr_pct_axes_depart: null,
+    cr_pct_national: null,
+    cr_pct_international: null
 };
 
 const FormattedInput = ({ value, onChange, className, suffix }) => {
@@ -609,8 +634,7 @@ export default function BandoengSimulation() {
     const isMoiPoste = (p) => {
         if (!p) return false;
         const type = (p.type_poste || "").toUpperCase();
-        const label = (p.label || "").toUpperCase();
-        return type === "MOI" || type === "INDIRECT" || type === "STRUCTURE" || label.includes("RESPONSABLE") || !!p.is_moi;
+        return type === "MOI" || type === "INDIRECT" || type === "STRUCTURE" || !!p.is_moi;
     };
 
     const totalMoiGlobal = React.useMemo(() => {
@@ -874,8 +898,8 @@ export default function BandoengSimulation() {
                             setPctAxesArrivee={(v) => handleParamChange('pct_axes', v)}
                             pctAxesDepart={params.pct_local}
                             setPctAxesDepart={(v) => handleParamChange('pct_local', v)}
-                            pctMarcheOrdinaire={params.pct_march_ordinaire}
-                            setPctMarcheOrdinaire={(v) => handleParamChange('pct_march_ordinaire', v)}
+                            pctMarcheOrdinaire={params.pct_marche_ordinaire}
+                            setPctMarcheOrdinaire={(v) => handleParamChange('pct_marche_ordinaire', v)}
                             pctInternational={params.pct_international}
                             setPctInternational={(v) => handleParamChange('pct_international', v)}
                             pctNational={params.pct_national}
@@ -1001,25 +1025,45 @@ export default function BandoengSimulation() {
 
                                     {/* ETP Final */}
                                     {(() => {
-                                        // Targets
+                                        // On réutilise la même logique que celle de la carte Besoin pour être cohérent
                                         const targetFinalMOD = isMOD ? fteArrondi : 0;
                                         const targetFinalMOI = selectedPosteObj
                                             ? (isMoiPoste(selectedPosteObj) ? Number(selectedPosteObj.effectif_actuel || 0) : 0)
                                             : displayMOI;
 
-                                        const totalFinal = targetFinalMOD + targetFinalMOI;
-
-                                        // Actuals for Footer comparison
-                                        let actualStatutaire = 0;
+                                        let actualMOD = 0;
+                                        let actualMOI = 0;
                                         if (selectedPosteObj) {
-                                            const val = Number(selectedPosteObj.effectif_actuel || 0);
-                                            actualStatutaire = val; // Assuming selected is either MOD or MOI, so total is just val
+                                            actualMOD = isMOD ? Number(selectedPosteObj.effectif_actuel || 0) : 0;
+                                            actualMOI = isMoiPoste(selectedPosteObj) ? Number(selectedPosteObj.effectif_actuel || 0) : 0;
                                         } else {
-                                            actualStatutaire = displayMOD + displayMOI;
+                                            actualMOD = displayMOD;
+                                            actualMOI = displayMOI;
+                                        }
+                                        const actualStatutaire = actualMOD + actualMOI;
+                                        const gapStatutaire = targetFinalMOD + targetFinalMOI - actualStatutaire;
+
+                                        let diffStatutaire = 0;
+                                        let apsDelta = 0;
+                                        const actualAPS = Math.round(displayAPS);
+
+                                        if (gapStatutaire > 0) {
+                                            diffStatutaire = 0;
+                                            apsDelta = gapStatutaire;
+                                        } else if (gapStatutaire < 0) {
+                                            const surplus = Math.abs(gapStatutaire);
+                                            if (surplus <= actualAPS) {
+                                                apsDelta = -surplus;
+                                                diffStatutaire = 0;
+                                            } else {
+                                                apsDelta = -actualAPS;
+                                                diffStatutaire = actualAPS - surplus;
+                                            }
                                         }
 
-                                        // APS (Target)
-                                        const apsDisplay = Math.round(apsCalculeDisplay);
+                                        const apsDisplay = actualAPS + apsDelta;
+                                        const statutaireCible = actualStatutaire + diffStatutaire;
+                                        const totalFinal = statutaireCible + apsDisplay;
 
                                         return (
                                             <KPICardGlass
@@ -1032,11 +1076,11 @@ export default function BandoengSimulation() {
                                                 {(!selectedPoste || selectedPoste === "all") && (
                                                     <EffectifFooter
                                                         totalLabel="Statutaire"
-                                                        totalValue={Math.round(actualStatutaire)}
+                                                        totalValue={Math.round(statutaireCible)}
                                                         modValue={targetFinalMOD}
                                                         moiValue={formatSmallNumber(targetFinalMOI)}
                                                         apsLabel="APS"
-                                                        apsValue={apsDisplay}
+                                                        apsValue={Math.round(apsDisplay)}
                                                     />
                                                 )}
                                             </KPICardGlass>
@@ -1056,7 +1100,6 @@ export default function BandoengSimulation() {
                                         const targetFinalMOI = selectedPosteObj
                                             ? (isMoiPoste(selectedPosteObj) ? Number(selectedPosteObj.effectif_actuel || 0) : 0)
                                             : displayMOI;
-                                        const statutaireCible = targetFinalMOD + targetFinalMOI;
 
                                         // Actuels
                                         let actualMOD = 0;
@@ -1069,21 +1112,38 @@ export default function BandoengSimulation() {
                                             actualMOI = displayMOI;
                                         }
                                         const actualStatutaire = actualMOD + actualMOI;
+                                        const gapStatutaire = targetFinalMOD + targetFinalMOI - actualStatutaire;
 
-                                        // APS Delta (Besoin)
-                                        const apsTarget = Math.round(apsCalculeDisplay);
-                                        const apsActual = Math.round(displayAPS);
-                                        const apsDelta = apsTarget - apsActual;
+                                        let diffStatutaire = 0;
+                                        let apsDelta = 0;
+                                        const actualAPS = Math.round(displayAPS);
 
-                                        // Footer Ecarts
-                                        const diffMOD = targetFinalMOD - actualMOD;
-                                        const diffMOI = targetFinalMOI - actualMOI;
-                                        const diffStatutaire = statutaireCible - actualStatutaire;
+                                        if (gapStatutaire > 0) {
+                                            diffStatutaire = 0;
+                                            apsDelta = gapStatutaire;
+                                        } else if (gapStatutaire < 0) {
+                                            const surplus = Math.abs(gapStatutaire);
+                                            if (surplus <= actualAPS) {
+                                                apsDelta = -surplus;
+                                                diffStatutaire = 0;
+                                            } else {
+                                                apsDelta = -actualAPS;
+                                                diffStatutaire = actualAPS - surplus;
+                                            }
+                                        }
 
                                         const isIndividual = selectedPoste && selectedPoste !== "all";
-                                        const valToDisplay = isIndividual ? diffStatutaire : (apsDelta > 0 ? apsDelta : 0);
+                                        const valToDisplay = isIndividual
+                                            ? gapStatutaire
+                                            : (gapStatutaire > 0 ? apsDelta : (diffStatutaire !== 0 ? diffStatutaire : apsDelta));
+
                                         const tone = valToDisplay > 0 ? "rose" : "emerald";
-                                        const displayTotal = isIndividual ? formatSigned(Math.round(valToDisplay)) : (valToDisplay > 0 ? `+${Math.round(valToDisplay)}` : "0");
+                                        const displayTotal = isIndividual
+                                            ? formatSigned(Math.round(valToDisplay))
+                                            : (valToDisplay === 0 ? "0" : formatSigned(Math.round(valToDisplay)));
+
+                                        // Ecarts pour MOD/MOI individuels (footer)
+                                        const diffMOD = diffStatutaire - (targetFinalMOI - actualMOI);
 
                                         return (
                                             <KPICardGlass
@@ -1097,8 +1157,8 @@ export default function BandoengSimulation() {
                                                     <EffectifFooter
                                                         totalLabel="Ecart Statutaire"
                                                         totalValue={formatSigned(Math.round(diffStatutaire))}
-                                                        modValue={formatSigned(diffMOD)}
-                                                        moiValue={formatSigned(diffMOI)}
+                                                        modValue={formatSigned(Math.round(diffMOD))}
+                                                        moiValue={formatSigned(Math.round(targetFinalMOI - actualMOI))}
                                                         apsLabel="Var. APS"
                                                         apsValue={formatSigned(Math.round(apsDelta))}
                                                     />

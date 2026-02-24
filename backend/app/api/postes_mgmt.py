@@ -48,6 +48,290 @@ def get_all_centre_postes(db: Session = Depends(get_db)):
         })
     return result
 
+class ApsUpdate(BaseModel):
+    aps: float
+
+@router.put("/centres/{centre_id}/aps")
+def update_centre_aps(centre_id: int, update: ApsUpdate, db: Session = Depends(get_db)):
+    """
+    Met à jour l'APS d'un centre spécifié.
+    """
+    centre = db.query(Centre).filter(Centre.id == centre_id).first()
+    if not centre:
+        raise HTTPException(status_code=404, detail="Centre non trouvé")
+    
+    centre.aps = update.aps
+    db.commit()
+    return {"status": "success", "message": f"APS du centre {centre.label} mis à jour"}
+
+@router.get("/aps/export-template")
+def export_aps_template(
+    region_id: Optional[int] = Query(None),
+    typologie_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """
+    Exporte un template Excel des centres filtrés avec leur APS actuel.
+    """
+    query = db.query(Centre)
+    if region_id:
+        query = query.filter(Centre.region_id == region_id)
+    if typologie_id:
+        query = query.filter(Centre.categorie_id == typologie_id)
+    
+    centres = query.all()
+    
+    data = []
+    for c in centres:
+        data.append({
+            "Région": c.region.label if c.region else "N/A",
+            "Centre": c.label,
+            "APS Actuel": c.aps if c.aps is not None else 0.0
+        })
+    
+    df = pd.DataFrame(data)
+    
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Update_APS')
+    
+    output.seek(0)
+    
+    filename = "template_aps_global.xlsx"
+    if region_id:
+        region = db.query(text("label from dbo.regions where id = :id")).params(id=region_id).first()
+        if region:
+            filename = f"template_aps_{region[0]}.xlsx"
+            
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+@router.post("/aps/import")
+async def import_aps(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """
+    Importe un fichier Excel pour mettre à jour les APS des centres par lot.
+    """
+    try:
+        contents = await file.read()
+        df = pd.read_excel(io.BytesIO(contents))
+        
+        required_cols = ["Centre", "APS Actuel"]
+        if not all(col in df.columns for col in required_cols):
+            raise HTTPException(status_code=400, detail=f"Colonnes manquantes. Requis: {required_cols}")
+        
+        updated_count = 0
+        errors = []
+        
+        for index, row in df.iterrows():
+            centre_name = str(row["Centre"]).strip()
+            new_aps = row["APS Actuel"]
+            
+            # Recherche du centre par nom (normalisé)
+            centre = db.query(Centre).filter(text("LOWER(REPLACE(label, ' ', '')) = LOWER(REPLACE(:name, ' ', ''))")).params(name=centre_name).first()
+            
+            if centre:
+                centre.aps = float(new_aps)
+                updated_count += 1
+            else:
+                errors.append(f"Ligne {index+2}: Centre '{centre_name}' non trouvé")
+        
+        db.commit()
+        return {
+            "status": "success", 
+            "message": f"{updated_count} centres mis à jour",
+            "errors": errors
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/effectifs/export-template")
+def export_effectifs_template(
+    region_id: Optional[int] = Query(None),
+    typologie_id: Optional[int] = Query(None),
+    centre_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """
+    Exporte un template Excel des postes par centre selon les filtres.
+    """
+    if centre_id:
+        # Si un centre est spécifié, on utilise LEFT JOIN pour qu'il apparaisse même s'il n'a pas encore de postes
+        query = text("""
+            SELECT 
+                r.label as region,
+                c.label as centre,
+                p.label as poste,
+                COALESCE(cp.effectif_actuel, 0) as effectif
+            FROM dbo.centres c
+            JOIN dbo.regions r ON r.id = c.region_id
+            LEFT JOIN dbo.centre_postes cp ON cp.centre_id = c.id
+            LEFT JOIN dbo.postes p ON p.Code = cp.code_resp
+            WHERE c.id = :centre_id
+        """)
+        rows = db.execute(query, {"centre_id": centre_id}).mappings().all()
+    else:
+        # Sinon, on liste tous les couples Centre/Poste existants filtrés par région/typologie
+        filters = []
+        params = {}
+        if region_id:
+            filters.append("c.region_id = :region_id")
+            params["region_id"] = region_id
+        if typologie_id:
+            filters.append("c.categorie_id = :typologie_id")
+            params["typologie_id"] = typologie_id
+        
+        filter_str = " AND ".join(filters) if filters else "1=1"
+        
+        query = text(f"""
+            SELECT 
+                r.label as region,
+                c.label as centre,
+                p.label as poste,
+                COALESCE(cp.effectif_actuel, 0) as effectif
+            FROM dbo.centres c
+            JOIN dbo.regions r ON r.id = c.region_id
+            LEFT JOIN dbo.centre_postes cp ON cp.centre_id = c.id
+            LEFT JOIN dbo.postes p ON p.id = cp.poste_id
+            WHERE {filter_str}
+            ORDER BY c.label, p.label
+        """)
+        rows = db.execute(query, params).mappings().all()
+
+    data = []
+    for row in rows:
+        data.append({
+            "Région": row["region"],
+            "Centre": row["centre"],
+            "Poste": row["poste"] if row["poste"] else "",
+            "Effectif Actuel": row["effectif"]
+        })
+    
+    # Sincérité des colonnes même si data est vide
+    df = pd.DataFrame(data, columns=["Région", "Centre", "Poste", "Effectif Actuel"])
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Update_Effectifs')
+    
+    output.seek(0)
+    
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=template_effectifs.xlsx"}
+    )
+
+@router.post("/effectifs/import")
+async def import_effectifs(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """
+    Importe un fichier Excel pour mettre à jour ou ajouter des effectifs (Upsert).
+    """
+    try:
+        contents = await file.read()
+        df = pd.read_excel(io.BytesIO(contents))
+        
+        required_cols = ["Centre", "Poste", "Effectif Actuel"]
+        if not all(col in df.columns for col in required_cols):
+            raise HTTPException(status_code=400, detail=f"Colonnes manquantes. Requis: {required_cols}")
+        
+        updated_count = 0
+        created_count = 0
+        errors = []
+        
+        # Pré-charger les centres et les postes pour éviter trop de requêtes unitaires
+        all_centres = {c.label.lower().replace(' ', ''): c.id for c in db.query(Centre).all()}
+        all_postes = {p.label.lower().replace(' ', ''): (p.id, p.Code) for p in db.query(Poste).all()}
+        
+        for index, row in df.iterrows():
+            centre_name_raw = str(row["Centre"]).strip()
+            poste_label_raw = str(row["Poste"]).strip()
+            new_val = row["Effectif Actuel"]
+            
+            if pd.isna(new_val): new_val = 0
+            
+            centre_key = centre_name_raw.lower().replace(' ', '')
+            poste_key = poste_label_raw.lower().replace(' ', '')
+            
+            centre_id = all_centres.get(centre_key)
+            poste_info = all_postes.get(poste_key)
+            
+            if not centre_id:
+                errors.append(f"Ligne {index+2}: Centre '{centre_name_raw}' non trouvé")
+                continue
+            if not poste_info:
+                errors.append(f"Ligne {index+2}: Poste '{poste_label_raw}' non trouvé dans le référentiel")
+                continue
+            
+            poste_id, poste_code = poste_info
+            
+            # Recherche de l'association existante
+            # On cherche par poste_id ou par code_resp pour être résilient
+            cp = db.query(CentrePoste).filter(
+                CentrePoste.centre_id == centre_id,
+                (CentrePoste.poste_id == poste_id) | (CentrePoste.code_resp == poste_code)
+            ).first()
+            
+            if cp:
+                cp.effectif_actuel = float(new_val)
+                updated_count += 1
+            else:
+                # Création d'une nouvelle association
+                new_cp = CentrePoste(
+                    centre_id=centre_id,
+                    poste_id=poste_id,
+                    code_resp=poste_code,
+                    effectif_actuel=float(new_val)
+                )
+                db.add(new_cp)
+                created_count += 1
+        
+        db.commit()
+        return {
+            "status": "success", 
+            "message": f"{updated_count} effectifs mis à jour, {created_count} nouveaux postes affectés.",
+            "errors": errors
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/effectifs/clear")
+def clear_effectifs(
+    region_id: Optional[int] = Query(None),
+    typologie_id: Optional[int] = Query(None),
+    centre_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """
+    Supprime massivement les effectifs (entrées centre_postes) selon les filtres.
+    ATTENTION: Cette opération est destructive et supprimera aussi les tâches associées.
+    """
+    try:
+        if centre_id:
+            # Cas d'un centre unique
+            db.query(CentrePoste).filter(CentrePoste.centre_id == centre_id).delete(synchronize_session=False)
+        else:
+            # Cas filtré par région ou typologie
+            # On récupère les IDs des centres concernés
+            centres_query = db.query(Centre.id)
+            if region_id:
+                centres_query = centres_query.filter(Centre.region_id == region_id)
+            if typologie_id:
+                centres_query = centres_query.filter(Centre.categorie_id == typologie_id)
+            
+            centre_ids = [c[0] for c in centres_query.all()]
+            
+            if centre_ids:
+                db.query(CentrePoste).filter(CentrePoste.centre_id.in_(centre_ids)).delete(synchronize_session=False)
+        
+        db.commit()
+        return {"status": "success", "message": "Les effectifs pour le périmètre sélectionné ont été réinitialisés."}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ==================== SCHEMAS ====================
 class PosteCentreItem(BaseModel):
@@ -83,20 +367,11 @@ def get_postes_by_centre(
 ):
     """
     Récupère tous les postes d'un centre avec leurs effectifs.
-    
-    Retourne la liste des postes (via centre_postes) avec :
-    - Label du poste
-    - Type (MOD/MOI)
-    - Effectif actuel
-    - Effectif statutaire
-    - Effectif APS
     """
-    # Vérifier que le centre existe
     centre = db.query(Centre).filter(Centre.id == centre_id).first()
     if not centre:
         raise HTTPException(status_code=404, detail=f"Centre {centre_id} non trouvé")
     
-    # Requête pour récupérer les postes du centre
     query = text("""
         SELECT 
             cp.id as centre_poste_id,
@@ -106,7 +381,7 @@ def get_postes_by_centre(
             COALESCE(cp.effectif_actuel, 0) as effectif_actuel,
             c.aps as effectif_aps
         FROM dbo.centre_postes cp
-        LEFT JOIN dbo.postes p ON p.id = cp.poste_id
+        LEFT JOIN dbo.postes p ON p.Code = cp.code_resp
         LEFT JOIN dbo.centres c ON c.id = cp.centre_id
         WHERE cp.centre_id = :centre_id
         ORDER BY p.label
@@ -127,125 +402,12 @@ def get_postes_by_centre(
     ]
 
 
-@router.put("/centre-postes/{centre_poste_id}")
-def update_poste_effectifs(
-    centre_poste_id: int,
-    data: PosteCentreUpdate,
-    db: Session = Depends(get_db)
-):
-    """
-    Met à jour les effectifs d'un poste dans un centre.
-    """
-    # Vérifier que le centre_poste existe
-    centre_poste = db.query(CentrePoste).filter(CentrePoste.id == centre_poste_id).first()
-    if not centre_poste:
-        raise HTTPException(status_code=404, detail=f"Centre-Poste {centre_poste_id} non trouvé")
-    
-    # Mise à jour des champs fournis
-    if data.effectif_actuel is not None:
-        centre_poste.effectif_actuel = data.effectif_actuel
-    
-    # NOTE: effectif_statutaire n'existe pas dans la BDD
-    # NOTE: effectif_aps est au niveau Centre, pas CentrePoste, donc on ne le modifie pas ici pour l'instant
-    
-    db.commit()
-    db.refresh(centre_poste)
-    
-    return {
-        "success": True,
-        "message": f"Effectifs mis à jour pour le poste {centre_poste_id}",
-        "data": {
-            "centre_poste_id": centre_poste.id,
-            "effectif_actuel": centre_poste.effectif_actuel
-        }
-    }
-
-
-@router.post("/centres/{centre_id}/postes")
-def create_poste_in_centre(
-    centre_id: int,
-    data: PosteCentreCreate,
-    db: Session = Depends(get_db)
-):
-    """
-    Ajoute un nouveau poste à un centre.
-    """
-    # Vérifier que le centre existe
-    centre = db.query(Centre).filter(Centre.id == centre_id).first()
-    if not centre:
-        raise HTTPException(status_code=404, detail=f"Centre {centre_id} non trouvé")
-    
-    # Vérifier que le poste existe
-    poste = db.query(Poste).filter(Poste.id == data.poste_id).first()
-    if not poste:
-        raise HTTPException(status_code=404, detail=f"Poste {data.poste_id} non trouvé")
-    
-    # Vérifier que ce poste n'existe pas déjà dans ce centre
-    existing = db.query(CentrePoste).filter(
-        CentrePoste.centre_id == centre_id,
-        CentrePoste.poste_id == data.poste_id
-    ).first()
-    
-    if existing:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Le poste {poste.label} existe déjà dans ce centre"
-        )
-    
-    # Créer le nouveau centre_poste
-    new_centre_poste = CentrePoste(
-        centre_id=centre_id,
-        poste_id=data.poste_id,
-        effectif_actuel=data.effectif_actuel
-    )
-    
-    db.add(new_centre_poste)
-    db.commit()
-    db.refresh(new_centre_poste)
-    
-    return {
-        "success": True,
-        "message": f"Poste {poste.label} ajouté au centre {centre.label}",
-        "data": {
-            "centre_poste_id": new_centre_poste.id,
-            "poste_id": new_centre_poste.poste_id,
-            "poste_label": poste.label
-        }
-    }
-
-
-@router.delete("/centre-postes/{centre_poste_id}")
-def delete_poste_from_centre(
-    centre_poste_id: int,
-    db: Session = Depends(get_db)
-):
-    """
-    Supprime un poste d'un centre.
-    ⚠️ Attention : Cela supprimera aussi toutes les tâches associées.
-    """
-    centre_poste = db.query(CentrePoste).filter(CentrePoste.id == centre_poste_id).first()
-    if not centre_poste:
-        raise HTTPException(status_code=404, detail=f"Centre-Poste {centre_poste_id} non trouvé")
-    
-    # Récupérer les infos avant suppression
-    poste_label = centre_poste.poste.label if centre_poste.poste else "N/A"
-    centre_label = centre_poste.centre.label if centre_poste.centre else "N/A"
-    
-    db.delete(centre_poste)
-    db.commit()
-    
-    return {
-        "success": True,
-        "message": f"Poste {poste_label} supprimé du centre {centre_label}"
-    }
-
-
 @router.get("/postes/available", response_model=List[dict])
 def get_available_postes(
     db: Session = Depends(get_db)
 ):
     """
-    Récupère la liste de tous les postes disponibles (pour ajout).
+    Récupère la liste de tous les postes référencés.
     """
     postes = db.query(Poste).order_by(Poste.label).all()
     
@@ -257,393 +419,4 @@ def get_available_postes(
         }
         for p in postes
     ]
-
-
-@router.post("/import-effectifs")
-async def import_effectifs(
-    file: UploadFile = File(...),
-    db: Session = Depends(get_db)
-):
-    """
-    Importe un fichier Excel pour mettre à jour les effectifs globalement.
-    """
-    return await _process_import(file, db, None)
-
-
-@router.post("/centres/{centre_id}/import-effectifs")
-async def import_centre_effectifs(
-    centre_id: int,
-    file: UploadFile = File(...),
-    db: Session = Depends(get_db)
-):
-    """
-    Importe un fichier Excel pour mettre à jour les effectifs d'un centre spécifique.
-    """
-    return await _process_import(file, db, centre_id)
-
-
-async def _process_import(file: UploadFile, db: Session, target_centre_id: Optional[int] = None):
-    try:
-        from sqlalchemy import func
-        contents = await file.read()
-        df = pd.read_excel(io.BytesIO(contents))
-        
-        df.columns = [str(c).upper().strip() for c in df.columns]
-        
-        col_centre = next((c for c in ['RATTACHEMENT', 'CENTRE_LABEL', 'CENTRE'] if c in df.columns), None)
-        col_poste = next((c for c in ['POSTE', 'POSTE_LABEL'] if c in df.columns), None)
-        col_effectif = next((c for c in ['EFFECTIF_ACTUEL', 'EFFECTIF'] if c in df.columns), None)
-        
-        # Si target_centre_id est fourni, la colonne centre est optionnelle
-        if not target_centre_id and not col_centre:
-            return {
-                "success": False,
-                "message": "Le fichier doit contenir une colonne 'RATTACHEMENT' ou 'CENTRE_LABEL' pour un import global."
-            }
-            
-        if not col_poste:
-            return {
-                "success": False,
-                "message": "Le fichier doit contenir une colonne 'POSTE' ou 'POSTE_LABEL'."
-            }
-            
-        # Nettoyage
-        def clean_val(x):
-            if isinstance(x, str):
-                return x.replace(u'\xa0', ' ').strip().upper()
-            return str(x).strip().upper() if x is not None else ""
-
-        if col_centre:
-            df[col_centre] = df[col_centre].apply(clean_val)
-        df[col_poste] = df[col_poste].apply(clean_val)
-
-        # Vérifier si colonne APS existe
-        col_aps = next((c for c in ['APS', 'EFFECTIF_APS'] if c in df.columns), None)
-        
-        # Préparation des données
-        data_to_process = []
-        group_cols = [col_poste]
-        if col_centre and not target_centre_id:
-            group_cols.insert(0, col_centre)
-
-        # Ajouter APS aux colonnes à agréger si présent
-        agg_dict = {col_effectif: 'sum'} if col_effectif else {}
-        if col_aps:
-            agg_dict[col_aps] = 'first'  # On prend la première valeur (devrait être identique pour un centre)
-
-        if col_effectif:
-            if agg_dict:
-                grouped = df.groupby(group_cols).agg(agg_dict).reset_index()
-            else:
-                grouped = df.groupby(group_cols)[col_effectif].sum().reset_index()
-            
-            for _, row in grouped.iterrows():
-                data_to_process.append({
-                    'centre': str(row[col_centre]) if col_centre and not target_centre_id else None,
-                    'poste': str(row[col_poste]),
-                    'count': float(row[col_effectif] or 0),
-                    'aps': float(row[col_aps]) if col_aps and col_aps in row and pd.notna(row[col_aps]) else None
-                })
-        else:
-            grouped = df.groupby(group_cols).size().reset_index(name='count')
-            for _, row in grouped.iterrows():
-                data_to_process.append({
-                    'centre': str(row[col_centre]) if col_centre and not target_centre_id else None,
-                    'poste': str(row[col_poste]),
-                    'count': int(row['count']),
-                    'aps': None
-                })
-        
-        results = {"success": True, "processed": 0, "updated": 0, "created": 0, "errors": []}
-        
-        def clean_str(s):
-            if not isinstance(s, str): return str(s)
-            return s.replace(u'\xa0', ' ').strip().upper()
-
-        centres_map = {clean_str(c.label): c.id for c in db.query(Centre).all()}
-        postes_map = {clean_str(p.label): p.id for p in db.query(Poste).all()}
-        
-        processed_poste_ids = []
-        aps_value = None
-        
-        for item in data_to_process:
-            raw_poste = item['poste']
-            count = item['count']
-            poste_key = clean_str(raw_poste)
-            
-            # Capturer la valeur APS si présente
-            if item.get('aps') is not None:
-                aps_value = item['aps']
-            
-            results["processed"] += 1
-            
-            # Déterminer le centre_id
-            centre_id = target_centre_id
-            if not centre_id:
-                raw_centre = item['centre']
-                centre_key = clean_str(raw_centre)
-                centre_id = centres_map.get(centre_key)
-                if not centre_id:
-                    if len(results["errors"]) < 10:
-                        results["errors"].append(f"Centre inconnu : {raw_centre}")
-                    continue
-
-            # Trouver ou créer le poste
-            poste_id = postes_map.get(poste_key)
-            if not poste_id:
-                try:
-                    existing_p = db.query(Poste).filter(func.lower(Poste.label) == func.lower(raw_poste.strip())).first()
-                    if existing_p:
-                        poste_id = existing_p.id
-                        postes_map[poste_key] = poste_id
-                    else:
-                        new_p_ref = Poste(label=raw_poste.strip(), type_poste="MOD")
-                        db.add(new_p_ref)
-                        db.flush()
-                        poste_id = new_p_ref.id
-                        postes_map[poste_key] = poste_id
-                        results["created_refs"] = results.get("created_refs", 0) + 1
-                except Exception:
-                    if len(results["errors"]) < 10:
-                        results["errors"].append(f"Erreur avec le poste : {raw_poste}")
-                    continue
-            
-            # Garder trace des postes vus dans le fichier (pour le centre cible)
-            if target_centre_id:
-                processed_poste_ids.append(poste_id)
-
-            # Mise à jour ou création
-            centre_poste = db.query(CentrePoste).filter(
-                CentrePoste.centre_id == centre_id,
-                CentrePoste.poste_id == poste_id
-            ).first()
-            
-            if centre_poste:
-                centre_poste.effectif_actuel = count
-                results["updated"] += 1
-            else:
-                new_cp = CentrePoste(centre_id=centre_id, poste_id=poste_id, effectif_actuel=count)
-                db.add(new_cp)
-                results["created"] += 1
-        
-        # 🔴 SYNCHRONISATION : Supprimer les postes du centre qui ne sont plus dans le fichier
-        if target_centre_id:
-            delete_query = db.query(CentrePoste).filter(
-                CentrePoste.centre_id == target_centre_id,
-                ~CentrePoste.poste_id.in_(processed_poste_ids)
-            )
-            deleted_count = delete_query.count()
-            delete_query.delete(synchronize_session=False)
-            if deleted_count > 0:
-                results["deleted"] = deleted_count
-        
-        # Mise à jour de l'APS si une valeur a été trouvée
-        if target_centre_id and aps_value is not None:
-            c = db.query(Centre).filter(Centre.id == target_centre_id).first()
-            if c:
-                c.t_aps = aps_value
-                results["aps_updated"] = True
-        
-        db.commit()
-        
-        msg = f"Import terminé : {results['updated']} mis à jour, {results['created']} créés."
-        if results.get("aps_updated"):
-            msg += " L'effectif APS a été mis à jour."
-        if results.get("deleted"):
-            msg += f" {results['deleted']} postes supprimés (absents du fichier)."
-        msg += f" {len(results['errors'])} erreurs."
-        
-        results["message"] = msg
-        return results
-        
-    except Exception as e:
-        print(f"Erreur import: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Erreur lors de l'import : {str(e)}")
-
-
-
-@router.get("/centres/{centre_id}/export-template")
-def export_centre_template(centre_id: int, db: Session = Depends(get_db)):
-    """Génère un template Excel pour un centre spécifique"""
-    try:
-        from sqlalchemy.orm import joinedload
-        
-        # 1. Vérifier existence centre avec eager loading de la région
-        centre_info = db.query(Centre).options(joinedload(Centre.region)).filter(Centre.id == centre_id).first()
-        if not centre_info:
-            raise HTTPException(status_code=404, detail=f"Centre {centre_id} introuvable")
-
-        # 2. Récupérer les données
-        query = text("""
-            SELECT 
-                r.label as region,
-                c.label as centre_label,
-                p.label as poste,
-                COALESCE(cp.effectif_actuel, 0) as effectif_actuel
-            FROM dbo.centre_postes cp
-            JOIN dbo.centres c ON c.id = cp.centre_id
-            LEFT JOIN dbo.regions r ON r.id = c.region_id
-            JOIN dbo.postes p ON p.id = cp.poste_id
-            WHERE cp.centre_id = :centre_id
-            ORDER BY p.label
-        """)
-        rows = db.execute(query, {"centre_id": centre_id}).mappings().all()
-        
-        # Récupérer APS
-        aps_value = centre_info.aps if centre_info.aps is not None else 0
-        
-        data = []
-        for r in rows:
-            data.append({
-                "REGION": r["region"] if r["region"] else "",
-                "centre_label": r["centre_label"],
-                "POSTE": r["poste"],
-                "EFFECTIF_ACTUEL": r["effectif_actuel"],
-                "APS": aps_value
-            })
-        
-        # Si aucune donnée (centre sans postes), créer une ligne vide modèle
-        if not data:
-            region_label = centre_info.region.label if centre_info.region else ""
-            data = [{
-                "REGION": region_label,
-                "centre_label": centre_info.label,
-                "POSTE": "",
-                "EFFECTIF_ACTUEL": 0,
-                "APS": aps_value
-            }]
-            
-        df = pd.DataFrame(data)
-        
-        # Ordonner les colonnes pour que le template soit propre
-        cols = ["REGION", "centre_label", "POSTE", "EFFECTIF_ACTUEL", "APS"]
-        # S'assurer que les colonnes existent
-        for c in cols:
-            if c not in df.columns:
-                df[c] = ""
-        df = df[cols]
-        
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df.to_excel(writer, index=False, sheet_name='Effectifs Centre')
-        
-        output.seek(0)
-        filename = f"template_effectifs_{centre_id}.xlsx"
-        
-        return StreamingResponse(
-            output, 
-            headers={'Content-Disposition': f'attachment; filename="{filename}"'}, 
-            media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        )
-        
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        print(f"Erreur export template centre: {str(e)}")
-        # Renvoyer une erreur 500 explicite
-        raise HTTPException(status_code=500, detail=f"Erreur technique génération Excel: {str(e)}")
-
-
-@router.get("/export-template")
-def export_template(db: Session = Depends(get_db)):
-    """Génère un template Excel global"""
-    try:
-        query = text("""
-            SELECT 
-                r.label as region,
-                c.label as centre_label,
-                p.label as poste,
-                COALESCE(cp.effectif_actuel, 0) as effectif_actuel
-            FROM dbo.centre_postes cp
-            JOIN dbo.centres c ON c.id = cp.centre_id
-            JOIN dbo.regions r ON r.id = c.region_id
-            JOIN dbo.postes p ON p.id = cp.poste_id
-            ORDER BY r.label, c.label, p.label
-        """)
-        rows = db.execute(query).mappings().all()
-        
-        df = pd.DataFrame([{
-            "REGION": r["region"],
-            "centre_label": r["centre_label"],
-            "POSTE": r["poste"],
-            "EFFECTIF_ACTUEL": r["effectif_actuel"]
-        } for r in rows])
-        
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df.to_excel(writer, index=False, sheet_name='Effectifs')
-        
-        output.seek(0)
-        return StreamingResponse(output, headers={'Content-Disposition': 'attachment; filename="template_effectifs_global.xlsx"'}, media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-
-class ApsUpdate(BaseModel):
-    aps: float
-
-@router.put("/centres/{centre_id}/aps")
-def update_centre_aps(
-    centre_id: int,
-    update: ApsUpdate,
-    db: Session = Depends(get_db)
-):
-    centre = db.query(Centre).filter(Centre.id == centre_id).first()
-    if not centre:
-        raise HTTPException(status_code=404, detail="Centre non trouvé")
-    
-    centre.t_aps = update.aps
-    db.commit()
-    return {"success": True, "aps": centre.t_aps}
-
-
-class PosteRefUpdate(BaseModel):
-    label: Optional[str] = None
-    type_poste: Optional[str] = None
-
-@router.put("/postes/{poste_id}")
-def update_poste_ref(
-    poste_id: int,
-    data: PosteRefUpdate,
-    db: Session = Depends(get_db)
-):
-    """
-    Met à jour un poste du référentiel (Global).
-    """
-    poste = db.query(Poste).filter(Poste.id == poste_id).first()
-    if not poste:
-        raise HTTPException(status_code=404, detail="Poste non trouvé")
-    
-    if data.label is not None:
-        poste.label = data.label
-    if data.type_poste is not None:
-        poste.type_poste = data.type_poste
-        
-    db.commit()
-    return {"success": True, "message": "Poste mis à jour"}
-
-@router.delete("/postes/{poste_id}")
-def delete_poste_ref(
-    poste_id: int,
-    db: Session = Depends(get_db)
-):
-    """
-    Supprime un poste du référentiel (Global).
-    ATTENTION: Supprime aussi les liens dans les centres (cascade) si configuré, 
-    sinon il faut gérer manuellement. Ici on supprime manuellement les dépendances pour éviter les erreurs FK.
-    """
-    poste = db.query(Poste).filter(Poste.id == poste_id).first()
-    if not poste:
-        raise HTTPException(status_code=404, detail="Poste non trouvé")
-    
-    # Suppression manuelle des dépendances connues
-    # 1. CentrePoste
-    db.query(CentrePoste).filter(CentrePoste.poste_id == poste_id).delete()
-    
-    # 2. Le poste lui-même
-    db.delete(poste)
-    db.commit()
-    
-    return {"success": True, "message": f"Poste {poste.label} supprimé définitivement"}
 

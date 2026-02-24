@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Network, Building2, Sparkles } from 'lucide-react';
+import { Network, Building2, Sparkles, Workflow } from 'lucide-react';
 
 export default function MainMenu() {
     const navigate = useNavigate();
@@ -24,6 +24,15 @@ export default function MainMenu() {
             path: '/app/simulation/centres-uniques'
         },
         {
+            id: 'simulation-wizard',
+            title: 'Simulation Guidée',
+            description: 'Interface pas-à-pas pour la simulation des effectifs',
+            icon: Workflow,
+            color: 'from-purple-500 to-indigo-600',
+            hoverColor: 'hover:from-purple-600 hover:to-indigo-700',
+            path: '/app/simulation/wizard'
+        },
+        {
             id: 'simulation-nouvelle',
             title: 'Simulation Nouvelle Création',
             description: 'Simulation Nouvelle Création',
@@ -45,7 +54,7 @@ export default function MainMenu() {
                 </div>
 
                 {/* Cards Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     {menuCards.map((card) => {
                         const Icon = card.icon;
                         return (

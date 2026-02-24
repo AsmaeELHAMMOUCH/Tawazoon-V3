@@ -28,9 +28,6 @@ class BandoengSimulationResult:
     heures_net_jour: float = 8.0
     fte_calcule: float = 0.0
     fte_arrondi: int = 0
-    besoin_trieur: float = 0.0
-    besoin_preparateur: float = 0.0
-    besoin_magasinier: float = 0.0
     total_ressources_humaines: float = 0.0
     ressources_par_poste: Dict[str, float] = field(default_factory=dict)
     debug_info: Dict[str, Any] = field(default_factory=dict)
@@ -51,7 +48,7 @@ class BandoengInputVolumes:
 
 @dataclass
 class BandoengParameters:
-    pct_sac: float = 60.0
+    ed_percent: float = 40.0
     colis_amana_par_canva_sac: float = 35.0
     nbr_co_sac: float = 350.0
     nbr_cr_sac: float = 400.0
@@ -62,15 +59,43 @@ class BandoengParameters:
     pct_axes: float = 0.0
     pct_local: float = 0.0
     pct_international: float = 0.0
-    pct_national: float = 0.0
-    pct_march_ordinaire: float = 0.0
+    pct_national: float = 100.0
+    pct_marche_ordinaire: float = 0.0
     productivite: float = 100.0
     idle_minutes: float = 0.0
-    ratio_trieur: float = 1200.0
-    ratio_preparateur: float = 1000.0
-    ratio_magasinier: float = 800.0
     shift: int = 1
+    duree_trajet: float = 0.0  # Durée du trajet A/R en minutes
+    has_guichet: int = 1  # 1: Oui, 0: Non
+    cr_par_caisson: float = 40.0 # Par défaut
     pct_mois: Optional[float] = None  # Nouveau paramètre pour la saisonnalité
+
+    # --- Paramètres Découplés par Flux ---
+    # AMANA
+    amana_pct_collecte: Optional[float] = None
+    amana_pct_retour: Optional[float] = None
+    amana_pct_axes_arrivee: Optional[float] = None
+    amana_pct_axes_depart: Optional[float] = None
+    amana_pct_national: Optional[float] = None
+    amana_pct_international: Optional[float] = None
+    amana_pct_marche_ordinaire: Optional[float] = None
+    amana_pct_crbt: Optional[float] = None
+    amana_pct_hors_crbt: Optional[float] = None
+
+    # CO (Courrier Ordinaire)
+    co_pct_collecte: Optional[float] = None
+    co_pct_retour: Optional[float] = None
+    co_pct_axes_arrivee: Optional[float] = None
+    co_pct_axes_depart: Optional[float] = None
+    co_pct_national: Optional[float] = None
+    co_pct_international: Optional[float] = None
+
+    # CR (Courrier Recommandé)
+    cr_pct_collecte: Optional[float] = None
+    cr_pct_retour: Optional[float] = None
+    cr_pct_axes_arrivee: Optional[float] = None
+    cr_pct_axes_depart: Optional[float] = None
+    cr_pct_national: Optional[float] = None
+    cr_pct_international: Optional[float] = None
 
 def safe_float(val: Any) -> float:
     try:
@@ -90,6 +115,47 @@ def get_grid_val(grid: Dict, path: List[str]) -> float:
         else:
             return 0.0
     return safe_float(current)
+
+def detect_flux(produit: str) -> str:
+    """
+    Identifie le flux (amana, co, cr) à partir du nom du produit.
+    """
+    if not produit: return "general"
+    p = produit.upper().strip()
+    
+    # AMANA
+    if "AMANA" in p: return "amana"
+    
+    # CO (Courrier Ordinaire)
+    if any(k in p for k in ["CO ", " CO", "ORDINAIRE", "COURRIER O"]): 
+        return "co"
+    if p == "CO": return "co"
+    
+    # CR (Courrier Recommandé)
+    if any(k in p for k in ["CR ", " CR", "RECOMMANDE", "RECOMMANDÉ", "COURRIER R"]): 
+        return "cr"
+    if p == "CR": return "cr"
+    
+    return "general"
+
+def get_flux_param(params: BandoengParameters, flux: str, param_name: str) -> float:
+    """
+    Récupère un paramètre spécifique au flux s'il existe, sinon la valeur globale.
+    """
+    # 1. Tentative avec le préfixe de flux (ex: amana_pct_collecte)
+    attr_name = f"{flux}_{param_name}"
+    if hasattr(params, attr_name):
+        val = getattr(params, attr_name)
+        if val is not None:
+            return val
+            
+    # 2. Fallback sur la valeur globale (ex: pct_collecte)
+    if hasattr(params, param_name):
+        val = getattr(params, param_name)
+        if val is not None:
+             return val
+             
+    return 0.0
 
 def get_volume_by_product(produit: str, volumes: BandoengInputVolumes) -> float:
     """
@@ -259,14 +325,14 @@ def calculate_task_duration(
     # Base Formula Components
     # Formule = moy_sec/60 * base_calcul/100 * (Volume / Divisor) * PhaseMultiplier
     
+    # 0. Detect Flux
+    flux = detect_flux(produit)
+    
     # 1. Get Volume
     volume_source_val = get_volume_by_product(produit, volumes)
     
     # 2. Determine Day Divisor (Annual -> Daily)
-    # User Request: "on garde Calcul du Volume Journalier comme précedemment on divise par 264 ensuite en divise par 350 ou 24 ça depend phase"
-    # Seasonal Request: "en saisonalité on va multiplier par le prct mois et diviser par 22"
-    
-    # Step 1: Divide by 264 (default) or use Seasonality (pct_mois / 22)
+    # ... (Day divisor logic is same)
     if params.pct_mois is not None:
         vol_jour_brut = (volume_source_val * (params.pct_mois / 100.0)) / 22.0
         days_divisor_str = f"({params.pct_mois}% / 22)"
@@ -274,7 +340,6 @@ def calculate_task_duration(
         vol_jour_brut = volume_source_val / 264.0
         days_divisor_str = "264"
     
-    # Step 2: Apply specific phase divisors IF present (cumulative/sequential)
     if "day_350" in phase:
         vol_jour_brut /= 350.0
         days_divisor_str += " * 350"
@@ -290,26 +355,18 @@ def calculate_task_duration(
     formula_unit_part = ""
     
     if "DEPECHE" in unite.upper() or "DÉPÊCHE" in unite.upper() or "DÉPECHE" in unite.upper() or "PART" in unite.upper():
-        # Pas de diviseur pour ces unités (formule simplifiée fixe)
         divisor = 1.0
-        formula_unit_part = ""
-        
-    elif "CAISSON" in unite:
-        divisor = max(1.0, params.nbr_cr_sac) 
+    elif "CAISSON" in unite or "BAC" in unite:
+        divisor = max(1.0, params.cr_par_caisson) 
         formula_unit_part = f" / {divisor:.0f} (Caisson)"
-        
     elif "SAC" in unite:
-        flux_is_amana = "AMANA" in produit
-        flux_is_cr = "CR" in produit or "RECOMMANDE" in produit
-        flux_is_co = "CO" in produit or "ORDINAIRE" in produit
-        
-        if flux_is_amana:
+        if flux == "amana":
             divisor = max(1.0, params.colis_amana_par_canva_sac)
             formula_unit_part = f" / {divisor:.0f} (Sac Amana)"
-        elif flux_is_cr:
+        elif flux == "cr":
             divisor = max(1.0, params.nbr_cr_sac)
             formula_unit_part = f" / {divisor:.0f} (Sac CR)"
-        elif flux_is_co:
+        elif flux == "co":
             divisor = max(1.0, params.nbr_co_sac)
             formula_unit_part = f" / {divisor:.0f} (Sac CO)"
         else:
@@ -325,34 +382,34 @@ def calculate_task_duration(
         phase_part = f" * Coeff({m:.2f})"
         
     elif "circul_collect" in phase:
-        pct = (params.pct_collecte / 100.0)
+        pct_collecte = get_flux_param(params, flux, "pct_collecte")
+        pct = (pct_collecte / 100.0)
         m = params.coeff_circ * pct
         multiplier *= m
         phase_part = f" * Circ*Collect({m:.4f})"
 
     elif "circul_march" in phase:
-        pct = (params.pct_march_ordinaire / 100.0)
+        pct_march = get_flux_param(params, flux, "pct_marche_ordinaire")
+        pct = (pct_march / 100.0)
         m = params.coeff_circ * pct
         multiplier *= m
         phase_part = f" * Circ*March({m:.4f})"
-
         
-    elif "retour" in phase:
-        pct = (params.pct_retour / 100.0)
-        multiplier *= pct
-        phase_part = f" * Retour({pct:.2f})"
-    elif "retour_day_350" in phase:
-        pct = (params.pct_retour / 100.0)
+    elif "retour" in phase or "retour_day_350" in phase:
+        pct_retour = get_flux_param(params, flux, "pct_retour")
+        pct = (pct_retour / 100.0)
         multiplier *= pct
         phase_part = f" * Retour({pct:.2f})"
 
     # --- National / International Logic ---
     if "national" in phase and "international" not in phase:
-        pct = (params.pct_national / 100.0)
+        pct_nat = get_flux_param(params, flux, "pct_national")
+        pct = (pct_nat / 100.0)
         multiplier *= pct
         phase_part += f" * Natl({pct:.2f})"
     elif "international" in phase:
-        pct = (params.pct_international / 100.0)
+        pct_intl = get_flux_param(params, flux, "pct_international")
+        pct = (pct_intl / 100.0)
         multiplier *= pct
         phase_part += f" * Intl({pct:.2f})"
 
@@ -366,21 +423,48 @@ def calculate_task_duration(
     # If `day_350` means "divide by 350", it strongly suggests the input volume IS ANNUAL.
     # If inputs were daily, dividing by 350 would make it tiny.
     # So: INPUTS ARE ANNUAL.
+    # --- Logic for ED factor ---
+    # AMANA + COLIS :
+    #   - Si base_calcul == 100 en BDD → ed_factor = 1.0 (pas d'ajustement ED)
+    #   - Sinon                        → ed_factor = ed_percent / 100
+    # AMANA + SAC   : toujours → (100 - ed_percent) / 100
+    # Autre         : toujours → 1.0
+    ed_factor = 1.0
+    ed_label = "1.0"
+    unite_upper = unite.upper()
+
+    if "AMANA" in produit:
+        if "COLIS" in unite_upper:
+            if base_calcul == 100.0:
+                # base_calcul = 100% → on utilise directement, pas d'ajustement ED
+                ed_factor = 1.0
+                ed_label = "100% (base_calcul=100)"
+            else:
+                ed_factor = params.ed_percent / 100.0
+                ed_label = f"{params.ed_percent}% (ED)"
+        elif "SAC" in unite_upper:
+            if base_calcul == 100.0:
+                ed_factor = 1.0
+                ed_label = "100% (base_calcul=100)"
+            else:
+                ed_factor = (100.0 - params.ed_percent) / 100.0
+                ed_label = f"{100 - params.ed_percent}% (non-ED)"
+
+    # Final Calculation
     # Step A: Vol Jour Adjusted = (Vol / Days) / UnitDivisor * Multiplier
     vol_jour = (vol_jour_brut / divisor) * multiplier
     
     # Step B: Time Calculation
-    # ✅ CAS SPÉCIAL : Unités DEPECHE et PART ont une formule simplifiée
-    unite_upper = unite.upper()
+    # Note: On remplace (base_calcul / 100.0) par ed_factor selon demande
     if "DEPECHE" in unite_upper or "DÉPÊCHE" in unite_upper or "DÉPECHE" in unite_upper or "PART" in unite_upper:
-        # Formule simplifiée : moy_sec/60 * base_calcul (PAS de division par 60 finale, PAS de volume)
-        heures_tache = ((moy_sec / 60.0) * (base_calcul / 100.0)) / 60.0
-        friendly_formula = f"{moy_sec}s/60 * {base_calcul}%"
+        # Formule simplifiée : moy_sec/60 * ed_factor (PAS de division par 60 finale, PAS de volume)
+        heures_tache = ((moy_sec / 60.0) * ed_factor) / 60.0
+        friendly_formula = f"{moy_sec}s/60 * {ed_label}"
     else:
-        # Formule standard : moy_sec/60 * base_calcul/100 * vol_jour / 60
-        minutes_jour = (moy_sec / 60.0) * (base_calcul / 100.0) * vol_jour
+        # Formule standard : (moy_sec/60) * ed_factor * vol_jour / 60
+        minutes_jour = (moy_sec / 60.0) * ed_factor * vol_jour
         heures_tache = minutes_jour / 60.0
-        friendly_formula = f"(Vol/{days_divisor_str}) / {divisor:.0f} * {multiplier:.2f} * {moy_sec}s/60 * {base_calcul}%"
+        friendly_formula = f"(Vol/{days_divisor_str}) / {divisor:.0f} * {multiplier:.2f} * {moy_sec}s/60 * {ed_label}"
 
     
     # Retrieve Responsable and Family
@@ -460,8 +544,19 @@ def run_bandoeng_simulation(
     
     task_results = []
     total_heures = 0.0
+    seen_families = set()
+    filtered_count = 0
     
     for t in taches:
+        # Filtre "Guichet" : si has_guichet=0, on ignore les tâches de la famille GUICHET
+        famille_uo = str(t.famille_uo or "").upper().strip()
+        seen_families.add(famille_uo)
+        
+        if params.has_guichet == 0 and famille_uo.startswith("GUICHET"):
+            filtered_count += 1
+            # print(f"DEBUG: Filtering out Guichet task: {t.nom_tache}")
+            continue
+            
         res = calculate_task_duration(t, volumes, params, poste_map)
         task_results.append(res)
         total_heures += res.heures_calculees
@@ -484,22 +579,18 @@ def run_bandoeng_simulation(
         # ETP pour cette tâche = Heures / Capacité Nette
         ressources_par_poste[resp] += (res.heures_calculees / capacite_nette)
 
-    # Calcul des besoins spécifiques (Sommaire - Legacy/Global logic, might need adjustment if filtered)
-    vol_total_colis = get_volume_by_product("AMANA REÇU TOTAL", volumes) + get_volume_by_product("AMANA DÉPÔT TOTAL", volumes)
-    besoin_trieur = (vol_total_colis / 264.0) / max(1, params.ratio_trieur)
-    besoin_preparateur = (vol_total_colis / 264.0) / max(1, params.ratio_preparateur)
-    besoin_magasinier = (vol_total_colis / 264.0) / max(1, params.ratio_magasinier)
-    
     return BandoengSimulationResult(
         tasks=task_results,
         total_heures=total_heures,
         heures_net_jour=capacite_nette,
         fte_calcule=fte_calcule,
         fte_arrondi=int(round(fte_calcule)),
-        besoin_trieur=besoin_trieur,
-        besoin_preparateur=besoin_preparateur,
-        besoin_magasinier=besoin_magasinier,
         total_ressources_humaines=fte_calcule,
         ressources_par_poste=ressources_par_poste,
-        debug_info={}
+        debug_info={
+            "has_guichet_received": params.has_guichet,
+            "seen_families": list(seen_families),
+            "filtered_guichet_count": filtered_count,
+            "total_tasks_polled": len(taches)
+        }
     )

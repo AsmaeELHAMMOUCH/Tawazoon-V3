@@ -20,6 +20,7 @@ import VueCCI from "./pages/centres_uniq/VueCCI";
 
 // Simple error boundary to catch rendering errors in routes
 import React from "react";
+import { Toaster } from "react-hot-toast";
 
 class RouteErrorBoundary extends React.Component {
   constructor(props) {
@@ -74,6 +75,8 @@ import SimulationCentresUniques from "./pages/SimulationCentresUniques"; // ðŸ
 import GlobalImportPage from "./pages/GlobalImportPage"; // ðŸ†• Global Import
 import SimulationIntervenantAvancee from "./pages/SimulationIntervenantAvancee"; // ðŸ†• Simulation Intervenant AvancÃ©e
 import IndexAdequation from "./pages/IndexAdequation";
+import StepWizardSimulation from "./pages/StepWizardSimulation";
+
 
 
 // ðŸ”¹ NOUVELLE ARCHITECTURE DATA-DRIVEN - IntÃ©grÃ©e directement dans SimulationEffectifs
@@ -148,6 +151,7 @@ export default function App() {
   const token = getToken();
   return (
     <BrowserRouter>
+      <Toaster position="top-right" reverseOrder={false} />
       {import.meta?.env?.DEV && !token && (
         <button
           onClick={() => {
@@ -248,6 +252,7 @@ export default function App() {
           <Route path="simulation/centres-uniques" element={<RouteErrorBoundary><SimulationCentresUniques /></RouteErrorBoundary>} />
           <Route path="simulation/intervenant-avancee" element={<RouteErrorBoundary><SimulationIntervenantAvancee /></RouteErrorBoundary>} />
           <Route path="simulation/index_Adequation" element={<RouteErrorBoundary><IndexAdequation /></RouteErrorBoundary>} />
+          <Route path="simulation/wizard" element={<RouteErrorBoundary><StepWizardSimulation /></RouteErrorBoundary>} />
 
           {/* Administration */}
           <Route path="admin/import-tasks" element={<RouteErrorBoundary><GlobalImportPage /></RouteErrorBoundary>} />
