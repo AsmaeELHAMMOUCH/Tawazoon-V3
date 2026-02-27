@@ -73,6 +73,7 @@ class Poste(Base):
     type_poste = Column("type_poste", String(50))
     Code = Column(String(50), nullable=True, unique=True)
     hie_poste = Column(String(50), nullable=True)  # ✅ AJOUT: Code hiérarchie pour l'organigramme
+    charge_salaire = Column(Float, nullable=True)
 
     centre_postes = relationship("CentrePoste", back_populates="poste")
 

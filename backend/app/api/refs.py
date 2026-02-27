@@ -316,13 +316,14 @@ def list_postes(
                 p.label,
                 p.type_poste,
                 p.Code,
+                p.charge_salaire,
                 SUM(COALESCE(cp.effectif_actuel, 0)) AS effectif_actuel,
                 MAX(hp.label) AS categorie
             FROM dbo.postes p
             INNER JOIN dbo.centre_postes cp ON cp.code_resp = p.Code
             LEFT JOIN dbo.Hierarchie_postes hp ON hp.code = p.hie_poste
             WHERE cp.centre_id = :centre_id
-            GROUP BY p.id, p.label, p.type_poste, p.Code
+            GROUP BY p.id, p.label, p.type_poste, p.Code, p.charge_salaire
             ORDER BY p.label
         """
         rows = db.execute(text(sql), {"centre_id": centre_id}).mappings().all()
@@ -337,6 +338,7 @@ def list_postes(
                 p.label,
                 p.type_poste AS type_poste,
                 p.Code,
+                p.charge_salaire,
                 0 AS effectif_actuel,
                 NULL AS categorie
             FROM dbo.postes p
@@ -358,6 +360,7 @@ def list_postes(
             "code": r.get("Code"),
             "type_poste": r.get("type_poste"),
             "effectif_actuel": r.get("effectif_actuel", 0),
+            "charge_salaire": r.get("charge_salaire", 0),
             "category": r.get("categorie"), # ✅ Expose category (mapped from HierarchiePostes)
         })
     

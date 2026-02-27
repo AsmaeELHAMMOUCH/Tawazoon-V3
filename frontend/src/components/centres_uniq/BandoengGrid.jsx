@@ -75,9 +75,9 @@ const EmptyCell = ({ colSpan = 1, className = "" }) => (
 export default function BandoengGrid({ gridValues, handleGridChange }) {
 
     return (
-            <div className="flex gap-4">
+        <div className="flex gap-4">
             {/* COLUMN 1: LABELS */}
-                <div className="w-[80px] flex-shrink-0 pt-[88px] flex flex-col">
+            <div className="w-[80px] flex-shrink-0 pt-[88px] flex flex-col">
                 <LabelCell>Amana</LabelCell>
                 <LabelCell>CR</LabelCell>
                 <LabelCell>CO</LabelCell>
@@ -86,13 +86,13 @@ export default function BandoengGrid({ gridValues, handleGridChange }) {
             </div>
 
             {/* COLUMN 2: DEPART BLOCK */}
-                <div className="flex-1 bg-white rounded-lg shadow-md border border-slate-200 overflow-hidden">
-                    <div className="bg-slate-100 py-1 text-center text-xs font-bold text-slate-700 border-b border-slate-200">Départ</div>
+            <div className="flex-1 bg-white rounded-lg shadow-md border border-slate-200 overflow-hidden">
+                <div className="bg-slate-100 py-1 text-center text-xs font-bold text-slate-700 border-b border-slate-200">Départ</div>
 
                 <div className="grid grid-cols-6">
                     {/* Sub Headers GC / Part */}
-                    <SubHeaderCell colSpan={3}>GC</SubHeaderCell>
-                        <SubHeaderCell colSpan={3}>Particuliers</SubHeaderCell>
+                    <SubHeaderCell colSpan={3}>PRO</SubHeaderCell>
+                    <SubHeaderCell colSpan={3}>Particuliers</SubHeaderCell>
 
                     {/* Col Headers */}
                     <SubHeaderCell>Global</SubHeaderCell>
@@ -133,13 +133,13 @@ export default function BandoengGrid({ gridValues, handleGridChange }) {
             </div>
 
             {/* COLUMN 3: ARRIVE BLOCK */}
-                <div className="flex-1 bg-white rounded-lg shadow-md border border-slate-200 overflow-hidden">
-                    <div className="bg-slate-100 py-1 text-center text-xs font-bold text-slate-700 border-b border-slate-200">Arrivé</div>
+            <div className="flex-1 bg-white rounded-lg shadow-md border border-slate-200 overflow-hidden">
+                <div className="bg-slate-100 py-1 text-center text-xs font-bold text-slate-700 border-b border-slate-200">Arrivé</div>
 
                 <div className="grid grid-cols-6">
                     {/* Sub Headers GC / Part */}
-                    <SubHeaderCell colSpan={3}>GC</SubHeaderCell>
-                        <SubHeaderCell colSpan={3}>Particuliers</SubHeaderCell>
+                    <SubHeaderCell colSpan={3}>PRO</SubHeaderCell>
+                    <SubHeaderCell colSpan={3}>Particuliers</SubHeaderCell>
 
                     {/* Col Headers */}
                     <SubHeaderCell>Global</SubHeaderCell>

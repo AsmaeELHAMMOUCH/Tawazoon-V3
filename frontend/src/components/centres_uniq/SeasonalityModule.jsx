@@ -73,11 +73,14 @@ export default function SeasonalityModule({
     const chartOptions = useMemo(() => {
         if (!results) return null;
 
-        const data = results.months.map(m => {
-            const val = selectedIntervenant === "all" ? m.totalEtp : (m.intervenants[selectedIntervenant] || 0);
-            return Math.round(val);
-        });
-        const average = data.length > 0 ? (data.reduce((a, b) => a + b, 0) / data.length) : 0;
+        const rawValues = results.months.map(m =>
+            selectedIntervenant === "all" ? m.totalEtp : (m.intervenants[selectedIntervenant] || 0)
+        );
+        // Pour le graphe : utiliser annualEtp (simulation classique) si disponible, sinon moyenne mensuelle
+        const averageForChart = (results.annualEtp !== undefined && selectedIntervenant === "all")
+            ? results.annualEtp
+            : (rawValues.length > 0 ? rawValues.reduce((a, b) => a + b, 0) / rawValues.length : 0);
+        const data = rawValues.map(v => Math.round(v));
 
         return {
             tooltip: {
@@ -143,9 +146,9 @@ export default function SeasonalityModule({
                         symbol: ['none', 'none'],
                         data: [
                             {
-                                yAxis: Math.round(average),
+                                yAxis: Math.round(averageForChart),
                                 label: {
-                                    formatter: `Target: ${Math.round(average)} ETP`,
+                                    formatter: `Moyenne: ${Math.round(averageForChart)} ETP`,
                                     position: 'end',
                                     color: '#ef4444',
                                     fontWeight: 'bold',
@@ -293,10 +296,14 @@ export default function SeasonalityModule({
                                 {/* Moyenne Annuelle - Blue Theme */}
                                 <div className="relative overflow-hidden rounded-xl border border-white/50 bg-white/60 backdrop-blur-md p-3 ring-1 ring-blue-300/50 shadow-sm transition-all hover:scale-[1.02]">
                                     <div className="absolute -right-8 -top-8 h-16 w-16 rounded-full blur-2xl bg-blue-400/20" />
-                                    <p className="text-[9px] font-bold text-blue-600 uppercase tracking-widest mb-1">Moyenne Annuelle</p>
+                                    <p className="text-[9px] font-bold text-blue-600 uppercase tracking-widest mb-1">Simulation Annuelle</p>
                                     <p className="text-xl font-black text-[#005EA8]">
-                                        {Math.round(results.months.reduce((acc, m) => acc + (selectedIntervenant === "all" ? m.totalEtp : (m.intervenants[selectedIntervenant] || 0)), 0) / 12)} <span className="text-xs font-medium">ETP</span>
+                                        {results.annualEtp !== undefined
+                                            ? results.annualEtp
+                                            : Math.round(rawValues.reduce((a, b) => a + b, 0) / 12)
+                                        } <span className="text-xs font-medium">ETP</span>
                                     </p>
+                                    <p className="text-[9px] text-slate-400 mt-0.5">= Simulation Actuel (Annuel)</p>
                                 </div>
 
                                 {/* Pic d'Activité - Blue/Cyan Theme */}

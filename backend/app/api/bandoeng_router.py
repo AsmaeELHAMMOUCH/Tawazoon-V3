@@ -58,6 +58,19 @@ class BandoengParamsIn(BaseModel):
     has_guichet: int = 1
     cr_par_caisson: float = 40.0
     pct_mois: Optional[float] = None
+    # --- Saisonnalité mensuelle par flux ---
+    pct_mois_amana:   Optional[float] = None
+    pct_mois_co:      Optional[float] = None
+    pct_mois_cr:      Optional[float] = None
+    pct_mois_lrh:     Optional[float] = None
+    pct_mois_ebarkia: Optional[float] = None
+    pct_annee: Optional[float] = None # Pour le forecast
+    # --- Taux de croissance par flux ---
+    amana_pct_annee:   Optional[float] = None
+    co_pct_annee:      Optional[float] = None
+    cr_pct_annee:      Optional[float] = None
+    lrh_pct_annee:     Optional[float] = None
+    ebarkia_pct_annee: Optional[float] = None
     
     # --- Flux specific overrides (amana_) ---
     amana_pct_collecte: Optional[float] = None
@@ -117,6 +130,7 @@ class BandoengSimulateResponse(BaseModel):
     fte_arrondi: int
     total_ressources_humaines: float
     ressources_par_poste: dict = {}
+    grid_values: Optional[dict] = None
     debug_info: dict = {}
 
 @router.post("/simulate", response_model=BandoengSimulateResponse)
@@ -158,6 +172,19 @@ def simulate_bandoeng(request: BandoengSimulateRequest, db: Session = Depends(ge
             has_guichet=request.params.has_guichet,
             cr_par_caisson=request.params.cr_par_caisson,
             pct_mois=request.params.pct_mois,
+            # Saisonnalité par flux
+            pct_mois_amana=request.params.pct_mois_amana,
+            pct_mois_co=request.params.pct_mois_co,
+            pct_mois_cr=request.params.pct_mois_cr,
+            pct_mois_lrh=request.params.pct_mois_lrh,
+            pct_mois_ebarkia=request.params.pct_mois_ebarkia,
+            pct_annee=request.params.pct_annee,
+            # Taux par flux
+            amana_pct_annee=request.params.amana_pct_annee,
+            co_pct_annee=request.params.co_pct_annee,
+            cr_pct_annee=request.params.cr_pct_annee,
+            lrh_pct_annee=request.params.lrh_pct_annee,
+            ebarkia_pct_annee=request.params.ebarkia_pct_annee,
             # AMANA
             amana_pct_collecte=request.params.amana_pct_collecte,
             amana_pct_retour=request.params.amana_pct_retour,
@@ -215,123 +242,13 @@ def simulate_bandoeng(request: BandoengSimulateRequest, db: Session = Depends(ge
             fte_calcule=result.fte_calcule,
             fte_arrondi=result.fte_arrondi,
             total_ressources_humaines=result.total_ressources_humaines,
-            ressources_par_poste=result.ressources_par_poste
+            ressources_par_poste=result.ressources_par_poste, grid_values=result.grid_values
         )
         
     except Exception as e:
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
-
-
-# --- NEW: Forecast Endpoint ---
-class ForecastRequest(BaseModel):
-    centre_id: int
-    grid_values: dict = Field(default_factory=dict)
-    parameters: dict = Field(default_factory=dict)
-    growth_rates: List[float] = Field(..., description="4 rates for N+1, N+2, N+3, N+4")
-
-def multiply_grid_volumes(grid: dict, factor: float) -> dict:
-    """
-    Apply a multiplier to all numeric values in the grid_values dictionary recursively.
-    """
-    new_grid = deepcopy(grid)
-    def recurse(d):
-        for k, v in d.items():
-            if isinstance(v, dict):
-                recurse(v)
-            elif isinstance(v, (int, float)):
-                d[k] = v * factor
-    recurse(new_grid)
-    return new_grid
-
-@router.post("/forecast")
-def run_forecast(request: ForecastRequest, db: Session = Depends(get_db)):
-    """
-    Performs 5 simulations (Base N + 4 projected years) with compound growth.
-    """
-    try:
-        results = []
-        current_grid = deepcopy(request.grid_values)
-        
-        # Base Year (Year N)
-        def run_single_step(grid, year_label, growth_rate):
-            # Prepare engine inputs
-            v_input = BandoengInputVolumes(grid_values=grid)
-            p = request.parameters
-            p_input = BandoengParameters(
-                ed_percent=p.get('ed_percent', 60.0),
-                colis_amana_par_canva_sac=p.get('colis_amana_par_canva_sac', 35.0),
-                nbr_co_sac=p.get('nbr_co_sac', 350.0),
-                nbr_cr_sac=p.get('nbr_cr_sac', 400.0),
-                coeff_circ=p.get('taux_complexite', 1.0),
-                coeff_geo=p.get('nature_geo', 1.0),
-                pct_retour=p.get('pct_retour', 0.0),
-                pct_collecte=p.get('pct_collecte', 0.0),
-                pct_axes=p.get('pct_axes_arrivee', 0.0),
-                pct_local=p.get('pct_axes_depart', 0.0),
-                pct_international=p.get('pct_international', 0.0),
-                pct_national=p.get('pct_national', 100.0),
-                pct_marche_ordinaire=p.get('pct_marche_ordinaire', 0.0),
-                productivite=p.get('productivite', 100.0),
-                idle_minutes=p.get('idle_minutes', 0.0),
-                shift=int(p.get('shift', 1)),
-                duree_trajet=float(p.get('duree_trajet', 0.0)),
-                has_guichet=int(p.get('has_guichet', 1)),
-                cr_par_caisson=p.get('cr_par_caisson', 40.0),
-                # Specifics
-                amana_pct_collecte=p.get('amana_pct_collecte'),
-                amana_pct_retour=p.get('amana_pct_retour'),
-                amana_pct_axes_arrivee=p.get('amana_pct_axes_arrivee'),
-                amana_pct_axes_depart=p.get('amana_pct_axes_depart'),
-                amana_pct_national=p.get('amana_pct_national'),
-                amana_pct_international=p.get('amana_pct_international'),
-                amana_pct_marche_ordinaire=p.get('amana_pct_marche_ordinaire'),
-                amana_pct_crbt=p.get('amana_pct_crbt'),
-                amana_pct_hors_crbt=p.get('amana_pct_hors_crbt'),
-                co_pct_collecte=p.get('co_pct_collecte'),
-                co_pct_retour=p.get('co_pct_retour'),
-                co_pct_axes_arrivee=p.get('co_pct_axes_arrivee'),
-                co_pct_axes_depart=p.get('co_pct_axes_depart'),
-                co_pct_national=p.get('co_pct_national'),
-                co_pct_international=p.get('co_pct_international'),
-                cr_pct_collecte=p.get('cr_pct_collecte'),
-                cr_pct_retour=p.get('cr_pct_retour'),
-                cr_pct_axes_arrivee=p.get('cr_pct_axes_arrivee'),
-                cr_pct_axes_depart=p.get('cr_pct_axes_depart'),
-                cr_pct_national=p.get('cr_pct_national'),
-                cr_pct_international=p.get('cr_pct_international')
-            )
-            
-            sim_res = run_bandoeng_simulation(db, request.centre_id, v_input, p_input)
-            
-            return {
-                "year": year_label,
-                "fte": sim_res.total_ressources_humaines,
-                "load": sim_res.total_heures,
-                "growth": growth_rate,
-                "grid_values": deepcopy(grid)
-            }
-
-        # Results container
-        simulation_steps = []
-        
-        # Current Year N
-        simulation_steps.append(run_single_step(current_grid, "N", 0.0))
-
-        # Projected years
-        for i, rate in enumerate(request.growth_rates):
-            factor = 1.0 + (rate / 100.0)
-            current_grid = multiply_grid_volumes(current_grid, factor)
-            simulation_steps.append(run_single_step(current_grid, f"N+{i+1}", rate))
-
-        return {"forecast": simulation_steps}
-
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
 
 
 # --- NEW: Simplified Endpoint for VueIntervenant ---
@@ -371,26 +288,40 @@ def simulate_bandoeng_direct(request: SimplifiedBandoengRequest, db: Session = D
         # 2. Construire BandoengParameters depuis le dict parameters
         p = request.parameters
         params = BandoengParameters(
-            ed_percent=p.get('ed_percent', p.get('pct_sac', 60.0)),
-            colis_amana_par_canva_sac=p.get('colis_amana_par_canva_sac', 35.0),
+            ed_percent=p.get('ed_percent', p.get('edPercent', p.get('pct_sac', 60.0))),
+            colis_amana_par_canva_sac=p.get('colis_amana_par_canva_sac', p.get('colisAmanaParCanvaSac', 35.0)),
             nbr_co_sac=p.get('nbr_co_sac', 350.0),
             nbr_cr_sac=p.get('nbr_cr_sac', 400.0),
-            coeff_circ=p.get('taux_complexite', 1.0),  # Alias frontend
-            coeff_geo=p.get('nature_geo', 1.0),  # Alias frontend
+            # Noms Step4 en priorité, puis anciens alias frontend
+            coeff_circ=p.get('coeff_circ', p.get('taux_complexite', p.get('tauxComplexite', 1.0))),
+            coeff_geo=p.get('coeff_geo', p.get('nature_geo', p.get('natureGeo', 1.0))),
             pct_retour=p.get('pct_retour', 0.0),
             pct_collecte=p.get('pct_collecte', 0.0),
-            pct_axes=p.get('pct_axes_arrivee', 0.0),  # Alias frontend
-            pct_local=p.get('pct_axes_depart', 0.0),  # Alias frontend
+            pct_axes=p.get('pct_axes', p.get('pct_axes_arrivee', 0.0)),
+            pct_local=p.get('pct_local', p.get('pct_axes_depart', 0.0)),
             pct_international=p.get('pct_international', 0.0),
             pct_national=p.get('pct_national', 100.0),
             pct_marche_ordinaire=p.get('pct_marche_ordinaire', 0.0),
             productivite=p.get('productivite', 100.0),
-            idle_minutes=p.get('idle_minutes', 0.0),
+            idle_minutes=p.get('idle_minutes', p.get('idleMinutes', 0.0)),
             shift=int(p.get('shift', 1)),
-            duree_trajet=float(p.get('duree_trajet', 0.0)), # Use 'duree_trajet' key.
-            has_guichet=int(p.get('has_guichet', 1)),
+            duree_trajet=float(p.get('duree_trajet', p.get('dureeTrajet', 0.0))),
+            has_guichet=int(p.get('has_guichet', p.get('hasGuichet', 1))),
             pct_mois=p.get('pct_mois'),
+            # Saisonnalité par flux
+            pct_mois_amana=p.get('pct_mois_amana'),
+            pct_mois_co=p.get('pct_mois_co'),
+            pct_mois_cr=p.get('pct_mois_cr'),
+            pct_mois_lrh=p.get('pct_mois_lrh'),
+            pct_mois_ebarkia=p.get('pct_mois_ebarkia'),
+            pct_annee=p.get('pct_annee'),
             cr_par_caisson=p.get('cr_par_caisson', 40.0),
+            # Taux par flux
+            amana_pct_annee=p.get('amana_pct_annee'),
+            co_pct_annee=p.get('co_pct_annee'),
+            cr_pct_annee=p.get('cr_pct_annee'),
+            lrh_pct_annee=p.get('lrh_pct_annee'),
+            ebarkia_pct_annee=p.get('ebarkia_pct_annee'),
             # AMANA
             amana_pct_collecte=p.get('amana_pct_collecte'),
             amana_pct_retour=p.get('amana_pct_retour'),
@@ -426,6 +357,7 @@ def simulate_bandoeng_direct(request: SimplifiedBandoengRequest, db: Session = D
             params=params,
             poste_code=request.poste_code
         )
+        print(f"DEBUG: result.total_heures={result.total_heures}, result.total_ressources_humaines={result.total_ressources_humaines}")
         
         # 4. Convertir le résultat
         tasks_out = [
@@ -455,7 +387,7 @@ def simulate_bandoeng_direct(request: SimplifiedBandoengRequest, db: Session = D
             fte_calcule=result.fte_calcule,
             fte_arrondi=result.fte_arrondi,
             total_ressources_humaines=result.total_ressources_humaines,
-            ressources_par_poste=result.ressources_par_poste
+            ressources_par_poste=result.ressources_par_poste, grid_values=result.grid_values
         )
         
     except Exception as e:

@@ -138,6 +138,7 @@ function normalizePostes(payload) {
     centre_id: p.centre_id ?? null,
     centre_poste_id: p.centre_poste_id ?? null,
     effectif_actuel: Number(p.effectif_actuel ?? p.effectif ?? 0),
+    charge_salaire: Number(p.charge_salaire ?? 0),
     type_poste: p.type_poste ?? null,
     category: p.category ?? p.categorie ?? null, // ✅ Capture category
   }));
@@ -616,9 +617,6 @@ export const api = {
     return await http("/bandoeng/simulate-bandoeng", { method: "POST", body: payload });
   },
 
-  bandoengForecast: async (payload) => {
-    return await http("/bandoeng/forecast", { method: "POST", body: payload });
-  },
 
   autoImportTasks: async (centreId) => {
     return await http(`/bandoeng/auto-import-tasks?centre_id=${centreId}`, { method: "POST" });

@@ -145,14 +145,14 @@ const PARAM_SECTIONS = [
 
             { id: "pctNational", label: "Amana Nat.", suffix: "%", icon: Map, iconColor: "text-cyan-600", iconBg: "bg-cyan-50", handler: "national", flux: ["amana", "cr"] },
             { id: "pctInternational", label: "Amana Int.", suffix: "%", icon: Globe, iconColor: "text-indigo-600", iconBg: "bg-indigo-50", handler: "international", flux: ["amana", "cr"] },
-            { id: "pctRetour", label: "Retour", suffix: "%", icon: Undo2, iconColor: "text-amber-600", iconBg: "bg-amber-50", flux: ["amana", "cr"] },
             { id: "pctCrbt", label: "% CRBT", suffix: "%", icon: Banknote, iconColor: "text-amber-600", iconBg: "bg-amber-50", handler: "crbt", flux: ["amana", "cr"] },
             { id: "pctHorsCrbt", label: "% Hors CRBT", suffix: "%", icon: Banknote, iconColor: "text-slate-600", iconBg: "bg-slate-50", handler: "horsCrbt", flux: ["amana", "cr"] },
+            { id: "pctRetour", label: "Retour", suffix: "%", icon: Undo2, iconColor: "text-amber-600", iconBg: "bg-amber-50", flux: ["amana", "cr"] },
 
             { id: "nbrCoSac", label: "CO/Sac", icon: Mail, iconColor: "text-sky-600", iconBg: "bg-sky-50", flux: ["co"] },
             { id: "crParCaisson", label: "CR/Caisson", icon: Box, iconColor: "text-indigo-600", iconBg: "bg-indigo-50", flux: ["cr"] },
-            { id: "colisAmanaParCanvaSac", label: "Colis/Sac", icon: Package, iconColor: "text-blue-600", iconBg: "bg-blue-50", flux: ["amana"] },
             { id: "edPercent", label: "% ED", suffix: "%", icon: Percent, iconColor: "text-slate-600", iconBg: "bg-slate-50", flux: ["amana"] },
+            { id: "colisAmanaParCanvaSac", label: "Colis/Sac", icon: Package, iconColor: "text-blue-600", iconBg: "bg-blue-50", flux: ["amana"] },
         ]
     },
     {
@@ -311,7 +311,7 @@ export default function Step2ParametersConfig({
     };
 
     const [activeTab, setActiveTab] = useState("general");
-    const [displayMode, setDisplayMode] = useState("tabs"); // 'tabs' or 'grid'
+    const displayMode = "grid"; // Toujours en mode panorama
 
     const filteredSections = React.useMemo(() => {
         if (displayMode === "grid") {
@@ -415,45 +415,7 @@ export default function Step2ParametersConfig({
                 </p>
             </div>
 
-            <div className="flex flex-col items-center justify-center gap-4 mb-4">
-                <div className="bg-slate-100/80 p-1 rounded-xl border border-slate-200 shadow-sm flex gap-1">
-                    <button
-                        onClick={() => setDisplayMode("tabs")}
-                        className={`px-4 py-1.5 text-[10px] font-bold rounded-lg transition-all flex items-center gap-2 ${displayMode === "tabs" ? "bg-white text-[#005EA8] shadow-md" : "text-slate-500 hover:text-slate-700"}`}
-                    >
-                        <Layers className="w-3.5 h-3.5" /> MODE FOCUS (ONGLETS)
-                    </button>
-                    <button
-                        onClick={() => setDisplayMode("grid")}
-                        className={`px-4 py-1.5 text-[10px] font-bold rounded-lg transition-all flex items-center gap-2 ${displayMode === "grid" ? "bg-white text-[#005EA8] shadow-md" : "text-slate-500 hover:text-slate-700"}`}
-                    >
-                        <Grid2X2 className="w-3.5 h-3.5" /> MODE PANORAMA (GRILLE)
-                    </button>
-                </div>
 
-                {displayMode === "tabs" && (
-                    <div className="flex justify-center w-full">
-                        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                            <div className="flex justify-center">
-                                <TabsList className="bg-slate-100/80 p-1 rounded-xl border border-slate-200 shadow-sm">
-                                    <TabsTrigger value="general" className="px-6 py-1.5 text-xs font-bold rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#005EA8] data-[state=active]:shadow-md transition-all">
-                                        🏠 GÉNÉRAL
-                                    </TabsTrigger>
-                                    <TabsTrigger value="amana" className="px-6 py-1.5 text-xs font-bold rounded-lg data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-md transition-all">
-                                        📦 AMANA
-                                    </TabsTrigger>
-                                    <TabsTrigger value="co" className="px-6 py-1.5 text-xs font-bold rounded-lg data-[state=active]:bg-white data-[state=active]:text-emerald-600 data-[state=active]:shadow-md transition-all">
-                                        ✉️ CO
-                                    </TabsTrigger>
-                                    <TabsTrigger value="cr" className="px-6 py-1.5 text-xs font-bold rounded-lg data-[state=active]:bg-white data-[state=active]:text-amber-600 data-[state=active]:shadow-md transition-all">
-                                        💰 CR
-                                    </TabsTrigger>
-                                </TabsList>
-                            </div>
-                        </Tabs>
-                    </div>
-                )}
-            </div>
 
             <div className={`max-w-full mx-auto grid gap-3 items-start ${displayMode === "grid" ? "grid-cols-1 md:grid-cols-2 xl:grid-cols-4" : "grid-cols-1 xl:grid-cols-4"}`}>
                 {filteredSections.map((section) => (

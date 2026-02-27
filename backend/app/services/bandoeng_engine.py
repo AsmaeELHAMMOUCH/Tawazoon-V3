@@ -30,6 +30,7 @@ class BandoengSimulationResult:
     fte_arrondi: int = 0
     total_ressources_humaines: float = 0.0
     ressources_par_poste: Dict[str, float] = field(default_factory=dict)
+    grid_values: Dict[str, Any] = field(default_factory=dict) # Ajouté pour le forecast
     debug_info: Dict[str, Any] = field(default_factory=dict)
 
 @dataclass
@@ -67,7 +68,20 @@ class BandoengParameters:
     duree_trajet: float = 0.0  # Durée du trajet A/R en minutes
     has_guichet: int = 1  # 1: Oui, 0: Non
     cr_par_caisson: float = 40.0 # Par défaut
-    pct_mois: Optional[float] = None  # Nouveau paramètre pour la saisonnalité
+    pct_mois: Optional[float] = None  # Saisonnalité globale (fallback)
+    # --- Saisonnalité mensuelle par flux ---
+    pct_mois_amana:   Optional[float] = None
+    pct_mois_co:      Optional[float] = None
+    pct_mois_cr:      Optional[float] = None
+    pct_mois_lrh:     Optional[float] = None
+    pct_mois_ebarkia: Optional[float] = None
+    pct_annee: Optional[float] = None  # Nouveau paramètre pour le forecast (croissance)
+    # --- Taux de croissance annuelle par flux ---
+    amana_pct_annee:   Optional[float] = None
+    co_pct_annee:      Optional[float] = None
+    cr_pct_annee:      Optional[float] = None
+    lrh_pct_annee:     Optional[float] = None
+    ebarkia_pct_annee: Optional[float] = None
 
     # --- Paramètres Découplés par Flux ---
     # AMANA
@@ -115,6 +129,44 @@ def get_grid_val(grid: Dict, path: List[str]) -> float:
         else:
             return 0.0
     return safe_float(current)
+
+def apply_growth_to_grid(grid: Any, growth_pct: float) -> Any:
+    """
+    Applique récursivement un taux de croissance à toutes les valeurs numériques d'une grille.
+    (Growth = 1 + growth_pct/100)
+    """
+    factor = 1.0 + (growth_pct / 100.0)
+    
+    if isinstance(grid, dict):
+        new_grid = {}
+        for k, v in grid.items():
+            new_grid[k] = apply_growth_to_grid(v, growth_pct)
+        return new_grid
+    elif isinstance(grid, (int, float)):
+        return grid * factor
+    elif isinstance(grid, str):
+        # Tenter de convertir si c'est une chaîne numérique
+        try:
+            val = safe_float(grid)
+            return val * factor
+        except:
+            return grid
+    return grid
+
+def apply_growth_per_flux(grid: dict, flux_rates: dict) -> dict:
+    """
+    Applique un taux de croissance différent par flux (clé de premier niveau de grid_values).
+    flux_rates = { "amana": 5.0, "co": 3.0, "cr": 2.0, "lrh": 1.0, "ebarkia": 0.0 }
+    Les clés absentes ou à 0 ne sont pas modifiées.
+    """
+    new_grid = {}
+    for flux_key, sub_grid in grid.items():
+        rate = flux_rates.get(flux_key, 0)
+        if rate != 0:
+            new_grid[flux_key] = apply_growth_to_grid(sub_grid, rate)
+        else:
+            new_grid[flux_key] = sub_grid
+    return new_grid
 
 def detect_flux(produit: str) -> str:
     """
@@ -332,13 +384,31 @@ def calculate_task_duration(
     volume_source_val = get_volume_by_product(produit, volumes)
     
     # 2. Determine Day Divisor (Annual -> Daily)
-    # ... (Day divisor logic is same)
-    if params.pct_mois is not None:
-        vol_jour_brut = (volume_source_val * (params.pct_mois / 100.0)) / 22.0
-        days_divisor_str = f"({params.pct_mois}% / 22)"
+    if params.pct_annee is not None:
+        # Note: volume_source_val contient déjà la croissance si appliquée au préalable sur grid_values
+        vol_jour_brut = volume_source_val / 264.0
+        days_divisor_str = f"264 (Forecast +{params.pct_annee}%)"
+    elif params.pct_mois is not None or any([
+        params.pct_mois_amana, params.pct_mois_co, params.pct_mois_cr,
+        params.pct_mois_lrh, params.pct_mois_ebarkia
+    ]):
+        # Priorité : pct_mois spécifique au flux, sinon fallback sur pct_mois global
+        flux_pct_map = {
+            "amana":   params.pct_mois_amana,
+            "co":      params.pct_mois_co,
+            "cr":      params.pct_mois_cr,
+            "lrh":     params.pct_mois_lrh,
+            "ebarkia": params.pct_mois_ebarkia,
+        }
+        effective_pct = flux_pct_map.get(flux) or params.pct_mois or 8.33
+        vol_jour_brut = (volume_source_val * (effective_pct / 100.0)) / 22.0
+        days_divisor_str = f"({effective_pct}% [{flux}] / 22)"
     else:
         vol_jour_brut = volume_source_val / 264.0
         days_divisor_str = "264"
+    
+    if vol_jour_brut > 1000:
+        print(f"DEBUG: Task {nom_tache} has high vol_jour_brut: {vol_jour_brut} (source={volume_source_val}, divisor={days_divisor_str})")
     
     if "day_350" in phase:
         vol_jour_brut /= 350.0
@@ -522,6 +592,34 @@ def run_bandoeng_simulation(
     poste_code: Optional[str] = None
 ) -> BandoengSimulationResult:
     
+    # 0. Appliquer la croissance sur les grid_values avant la simulation
+    local_volumes = volumes
+    has_flux_rates = any([
+        params.amana_pct_annee, params.co_pct_annee, params.cr_pct_annee,
+        params.lrh_pct_annee, params.ebarkia_pct_annee
+    ])
+
+    if has_flux_rates:
+        # Priorité : taux par flux individuels
+        flux_rates = {
+            "amana":   params.amana_pct_annee   or 0,
+            "co":      params.co_pct_annee       or 0,
+            "cr":      params.cr_pct_annee       or 0,
+            "lrh":     params.lrh_pct_annee      or 0,
+            "ebarkia": params.ebarkia_pct_annee  or 0,
+        }
+        print(f"DEBUG: apply_growth_per_flux rates={flux_rates}")
+        from copy import deepcopy
+        local_volumes = deepcopy(volumes)
+        local_volumes.grid_values = apply_growth_per_flux(volumes.grid_values, flux_rates)
+    elif params.pct_annee is not None and params.pct_annee != 0:
+        # Fallback : taux global unique
+        print(f"DEBUG: apply_growth_to_grid global rate={params.pct_annee}%")
+        updated_grid = apply_growth_to_grid(volumes.grid_values, params.pct_annee)
+        from copy import deepcopy
+        local_volumes = deepcopy(volumes)
+        local_volumes.grid_values = updated_grid
+
     # 1. Récupérer les tâches associées aux postes MOD uniquement
     query = (
         db.query(Tache)
@@ -557,7 +655,7 @@ def run_bandoeng_simulation(
             # print(f"DEBUG: Filtering out Guichet task: {t.nom_tache}")
             continue
             
-        res = calculate_task_duration(t, volumes, params, poste_map)
+        res = calculate_task_duration(t, local_volumes, params, poste_map)
         task_results.append(res)
         total_heures += res.heures_calculees
         
@@ -569,6 +667,9 @@ def run_bandoeng_simulation(
     
     # ETP Calculé = Total Heures Nécessaires / Capacité Nette d'un agent
     fte_calcule = total_heures / capacite_nette
+    print(f"DEBUG: centre={centre_id} total_heures={total_heures} capacite_nette={capacite_nette} fte_calcule={fte_calcule}")
+    if total_heures > 0:
+        print(f"DEBUG: Sample tasks responsible for load: {[ (t.task_name, t.heures_calculees) for t in task_results[:5] ]}")
     
     # Calcul des ressources par poste (Intervenant)
     ressources_par_poste = {}
@@ -587,6 +688,7 @@ def run_bandoeng_simulation(
         fte_arrondi=int(round(fte_calcule)),
         total_ressources_humaines=fte_calcule,
         ressources_par_poste=ressources_par_poste,
+        grid_values=local_volumes.grid_values,
         debug_info={
             "has_guichet_received": params.has_guichet,
             "seen_families": list(seen_families),

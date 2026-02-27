@@ -112,7 +112,7 @@ export default function StepWizardSimulation() {
         natureGeo: 1,
         tauxComplexite: 1,
         dureeTrajet: 0,
-        hasGuichet: 0,
+        hasGuichet: 1,
         nbrCoSac: 350,
         nbrCrSac: 400,
 

@@ -29,6 +29,9 @@ import EnterpriseTable from "@/components/tables/EnterpriseTable";
 import OrganigrammeDialog from "@/components/wizard/OrganigrammeDialog";
 import SeasonalityDialog from "@/components/wizard/SeasonalityDialog";
 import ForecastingDialog from "@/components/wizard/ForecastingDialog";
+import AdequationDialog from "@/components/wizard/AdequationDialog";
+import CapaciteNominaleDialog from "@/components/wizard/CapaciteNominaleDialog";
+import ChiffrageDialog from "@/components/wizard/ChiffrageDialog";
 import * as XLSX from 'xlsx';
 
 // KPI Card Component (copied from VueIntervenant)
@@ -153,8 +156,13 @@ export default function Step4Results({
     const [showOrgChartDialog, setShowOrgChartDialog] = useState(false);
     const [showSeasonalityDialog, setShowSeasonalityDialog] = useState(false);
     const [showForecastingDialog, setShowForecastingDialog] = useState(false);
+    const [showAdequationDialog, setShowAdequationDialog] = useState(false);
+    const [showCapaciteNominaleDialog, setShowCapaciteNominaleDialog] = useState(false);
+    const [showChiffrageDialog, setShowChiffrageDialog] = useState(false);
     const [showAdditionalSections, setShowAdditionalSections] = useState(false);
-    const [showReferentiel, setShowReferentiel] = useState(false);
+    const [showReferentielDialog, setShowReferentielDialog] = useState(false);
+    const [refFilterFamille, setRefFilterFamille] = useState("");
+    const [refFilterProduit, setRefFilterProduit] = useState("");
 
     // Helper pour extraire le premier mot (avec gestion spéciale pour e Barkia)
     const getFirstWord = (str) => {
@@ -303,6 +311,7 @@ export default function Step4Results({
     const columns = [
         { key: "seq", label: "Seq", width: "60px" },
         { key: "task_name", label: "Tâche", width: "auto" },
+        { key: "unite_mesure", label: "Unité", width: "100px" },
         { key: "volume_journalier", label: "Vol/Jour", width: "100px", align: "right" },
         { key: "moyenne_min", label: "Temps Unit (min)", width: "120px", align: "right" },
         { key: "formule", label: "Formule", width: "200px" },
@@ -333,6 +342,44 @@ export default function Step4Results({
         const produits = [...new Set(tableData.map(t => getFirstWord(t.produit)).filter(Boolean))];
         return produits.sort();
     }, [tableData]);
+
+    // Unique tasks for referential (moy_sec > 0)
+    const referentielTasks = useMemo(() => {
+        if (!simulationResults?.tasks) return [];
+        const groups = {};
+        simulationResults.tasks.filter(t => Number(t.moy_sec) > 0).forEach(t => {
+            const key = [
+                t.task_name || "",
+                t.produit || "",
+                t.famille || "",
+                t.unite_mesure || "",
+                t.phase || ""
+            ].join("|||");
+            if (!groups[key]) groups[key] = t;
+        });
+        return Object.values(groups);
+    }, [simulationResults]);
+
+    const uniqueRefFamilles = useMemo(() => {
+        const familles = [...new Set(referentielTasks.map(t => t.famille).filter(Boolean))];
+        return familles.sort();
+    }, [referentielTasks]);
+
+    const uniqueRefProduits = useMemo(() => {
+        const produits = [...new Set(referentielTasks.map(t => getFirstWord(t.produit)).filter(Boolean))];
+        return produits.sort();
+    }, [referentielTasks]);
+
+    const filteredReferentielTasks = useMemo(() => {
+        let filtered = referentielTasks;
+        if (refFilterFamille) {
+            filtered = filtered.filter(t => t.famille === refFilterFamille);
+        }
+        if (refFilterProduit) {
+            filtered = filtered.filter(t => getFirstWord(t.produit) === refFilterProduit);
+        }
+        return filtered;
+    }, [referentielTasks, refFilterFamille, refFilterProduit]);
 
     // Apply filters to table data
     const filteredTableData = useMemo(() => {
@@ -758,110 +805,22 @@ export default function Step4Results({
                                     <Button
                                         variant="outline"
                                         size="sm"
-                                        onClick={() => setShowReferentiel(!showReferentiel)}
-                                        className={`h-7 text-[10px] gap-2 font-bold px-3 transition-all ${showReferentiel
-                                            ? 'bg-blue-100 text-[#005EA8] border-blue-200'
-                                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                                            }`}
+                                        onClick={() => setShowReferentielDialog(true)}
+                                        className="h-7 text-[10px] gap-2 font-bold px-3 bg-white text-[#005EA8] border-blue-200 hover:bg-blue-50 transition-all shadow-sm"
                                     >
-                                        {showReferentiel ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                                        {showReferentiel ? 'Masquer Référentiel' : 'Afficher Référentiel'}
+                                        <Eye className="w-3.5 h-3.5" />
+                                        Afficher
+                                        <Badge variant="secondary" className="h-4 px-1.5 text-[9px] bg-blue-100 text-blue-700 border-blue-200">
+                                            {referentielTasks.length}
+                                        </Badge>
                                     </Button>
                                 </div>
                             </div>
                         )}
 
-                        {/* Tasks Tables - VueIntervenant Style */}
+                        {/* Résultats de Simulation */}
                         {simulationResults && simulationResults.tasks && simulationResults.tasks.length > 0 && (
-                            <div className={`grid grid-cols-1 ${showReferentiel ? 'xl:grid-cols-2' : ''} gap-2 mt-1 animate-in slide-in-from-bottom-2 duration-300 relative`}>
-                                {/* Référentiel Temps */}
-                                {showReferentiel && (
-                                    <div className="bg-white rounded-lg p-1 min-h-[410px]">
-                                        <EnterpriseTable
-                                            title="Référentiel Temps"
-                                            subtitle={
-                                                <div className="flex items-center gap-2">
-                                                    <span>Base de calcul</span>
-                                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 text-blue-800 border border-blue-200">
-                                                        {(() => {
-                                                            const groups = {};
-                                                            // SHOW ALL TASKS existing in the center where moy_sec > 0
-                                                            // Using filteredTableData to respect Family/Product filters
-                                                            const allTasks = (filteredTableData || []).filter(t => Number(t.moy_sec) > 0);
-
-                                                            allTasks.forEach(t => {
-                                                                const key = [
-                                                                    t.task_name || "",
-                                                                    t.produit || "",
-                                                                    t.famille || "",
-                                                                    t.unite_mesure || "",
-                                                                    t.phase || ""
-                                                                ].join("|||");
-                                                                if (!groups[key]) groups[key] = t;
-                                                            });
-                                                            const count = Object.keys(groups).length;
-                                                            return `${count} tâche${count > 1 ? 's' : ''} `;
-                                                        })()}
-                                                    </span>
-                                                </div>
-                                            }
-                                            tooltip="Temps moyen nécessaire pour traiter une unité (colis, sac…)"
-                                            icon={Clock}
-                                            columns={[
-                                                { key: 'p', label: 'Produit', align: 'left', width: '110px', ellipsis: true },
-                                                { key: 'f', label: 'Famille', align: 'left', width: '120px', ellipsis: true },
-                                                { key: 't', label: 'Tâche', align: 'left', ellipsis: true },
-                                                { key: 'resp', label: 'Responsable 1', align: 'left', width: '130px', ellipsis: true },
-                                                { key: 'resp2', label: 'Responsable 2', align: 'left', width: '130px', ellipsis: true },
-                                                { key: 'u', label: 'Unité', align: 'left', width: '100px', ellipsis: true },
-                                                { key: 's', label: 'Sec', align: 'right', width: '60px', render: (val) => Number(val || 0).toFixed(0) },
-                                                { key: 'm', label: 'Min', align: 'right', width: '60px', render: (val) => Number(val || 0).toFixed(2) }
-                                            ]}
-                                            data={(() => {
-                                                // Group tasks by composite key
-                                                const groups = {};
-                                                // SHOW ALL TASKS with moy_sec > 0
-                                                const allTasks = (filteredTableData || []).filter(t => Number(t.moy_sec) > 0);
-
-                                                allTasks.forEach(t => {
-                                                    const key = [
-                                                        t.task_name || "",
-                                                        t.produit || "",
-                                                        t.famille || "",
-                                                        t.unite_mesure || "",
-                                                        t.phase || ""
-                                                    ].join("|||");
-
-                                                    if (!groups[key]) {
-                                                        groups[key] = { ...t, responsables: [] };
-                                                    }
-                                                    const resp = (t.responsable || "").trim();
-                                                    if (resp && resp !== "N/A" && !groups[key].responsables.includes(resp)) {
-                                                        groups[key].responsables.push(resp);
-                                                    }
-                                                });
-
-                                                return Object.values(groups).map((task, i) => ({
-                                                    seq: i + 1,
-                                                    p: getFirstWord(task.produit) || "-",
-                                                    f: task.famille || "",
-                                                    t: (task.task_name || "").replace(/\s*\([^)]*\)/g, "").trim(),
-                                                    ph: task.phase && String(task.phase).trim().toLowerCase() !== "n/a" ? task.phase : "",
-                                                    resp: (task.responsables[0] || "-").replace(/\s*\([^)]*\)/g, "").trim(),
-                                                    resp2: (task.responsables[1] || "-").replace(/\s*\([^)]*\)/g, "").trim(),
-                                                    u: task.unite_mesure,
-                                                    m: task.moyenne_min,
-                                                    s: Number(task.moy_sec) || 0
-                                                }));
-                                            })()}
-                                            currentView="table"
-                                            onViewChange={() => { }}
-                                            showViewToggle={true}
-                                            enableExport={true}
-                                            height={400}
-                                        />
-                                    </div>
-                                )}
+                            <div className="grid grid-cols-1 gap-2 mt-1 animate-in slide-in-from-bottom-2 duration-300 relative">
 
                                 {/* Résultats de Simulation */}
                                 <div className="bg-white rounded-lg p-1 min-h-[410px]">
@@ -884,12 +843,14 @@ export default function Step4Results({
                                         columns={[
                                             { key: 'produit', label: 'Produit', align: 'left', width: '100px', ellipsis: true },
                                             { key: 'task', label: 'Tâche', align: 'left', ellipsis: true },
+                                            { key: 'unite', label: 'Unité', align: 'left', width: '80px', ellipsis: true },
                                             { key: 'nombre_Unite', label: 'Vol. (/jour)', align: 'right', width: '100px', render: (val) => Number(val || 0).toFixed(1) },
                                             { key: 'heures', label: 'Heures', align: 'right', width: '80px', bold: true, render: (val) => Number(val || 0).toFixed(2) }
                                         ]}
                                         data={filteredTableData.filter(t => Number(t.heures_calculees) > 0).map(task => ({
                                             produit: getFirstWord(task.produit) || "-",
                                             task: task.task_name,
+                                            unite: task.unite_mesure,
                                             nombre_Unite: task.volume_journalier,
                                             heures: task.heures_calculees
                                         }))}
@@ -953,7 +914,7 @@ export default function Step4Results({
 
                                             {/* Capacité nominale */}
                                             <button
-                                                onClick={() => console.log('Capacité nominale clicked')}
+                                                onClick={() => setShowCapaciteNominaleDialog(true)}
                                                 className="group relative overflow-hidden rounded-xl border border-cyan-200/60 bg-gradient-to-br from-white via-cyan-50/30 to-cyan-100/20 p-6 text-left transition-all duration-300 hover:shadow-xl hover:-translate-y-1 hover:border-cyan-300"
                                             >
                                                 <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-gradient-to-br from-cyan-400/20 to-transparent blur-2xl transition-opacity group-hover:opacity-100 opacity-60" />
@@ -970,7 +931,7 @@ export default function Step4Results({
 
                                             {/* Index d'adéquation */}
                                             <button
-                                                onClick={() => console.log('Index d\'adéquation clicked')}
+                                                onClick={() => setShowAdequationDialog(true)}
                                                 className="group relative overflow-hidden rounded-xl border border-emerald-200/60 bg-gradient-to-br from-white via-emerald-50/30 to-emerald-100/20 p-6 text-left transition-all duration-300 hover:shadow-xl hover:-translate-y-1 hover:border-emerald-300"
                                             >
                                                 <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-gradient-to-br from-emerald-400/20 to-transparent blur-2xl transition-opacity group-hover:opacity-100 opacity-60" />
@@ -1041,7 +1002,7 @@ export default function Step4Results({
 
                                             {/* Chiffrage */}
                                             <button
-                                                onClick={() => console.log('Chiffrage clicked')}
+                                                onClick={() => setShowChiffrageDialog(true)}
                                                 className="group relative overflow-hidden rounded-xl border border-amber-200/60 bg-gradient-to-br from-white via-amber-50/30 to-amber-100/20 p-6 text-left transition-all duration-300 hover:shadow-xl hover:-translate-y-1 hover:border-amber-300"
                                             >
                                                 <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-gradient-to-br from-amber-400/20 to-transparent blur-2xl transition-opacity group-hover:opacity-100 opacity-60" />
@@ -1088,6 +1049,7 @@ export default function Step4Results({
                 initialFte={kpiData.totalFinal}
                 initialLoad={kpiData.totalLoad}
                 gridValues={data?.gridValues || null}
+                initialPosteId={selectedIntervenant || "all"}
                 postes={postes}
                 tasks={simulationResults?.tasks || []}
                 wizardData={data}
@@ -1106,6 +1068,121 @@ export default function Step4Results({
                 wizardData={data}
                 postes={postes}
             />
+
+            <AdequationDialog
+                open={showAdequationDialog}
+                onOpenChange={setShowAdequationDialog}
+                simulationResults={simulationResults}
+                postes={postes}
+                centreDetails={centreDetails}
+            />
+
+            <CapaciteNominaleDialog
+                open={showCapaciteNominaleDialog}
+                onOpenChange={setShowCapaciteNominaleDialog}
+                data={data}
+                simulationResults={simulationResults}
+                postes={postes}
+                centreDetails={centreDetails}
+            />
+
+            <ChiffrageDialog
+                open={showChiffrageDialog}
+                onOpenChange={setShowChiffrageDialog}
+                simulationResults={simulationResults}
+                postes={postes}
+            />
+
+            <Dialog open={showReferentielDialog} onOpenChange={setShowReferentielDialog}>
+                <DialogContent className="max-w-none sm:max-w-[90vw] w-full sm:w-[800px] h-[85vh] p-0 overflow-hidden flex flex-col bg-white">
+                    <DialogHeader className="p-4 bg-gradient-to-r from-blue-600 to-indigo-700 text-white flex-shrink-0">
+                        <DialogTitle className="flex items-center gap-2">
+                            <Clock className="w-5 h-5 text-blue-100" />
+                            Référentiel Temps
+                        </DialogTitle>
+                    </DialogHeader>
+
+                    <div className="flex-1 overflow-hidden flex flex-col p-4 bg-slate-50/50">
+                        {/* Filters for Referential */}
+                        <div className="flex flex-wrap items-center gap-4 mb-3 bg-white p-2 rounded-lg border border-slate-200">
+                            <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-bold text-slate-500 uppercase">Famille:</span>
+                                <select
+                                    className="bg-slate-50 border border-slate-200 text-[11px] text-slate-700 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500 min-w-[200px]"
+                                    value={refFilterFamille}
+                                    onChange={e => setRefFilterFamille(e.target.value)}
+                                >
+                                    <option value="">Toutes ({uniqueRefFamilles.length})</option>
+                                    {uniqueRefFamilles.map(f => (
+                                        <option key={f} value={f}>{f}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-bold text-slate-500 uppercase">Produit:</span>
+                                <select
+                                    className="bg-slate-50 border border-slate-200 text-[11px] text-slate-700 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500 min-w-[150px]"
+                                    value={refFilterProduit}
+                                    onChange={e => setRefFilterProduit(e.target.value)}
+                                >
+                                    <option value="">Tous ({uniqueRefProduits.length})</option>
+                                    {uniqueRefProduits.map(p => (
+                                        <option key={p} value={p}>{p}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            {(refFilterFamille || refFilterProduit) && (
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => { setRefFilterFamille(""); setRefFilterProduit(""); }}
+                                    className="h-7 text-[10px] text-red-500 hover:text-red-600 hover:bg-red-50"
+                                >
+                                    Réinitialiser
+                                </Button>
+                            )}
+                        </div>
+
+                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex-1 flex flex-col p-1">
+                            <EnterpriseTable
+                                title="Référentiel Temps Complet"
+                                subtitle={
+                                    <div className="flex items-center gap-2">
+                                        <span>Base de calcul unitaire</span>
+                                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                                            {filteredReferentielTasks.length} tâches affichées
+                                        </Badge>
+                                    </div>
+                                }
+                                tooltip="Temps moyen nécessaire par unité (colis, sac, etc.)"
+                                icon={Clock}
+                                columns={[
+                                    { key: 'p', label: 'Produit', align: 'left', width: '120px', ellipsis: true },
+                                    { key: 'f', label: 'Famille', align: 'left', width: '140px', ellipsis: true },
+                                    { key: 't', label: 'Tâche', align: 'left', ellipsis: true },
+                                    { key: 'u', label: 'Unité', align: 'left', width: '100px', ellipsis: true },
+                                    { key: 's', label: 'Sec', align: 'right', width: '70px', render: (val) => Number(val || 0).toFixed(0) }
+                                ]}
+                                data={filteredReferentielTasks.map((task, i) => ({
+                                    p: getFirstWord(task.produit) || "-",
+                                    f: task.famille || "",
+                                    t: (task.task_name || "").replace(/\s*\([^)]*\)/g, "").trim(),
+                                    u: task.unite_mesure,
+                                    s: Number(task.moy_sec) || 0
+                                }))}
+                                currentView="table"
+                                onViewChange={() => { }}
+                                showViewToggle={true}
+                                enableExport={true}
+                                height="100%"
+                                searchEnabled={true}
+                                searchFields={['p', 'f', 't', 'u']}
+                                showFilters={true}
+                            />
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
