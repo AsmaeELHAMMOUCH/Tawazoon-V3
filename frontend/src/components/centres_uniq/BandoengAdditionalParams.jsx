@@ -1,6 +1,6 @@
 import React from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Package, Mail, Box, RefreshCw, MapPin as MapIcon, Undo2, Briefcase, Move, MapPin, Globe } from "lucide-react";
+import { Package, Mail, Box, RefreshCw, MapPin as MapIcon, Undo2, Briefcase, Move, MapPin, Globe, SwitchCamera } from "lucide-react";
 
 // 🔥 CRITICAL: Define components OUTSIDE to prevent recreation on each render (fixes focus loss)
 const ParamField = ({ icon: Icon, label, value, onChange, suffix, iconColor = "text-blue-600", iconBg = "bg-blue-50" }) => {
@@ -95,8 +95,16 @@ export default function BandoengAdditionalParams({
     setPctMarcheOrdinaire,
     pctInternational,
     setPctInternational,
+    pctVagueMaster,
+    setPctVagueMaster,
+    pctBoitePostale,
+    setPctBoitePostale,
     pctNational = 100,
     setPctNational,
+    pctCrbt = 50,
+    setPctCrbt,
+    pctHorsCrbt = 50,
+    setPctHorsCrbt,
     edPercent,
     setEdPercent,
     className = ""
@@ -167,7 +175,7 @@ export default function BandoengAdditionalParams({
                     </div>
 
                     {/* Groupe 3: Pourcentages */}
-                    <div className="flex gap-1 flex-[6]">
+                    <div className="flex gap-1 flex-[8]">
                         <ParamField
                             icon={Undo2}
                             label="% Retour"
@@ -190,7 +198,10 @@ export default function BandoengAdditionalParams({
                             icon={Move}
                             label="% Axes"
                             value={pctAxesArrivee}
-                            onChange={setPctAxesArrivee}
+                            onChange={(v) => {
+                                setPctAxesArrivee(v);
+                                setPctAxesDepart(Math.max(0, 100 - v));
+                            }}
                             suffix="%"
                             iconColor="text-orange-600"
                             iconBg="bg-orange-50"
@@ -199,28 +210,55 @@ export default function BandoengAdditionalParams({
                             icon={MapPin}
                             label="% Local"
                             value={pctAxesDepart}
-                            onChange={setPctAxesDepart}
+                            onChange={(v) => {
+                                setPctAxesDepart(v);
+                                setPctAxesArrivee(Math.max(0, 100 - v));
+                            }}
                             suffix="%"
                             iconColor="text-[#005EA8]"
                             iconBg="bg-blue-50"
                         />
                         <ParamField
-                            icon={Box}
-                            label="% March Ord"
-                            value={pctMarcheOrdinaire}
-                            onChange={setPctMarcheOrdinaire}
+                            icon={Briefcase}
+                            label="% Vague"
+                            value={pctVagueMaster}
+                            onChange={setPctVagueMaster}
                             suffix="%"
-                            iconColor="text-slate-600"
-                            iconBg="bg-slate-50"
+                            iconColor="text-rose-600"
+                            iconBg="bg-rose-50"
                         />
                         <ParamField
-                            icon={Globe}
-                            label="% Inter"
-                            value={pctInternational}
-                            onChange={setPctInternational}
+                            icon={Mail}
+                            label="% BP"
+                            value={pctBoitePostale}
+                            onChange={setPctBoitePostale}
                             suffix="%"
-                            iconColor="text-indigo-600"
-                            iconBg="bg-indigo-50"
+                            iconColor="text-cyan-600"
+                            iconBg="bg-cyan-50"
+                        />
+                        <ParamField
+                            icon={SwitchCamera}
+                            label="% CRBT"
+                            value={pctCrbt}
+                            onChange={(v) => {
+                                setPctCrbt(v);
+                                setPctHorsCrbt(Math.max(0, 100 - v));
+                            }}
+                            suffix="%"
+                            iconColor="text-amber-500"
+                            iconBg="bg-amber-50"
+                        />
+                        <ParamField
+                            icon={SwitchCamera}
+                            label="% H-CRBT"
+                            value={pctHorsCrbt}
+                            onChange={(v) => {
+                                setPctHorsCrbt(v);
+                                setPctCrbt(Math.max(0, 100 - v));
+                            }}
+                            suffix="%"
+                            iconColor="text-slate-500"
+                            iconBg="bg-slate-50"
                         />
                         <ParamField
                             icon={Box}

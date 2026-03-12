@@ -9,15 +9,9 @@ import { cn } from "@/lib/utils";
 
 const fluxOptions = [
     {
-        id: "bandoeng",
-        label: "Bandoeng",
-        labelMobile: "Bnd",
-        icon: Building2,
-    },
-    {
-        id: "cndp",
-        label: "CNDP",
-        labelMobile: "CNDP",
+        id: "cna",
+        label: "CNA",
+        labelMobile: "CNA",
         icon: Building,
     },
     {
@@ -27,16 +21,22 @@ const fluxOptions = [
         icon: Building,
     },
     {
-        id: "ccp",
-        label: "CCP",
-        labelMobile: "CCP",
+        id: "bandoeng",
+        label: "PNC",
+        labelMobile: "PNC",
         icon: Building2,
     },
     {
-        id: "cna",
-        label: "CNA",
-        labelMobile: "CNA",
+        id: "cndp",
+        label: "CNDP",
+        labelMobile: "CNDP",
         icon: Building,
+    },
+    {
+        id: "ccp",
+        label: "CNTR",
+        labelMobile: "CNTR",
+        icon: Building2,
     },
 ];
 

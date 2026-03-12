@@ -353,7 +353,7 @@ export default function ResultsGlobal() {
       {/* KPI (uniquement en Graphe) */}
       {view === "chart" && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <KpiCard title="Adéquation globale" value={`${adequation.pct}%`} hint="Proximité Actuel ↔ Recommandé" />
+          <KpiCard title="Adéquation globale" value={`${adequation.pct}%`} hint="Proximité Actuel ↔ Consolidé" />
           <KpiCard title="Sous-effectif (postes)" value={adequation.under} />
           <KpiCard title="Sur-effectif (postes)" value={adequation.over} />
         </div>
@@ -427,10 +427,10 @@ function TableBlock({ rows, totals }) {
               <Th className="w-[240px]">Intervenant</Th>
               <Th center>Actuel</Th>
               <Th center>Calculé</Th>
-              <Th center>Recommandé</Th>
+              <Th center>Consolidé</Th>
               <Th center>Écart Calculé vs Actuel</Th>
-              <Th center>Écart Recommandé vs Actuel</Th>
-              <Th center>Écart Recommandé vs Calculé</Th>
+              <Th center>Écart Consolidé vs Actuel</Th>
+              <Th center>Écart Consolidé vs Calculé</Th>
             </tr>
           </thead>
           <tbody>
@@ -477,7 +477,7 @@ function TableBlock({ rows, totals }) {
               <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
                 <div className="text-slate-600">Actuel</div><div className="text-right">{row.actuel}</div>
                 <div className="text-slate-600">Calculé</div><div className="text-right">{row.calcule}</div>
-                <div className="text-slate-600">Recommandé</div><div className="text-right">{row.recommande}</div>
+                <div className="text-slate-600">Consolidé</div><div className="text-right">{row.recommande}</div>
                 <div className="text-slate-600">Écart C/A</div><div className={["text-right", cls(ca)].join(" ")}>{ca}</div>
                 <div className="text-slate-600">Écart R/A</div><div className={["text-right", cls(ra)].join(" ")}>{ra}</div>
                 <div className="text-slate-600">Écart R/C</div><div className={["text-right", cls(rc)].join(" ")}>{rc}</div>
@@ -498,8 +498,8 @@ function AggregateTableBlock({ rows, totals, labelTitle, onRowClick }) {
           <thead className="sticky top-0 z-10">
             <tr className="bg-primary text-white">
               <Th className="w-[240px]">{labelTitle}</Th>
-              <Th center>Actuel</Th><Th center>Calculé</Th><Th center>Recommandé</Th>
-              <Th center>Écart Calculé vs Actuel</Th><Th center>Écart Recommandé vs Actuel</Th><Th center>Écart Recommandé vs Calculé</Th>
+              <Th center>Actuel</Th><Th center>Calculé</Th><Th center>Consolidé</Th>
+              <Th center>Écart Calculé vs Actuel</Th><Th center>Écart Consolidé vs Actuel</Th><Th center>Écart Consolidé vs Calculé</Th>
             </tr>
           </thead>
           <tbody>
@@ -539,7 +539,7 @@ function AggregateTableBlock({ rows, totals, labelTitle, onRowClick }) {
               <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
                 <div className="text-slate-600">Actuel</div><div className="text-right">{r.actuel}</div>
                 <div className="text-slate-600">Calculé</div><div className="text-right">{r.calcule}</div>
-                <div className="text-slate-600">Recommandé</div><div className="text-right">{r.recommande}</div>
+                <div className="text-slate-600">Consolidé</div><div className="text-right">{r.recommande}</div>
                 <div className="text-slate-600">Écart C/A</div><div className={["text-right", cls(ca)].join(" ")}>{ca}</div>
                 <div className="text-slate-600">Écart R/A</div><div className={["text-right", cls(ra)].join(" ")}>{ra}</div>
                 <div className="text-slate-600">Écart R/C</div><div className={["text-right", cls(rc)].join(" ")}>{rc}</div>
@@ -577,7 +577,7 @@ function ChartBlock({ data, title, mode = "grouped", target = "recommande" }) {
           <YAxis allowDecimals={false} label={{ value: "Nombre de Personnes", angle: -90, position: "insideLeft" }} />
           <Tooltip /><Legend />
           <text x="50%" y={14} textAnchor="middle" dominantBaseline="middle" style={{ fontWeight: 600 }}>
-            {isStacked ? `${title} — Empilé vers ${target === "calcule" ? "Calculé" : "Recommandé"}` : title}
+            {isStacked ? `${title} — Empilé vers ${target === "calcule" ? "Calculé" : "Consolidé"}` : title}
           </text>
           {isStacked ? (
             <>
@@ -651,7 +651,7 @@ function TargetToggle({ value, onChange }) {
     <div className="inline-flex items-center rounded-md border border-slate-300 overflow-hidden">
       <button onClick={() => onChange("recommande")}
         className={`px-2.5 py-1.5 text-xs ${value === "recommande" ? "bg-primary text-white" : "bg-white text-slate-700 hover:bg-slate-50"}`}>
-        Cible: Recommandé
+        Cible: Consolidé
       </button>
       <button onClick={() => onChange("calcule")}
         className={`px-2.5 py-1.5 text-xs border-l border-slate-300 ${value === "calcule" ? "bg-primary text-white" : "bg-white text-slate-700 hover:bg-slate-50"}`}>

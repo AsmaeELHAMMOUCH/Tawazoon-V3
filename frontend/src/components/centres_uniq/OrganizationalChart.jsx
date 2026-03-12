@@ -215,18 +215,14 @@ const OrganizationalChart = ({ chefCentre, moiStaff = [], modStaff = [] }) => {
 
     const filteredMOI = moiStaff.filter(s => !isChef(s));
     const filteredMOD = modStaff.filter(s => !isChef(s));
+    const allStaff = [...filteredMOI, ...filteredMOD];
 
     // Calculate totals
-    const totalMOI = filteredMOI.reduce((sum, staff) => sum + (staff.effectif || 0), 0);
-    const totalMOD = filteredMOD.reduce((sum, staff) => sum + (staff.effectif || 0), 0);
-    const totalEffectif = totalMOI + totalMOD;
+    const totalEffectif = allStaff.reduce((sum, staff) => sum + (staff.effectif || 0), 0);
 
     // Determine Chef Name and Effectif
     const chefName = typeof chefCentre === 'object' ? (chefCentre.name || "Chef de Centre") : (chefCentre || "Chef de Centre");
     const chefEffectif = typeof chefCentre === 'object' ? (chefCentre.effectif || 1) : 1;
-
-    // Total Global (MOI + MOD + Chef)
-    const totalGlobal = totalEffectif + chefEffectif;
 
     // Zoom State
     const [zoom, setZoom] = React.useState(0.8);
@@ -260,8 +256,6 @@ const OrganizationalChart = ({ chefCentre, moiStaff = [], modStaff = [] }) => {
                     className="min-w-max flex flex-col items-center"
                     style={{ zoom: zoom }}
                 >
-
-
                     {/* Level 0: Root */}
                     <TreeNode className="">
                         <OrgCard
@@ -276,52 +270,9 @@ const OrganizationalChart = ({ chefCentre, moiStaff = [], modStaff = [] }) => {
                     </TreeNode>
 
                     {/* Level 1: Categories Container */}
-                    <div className="grid grid-cols-2 gap-0 relative w-full mx-auto align-top">
-                        {/* Connector Bridge Logic */}
-                        <div className="absolute top-0 left-1/4 right-1/4 h-0.5 bg-slate-300 -mt-[1px]"></div>
-                        <div className="absolute top-0 left-1/4 w-0.5 h-6 bg-slate-300 -mt-[1px] -ml-[0px]"></div>
-                        <div className="absolute top-0 right-1/4 w-0.5 h-6 bg-slate-300 -mt-[1px] -mr-[0px]"></div>
-
-                        {/* Branch 2: MOD */}
-                        <div className="flex flex-col items-center">
-                            <div className="mt-2 mb-4 relative">
-                                <OrgCard
-                                    type="mod"
-                                    role=""
-                                    name="MOD (Direct)"
-                                    count={Math.round(totalMOD)}
-                                    icon={Users}
-                                />
-                                {/* Connector to children */}
-                                {filteredMOD.length > 0 && (
-                                    <div className="absolute left-1/2 -translate-x-1/2 top-full w-0.5 h-4 bg-slate-300"></div>
-                                )}
-                            </div>
-
-                            {/* Grouped Content for MOD */}
-                            <StaffGroupRenderer staffList={filteredMOD} />
-                        </div>
-
-                        {/* Branch 1: MOI */}
-                        <div className="flex flex-col items-center">
-                            <div className="mt-2 mb-4 relative">
-                                <OrgCard
-                                    type="moi"
-                                    role=""
-                                    name="MOI (Indirect)"
-                                    count={Math.round(totalMOI)}
-                                    icon={Users}
-                                />
-                                {/* Connector to children */}
-                                {filteredMOI.length > 0 && (
-                                    <div className="absolute left-1/2 -translate-x-1/2 top-full w-0.5 h-4 bg-slate-300"></div>
-                                )}
-                            </div>
-
-                            {/* Grouped Content for MOI */}
-                            <StaffGroupRenderer staffList={filteredMOI} />
-                        </div>
-
+                    <div className="flex flex-col items-center w-full">
+                        {/* Render all staff categories directly linked via StaffGroupRenderer */}
+                        <StaffGroupRenderer staffList={allStaff} />
                     </div>
                 </div>
             </div>

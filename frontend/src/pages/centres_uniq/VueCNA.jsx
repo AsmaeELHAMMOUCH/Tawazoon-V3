@@ -212,8 +212,8 @@ export default function VueCNA() {
   const [heuresNet, setHeuresNet] = useState(8.0);
 
   // CNA-specific (if needed)
-  const [tauxComplexite, setTauxComplexite] = useState(1);
-  const [natureGeo, setNatureGeo] = useState(1);
+  const [tauxComplexite, setTauxComplexite] = useState(0);
+  const [natureGeo, setNatureGeo] = useState(0);
 
   // New Parameters
   const [colisAmanaParSac, setColisAmanaParSac] = useState(5);
@@ -837,7 +837,7 @@ export default function VueCNA() {
       {/* 🔹 TITRE & HEADER (Sticky) */}
       <div className="sticky top-[57px] z-30 flex flex-col gap-2">
         <SimulationHeader
-          title="Centre National AMANA (CNA)"
+          title="Simulation des Effectifs-CNA"
           region="Region Casa"
           subtitle="Code 1964 - Simulation"
         >

@@ -126,25 +126,57 @@ async def import_aps(file: UploadFile = File(...), db: Session = Depends(get_db)
         errors = []
         
         for index, row in df.iterrows():
-            centre_name = str(row["Centre"]).strip()
-            new_aps = row["APS Actuel"]
+            centre_name_raw = str(row["Centre"]).strip()
+            new_aps_raw = row["APS Actuel"]
+            
+            try:
+                if pd.isna(new_aps_raw) or str(new_aps_raw).strip() == "":
+                    new_aps_float = 0.0
+                else:
+                    new_aps_float = float(str(new_aps_raw).replace(',', '.'))
+            except ValueError:
+                errors.append(f"Ligne {index+2}: Valeur APS invalide '{new_aps_raw}'")
+                continue
             
             # Recherche du centre par nom (normalisé)
-            centre = db.query(Centre).filter(text("LOWER(REPLACE(label, ' ', '')) = LOWER(REPLACE(:name, ' ', ''))")).params(name=centre_name).first()
+            centre = db.query(Centre).filter(text("LOWER(REPLACE(label, ' ', '')) = LOWER(REPLACE(:name, ' ', ''))")).params(name=centre_name_raw).first()
             
             if centre:
-                centre.aps = float(new_aps)
+                centre.aps = new_aps_float
                 updated_count += 1
             else:
-                errors.append(f"Ligne {index+2}: Centre '{centre_name}' non trouvé")
+                errors.append(f"Ligne {index+2}: Centre '{centre_name_raw}' non trouvé")
         
         db.commit()
+        
+        if errors:
+            error_data = [{"Erreur": err} for err in errors]
+            df_errors = pd.DataFrame(error_data)
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                df_errors.to_excel(writer, index=False, sheet_name='Lignes_Rejetees')
+            output.seek(0)
+            
+            headers = {
+                "Content-Disposition": "attachment; filename=rejets_import_aps.xlsx",
+                "Access-Control-Expose-Headers": "X-Error-Count, X-Updated-Count",
+                "X-Error-Count": str(len(errors)),
+                "X-Updated-Count": str(updated_count)
+            }
+            return StreamingResponse(
+                output,
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                headers=headers
+            )
+            
         return {
             "status": "success", 
             "message": f"{updated_count} centres mis à jour",
-            "errors": errors
+            "errors": []
         }
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -241,16 +273,25 @@ async def import_effectifs(file: UploadFile = File(...), db: Session = Depends(g
         created_count = 0
         errors = []
         
+        # Track processed combinations to prevent IntegrityError on duplicates
+        processed_combinations = set()
+        
         # Pré-charger les centres et les postes pour éviter trop de requêtes unitaires
-        all_centres = {c.label.lower().replace(' ', ''): c.id for c in db.query(Centre).all()}
-        all_postes = {p.label.lower().replace(' ', ''): (p.id, p.Code) for p in db.query(Poste).all()}
+        all_centres = {(c.label.lower().replace(' ', '') if c.label else ''): c.id for c in db.query(Centre).all()}
+        all_postes = {(p.label.lower().replace(' ', '') if p.label else ''): (p.id, p.Code) for p in db.query(Poste).all()}
         
         for index, row in df.iterrows():
             centre_name_raw = str(row["Centre"]).strip()
             poste_label_raw = str(row["Poste"]).strip()
             new_val = row["Effectif Actuel"]
-            
-            if pd.isna(new_val): new_val = 0
+            try:
+                if pd.isna(new_val) or str(new_val).strip() == "":
+                    new_val_float = 0.0
+                else:
+                    new_val_float = float(str(new_val).replace(',', '.'))
+            except ValueError:
+                errors.append(f"Ligne {index+2}: Valeur d'effectif invalide '{new_val}'")
+                continue
             
             centre_key = centre_name_raw.lower().replace(' ', '')
             poste_key = poste_label_raw.lower().replace(' ', '')
@@ -267,6 +308,13 @@ async def import_effectifs(file: UploadFile = File(...), db: Session = Depends(g
             
             poste_id, poste_code = poste_info
             
+            combo_key = (centre_id, poste_id)
+            if combo_key in processed_combinations:
+                errors.append(f"Ligne {index+2}: Doublon ignoré pour le centre '{centre_name_raw}' et le poste '{poste_label_raw}'")
+                continue
+            
+            processed_combinations.add(combo_key)
+            
             # Recherche de l'association existante
             # On cherche par poste_id ou par code_resp pour être résilient
             cp = db.query(CentrePoste).filter(
@@ -275,7 +323,7 @@ async def import_effectifs(file: UploadFile = File(...), db: Session = Depends(g
             ).first()
             
             if cp:
-                cp.effectif_actuel = float(new_val)
+                cp.effectif_actuel = new_val_float
                 updated_count += 1
             else:
                 # Création d'une nouvelle association
@@ -283,18 +331,49 @@ async def import_effectifs(file: UploadFile = File(...), db: Session = Depends(g
                     centre_id=centre_id,
                     poste_id=poste_id,
                     code_resp=poste_code,
-                    effectif_actuel=float(new_val)
+                    effectif_actuel=new_val_float
                 )
                 db.add(new_cp)
                 created_count += 1
         
         db.commit()
+        
+        if errors:
+            # S'il y a des erreurs, on génère un fichier excel de rejets
+            error_data = []
+            for err_msg in errors:
+                # Extraire la ligne si possible pour le contexte, sinon on met juste l'erreur
+                error_data.append({
+                    "Erreur": err_msg
+                })
+            
+            df_errors = pd.DataFrame(error_data)
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                df_errors.to_excel(writer, index=False, sheet_name='Lignes_Rejetees')
+            output.seek(0)
+            
+            headers = {
+                "Content-Disposition": "attachment; filename=rejets_import_effectifs.xlsx",
+                "Access-Control-Expose-Headers": "X-Error-Count, X-Updated-Count, X-Created-Count",
+                "X-Error-Count": str(len(errors)),
+                "X-Updated-Count": str(updated_count),
+                "X-Created-Count": str(created_count)
+            }
+            return StreamingResponse(
+                output,
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                headers=headers
+            )
+            
         return {
             "status": "success", 
             "message": f"{updated_count} effectifs mis à jour, {created_count} nouveaux postes affectés.",
-            "errors": errors
+            "errors": []
         }
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -415,7 +494,8 @@ def get_available_postes(
         {
             "id": p.id,
             "label": p.label,
-            "type_poste": p.type_poste
+            "type_poste": p.type_poste,
+            "Code": p.Code
         }
         for p in postes
     ]

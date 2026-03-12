@@ -24,6 +24,7 @@ from app.api.bandoeng_router import router as bandoeng_router # 🆕 Bandoeng Is
 from app.api.ccp import router as ccp_router # 🆕 CCP Standalone Module
 from app.api.cna import router as cna_router # 🆕 CNA Standalone Module
 from app.api.cci import router as cci_router # 🆕 CCI Standalone Module
+from app.api.batch_simulation import router as batch_router # 🆕 Simulation Régionale/Nationale
 
 from app.core.db import engine, Base, get_db
 from app.models import db_models, scoring_models, categorisation_models
@@ -114,6 +115,7 @@ app.include_router(bandoeng_router, prefix="/api") # ✅ Bandoeng Isolation
 app.include_router(ccp_router, prefix="/api") # ✅ CCP Standalone Module
 app.include_router(cna_router, prefix="/api") # ✅ CNA Standalone Module
 app.include_router(cci_router, prefix="/api") # ✅ CCI Standalone Module
+app.include_router(batch_router, prefix="/api") # ✅ Simulation Régionale/Nationale
 #app.include_router(views_router, prefix="/api")
 from app.api.taches_mgmt import router as taches_mgmt_router # 🆕 Taches Management
 from app.api.postes_mgmt import router as postes_mgmt_router # 🆕 Postes Management

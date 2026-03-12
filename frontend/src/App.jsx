@@ -76,6 +76,9 @@ import GlobalImportPage from "./pages/GlobalImportPage"; // ðŸ†• Global Im
 import SimulationIntervenantAvancee from "./pages/SimulationIntervenantAvancee"; // ðŸ†• Simulation Intervenant AvancÃ©e
 import IndexAdequation from "./pages/IndexAdequation";
 import StepWizardSimulation from "./pages/StepWizardSimulation";
+import SimulationBatchPage from "./pages/SimulationBatchPage"; // 🆕 Simulation Régionale/Nationale
+import MappingResponsables from "./pages/process/MappingResponsables";
+import ExclusionTaches from "./pages/process/ExclusionTaches";
 
 
 
@@ -253,6 +256,10 @@ export default function App() {
           <Route path="simulation/intervenant-avancee" element={<RouteErrorBoundary><SimulationIntervenantAvancee /></RouteErrorBoundary>} />
           <Route path="simulation/index_Adequation" element={<RouteErrorBoundary><IndexAdequation /></RouteErrorBoundary>} />
           <Route path="simulation/wizard" element={<RouteErrorBoundary><StepWizardSimulation /></RouteErrorBoundary>} />
+          <Route path="simulation/regional" element={<RouteErrorBoundary><SimulationBatchPage mode="regional" /></RouteErrorBoundary>} />
+          <Route path="simulation/national-batch" element={<RouteErrorBoundary><SimulationBatchPage mode="national" /></RouteErrorBoundary>} />
+          <Route path="simulation/mapping-responsables" element={<RouteErrorBoundary><MappingResponsables /></RouteErrorBoundary>} />
+          <Route path="simulation/exclusion-taches" element={<ExclusionTaches />} />
 
           {/* Administration */}
           <Route path="admin/import-tasks" element={<RouteErrorBoundary><GlobalImportPage /></RouteErrorBoundary>} />

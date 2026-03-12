@@ -11,7 +11,8 @@ export default function SeasonalityDialog({
     open,
     onOpenChange,
     wizardData,
-    postes = []
+    postes = [],
+    mode
 }) {
     const [loading, setLoading] = useState(false);
 
@@ -116,6 +117,7 @@ export default function SeasonalityDialog({
                     loading={loading}
                     intervenants={postes.map(p => ({ id: p.id, label: p.label || p.nom_poste }))}
                     className="border-none shadow-none"
+                    mode={mode}
                 />
             </DialogContent>
         </Dialog>

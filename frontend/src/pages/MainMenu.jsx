@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Network, Building2, Sparkles, Workflow } from 'lucide-react';
+import { Network, Building2, Sparkles } from 'lucide-react';
 
 export default function MainMenu() {
     const navigate = useNavigate();
@@ -16,21 +16,12 @@ export default function MainMenu() {
         },
         {
             id: 'centres-uniques',
-            title: 'Centres Uniques',
-            description: 'Gestion des centres uniques',
+            title: 'Centres Spécifiques',
+            description: 'Gestion des centres spécifiques',
             icon: Building2,
             color: 'from-cyan-500 to-cyan-600',
             hoverColor: 'hover:from-cyan-600 hover:to-cyan-700',
             path: '/app/simulation/centres-uniques'
-        },
-        {
-            id: 'simulation-wizard',
-            title: 'Simulation Guidée',
-            description: 'Interface pas-à-pas pour la simulation des effectifs',
-            icon: Workflow,
-            color: 'from-purple-500 to-indigo-600',
-            hoverColor: 'hover:from-purple-600 hover:to-indigo-700',
-            path: '/app/simulation/wizard'
         },
         {
             id: 'simulation-nouvelle',
@@ -53,15 +44,15 @@ export default function MainMenu() {
                     </h1>
                 </div>
 
-                {/* Cards Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {/* Cards Grid centered */}
+                <div className="flex flex-wrap justify-center gap-6">
                     {menuCards.map((card) => {
                         const Icon = card.icon;
                         return (
                             <button
                                 key={card.id}
                                 onClick={() => navigate(card.path)}
-                                className="group relative bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden"
+                                className="w-full md:w-80 group relative bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden"
                             >
                                 {/* Gradient Background */}
                                 <div className={`absolute inset-0 bg-gradient-to-br ${card.color} ${card.hoverColor} opacity-0 group-hover:opacity-100 transition-opacity duration-300`} />

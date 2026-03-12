@@ -53,7 +53,7 @@ const fmt = (num, decimals = 0) => {
     if (num === null || num === undefined || isNaN(num)) return "—";
     if (typeof num !== "number") return num;
     const fixed = decimals > 0 ? num.toFixed(decimals).replace(".", ",") : Math.round(num).toString();
-    return fixed.replace(/\B(?=(\d{3})+(?!\d))/g, "\u00A0");
+    return fixed.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
 };
 
 /* ─── Cartes KPI Design (Départ, Arrivé, Global) ──────────────── */
@@ -93,7 +93,7 @@ function KpiDirectionCard({ icon, label, vol, effActuel, effCalcule, color, capN
                         {bAct !== null ? (
                             <div className="flex flex-col items-center leading-tight">
                                 <span className="text-lg font-black text-slate-600">{fmt(bAct)} <span className="text-[10px] font-medium opacity-60">/j</span></span>
-                                <span className="text-[10px] font-black text-slate-500">{fmt(bActH)} <span className="text-[8px] opacity-60">/h</span></span>
+                                <span className="text-[10px] font-black text-slate-500">{fmt(bActH, 1)} <span className="text-[8px] opacity-60">/h</span></span>
                             </div>
                         ) : (
                             <span className="text-slate-300">—</span>
@@ -107,7 +107,7 @@ function KpiDirectionCard({ icon, label, vol, effActuel, effCalcule, color, capN
                         {bCal !== null ? (
                             <div className="flex flex-col items-center leading-tight">
                                 <span className="text-lg font-black" style={{ color }}>{fmt(bCal)} <span className="text-[10px] font-medium opacity-60">/j</span></span>
-                                <span className="text-[10px] font-bold opacity-70" style={{ color }}>{fmt(bCalH)} <span className="text-[8px] opacity-60">/h</span></span>
+                                <span className="text-[10px] font-bold opacity-70" style={{ color }}>{fmt(bCalH, 1)} <span className="text-[8px] opacity-60">/h</span></span>
                             </div>
                         ) : (
                             <span className="text-slate-300">—</span>
@@ -131,24 +131,24 @@ export default function CapaciteNominaleDialog({
     simulationResults,  // pour effectif calculé
     postes,             // pour effectif actuel
     centreDetails,
+    mode
 }) {
     const [activeFlux, setActiveFlux] = useState("amana");
     const flux = FLUX_CONFIG[activeFlux];
     const gridValues = data?.gridValues || {};
     const capNette = data?.heuresNet || 8; // Récupéré de Step 2, défaut 8
 
-    /* Effectifs totaux (MOD + MOI) */
+    /* Effectifs totaux (MOD uniquement) */
     const effActuel = useMemo(() =>
-        (postes || []).reduce((s, p) => s + (p.effectif_actuel || 0), 0),
+        (postes || []).filter(p => isMod(p)).reduce((s, p) => s + (p.effectif_actuel || 0), 0),
         [postes]);
 
     const effCalcule = useMemo(() => {
         const rpp = simulationResults?.ressources_par_poste || {};
         return Math.round(
-            (postes || []).reduce((s, p) => {
+            (postes || []).filter(p => isMod(p)).reduce((s, p) => {
                 const label = (p.label || p.nom || "").trim();
-                const mod = isMod(p);
-                return s + (mod ? (rpp[label] || 0) : (p.effectif_actuel || 0));
+                return s + (rpp[label] || 0);
             }, 0)
         );
     }, [simulationResults, postes]);
@@ -162,12 +162,12 @@ export default function CapaciteNominaleDialog({
     const posteRows = useMemo(() => {
         const rpp = simulationResults?.ressources_par_poste || {};
         return (postes || [])
+            .filter(p => isMod(p)) // Exclure MOI
             .map((p) => {
                 const label = (p.label || p.nom || "").trim();
                 const type = p.type_poste || "—";
-                const moi = !isMod(p);
                 const actuel = p.effectif_actuel || 0;
-                const calcule = moi ? actuel : Math.round(rpp[label] || 0);
+                const calcule = Math.round(rpp[label] || 0);
 
                 const calc = (v, e) => (e > 0 && v > 0) ? (v / e / JOURS) : null;
 
@@ -180,7 +180,7 @@ export default function CapaciteNominaleDialog({
                 const bGlob_cal = calc(volTotal, calcule);
 
                 return {
-                    label, type, moi, actuel, calcule,
+                    label, type, moi: false, actuel, calcule,
                     bDep_act, bDep_cal,
                     bArr_act, bArr_cal,
                     bGlob_act, bGlob_cal,
@@ -193,7 +193,8 @@ export default function CapaciteNominaleDialog({
                     bGlobHs_cal: bGlob_cal ? bGlob_cal / capNette : null,
                 };
             })
-            .sort((a, b) => a.moi - b.moi || b.actuel - a.actuel); // MOD en premier
+            .filter(r => r.actuel > 0 || r.calcule > 0) // Uniquement ceux qui ont un effectif
+            .sort((a, b) => b.actuel - a.actuel);
     }, [postes, simulationResults, volDepart, volArrive, capNette]);
 
     return (
@@ -214,7 +215,7 @@ export default function CapaciteNominaleDialog({
                                 </div>
                                 <div>
                                     <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
-                                        Capacité Nominale
+                                        Capacité Nominale ({mode === "optimise" ? "Optimisée" : mode === "recommande" ? "Consolidée" : "Cible"})
                                         {centreDetails?.centre_name && (
                                             <span className="text-xs font-medium text-blue-100/80 bg-white/10 px-2 py-0.5 rounded-full border border-white/10">
                                                 {centreDetails.centre_name}
@@ -234,12 +235,12 @@ export default function CapaciteNominaleDialog({
                                     </div>
                                     <div className="w-px bg-white/10" />
                                     <div className="text-center">
-                                        <p className="text-[8px] text-blue-200 font-bold uppercase tracking-widest" style={{ color: "#7dd3fc" }}>Calculé</p>
+                                        <p className="text-[8px] text-blue-200 font-bold uppercase tracking-widest" style={{ color: "#7dd3fc" }}>{mode === "optimise" ? "Optimisé" : mode === "recommande" ? "Consolidé" : "Calculé"}</p>
                                         <p className="text-base font-black text-white leading-tight">{fmt(effCalcule)}</p>
                                     </div>
                                     <div className="w-px bg-white/10" />
                                     <div className="text-center">
-                                        <p className="text-[8px] text-blue-100/70 font-bold uppercase tracking-widest">Total</p>
+                                        <p className="text-[8px] text-blue-100/70 font-bold uppercase tracking-widest">Total Vol</p>
                                         <p className="text-base font-black text-white leading-tight">
                                             {fmt(volTotal)}
                                         </p>
@@ -391,14 +392,14 @@ export default function CapaciteNominaleDialog({
                                                     {fmt(r.bDep_act)}
                                                 </td>
                                                 <td className="px-1 py-1 text-center bg-blue-50/5 text-slate-500 font-black">
-                                                    {fmt(r.bDepHs_act)}
+                                                    {fmt(r.bDepHs_act, 1)}
                                                 </td>
                                                 {/* Besoin Départ Calculé */}
                                                 <td className="px-1 py-1 text-center bg-blue-50/20 font-black text-blue-700">
                                                     {fmt(r.bDep_cal)}
                                                 </td>
                                                 <td className="px-1 py-1 text-center bg-blue-50/20 font-black text-blue-600/70">
-                                                    {fmt(r.bDepHs_cal)}
+                                                    {fmt(r.bDepHs_cal, 1)}
                                                 </td>
 
                                                 {/* Besoin Arrivé Actuel */}
@@ -406,14 +407,14 @@ export default function CapaciteNominaleDialog({
                                                     {fmt(r.bArr_act)}
                                                 </td>
                                                 <td className="px-1 py-1 text-center bg-sky-50/5 text-slate-500 font-black">
-                                                    {fmt(r.bArrHs_act)}
+                                                    {fmt(r.bArrHs_act, 1)}
                                                 </td>
                                                 {/* Besoin Arrivé Calculé */}
                                                 <td className="px-1 py-1 text-center bg-sky-50/20 font-black text-sky-700">
                                                     {fmt(r.bArr_cal)}
                                                 </td>
                                                 <td className="px-1 py-1 text-center bg-sky-50/20 font-black text-sky-600/70">
-                                                    {fmt(r.bArrHs_cal)}
+                                                    {fmt(r.bArrHs_cal, 1)}
                                                 </td>
 
                                                 {/* Besoin Global Actuel */}
@@ -421,14 +422,14 @@ export default function CapaciteNominaleDialog({
                                                     {fmt(r.bGlob_act)}
                                                 </td>
                                                 <td className="px-1 py-1 text-center bg-slate-50/30 text-slate-500 font-black">
-                                                    {fmt(r.bGlobHs_act)}
+                                                    {fmt(r.bGlobHs_act, 1)}
                                                 </td>
                                                 {/* Besoin Global Calculé */}
                                                 <td className="px-1 py-1 text-center bg-slate-100/20 font-black text-slate-700">
                                                     {fmt(r.bGlob_cal)}
                                                 </td>
                                                 <td className="px-1 py-1 text-center bg-slate-100/20 font-black text-slate-600/70">
-                                                    {fmt(r.bGlobHs_cal)}
+                                                    {fmt(r.bGlobHs_cal, 1)}
                                                 </td>
                                             </tr>
                                         ))}

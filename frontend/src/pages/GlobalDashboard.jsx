@@ -102,7 +102,7 @@ function HelpPopover({ children }) {
             <ul className="list-disc pl-5 space-y-1">
               <li>Filtrez par <b>Région</b>, <b>Centre</b> et <b>Période</b> en haut.</li>
               <li>Les KPI montrent l’état global (ETP, charge, productivité, retards).</li>
-              <li>Les graphiques comparent <b>Actuel vs Recommandé</b> et l’évolution dans le temps.</li>
+              <li>Les graphiques comparent <b>Actuel vs Consolidé</b> et l’évolution dans le temps.</li>
               <li>Exportez les vues via le bouton <b>Exporter</b> dans les en-têtes.</li>
             </ul>
           </div>
@@ -140,7 +140,7 @@ export default function GlobalDashboard() {
   // KPI simulés
   const kpi = useMemo(() => ([
     { label: "ETP Actuels", value: 128, delta: +2.3, icon: Users },
-    { label: "ETP Recommandés", value: 121, delta: -1.1, icon: TrendingUp },
+    { label: "ETP Consolidés", value: 121, delta: -1.1, icon: TrendingUp },
     { label: "Charge (h/j)", value: 892, delta: +0.7, icon: Clock },
     { label: "Productivité (%)", value: 86.4, delta: +0.4, icon: Activity },
   ]), [])
@@ -172,7 +172,7 @@ export default function GlobalDashboard() {
                 onChange={setMode}
                 items={[
                   { value: "actuel", label: "Actuel" },
-                  { value: "recommande", label: "Recommandé" },
+                  { value: "recommande", label: "Consolidé" },
                 ]}
               />
               <button className="inline-flex items-center gap-2 h-9 px-3 rounded-md text-[13px] border border-slate-300 hover:bg-slate-50">
@@ -240,12 +240,12 @@ export default function GlobalDashboard() {
         {/* Graphiques */}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           <Card
-            title="ETP — Actuel vs Recommandé (par centre)"
+            title="ETP — Actuel vs Consolidé (par centre)"
             actions={<button className="inline-flex items-center gap-2 h-8 px-3 rounded-md text-[12px] border border-slate-300 hover:bg-slate-50"><Download className="w-3.5 h-3.5" /> Exporter</button>}
           >
             <div className="h-64 grid place-items-center text-slate-500 border border-dashed border-slate-200 rounded-lg">
               {/* Remplace par ton graphique barres */}
-              <div className="flex items-center gap-2 text-sm"><BarChart3 className="w-4 h-4"/> Graphique ici</div>
+              <div className="flex items-center gap-2 text-sm"><BarChart3 className="w-4 h-4" /> Graphique ici</div>
             </div>
           </Card>
 
@@ -255,7 +255,7 @@ export default function GlobalDashboard() {
           >
             <div className="h-64 grid place-items-center text-slate-500 border border-dashed border-slate-200 rounded-lg">
               {/* Remplace par ton line chart */}
-              <div className="flex items-center gap-2 text-sm"><Activity className="w-4 h-4"/> Graphique ici</div>
+              <div className="flex items-center gap-2 text-sm"><Activity className="w-4 h-4" /> Graphique ici</div>
             </div>
           </Card>
         </div>

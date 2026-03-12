@@ -42,7 +42,7 @@ export default function HeaderSimulation({ mode, setMode, scope }) {
 
           <p className="text-[10px] text-slate-500 ml-3 mt-0.5 font-medium leading-tight">
             Analyse détaillée •{" "}
-            {mode === "recommande" ? "Processus Recommandé" : "Processus Actuel"}
+            {mode === "recommande" ? "Processus Consolidé" : "Processus Actuel"}
           </p>
         </div>
 
@@ -62,7 +62,7 @@ export default function HeaderSimulation({ mode, setMode, scope }) {
                     : "bg-white text-slate-600 hover:text-[#005EA8] hover:bg-blue-50"
                   }`}
               >
-                {m === "actuel" ? "Actuel" : "Recommandé"}
+                {m === "actuel" ? "Actuel" : "Consolidé"}
               </motion.button>
             ))}
           </div>

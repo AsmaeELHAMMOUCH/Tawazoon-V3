@@ -136,7 +136,7 @@ export default function ComparativeView() {
       {/* Header */}
       <div className="bg-white rounded-lg shadow-sm p-6">
         <h2 className="text-3xl font-bold text-gray-900 mb-2">Comparatif Global</h2>
-        <p className="text-gray-600">Scénario Actuel vs Scénario Recommandé</p>
+        <p className="text-gray-600">Scénario Actuel vs Scénario Consolidé</p>
       </div>
 
       {/* KPIs principaux */}
@@ -157,12 +157,11 @@ export default function ComparativeView() {
               <ArrowRight className="w-6 h-6 text-gray-400 mx-2" />
               <div className="text-right">
                 <p className="text-3xl font-bold text-blue-600">{item.recommande.toLocaleString()}</p>
-                <p className="text-xs text-gray-500 mt-1">Recommandé</p>
+                <p className="text-xs text-gray-500 mt-1">Consolidé</p>
               </div>
             </div>
-            <div className={`flex items-center text-sm font-semibold p-3 rounded-lg ${
-              item.ecart < 0 ? "bg-green-50 text-green-700" : "bg-blue-50 text-blue-700"
-            }`}>
+            <div className={`flex items-center text-sm font-semibold p-3 rounded-lg ${item.ecart < 0 ? "bg-green-50 text-green-700" : "bg-blue-50 text-blue-700"
+              }`}>
               {item.ecart < 0 ? <TrendingDown className="w-4 h-4 mr-2" /> : <TrendingUp className="w-4 h-4 mr-2" />}
               {item.ecart > 0 ? "+" : ""}{item.ecart.toLocaleString()}
               <span className="ml-1">({item.pourcentage > 0 ? "+" : ""}{item.pourcentage}%)</span>
@@ -179,15 +178,15 @@ export default function ComparativeView() {
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={departmentData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis dataKey="departement" tick={{fontSize: 12}} />
+              <XAxis dataKey="departement" tick={{ fontSize: 12 }} />
               <YAxis />
               <Tooltip
-                contentStyle={{backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px'}}
+                contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }}
                 formatter={(value) => value.toLocaleString()}
               />
               <Legend />
               <Bar dataKey="actuel" fill="#3b82f6" name="Actuel" radius={[8, 8, 0, 0]} />
-              <Bar dataKey="recommande" fill="#10b981" name="Recommandé" radius={[8, 8, 0, 0]} />
+              <Bar dataKey="recommande" fill="#10b981" name="Consolidé" radius={[8, 8, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </Card>
@@ -198,10 +197,10 @@ export default function ComparativeView() {
           <ResponsiveContainer width="100%" height={300}>
             <RadarChart data={kpiData}>
               <PolarGrid stroke="#e5e7eb" />
-              <PolarAngleAxis dataKey="name" tick={{fontSize: 12}} />
+              <PolarAngleAxis dataKey="name" tick={{ fontSize: 12 }} />
               <PolarRadiusAxis angle={90} domain={[0, 100]} />
               <Radar name="Actuel" dataKey="actuel" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.3} />
-              <Radar name="Recommandé" dataKey="recommande" stroke="#10b981" fill="#10b981" fillOpacity={0.3} />
+              <Radar name="Consolidé" dataKey="recommande" stroke="#10b981" fill="#10b981" fillOpacity={0.3} />
               <Legend />
             </RadarChart>
           </ResponsiveContainer>
@@ -219,7 +218,7 @@ export default function ComparativeView() {
               <XAxis dataKey="mois" />
               <YAxis yAxisId="left" />
               <YAxis yAxisId="right" orientation="right" />
-              <Tooltip contentStyle={{backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px'}} />
+              <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }} />
               <Legend />
               <Area
                 yAxisId="left"
@@ -253,7 +252,7 @@ export default function ComparativeView() {
                 cx="50%"
                 cy="50%"
                 labelLine={false}
-                label={({name, percent}) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
                 outerRadius={90}
                 fill="#8884d8"
                 dataKey="value"
@@ -277,7 +276,7 @@ export default function ComparativeView() {
               <tr>
                 <th className="px-4 py-3 text-left font-semibold text-gray-700">Département</th>
                 <th className="px-4 py-3 text-center font-semibold text-gray-700">Effectifs Actuel</th>
-                <th className="px-4 py-3 text-center font-semibold text-gray-700">Recommandé</th>
+                <th className="px-4 py-3 text-center font-semibold text-gray-700">Consolidé</th>
                 <th className="px-4 py-3 text-center font-semibold text-gray-700">Écart</th>
                 <th className="px-4 py-3 text-center font-semibold text-gray-700">Coût Actuel (K€)</th>
                 <th className="px-4 py-3 text-center font-semibold text-gray-700">Coût Rec. (K€)</th>

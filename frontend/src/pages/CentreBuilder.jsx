@@ -149,41 +149,17 @@ export default function CentreBuilder() {
 
 
     const handleSimulationTest = async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            if (!identity.categorie_id) return;
+        if (!identity.categorie_id) return;
 
-            const similar = await builderService.findSimilarCentre(identity.categorie_id);
+        const selectedCat = refCategories.find(c => String(c.value) === String(identity.categorie_id));
+        const catLabel = selectedCat ? selectedCat.label : "Standard";
 
-            // Persist as if it was the selected center
-            window.localStorage.setItem("sim_centre", JSON.stringify(similar.id));
-            window.localStorage.setItem("sim_poste", JSON.stringify("__ALL__"));
-            window.localStorage.setItem("sim_is_test", "true");
+        // Nettoyage local storage pour éviter les conflits
+        window.localStorage.removeItem("sim_is_test");
+        window.localStorage.removeItem("sim_centre");
 
-            // Persist User Choices for Display Override
-            window.localStorage.setItem("sim_test_region_id", identity.region_id);
-            window.localStorage.setItem("sim_test_cat_id", identity.categorie_id);
-            window.localStorage.setItem("sim_test_name", identity.nom || "CENTRE TEST");
-
-            console.log("DEBUG: saving test params", identity);
-            // console.log("DEBUG: refCategories", refCategories); // Avoid spamming console
-            const selectedCat = refCategories.find(c => String(c.value) === String(identity.categorie_id));
-            if (selectedCat) {
-                console.log("DEBUG: found cat label", selectedCat.label);
-                window.localStorage.setItem("sim_test_cat_label", selectedCat.label);
-            } else {
-                console.log("DEBUG: category NOT found for id", identity.categorie_id);
-            }
-
-            // Navigate
-            navigate(`/app/simulation?flux=poste`);
-        } catch (err) {
-            console.error(err);
-            setError("Impossible de trouver un centre similaire pour cette typologie (Test).");
-        } finally {
-            setLoading(false);
-        }
+        // Navigate to Wizard in Test Mode
+        navigate(`/app/simulation/wizard?mode=test&typology=${catLabel}&catId=${identity.categorie_id}&name=${encodeURIComponent(identity.nom || 'CENTRE TEST')}`);
     };
 
     return (

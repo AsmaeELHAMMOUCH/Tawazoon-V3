@@ -47,7 +47,13 @@ export default function Step1CentreSelection({
         const fetchTypologies = async () => {
             try {
                 const res = await api.categories();
-                setTypologies(res || []);
+                const filtered = (res || []).filter(
+                    (t) => {
+                        const label = (t.label || t.nom || "").toUpperCase();
+                        return label !== "CENTRE UNIQUE";
+                    }
+                );
+                setTypologies(filtered);
             } catch (err) {
                 console.error("Error loading typologies:", err);
             }

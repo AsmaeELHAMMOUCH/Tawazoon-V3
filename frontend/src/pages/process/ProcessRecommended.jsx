@@ -4,7 +4,7 @@
 import { UserGroupIcon, DocumentTextIcon, Cog6ToothIcon, ClockIcon, BookOpenIcon, ChartBarIcon } from '@heroicons/react/24/outline'
 import { Link } from 'react-router-dom'
 
-function Tile({ to, title, icon: Icon }){
+function Tile({ to, title, icon: Icon }) {
   return (
     <Link to={to} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-5 shadow-card hover:shadow-lg transition">
       <Icon className="w-6 h-6 text-primary" />
@@ -13,7 +13,7 @@ function Tile({ to, title, icon: Icon }){
   )
 }
 
-export default function ProcessRecommended(){
+export default function ProcessRecommended() {
   return (
     <>
       <div className="space-y-6">

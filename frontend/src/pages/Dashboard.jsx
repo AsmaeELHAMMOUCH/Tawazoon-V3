@@ -13,21 +13,21 @@ import {
 const API_BASE = import.meta.env.VITE_API_BASE ?? '/api'
 
 /* ======================== Helpers ======================== */
-function formatMoney(v){
-  try{
-    return new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(Math.round(Number(v||0)/1000)) + 'K'
-  }catch{ return v }
+function formatMoney(v) {
+  try {
+    return new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(Math.round(Number(v || 0) / 1000)) + 'K'
+  } catch { return v }
 }
 
 const ACCENTS = {
-  blue:   { stripe: 'from-sky-500 to-blue-600',      icon: 'text-sky-400' },
+  blue: { stripe: 'from-sky-500 to-blue-600', icon: 'text-sky-400' },
   violet: { stripe: 'from-fuchsia-500 to-violet-600', icon: 'text-fuchsia-400' },
-  emerald:{ stripe: 'from-emerald-500 to-teal-600',   icon: 'text-emerald-400' },
-  amber:  { stripe: 'from-amber-500 to-orange-600',   icon: 'text-amber-400' },
+  emerald: { stripe: 'from-emerald-500 to-teal-600', icon: 'text-emerald-400' },
+  amber: { stripe: 'from-amber-500 to-orange-600', icon: 'text-amber-400' },
 }
 
 /* ======================== UI Atomes ======================== */
-function GhostIcon({ icon, accent='blue' }) {
+function GhostIcon({ icon, accent = 'blue' }) {
   const Icon = icon
   return (
     <div className={`absolute top-2 right-2 opacity-20 ${ACCENTS[accent]?.icon ?? ACCENTS.blue.icon}`}>
@@ -50,7 +50,7 @@ function Kpi({ label, value, unit, icon = ClockIcon, accent = 'blue' }) {
   )
 }
 
-function Card({ title, children, right }){
+function Card({ title, children, right }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-center justify-between mb-2">
@@ -62,7 +62,7 @@ function Card({ title, children, right }){
   )
 }
 
-function FilterSelect({ label, icon:Icon, value, onChange, options, placeholder='—', disabled=false }) {
+function FilterSelect({ label, icon: Icon, value, onChange, options, placeholder = '—', disabled = false }) {
   return (
     <label className="flex items-center gap-2">
       <div className="flex items-center gap-1 text-slate-600 text-sm">
@@ -86,7 +86,7 @@ function FilterSelect({ label, icon:Icon, value, onChange, options, placeholder=
 function SegmentedProcess({ value, onChange }) {
   const items = [
     { key: 'actual', label: 'Actuel' },
-    { key: 'recommended', label: 'Recommandé' },
+    { key: 'recommended', label: 'Consolidé' },
     { key: 'compare', label: 'Compare' },
   ]
   return (
@@ -100,7 +100,7 @@ function SegmentedProcess({ value, onChange }) {
               ? "bg-white text-slate-900 shadow-sm border border-slate-200"
               : "text-slate-600 hover:text-slate-900"
           ].join(' ')}
-          onClick={()=>onChange(it.key)}
+          onClick={() => onChange(it.key)}
         >
           {it.label}
         </button>
@@ -110,91 +110,91 @@ function SegmentedProcess({ value, onChange }) {
 }
 
 /* ======================== Dashboard ======================== */
-export default function Dashboard(){
+export default function Dashboard() {
   const navigate = useNavigate()
 
   // Filtres hiérarchiques
   const [directionId, setDirectionId] = useState(null)
-  const [regionId, setRegionId]       = useState(null)
-  const [centreId, setCentreId]       = useState(null)
-  const [typeId, setTypeId]           = useState(null)
-  const [period, setPeriod]           = useState('last_6m') // ex: last_6m, ytd, last_12m
+  const [regionId, setRegionId] = useState(null)
+  const [centreId, setCentreId] = useState(null)
+  const [typeId, setTypeId] = useState(null)
+  const [period, setPeriod] = useState('last_6m') // ex: last_6m, ytd, last_12m
 
   // Processus
   const [process, setProcess] = useState('actual') // actual | recommended | compare
 
   // Options filtres
   const [directions, setDirections] = useState([])
-  const [regions, setRegions]       = useState([])
-  const [centres, setCentres]       = useState([])
-  const [types, setTypes]           = useState([])
+  const [regions, setRegions] = useState([])
+  const [centres, setCentres] = useState([])
+  const [types, setTypes] = useState([])
 
   // Données
-  const [kpis, setKpis]             = useState(null)
-  const [staffing, setStaffing]     = useState([])
+  const [kpis, setKpis] = useState(null)
+  const [staffing, setStaffing] = useState([])
   const [costSeries, setCostSeries] = useState([])
   const [centresRows, setCentresRows] = useState([])
 
   // UI
   const [loading, setLoading] = useState(false)
-  const [error, setError]     = useState('')
+  const [error, setError] = useState('')
 
   /* ------ Charger options filtres ------ */
   useEffect(() => {
     let cancelled = false
-    async function loadDirections(){
-      try{
+    async function loadDirections() {
+      try {
         const r = await fetch(`${API_BASE}/filters/directions`)
         const data = r.ok ? await r.json() : []
         if (!cancelled) setDirections(data)
         // auto-select first if none
         if (!cancelled && !directionId && data?.length) setDirectionId(String(data[0].id))
-      }catch(e){/* ignore */}
+      } catch (e) {/* ignore */ }
     }
     loadDirections()
     return () => { cancelled = true }
   }, [])
 
   useEffect(() => {
-    if (!directionId){ setRegions([]); setRegionId(null); return }
+    if (!directionId) { setRegions([]); setRegionId(null); return }
     let cancelled = false
-    async function loadRegions(){
-      try{
+    async function loadRegions() {
+      try {
         const r = await fetch(`${API_BASE}/filters/regions?direction_id=${encodeURIComponent(directionId)}`)
         const data = r.ok ? await r.json() : []
         if (!cancelled) setRegions(data)
-        if (!cancelled){ setRegionId(data?.[0]?.id ? String(data[0].id) : null) }
-      }catch(e){/* ignore */}
+        if (!cancelled) { setRegionId(data?.[0]?.id ? String(data[0].id) : null) }
+      } catch (e) {/* ignore */ }
     }
     loadRegions()
     return () => { cancelled = true }
   }, [directionId])
 
   useEffect(() => {
-    if (!regionId){ setCentres([]); setCentreId(null); return }
+    if (!regionId) { setCentres([]); setCentreId(null); return }
     let cancelled = false
-    async function loadCentres(){
-      try{
+    async function loadCentres() {
+      try {
         const r = await fetch(`${API_BASE}/filters/centres?region_id=${encodeURIComponent(regionId)}`)
         const data = r.ok ? await r.json() : []
         if (!cancelled) setCentres(data)
-        if (!cancelled){ setCentreId(data?.[0]?.id ? String(data[0].id) : null) }
-      }catch(e){/* ignore */}
+        if (!cancelled) { setCentreId(data?.[0]?.id ? String(data[0].id) : null) }
+      } catch (e) {/* ignore */ }
     }
     loadCentres()
     return () => { cancelled = true }
   }, [regionId])
 
   useEffect(() => {
-    if (!centreId){ setTypes([]); setTypeId(null); return }
+    if (!centreId) { setTypes([]); setTypeId(null); return }
     let cancelled = false
-    async function loadTypes(){
-      try{
+    async function loadTypes() {
+      try {
         const r = await fetch(`${API_BASE}/filters/types?centre_id=${encodeURIComponent(centreId)}`)
         const data = r.ok ? await r.json() : []
         if (!cancelled) setTypes(data)
-        if (!cancelled){ setTypeId(data?.[0]?.id ? String(data[0].id) : null) }
-      }catch(e){/* ignore */}
+        if (!cancelled) { setTypeId(data?.[0]?.id ? String(data[0].id) : null) }
+      } catch (e) {/* ignore */ }
     }
     loadTypes()
     return () => { cancelled = true }
@@ -203,8 +203,8 @@ export default function Dashboard(){
   /* ------ Charger données dashboard ------ */
   useEffect(() => {
     let cancelled = false
-    async function loadAll(){
-      try{
+    async function loadAll() {
+      try {
         setLoading(true); setError('')
         const scope = centreId ? 'centre' : regionId ? 'region' : directionId ? 'direction' : 'global'
         const scopeId = centreId ?? regionId ?? directionId ?? ''
@@ -218,20 +218,20 @@ export default function Dashboard(){
           fetch(`${API_BASE}/dashboard/centres?${qsBase}${typeQS}`),
         ])
 
-        const k  = rk.ok ? await rk.json() : null
+        const k = rk.ok ? await rk.json() : null
         const st = rs.ok ? await rs.json() : []
         const cs = rc.ok ? await rc.json() : []
         const tb = rt.ok ? await rt.json() : []
 
-        if (!cancelled){
+        if (!cancelled) {
           setKpis(k)
           setStaffing(Array.isArray(st) ? st : [])
           setCostSeries(Array.isArray(cs) ? cs : [])
           setCentresRows(Array.isArray(tb) ? tb : [])
         }
-      }catch(e){
+      } catch (e) {
         if (!cancelled) setError("Chargement des données échoué")
-      }finally{
+      } finally {
         if (!cancelled) setLoading(false)
       }
     }
@@ -241,38 +241,38 @@ export default function Dashboard(){
 
   /* ------ Dérivés graphiques ------ */
   const staffingBars = useMemo(() => {
-    if (!Array.isArray(staffing) || staffing.length === 0){
+    if (!Array.isArray(staffing) || staffing.length === 0) {
       return [
-        { label:'Actuel', value: 0 },
-        { label:'Calculé', value: 0 },
-        { label:'Recommandé', value: 0 },
+        { label: 'Actuel', value: 0 },
+        { label: 'Calculé', value: 0 },
+        { label: 'Consolidé', value: total.recommande },
       ]
     }
     const total = staffing.reduce((acc, r) => {
-      acc.actuel += Number(r.actuel||0)
-      acc.calcule += Number(r.calcule||0)
-      acc.recommande += Number(r.recommande||0)
+      acc.actuel += Number(r.actuel || 0)
+      acc.calcule += Number(r.calcule || 0)
+      acc.recommande += Number(r.recommande || 0)
       return acc
-    }, { actuel:0, calcule:0, recommande:0 })
+    }, { actuel: 0, calcule: 0, recommande: 0 })
     return [
-      { label:'Actuel', value: total.actuel },
-      { label:'Calculé', value: total.calcule },
-      { label:'Recommandé', value: total.recommande },
+      { label: 'Actuel', value: total.actuel },
+      { label: 'Calculé', value: total.calcule },
+      { label: 'Consolidé', value: total.recommande },
     ]
   }, [staffing])
 
   const masseMensuelle = useMemo(() => {
     // Si l'API renvoie déjà la série: utiliser costSeries
-    if (Array.isArray(costSeries) && costSeries.length){
+    if (Array.isArray(costSeries) && costSeries.length) {
       return costSeries // [{ mois:'Jan', actuel: 280, recommande: 140 }, ...]
     }
     // Fallback simple
-    const months = ['Jan','Fév','Mar','Avr','Mai','Jun']
-    return months.map((m)=>({ mois:m, actuel: 280, recommande: 140 }))
+    const months = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun']
+    return months.map((m) => ({ mois: m, actuel: 280, recommande: 140 }))
   }, [costSeries])
 
   /* ------ Actions ------ */
-  function handleNewSimulation(){
+  function handleNewSimulation() {
     // Transmets tout le contexte courant via querystring
     const qs = new URLSearchParams({
       direction_id: directionId || '',
@@ -323,7 +323,7 @@ export default function Dashboard(){
         {/* KPIs */}
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <Kpi
-            label="Effectif Recommandé"
+            label="Effectif Consolidé"
             value={kpis?.effectif_recommande}
             unit=""
             icon={UsersIcon}
@@ -362,7 +362,7 @@ export default function Dashboard(){
                   <XAxis dataKey="label" tick={{ fontSize: 12 }} />
                   <YAxis tick={{ fontSize: 12 }} />
                   <Tooltip />
-                  <Bar dataKey="value" fill="#0B63CE" radius={[6,6,0,0]} />
+                  <Bar dataKey="value" fill="#0B63CE" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -378,7 +378,7 @@ export default function Dashboard(){
                   <Tooltip />
                   <Legend />
                   <Line type="monotone" dataKey="actuel" name="Actuel (KMAD)" stroke="#0B63CE" dot={{ r: 3 }} />
-                  <Line type="monotone" dataKey="recommande" name="Recommandé (KMAD)" stroke="#10B981" dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="recommande" name="Consolidé (KMAD)" stroke="#10B981" dot={{ r: 3 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -387,7 +387,7 @@ export default function Dashboard(){
 
         {/* Tableau comparatif Centres */}
         <Card
-          title="Centres – comparatif (Actuel / Recommandé)"
+          title="Centres – comparatif (Actuel / Consolidé)"
           right={<span className="text-xs text-slate-500">Tri & filtres avancés à venir</span>}
         >
           <div className="overflow-x-auto">
@@ -397,7 +397,7 @@ export default function Dashboard(){
                   <th className="py-2 pr-4">Centre</th>
                   <th className="py-2 pr-4">Type</th>
                   <th className="py-2 pr-4">Actuel</th>
-                  <th className="py-2 pr-4">Recommandé</th>
+                  <th className="py-2 pr-4">Consolidé</th>
                   <th className="py-2 pr-4">Écart</th>
                   <th className="py-2 pr-4">Indice (%)</th>
                   <th className="py-2 pr-4">Économie (MAD)</th>
@@ -410,7 +410,7 @@ export default function Dashboard(){
                   { id: 1, centre: 'Agdal', type: 'Courrier', actuel: 12, recommande: 9, indice: 94, economie_mad: 240000 },
                   { id: 2, centre: 'Yacoub', type: 'Distribution', actuel: 18, recommande: 15, indice: 96, economie_mad: 320000 },
                 ]).map((r) => {
-                  const ecart = Number(r.recommande||0) - Number(r.actuel||0)
+                  const ecart = Number(r.recommande || 0) - Number(r.actuel || 0)
                   return (
                     <tr key={r.id} className="border-t border-slate-100">
                       <td className="py-2 pr-4 font-medium text-slate-900">{r.centre}</td>
@@ -435,8 +435,8 @@ export default function Dashboard(){
         <Card title="Simulations récentes">
           <div className="space-y-3">
             {[
-              { id: 'S-1024', name:'Hypothèse 2026 – Prod 85% – 7.2h/j', scope:'Région Rabat-Salé', date:'03 Oct 2025' },
-              { id: 'S-1017', name:'Plan centre Agdal – Prod 90%', scope:'Centre Agdal', date:'28 Sep 2025' },
+              { id: 'S-1024', name: 'Hypothèse 2026 – Prod 85% – 7.2h/j', scope: 'Région Rabat-Salé', date: '03 Oct 2025' },
+              { id: 'S-1017', name: 'Plan centre Agdal – Prod 90%', scope: 'Centre Agdal', date: '28 Sep 2025' },
             ].map(s => (
               <div key={s.id} className="flex items-center justify-between rounded-xl bg-slate-50 p-3">
                 <div>
@@ -445,7 +445,7 @@ export default function Dashboard(){
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="px-2 py-1 rounded-full text-xs bg-emerald-100 text-emerald-700">Complété</span>
-                  <button className="text-primary font-semibold" onClick={()=>navigate(`/simulations/${s.id}`)}>Voir</button>
+                  <button className="text-primary font-semibold" onClick={() => navigate(`/simulations/${s.id}`)}>Voir</button>
                 </div>
               </div>
             ))}

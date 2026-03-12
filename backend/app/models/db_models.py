@@ -45,6 +45,16 @@ class Categorie(Base):
     centres = relationship("Centre", back_populates="categorie")
 
 
+class Categorisation(Base):
+    __tablename__ = "Categorisation"
+    __table_args__ = {"schema": "dbo"}
+
+    id_categorisation = Column(Integer, primary_key=True, index=True)
+    label = Column(String, nullable=False)
+
+    centres = relationship("Centre", back_populates="categorisation")
+
+
 class Centre(Base):
     __tablename__ = "centres"
     __table_args__ = {"schema": "dbo"}
@@ -55,11 +65,13 @@ class Centre(Base):
     region_id = Column(Integer, ForeignKey("dbo.regions.id"), nullable=False)
     direction_id = Column(Integer, nullable=True) # Added missing column
     categorie_id = Column(Integer, ForeignKey("dbo.categories.id"), nullable=True)
-    id_categorisation = Column(Integer, nullable=True) # Pour la catégorisation (Classe A, B, C...)
+    id_categorisation = Column(Integer, ForeignKey("dbo.Categorisation.id_categorisation"), nullable=True) # Pour la catégorisation (Classe A, B, C...)
     aps = Column(Float, name="APS", nullable=True, default=0.0)
+    code_ville = Column(String, nullable=True) # Colonne de liaison avec la table Ville
 
     region = relationship("Region", back_populates="centres")
     categorie = relationship("Categorie", back_populates="centres")
+    categorisation = relationship("Categorisation", back_populates="centres")
 
     centre_postes = relationship("CentrePoste", back_populates="centre")
 
@@ -194,6 +206,18 @@ class VolumeSegment(Base):
     libelle = Column(String(100), nullable=True)
 
 
+class Ville(Base):
+    __tablename__ = "Ville"
+    __table_args__ = {"schema": "dbo"}
+
+    id = Column("ID", Integer, primary_key=True, index=True)
+    code = Column("Code", String(50), nullable=False, unique=True)
+    label = Column(String, nullable=False)
+    geographie = Column(Float, default=0.0)
+    circulation = Column(Float, default=0.0)
+    trajet = Column(Float, default=0.0)
+
+
 class VolumeSimulation(Base):
     __tablename__ = "volume_simulation"
     __table_args__ = (
@@ -217,3 +241,39 @@ class VolumeSimulation(Base):
 
 # Update Centre to include persistence relationship
 Centre.volume_ref = relationship("CentreVolumeRef", uselist=False, back_populates="centre")
+
+
+class MappingPosteRecommande(Base):
+    __tablename__ = "mapping_postes_recommandes"
+    __table_args__ = {"schema": "dbo"}
+
+    id = Column(Integer, primary_key=True, index=True)
+    poste_source_id = Column(Integer, ForeignKey("dbo.postes.id"), nullable=False)
+    poste_cible_id = Column(Integer, ForeignKey("dbo.postes.id"), nullable=False)
+    centre_id = Column(Integer, ForeignKey("dbo.centres.id"), nullable=True)
+
+    poste_source = relationship("Poste", foreign_keys=[poste_source_id])
+    poste_cible = relationship("Poste", foreign_keys=[poste_cible_id])
+    centre = relationship("Centre")
+
+
+class TacheExclueOptimisee(Base):
+    __tablename__ = "taches_exclues_optimisees"
+    __table_args__ = {"schema": "dbo"}
+
+    id = Column(Integer, primary_key=True, index=True)
+    
+    # --- Pour l'exclusion par ID (Centre spécifique) ---
+    tache_id = Column(Integer, ForeignKey("dbo.taches.id"), nullable=True) # Devient optionnel
+    centre_id = Column(Integer, ForeignKey("dbo.centres.id"), nullable=True) # Optionnel
+    
+    # --- Pour l'exclusion par Typologie (Global à la catégorie) ---
+    categorie_id = Column(Integer, ForeignKey("dbo.categories.id"), nullable=True)
+    nom_tache = Column(String, nullable=True)
+    famille_uo = Column(String, nullable=True)
+    produit = Column(String, nullable=True)
+    unite_mesure = Column(String, nullable=True)
+
+    tache = relationship("Tache")
+    centre = relationship("Centre")
+    categorie = relationship("Categorie")

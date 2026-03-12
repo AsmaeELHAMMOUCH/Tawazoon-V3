@@ -32,16 +32,28 @@ export default function EffectifUpdateDialog({ open, onOpenChange, onSuccess, fi
         try {
             const result = await importEffectifs(file);
 
-            if (result && result.status === "success") {
+            if (result && result.isErrorFile) {
+                // Download the rejected rows Excel file
+                const url = window.URL.createObjectURL(new Blob([result.data]));
+                const link = document.createElement('a');
+                link.href = url;
+                link.setAttribute('download', 'Lignes_Rejetees_Effectifs.xlsx');
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+
+                toast.error(
+                    `${result.errorCount} lignes rejetées. ${result.updatedCount} effectifs mis à jour, ${result.createdCount} affectés. Veuillez corriger le fichier téléchargé.`,
+                    { id: toastId, duration: 6000 }
+                );
+
+                onOpenChange(false);
+                if (onSuccess) onSuccess();
+            } else if (result && result.status === "success") {
                 toast.success(
                     `${result.message}.`,
                     { id: toastId, duration: 5000 }
                 );
-
-                if (result.errors && result.errors.length > 0) {
-                    console.warn("Certaines lignes ont échoué :", result.errors);
-                    toast.error(`${result.errors.length} lignes en erreur. Vérifiez la console.`, { duration: 6000 });
-                }
 
                 onOpenChange(false);
                 if (onSuccess) onSuccess();

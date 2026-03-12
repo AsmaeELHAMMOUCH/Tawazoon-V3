@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import WizardStepper from "@/components/wizard/WizardStepper";
 import WizardNavigation from "@/components/wizard/WizardNavigation";
 import Step1CentreSelection from "@/components/wizard/Step1CentreSelection";
@@ -76,22 +76,32 @@ const recalculateGridValues = (gridValues, wizardData) => {
 
 export default function StepWizardSimulation() {
     const navigate = useNavigate();
-    const [currentStep, setCurrentStep] = useState(1);
+    const location = useLocation();
+    const [searchParams] = useSearchParams();
+
+    // Mode Detection (from URL or state)
+    const mode = location.state?.mode || searchParams.get("mode") || "actuel";
+
+    // Test Mode Detection
+    const isTestMode = searchParams.get("mode") === "test";
+    const testTypology = searchParams.get("typology");
+    const testCatId = searchParams.get("catId");
+    const testName = searchParams.get("name") || "CENTRE TEST";
+
+    const [currentStep, setCurrentStep] = useState(isTestMode ? 2 : 1);
     const [loading, setLoading] = useState(false);
     const [postes, setPostes] = useState([]);
     const [centreDetails, setCentreDetails] = useState(null);
 
-    // Validation states for each step
-    const [step1Valid, setStep1Valid] = useState(false);
-    const [step2Valid, setStep2Valid] = useState(false);
-    const [step3Valid, setStep3Valid] = useState(false);
-
-    // Wizard data state
-    const [wizardData, setWizardData] = useState({
+    // Initial Wizard Data
+    const initialWizardData = {
         // Step 1: Centre Selection
         region: null,
-        typologie: null,
+        typologie: testTypology || null,
         centre: null,
+        isVirtual: isTestMode,
+        virtualTypology: testTypology,
+        virtualName: testName,
 
         // Volume
         pctCollecte: 5,
@@ -109,37 +119,12 @@ export default function StepWizardSimulation() {
         shift: 1,
 
         // Distribution
-        natureGeo: 1,
-        tauxComplexite: 1,
+        natureGeo: 0,
+        tauxComplexite: 0,
         dureeTrajet: 0,
         hasGuichet: 1,
         nbrCoSac: 350,
         nbrCrSac: 400,
-
-        // Flux Specific Defaults
-        amana_pctCollecte: 5,
-        amana_pctRetour: 0,
-        amana_pctAxesArrivee: 0,
-        amana_pctAxesDepart: 0,
-        amana_pctNational: 100,
-        amana_pctInternational: 0,
-        amana_pctMarcheOrdinaire: 0,
-        amana_pctCrbt: 50,
-        amana_pctHorsCrbt: 50,
-
-        co_pctCollecte: 5,
-        co_pctRetour: 0,
-        co_pctAxesArrivee: 0,
-        co_pctAxesDepart: 0,
-        co_pctNational: 100,
-        co_pctInternational: 0,
-
-        cr_pctCollecte: 5,
-        cr_pctRetour: 0,
-        cr_pctAxesArrivee: 0,
-        cr_pctAxesDepart: 0,
-        cr_pctNational: 100,
-        cr_pctInternational: 0,
 
         // Step 3: Volumes
         gridValues: {
@@ -170,12 +155,72 @@ export default function StepWizardSimulation() {
                 arrive: "0"
             }
         },
+        // Flux Specific Defaults
+        amana_pctCollecte: 5,
+        amana_pctRetour: 0,
+        amana_pctAxesArrivee: 0,
+        amana_pctAxesDepart: 0,
+        amana_pctNational: 100,
+        amana_pctInternational: 0,
+        amana_pctMarcheOrdinaire: 0,
+        amana_pctCrbt: 50,
+        amana_pctHorsCrbt: 50,
+
+        co_pctCollecte: 5,
+        co_pctRetour: 0,
+        co_pctAxesArrivee: 0,
+        co_pctAxesDepart: 0,
+        co_pctNational: 100,
+        co_pctInternational: 0,
+        co_pctMarcheOrdinaire: 0,
+        co_pctVagueMaster: 0,
+        co_pctBoitePostale: 0,
+
+        cr_pctCollecte: 5,
+        cr_pctRetour: 0,
+        cr_pctAxesArrivee: 0,
+        cr_pctAxesDepart: 0,
+        cr_pctNational: 100,
+        cr_pctInternational: 0,
+        cr_pctMarcheOrdinaire: 0,
+        cr_pctVagueMaster: 0,
+        cr_pctBoitePostale: 0,
+        cr_pctCrbt: 50,
+        cr_pctHorsCrbt: 50,
+
+        pctVagueMaster: 0,
+        pctBoitePostale: 0,
+        pctCrbt: 50,
+        pctHorsCrbt: 50,
+
         colisAmanaParCanvaSac: 35,
         edPercent: 40,
-
-        // Step 4: Results
         simulationResults: null,
-    });
+    };
+
+    // Validation states for each step
+    const [step1Valid, setStep1Valid] = useState(isTestMode);
+    const [step2Valid, setStep2Valid] = useState(false);
+    const [step3Valid, setStep3Valid] = useState(false);
+
+    // Wizard data state
+    const [wizardData, setWizardData] = useState(initialWizardData);
+
+    // Force validation of pre-filled steps in test mode
+    useEffect(() => {
+        if (isTestMode) {
+            setStep1Valid(true);
+        }
+    }, [isTestMode]);
+
+    // ✅ Correction : Réinitialiser les résultats si le mode change via la sidebar
+    useEffect(() => {
+        setWizardData(prev => ({
+            ...prev,
+            simulationResults: null
+        }));
+        // On reste à l'étape actuelle (généralement 4 si on regarde les résultats)
+    }, [mode]);
 
     // Load centre data when selected
     useEffect(() => {
@@ -193,6 +238,14 @@ export default function StepWizardSimulation() {
                 if (detailRes.ok) {
                     details = await detailRes.json();
                     setCentreDetails(details);
+                    updateWizardData({
+                        natureGeo: details.nature_geo !== undefined ? details.nature_geo : wizardData.natureGeo,
+                        tauxComplexite: details.taux_complexite !== undefined ? details.taux_complexite : wizardData.tauxComplexite,
+                        dureeTrajet: details.duree_trajet !== undefined ? details.duree_trajet : wizardData.dureeTrajet,
+                    });
+                } else {
+                    console.error("Failed to load centre details:", detailRes.statusText);
+                    toast.error("Erreur lors du chargement des détails du centre");
                 }
 
                 // 2. Charger les postes existants
@@ -391,7 +444,7 @@ export default function StepWizardSimulation() {
 
             autoTable(doc, {
                 startY: yPos,
-                head: [['Tâche', 'Famille', 'Produit', 'Volume', 'Temps Unit.', 'Charge (h)']],
+                head: [['Tâche', 'Famille', 'Prestation', 'Volume', 'Temps Unit.', 'Charge (h)']],
                 body: taskData,
                 theme: 'grid',
                 headStyles: { fillColor: [0, 94, 168], fontSize: 8 },
@@ -459,56 +512,10 @@ export default function StepWizardSimulation() {
         if (confirm("Êtes-vous sûr de vouloir réinitialiser le wizard ? Toutes les données seront perdues.")) {
             setCurrentStep(1);
             setWizardData({
-                region: null,
-                typologie: null,
-                centre: null,
-                pctCollecte: 5,
-                pctMarcheOrdinaire: 0,
-                pctRetour: 0,
-                pctAxesArrivee: 0,
-                pctAxesDepart: 0,
-                pctNational: 100,
-                pctInternational: 0,
-                crParCaisson: 500,
-                productivite: 100,
-                idleMinutes: 0,
-                shift: 1,
-                natureGeo: 1,
-                tauxComplexite: 1,
-                dureeTrajet: 0,
-                gridValues: {
-                    amana: {
-                        depot: {
-                            gc: { global: "0", local: "0", axes: "0" },
-                            part: { global: "0", local: "0", axes: "0" }
-                        },
-                        recu: {
-                            gc: { global: "0", local: "0", axes: "0" },
-                            part: { global: "0", local: "0", axes: "0" }
-                        }
-                    },
-                    cr: {
-                        med: { global: "0", local: "0", axes: "0" },
-                        arrive: { global: "0", local: "0", axes: "0" }
-                    },
-                    co: {
-                        med: { global: "0", local: "0", axes: "0" },
-                        arrive: { global: "0", local: "0", axes: "0" }
-                    },
-                    ebarkia: {
-                        med: "0",
-                        arrive: "0"
-                    },
-                    lrh: {
-                        med: "0",
-                        arrive: "0"
-                    }
-                },
-                colisAmanaParCanvaSac: 35,
-                nbrCoSac: 350,
-                nbrCrSac: 400,
-                edPercent: 40,
-                simulationResults: null,
+                ...initialWizardData,
+                isVirtual: false,
+                virtualTypology: null,
+                virtualName: null
             });
             setStep1Valid(false);
             setStep2Valid(false);
@@ -538,6 +545,10 @@ export default function StepWizardSimulation() {
                     pct_collecte: wizardData.pctCollecte,
                     pct_retour: wizardData.pctRetour,
                     pct_marche_ordinaire: wizardData.pctMarcheOrdinaire,
+                    pct_vague_master: wizardData.pctVagueMaster,
+                    pct_boite_postale: wizardData.pctBoitePostale,
+                    pct_crbt: wizardData.pctCrbt,
+                    pct_hors_crbt: wizardData.pctHorsCrbt,
                     colis_amana_par_canva_sac: wizardData.colisAmanaParCanvaSac,
                     nbr_co_sac: wizardData.nbrCoSac,
                     nbr_cr_sac: wizardData.nbrCrSac,
@@ -561,6 +572,9 @@ export default function StepWizardSimulation() {
                     co_pct_axes_depart: wizardData.co_pctAxesDepart,
                     co_pct_national: wizardData.co_pctNational,
                     co_pct_international: wizardData.co_pctInternational,
+                    co_pct_marche_ordinaire: wizardData.co_pctMarcheOrdinaire,
+                    co_pct_vague_master: wizardData.co_pctVagueMaster,
+                    co_pct_boite_postale: wizardData.co_pctBoitePostale,
                     // CR
                     cr_pct_collecte: wizardData.cr_pctCollecte,
                     cr_pct_retour: wizardData.cr_pctRetour,
@@ -568,10 +582,27 @@ export default function StepWizardSimulation() {
                     cr_pct_axes_depart: wizardData.cr_pctAxesDepart,
                     cr_pct_national: wizardData.cr_pctNational,
                     cr_pct_international: wizardData.cr_pctInternational,
+                    cr_pct_vague_master: wizardData.cr_pctVagueMaster,
+                    cr_pct_boite_postale: wizardData.cr_pctBoitePostale,
+                    cr_pct_crbt: wizardData.cr_pctCrbt,
+                    cr_pct_hors_crbt: wizardData.cr_pctHorsCrbt,
+                    cr_pct_marche_ordinaire: wizardData.cr_pctMarcheOrdinaire,
                 }
             };
 
-            const res = await api.bandoengSimulate(payload);
+            let res;
+            if (wizardData.isVirtual) {
+                // Call virtual simulation API
+                const testPayload = {
+                    typology: wizardData.virtualTypology || "Standard",
+                    volumes: { grid_values: payload.grid_values },
+                    params: payload.parameters
+                };
+                res = await api.simulateVirtual(testPayload);
+            } else {
+                // Include mode in payload
+                res = await api.bandoengSimulate({ ...payload, mode });
+            }
 
             updateWizardData({ simulationResults: res });
             toast.success("Simulation lancée avec succès !");
@@ -663,7 +694,7 @@ export default function StepWizardSimulation() {
                 )}
                 {currentStep === 4 && (
                     <Step4Results
-                        data={{ ...wizardData, heuresNet }}
+                        data={{ ...wizardData, heuresNet, mode }}
                         onLaunchSimulation={handleLaunchSimulation}
                         simulationResults={wizardData.simulationResults}
                         loading={loading}

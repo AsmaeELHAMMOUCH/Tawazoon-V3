@@ -145,8 +145,8 @@ export default function VueCCI() {
     const [idleMinutes, setIdleMinutes] = useState(0);
     const [heuresNet, setHeuresNet] = useState(8.0);
     const [filterFamille, setFilterFamille] = useState("");
-    const [tauxComplexite, setTauxComplexite] = useState(1);
-    const [natureGeo, setNatureGeo] = useState(1);
+    const [tauxComplexite, setTauxComplexite] = useState(0);
+    const [natureGeo, setNatureGeo] = useState(0);
 
     // CCI Specific Params
     const [nbrCourrierLiasseCo, setNbrCourrierLiasseCo] = useState(500);
@@ -344,7 +344,7 @@ export default function VueCCI() {
             {/* 🔹 TITRE & HEADER (Sticky) */}
             <div className="sticky top-[57px] z-30 flex flex-col gap-2">
                 <SimulationHeader
-                    title="Centre Colis International (CCI)"
+                    title="Simulation des Effectifs-CCI"
                     region="Region Casa"
                     subtitle="Code 1952 - Simulation Dédiée"
                 >

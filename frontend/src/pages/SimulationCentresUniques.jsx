@@ -7,7 +7,7 @@ import VueCNA from "./centres_uniq/VueCNA";
 import VueCCI from "./centres_uniq/VueCCI";
 
 export default function SimulationCentresUniques() {
-    const [activeTab, setActiveTab] = useState("cndp");
+    const [activeTab, setActiveTab] = useState("cna");
 
     return (
         <main className="min-h-screen bg-slate-50">

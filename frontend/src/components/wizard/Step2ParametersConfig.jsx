@@ -35,7 +35,8 @@ const FieldWithIcon = ({
     iconColor = "text-blue-600",
     iconBg = "bg-blue-50",
     className,
-    helperText
+    helperText,
+    disabled = false
 }) => {
     const [displayRaw, setDisplayRaw] = useState("");
 
@@ -93,8 +94,8 @@ const FieldWithIcon = ({
 
                 <div className="relative flex-1">
                     {type === "select" ? (
-                        <Select value={String(value)} onValueChange={(val) => onValueChange(Number(val))}>
-                            <SelectTrigger className="h-8 text-xs font-semibold bg-white border-slate-200 w-full focus:ring-1 focus:ring-blue-200 justify-center text-center">
+                        <Select value={String(value)} onValueChange={(val) => onValueChange(Number(val))} disabled={disabled}>
+                            <SelectTrigger className={`h-8 text-xs font-semibold bg-white border-slate-200 w-full focus:ring-1 focus:ring-blue-200 justify-center text-center ${disabled ? "opacity-50 cursor-not-allowed bg-slate-50" : ""}`}>
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -111,7 +112,8 @@ const FieldWithIcon = ({
                                 type="text"
                                 value={displayRaw}
                                 onChange={handleChange}
-                                className="h-8 text-xs font-semibold text-slate-800 bg-white border-slate-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-200 w-full pr-6 text-center"
+                                disabled={disabled}
+                                className={`h-8 text-xs font-semibold text-slate-800 bg-white border-slate-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-200 w-full pr-6 text-center ${disabled ? "opacity-50 cursor-not-allowed bg-slate-50" : ""}`}
                             />
                             {suffix && (
                                 <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] text-slate-400 font-bold pointer-events-none">
@@ -140,14 +142,14 @@ const PARAM_SECTIONS = [
             { id: "pctMarcheOrdinaire", label: "Marché Ord.", suffix: "%", icon: Box, iconColor: "text-slate-600", iconBg: "bg-slate-50", flux: ["amana", "cr", "co"] },
             { id: "pctAxesArrivee", label: "Axes", suffix: "%", icon: Move, iconColor: "text-orange-600", iconBg: "bg-orange-50", handler: "axesArrivee", flux: ["amana", "cr", "co"] },
             { id: "pctAxesDepart", label: "Local", suffix: "%", icon: MapPin, iconColor: "text-[#005EA8]", iconBg: "bg-blue-50", handler: "axesDepart", flux: ["amana", "cr", "co"] },
-            { id: "pctVagueMaster", label: "% vague master", suffix: "%", icon: Layout, iconColor: "text-purple-600", iconBg: "bg-purple-50", flux: ["cr", "co"] },
+            { id: "pctVagueMaster", label: "% Vaguemestre", suffix: "%", icon: Layout, iconColor: "text-purple-600", iconBg: "bg-purple-50", flux: ["cr", "co"] },
             { id: "pctBoitePostale", label: "% Boite postale", suffix: "%", icon: Mail, iconColor: "text-blue-600", iconBg: "bg-blue-50", flux: ["cr", "co"] },
 
             { id: "pctNational", label: "Amana Nat.", suffix: "%", icon: Map, iconColor: "text-cyan-600", iconBg: "bg-cyan-50", handler: "national", flux: ["amana", "cr"] },
             { id: "pctInternational", label: "Amana Int.", suffix: "%", icon: Globe, iconColor: "text-indigo-600", iconBg: "bg-indigo-50", handler: "international", flux: ["amana", "cr"] },
             { id: "pctCrbt", label: "% CRBT", suffix: "%", icon: Banknote, iconColor: "text-amber-600", iconBg: "bg-amber-50", handler: "crbt", flux: ["amana", "cr"] },
             { id: "pctHorsCrbt", label: "% Hors CRBT", suffix: "%", icon: Banknote, iconColor: "text-slate-600", iconBg: "bg-slate-50", handler: "horsCrbt", flux: ["amana", "cr"] },
-            { id: "pctRetour", label: "Retour", suffix: "%", icon: Undo2, iconColor: "text-amber-600", iconBg: "bg-amber-50", flux: ["amana", "cr"] },
+            { id: "pctRetour", label: "Retour", suffix: "%", icon: Undo2, iconColor: "text-amber-600", iconBg: "bg-amber-50", flux: ["amana", "cr", "co"] },
 
             { id: "nbrCoSac", label: "CO/Sac", icon: Mail, iconColor: "text-sky-600", iconBg: "bg-sky-50", flux: ["co"] },
             { id: "crParCaisson", label: "CR/Caisson", icon: Box, iconColor: "text-indigo-600", iconBg: "bg-indigo-50", flux: ["cr"] },
@@ -201,27 +203,27 @@ const PARAM_SECTIONS = [
                 iconBg: "bg-pink-50",
                 flux: "general",
                 options: [
-                    { value: 0.25, label: "0.25" },
-                    { value: 0.5, label: "0.5" },
-                    { value: 0.75, label: "0.75" },
-                    { value: 1, label: "1" },
-                    { value: 1.5, label: "1.5" }
+                    { value: 0, label: "0" },
+                    { value: -0.05, label: "-0.05" },
+                    { value: -0.1, label: "-0.1" },
+                    { value: -0.15, label: "-0.15" },
+                    { value: -0.2, label: "-0.2" }
                 ]
             },
             {
                 id: "tauxComplexite",
-                label: "Traffic",
+                label: "Circulation",
                 icon: RefreshCw,
                 type: "select",
                 iconColor: "text-violet-600",
                 iconBg: "bg-violet-50",
                 flux: "general",
                 options: [
-                    { value: 0.25, label: "0.25" },
-                    { value: 0.5, label: "0.5" },
-                    { value: 0.75, label: "0.75" },
-                    { value: 1, label: "1" },
-                    { value: 1.5, label: "1.5" }
+                    { value: 0, label: "0" },
+                    { value: 0.2, label: "0.2" },
+                    { value: 0.4, label: "0.4" },
+                    { value: 0.6, label: "0.6" },
+                    { value: 0.8, label: "0.8" }
                 ]
             },
             { id: "dureeTrajet", label: "Trajet A/R", suffix: "min", icon: Truck, iconColor: "text-amber-600", iconBg: "bg-amber-50", flux: "general" },
@@ -269,7 +271,7 @@ export default function Step2ParametersConfig({
     // Calculate Productivité Opérationnelle Facteur
     const prodOpFacteur = React.useMemo(() => {
         const net = Number(heuresNet);
-        const trajet = Number(data.dureeTrajet || 0) / 60;
+        const trajet = (Number(data.dureeTrajet || 0) * 2) / 60;
         return Math.max(0, net - trajet);
     }, [heuresNet, data.dureeTrajet]);
 
@@ -362,8 +364,13 @@ export default function Step2ParametersConfig({
                             fields: volumeSection.fields
                                 .filter(f => Array.isArray(f.flux) ? f.flux.includes(fluxKey) : f.flux === fluxKey)
                                 .map(f => {
+                                    let updatedField = { ...f };
+                                    if (fluxKey === "cr") {
+                                        if (f.id === "pctNational") updatedField.label = "CR Nat.";
+                                        if (f.id === "pctInternational") updatedField.label = "CR Int.";
+                                    }
                                     const isGlobalTechnical = ["nbrCoSac", "nbrCrSac", "colisAmanaParCanvaSac", "edPercent", "crParCaisson"].includes(f.id);
-                                    return !isGlobalTechnical ? { ...f, id: `${fluxKey}_${f.id}` } : f;
+                                    return !isGlobalTechnical ? { ...updatedField, id: `${fluxKey}_${f.id}` } : updatedField;
                                 }), // Préfixage ici seulement si non technique global
                             footer: volumeSection.footer
                         }
@@ -394,8 +401,13 @@ export default function Step2ParametersConfig({
                                     f.flux === "general" || (Array.isArray(f.flux) && f.flux.includes(activeTab)) || f.flux === activeTab
                                 )
                                 .map(f => {
+                                    let updatedField = { ...f };
+                                    if (activeTab === "cr") {
+                                        if (f.id === "pctNational") updatedField.label = "CR Nat.";
+                                        if (f.id === "pctInternational") updatedField.label = "CR Int.";
+                                    }
                                     const isGlobalTechnical = ["nbrCoSac", "nbrCrSac", "colisAmanaParCanvaSac", "edPercent", "crParCaisson"].includes(f.id);
-                                    return (isVolume && !isGlobalTechnical) ? { ...f, id: `${activeTab}_${f.id}` } : f;
+                                    return (isVolume && !isGlobalTechnical) ? { ...updatedField, id: `${activeTab}_${f.id}` } : updatedField;
                                 }), // Préfixage si Volume et non technique global
                             footer: section.footer
                         }
@@ -449,12 +461,15 @@ export default function Step2ParametersConfig({
                                                 const baseId = field.id.includes('_') ? field.id.split('_').slice(1).join('_') : field.id;
                                                 const displayValue = data[field.id] !== undefined ? data[field.id] : data[baseId];
 
+                                                const isReadOnlyField = ["natureGeo", "tauxComplexite", "dureeTrajet"].includes(field.id);
+
                                                 return (
                                                     <div key={field.id}>
                                                         <FieldWithIcon
                                                             {...field}
                                                             value={displayValue}
                                                             onValueChange={(val) => handleChange(field, val)}
+                                                            disabled={isReadOnlyField}
                                                         />
                                                     </div>
                                                 );

@@ -612,7 +612,27 @@ export const api = {
     return await res.blob();
   },
 
-  // --- Bandoeng Simulation ---
+  // --- Task Exclusions (Optimized Process) ---
+  getExclusions: async (centreId = null, categorieId = null) => {
+    const params = new URLSearchParams();
+    if (centreId) params.append("centre_id", centreId);
+    if (categorieId) params.append("categorie_id", categorieId);
+    const query = params.toString() ? `?${params.toString()}` : "";
+    return await http(`/bandoeng/pm/exclusions${query}`);
+  },
+
+  toggleExclusion: async (payload) => {
+    // payload peut contenir tache_id/centre_id OU nom_tache/produit/famille/unite/categorie_id
+    return await http("/bandoeng/pm/exclusions/toggle", { method: "POST", body: payload });
+  },
+
+  getStandardTasks: (categorieId) => http(`/bandoeng/pm/standard-tasks/${categorieId}`),
+
+  // --- Simulation ---
+  simulateVirtual: async (payload) => {
+    return await http("/builder/simulate-test", { method: "POST", body: payload });
+  },
+
   simulateBandoengDirect: async (payload) => {
     return await http("/bandoeng/simulate-bandoeng", { method: "POST", body: payload });
   },
@@ -819,6 +839,180 @@ export const api = {
   getCentres: async (regionId = null, categorieId = null) => api.centres(regionId, categorieId),
   getPostes: async (centreId = null, regionId = null) => api.postes(centreId, regionId),
   bandoengSimulate: async (payload) => await http("/bandoeng/simulate-bandoeng", { method: "POST", body: payload }),
+
+  // --- Batch Simulation (Régionale / Nationale) ---
+  downloadBatchTemplate: async (mode, regionId = null) => {
+    const t = getToken();
+    const headers = {};
+    if (t) headers.Authorization = `Bearer ${t}`;
+
+    const url = mode === "national"
+      ? `${API_BASE}/batch/template/national`
+      : `${API_BASE}/batch/template/regional?region_id=${regionId}`;
+
+    const res = await fetch(url, { method: "GET", headers });
+    if (!res.ok) throw new Error("Erreur téléchargement template");
+    const blob = await res.blob();
+
+    const filename = mode === "national"
+      ? "template_simulation_national.xlsx"
+      : `template_simulation_region_${regionId}.xlsx`;
+
+    const urlDl = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = urlDl;
+    a.setAttribute("download", filename);
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(urlDl);
+  },
+
+  simulateBatch: async (file) => {
+    const t = getToken();
+    const headers = {};
+    if (t) headers.Authorization = `Bearer ${t}`;
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const res = await fetch(`${API_BASE}/batch/simulate`, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error(txt || "Erreur simulation batch");
+    }
+    return await res.json();
+  },
+
+  // --- Mappings Responsables ---
+  getAvailablePostes: () => http("/pm/postes/available"),
+  getMappings: () => http("/bandoeng/mappings"),
+  createMapping: (data) => http("/bandoeng/mappings", { method: "POST", body: data }),
+  deleteMapping: (id) => http(`/bandoeng/mappings/${id}`, { method: "DELETE" }),
+
+  // --- Mappings Postes Recommandés (Excel) ---
+  downloadMappingTemplate: async () => {
+    const t = getToken();
+    const headers = {};
+    if (t) headers.Authorization = `Bearer ${t}`;
+
+    const res = await fetch(`${API_BASE}/bandoeng/mappings/template`, { method: "GET", headers });
+    if (!res.ok) throw new Error("Erreur téléchargement modèle mapping");
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", "Modele_Mapping_Postes.xlsx");
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  },
+
+  importMappings: async (file) => {
+    const t = getToken();
+    const headers = {};
+    if (t) headers.Authorization = `Bearer ${t}`;
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch(`${API_BASE}/bandoeng/mappings/import`, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+    if (!res.ok) throw new Error("Erreur lors de l'import des mappings");
+
+    const contentType = res.headers.get("content-type");
+    if (contentType && contentType.includes("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")) {
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", "rejet_mapping_postes.xlsx");
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      return {
+        created: parseInt(res.headers.get("X-Created-Count") || "0"),
+        updated: parseInt(res.headers.get("X-Updated-Count") || "0"),
+        errorsCount: parseInt(res.headers.get("X-Error-Count") || "0"),
+        hasErrors: true
+      };
+    }
+
+    return await res.json();
+  },
+
+  downloadUnmappedReport: async () => {
+    const t = getToken();
+    const headers = {};
+    if (t) headers.Authorization = `Bearer ${t}`;
+    const res = await fetch(`${API_BASE}/bandoeng/mappings/unmapped-report`, { headers });
+    if (!res.ok) throw new Error("Erreur téléchargement rapport");
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", "postes_non_mappes.xlsx");
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  },
+
+  downloadExclusionTemplate: async () => {
+    const t = getToken();
+    const headers = {};
+    if (t) headers.Authorization = `Bearer ${t}`;
+    const res = await fetch(`${API_BASE}/bandoeng/exclusions/template`, { headers });
+    if (!res.ok) throw new Error("Erreur téléchargement modèle");
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", "template_exclusions.xlsx");
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  },
+
+  importExclusions: async (file, categoryId) => {
+    const t = getToken();
+    const headers = {};
+    if (t) headers.Authorization = `Bearer ${t}`;
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch(`${API_BASE}/bandoeng/exclusions/import/${categoryId}`, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+    if (!res.ok) throw new Error("Erreur lors de l'import des exclusions");
+
+    const contentType = res.headers.get("content-type");
+    if (contentType && contentType.includes("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")) {
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", "rejets_exclusions.xlsx");
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      return {
+        created: parseInt(res.headers.get("X-Created-Count") || "0"),
+        errorsCount: parseInt(res.headers.get("X-Error-Count") || "0"),
+        hasErrors: true
+      };
+    }
+
+    return await res.json();
+  },
 };
 
 // Export par défaut pour compatibilité

@@ -396,23 +396,23 @@ const VueNationale = ({
     d > 90
       ? "#800026"
       : d > 80
-      ? "#BD0026"
-      : d > 70
-      ? "#E31A1C"
-      : d > 60
-      ? "#FC4E2A"
-      : d > 50
-      ? "#FD8D3C"
-      : d > 40
-      ? "#FEB24C"
-      : d > 30
-      ? "#FED976"
-      : "#FFEDA0";
+        ? "#BD0026"
+        : d > 70
+          ? "#E31A1C"
+          : d > 60
+            ? "#FC4E2A"
+            : d > 50
+              ? "#FD8D3C"
+              : d > 40
+                ? "#FEB24C"
+                : d > 30
+                  ? "#FED976"
+                  : "#FFEDA0";
 
   const barOptions = {
-    title: { text: "Comparaison ETP Actuel vs Recommandé", left: "center" },
+    title: { text: "Comparaison ETP Actuel vs Consolidé", left: "center" },
     tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
-    legend: { data: ["ETP Actuel", "ETP Recommandé"], top: 20 },
+    legend: { data: ["ETP Actuel", "ETP Consolidé"], top: 20 },
     grid: { left: "3%", right: "4%", bottom: "3%", containLabel: true },
     xAxis: { type: "category", data: regionsData.map((r) => r.nom) },
     yAxis: { type: "value" },
@@ -424,7 +424,7 @@ const VueNationale = ({
         itemStyle: { color: "#005EA8" },
       },
       {
-        name: "ETP Recommandé",
+        name: "ETP Consolidé",
         type: "bar",
         data: regionsData.map((r) => r.etpRecommande),
         itemStyle: { color: "#00A0E0" },
@@ -558,15 +558,14 @@ const VueNationale = ({
           value={kpisNationaux.etpActuelTotal}
           subtitle={
             <span className="text-slate-600">
-              Recommandé&nbsp;:{" "}
+              Consolidé&nbsp;:{" "}
               <span className="text-sky-600 font-semibold">
                 {kpisNationaux.etpRecommandeTotal}
               </span>
             </span>
           }
-          delta={`${kpisNationaux.surplusDeficit >= 0 ? "+" : ""}${
-            kpisNationaux.surplusDeficit
-          } (surplus)`}
+          delta={`${kpisNationaux.surplusDeficit >= 0 ? "+" : ""}${kpisNationaux.surplusDeficit
+            } (surplus)`}
           positive={kpisNationaux.surplusDeficit >= 0}
           icon={User}
         />
@@ -593,7 +592,7 @@ const VueNationale = ({
                 <th className="px-4 py-2 text-right">Centres</th>
                 <th className="px-4 py-2 text-right">ETP Actuel</th>
                 <th className="px-4 py-2 text-right">ETP Calculé</th>
-                <th className="px-4 py-2 text-right">ETP Recommandé</th>
+                <th className="px-4 py-2 text-right">ETP Consolidé</th>
                 <th className="px-4 py-2 text-right">Écart</th>
                 <th className="px-4 py-2 text-right">Taux Occupation</th>
               </tr>
@@ -648,7 +647,7 @@ const VueNationale = ({
 
       {/* Graphiques ECharts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card title="Comparaison ETP Actuel vs Recommandé">
+        <Card title="Comparaison ETP Actuel vs Consolidé">
           <div className="h-80">
             <ReactECharts
               option={barOptions}
@@ -813,24 +812,24 @@ const ComparatifRegional = () => {
     return density > 90
       ? "#800026"
       : density > 80
-      ? "#BD0026"
-      : density > 70
-      ? "#E31A1C"
-      : density > 60
-      ? "#FC4E2A"
-      : density > 50
-      ? "#FD8D3C"
-      : density > 40
-      ? "#FEB24C"
-      : density > 30
-      ? "#FED976"
-      : "#FFEDA0";
+        ? "#BD0026"
+        : density > 70
+          ? "#E31A1C"
+          : density > 60
+            ? "#FC4E2A"
+            : density > 50
+              ? "#FD8D3C"
+              : density > 40
+                ? "#FEB24C"
+                : density > 30
+                  ? "#FED976"
+                  : "#FFEDA0";
   };
 
   const barOptions = {
     title: { text: "Comparaison des ETP par Région", left: "center" },
     tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
-    legend: { data: ["ETP Actuel", "ETP Recommandé"], top: 20 },
+    legend: { data: ["ETP Actuel", "ETP Consolidé"], top: 20 },
     grid: { left: "3%", right: "4%", bottom: "3%", containLabel: true },
     xAxis: { type: "category", data: regionsData.map((r) => r.nom) },
     yAxis: { type: "value" },
@@ -842,7 +841,7 @@ const ComparatifRegional = () => {
         itemStyle: { color: "#005EA8" },
       },
       {
-        name: "ETP Recommandé",
+        name: "ETP Consolidé",
         type: "bar",
         data: regionsData.map((r) => r.etpRecommande),
         itemStyle: { color: "#00A0E0" },
@@ -913,15 +912,14 @@ const ComparatifRegional = () => {
           value={kpiData.totalETP}
           subtitle={
             <span className="text-slate-600">
-              Recommandé&nbsp;:{" "}
+              Consolidé&nbsp;:{" "}
               <span className="text-sky-600 font-semibold">
                 {kpiData.totalRecommande}
               </span>
             </span>
           }
-          delta={`${kpiData.ecartTotal >= 0 ? "+" : ""}${
-            kpiData.ecartTotal
-          } (surplus)`}
+          delta={`${kpiData.ecartTotal >= 0 ? "+" : ""}${kpiData.ecartTotal
+            } (surplus)`}
           positive={kpiData.ecartTotal >= 0}
           icon={User}
         />
@@ -948,7 +946,7 @@ const ComparatifRegional = () => {
                 <th className="px-4 py-2 text-right">Centres</th>
                 <th className="px-4 py-2 text-right">ETP Actuel</th>
                 <th className="px-4 py-2 text-right">ETP Calculé</th>
-                <th className="px-4 py-2 text-right">ETP Recommandé</th>
+                <th className="px-4 py-2 text-right">ETP Consolidé</th>
                 <th className="px-4 py-2 text-right">Écart</th>
                 <th className="px-4 py-2 text-right">Taux Occupation</th>
               </tr>
@@ -1051,12 +1049,12 @@ export default function SimulationEffectifs() {
   const [sacs, setSacs] = useState(30);
   const [colis, setColis] = useState(100);
   const [courrier, setCourrier] = useState(250);
-   const [scelle, setScelle] = useState(0);
+  const [scelle, setScelle] = useState(0);
   const [productivite, setProductivite] = useState(100);
   const [heuresNet, setHeuresNet] = useState(8);
- 
+
   const canSimulate = useMemo(() => true, []);
-  
+
   // Lookups
   const [regions, setRegions] = useState([]);
   const [centres, setCentres] = useState([]);
@@ -1091,8 +1089,8 @@ export default function SimulationEffectifs() {
             regions.find((r) => String(r.id) === String(region))?.label ||
             region,
           //categorie:
-            //categoriesList.find((c) => String(c.id) === String(categorie))
-              //?.label || categorie,
+          //categoriesList.find((c) => String(c.id) === String(categorie))
+          //?.label || categorie,
           centreId:
             centres.find((c) => String(c.id) === String(centre))?.label ||
             centre,
@@ -1100,7 +1098,7 @@ export default function SimulationEffectifs() {
             poste === "Tous"
               ? "Tous"
               : postesList.find((p) => String(p.id) === String(poste))?.label ||
-                poste,
+              poste,
           sacs,
           colis,
           courrier,
@@ -1151,38 +1149,38 @@ export default function SimulationEffectifs() {
 
   /* ---------- Load lookups ---------- */
   /* ---------- Load lookups ---------- */
-useEffect(() => {
-  let cancelled = false;
-  (async () => {
-    try {
-      setLoading((l) => ({ ...l, regions: true, categories: true }));
-      const [regs, cats] = await Promise.allSettled([
-        api.regions(),
-        api.categories(),
-      ]);
-      if (cancelled) return;
-      
-      // Charger les régions
-      if (regs.status === "fulfilled" && Array.isArray(regs.value))
-        setRegions(regs.value);
-      
-      // ✅ DÉCOMMENTER ET ACTIVER : Charger les catégories
-      if (cats.status === "fulfilled" && Array.isArray(cats.value))
-        setCategoriesList(cats.value);
-      else if (cats.status === "fulfilled") 
-        setCategoriesList([]);
-        
-    } catch (e) {
-      if (!cancelled) setErr(e);
-    } finally {
-      if (!cancelled)
-        setLoading((l) => ({ ...l, regions: false, categories: false }));
-    }
-  })();
-  return () => {
-    cancelled = true;
-  };
-}, []);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoading((l) => ({ ...l, regions: true, categories: true }));
+        const [regs, cats] = await Promise.allSettled([
+          api.regions(),
+          api.categories(),
+        ]);
+        if (cancelled) return;
+
+        // Charger les régions
+        if (regs.status === "fulfilled" && Array.isArray(regs.value))
+          setRegions(regs.value);
+
+        // ✅ DÉCOMMENTER ET ACTIVER : Charger les catégories
+        if (cats.status === "fulfilled" && Array.isArray(cats.value))
+          setCategoriesList(cats.value);
+        else if (cats.status === "fulfilled")
+          setCategoriesList([]);
+
+      } catch (e) {
+        if (!cancelled) setErr(e);
+      } finally {
+        if (!cancelled)
+          setLoading((l) => ({ ...l, regions: false, categories: false }));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   /* ---------- Charger les centres quand région change ---------- */
   useEffect(() => {
@@ -1245,68 +1243,68 @@ useEffect(() => {
     }
   }, [activeFlux, centre]);
 
-/* ---------- Charger la catégorie du centre sélectionné ---------- */
-useEffect(() => {
-  // actif seulement pour centre/poste
-  if (!(activeFlux === "centre" || activeFlux === "poste")) return;
+  /* ---------- Charger la catégorie du centre sélectionné ---------- */
+  useEffect(() => {
+    // actif seulement pour centre/poste
+    if (!(activeFlux === "centre" || activeFlux === "poste")) return;
 
-  // pas de centre => reset
-  if (!centre) {
-    setCentreCategorie("");
-    return;
-  }
+    // pas de centre => reset
+    if (!centre) {
+      setCentreCategorie("");
+      return;
+    }
 
-  // récupérer le centre choisi
-  const selectedCentre = centres.find(
-    (c) => String(c.id) === String(centre)
-  );
+    // récupérer le centre choisi
+    const selectedCentre = centres.find(
+      (c) => String(c.id) === String(centre)
+    );
 
-  console.log("▶ selectedCentre =", selectedCentre);
-  console.log("▶ categoriesList =", categoriesList);
+    console.log("▶ selectedCentre =", selectedCentre);
+    console.log("▶ categoriesList =", categoriesList);
 
-  if (!selectedCentre) {
-    setCentreCategorie("");
-    return;
-  }
+    if (!selectedCentre) {
+      setCentreCategorie("");
+      return;
+    }
 
-  // 1. si le backend nous donne déjà le libellé de la catégorie -> on prend ça
-  const directLabel =
-    selectedCentre.categorie ||
-    selectedCentre.category ||
-    selectedCentre.categorie_label ||
-    selectedCentre.category_label ||
-    null;
+    // 1. si le backend nous donne déjà le libellé de la catégorie -> on prend ça
+    const directLabel =
+      selectedCentre.categorie ||
+      selectedCentre.category ||
+      selectedCentre.categorie_label ||
+      selectedCentre.category_label ||
+      null;
 
-  if (directLabel) {
-    setCentreCategorie(directLabel);
-    return;
-  }
+    if (directLabel) {
+      setCentreCategorie(directLabel);
+      return;
+    }
 
-  // 2. sinon on essaie via l'id
-  const rawCatId =
-    selectedCentre.categorie_id ??
-    selectedCentre.categorieId ??
-    selectedCentre.category_id ??
-    selectedCentre.categoryId ??
-    null;
+    // 2. sinon on essaie via l'id
+    const rawCatId =
+      selectedCentre.categorie_id ??
+      selectedCentre.categorieId ??
+      selectedCentre.category_id ??
+      selectedCentre.categoryId ??
+      null;
 
-  if (!rawCatId) {
-    setCentreCategorie("Non définie");
-    return;
-  }
+    if (!rawCatId) {
+      setCentreCategorie("Non définie");
+      return;
+    }
 
-  const foundCat = categoriesList.find(
-    (cat) => String(cat.id) === String(rawCatId)
-  );
+    const foundCat = categoriesList.find(
+      (cat) => String(cat.id) === String(rawCatId)
+    );
 
-  console.log("▶ foundCat =", foundCat);
+    console.log("▶ foundCat =", foundCat);
 
-  if (foundCat) {
-    setCentreCategorie(foundCat.label || foundCat.name || "Non définie");
-  } else {
-    setCentreCategorie("Non définie");
-  }
-}, [activeFlux, centre, centres, categoriesList]);
+    if (foundCat) {
+      setCentreCategorie(foundCat.label || foundCat.name || "Non définie");
+    } else {
+      setCentreCategorie("Non définie");
+    }
+  }, [activeFlux, centre, centres, categoriesList]);
 
 
   /* ---------- Charger le référentiel des tâches quand poste change ---------- */
@@ -1334,8 +1332,8 @@ useEffect(() => {
           setReferentiel([]);
           setErr(
             e?.response?.data?.detail ||
-              e?.message ||
-              "Erreur lors du chargement des tâches"
+            e?.message ||
+            "Erreur lors du chargement des tâches"
           );
         } finally {
           if (!cancelled) setLoading((l) => ({ ...l, referentiel: false }));
@@ -1382,11 +1380,11 @@ useEffect(() => {
 
       const tot = res
         ? {
-            total_heures: res.total_heures ?? 0,
-            fte_calcule: res.fte_calcule ?? 0,
-            fte_arrondi: res.fte_arrondi ?? 0,
-            heures_net: res.heures_net_jour ?? heures_net_calculees,
-          }
+          total_heures: res.total_heures ?? 0,
+          fte_calcule: res.fte_calcule ?? 0,
+          fte_arrondi: res.fte_arrondi ?? 0,
+          heures_net: res.heures_net_jour ?? heures_net_calculees,
+        }
         : null;
 
       setResultats(details_taches);
@@ -1397,8 +1395,8 @@ useEffect(() => {
       setTotaux(null);
       setErr(
         e?.response?.data?.detail ||
-          e?.message ||
-          "Erreur lors du calcul de simulation"
+        e?.message ||
+        "Erreur lors du calcul de simulation"
       );
     } finally {
       setLoading((l) => ({ ...l, simulation: false }));
@@ -1416,69 +1414,69 @@ useEffect(() => {
 
   /* ---------- Render ---------- */
   return (
-  <main className="min-h-screen bg-slate-50">
-    {/* Header global bleu (TAWAZOON RH ...) reste au-dessus, sticky ailleurs */}
-{/* Navbar principale (juste sous le header bleu) */}
-<div className="sticky top-[64px] z-30 bg-white">
-  <div className="max-w-7xl mx-auto px-5 py-2">
-    <FluxNavbar activeFlux={activeFlux} onFluxChange={setActiveFlux} />
-  </div>
-</div>
-    {/* Bloc local Simulation (blanc sous le header bleu) */}
-    <div className="sticky top-[64px] z-30 bg-white/90 backdrop-blur-md border-b border-slate-200">
-      <div className="max-w-7xl mx-auto px-5 py-3">
-        {/* Ligne 1 : titre + boutons */}
-        <div className="flex flex-wrap items-start gap-3">
-          <div className="flex-1 min-w-[200px]">
-            <h1 className="text-[15px] font-semibold text-[#005EA8]">
-              Simulation des Effectifs - Flux en Cascade
-            </h1>
-            <p className="text-[13px] text-slate-700 -mt-0.5">
-              Sélectionnez les paramètres et lancez la simulation
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2 ml-auto">
-            <button
-              onClick={exportRapportPDF}
-              disabled={referentiel.length === 0 && resultats.length === 0}
-              className="inline-flex items-center gap-1.5 px-3 h-9 rounded-lg bg-red-600 text-white hover:shadow-md hover:-translate-y-0.5 transition-all disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-red-500/60"
-              title="Exporter le rapport"
-            >
-              <FileDown className="w-4 h-4" />
-              <span className="text-[13px] leading-none text-left">
-                Exporter le
-                <br />
-                rapport
-              </span>
-            </button>
-
-            <HelpPopover>
-              <span className="inline-flex items-center gap-1.5 text-slate-700 hover:text-slate-900 text-[13px] font-medium">
-                <Info className="w-4 h-4" />
-                Aide
-              </span>
-            </HelpPopover>
-          </div>
+    <main className="min-h-screen bg-slate-50">
+      {/* Header global bleu (TAWAZOON RH ...) reste au-dessus, sticky ailleurs */}
+      {/* Navbar principale (juste sous le header bleu) */}
+      <div className="sticky top-[64px] z-30 bg-white">
+        <div className="max-w-7xl mx-auto px-5 py-2">
+          <FluxNavbar activeFlux={activeFlux} onFluxChange={setActiveFlux} />
         </div>
-
-       
-
-        {/* Ligne 3 : Segmented (seulement si pas national) */}
-        {activeFlux !== "national" && (
-          <div className="mt-3 flex flex-wrap items-center">
-            <Segmented
-              value={mode}
-              onChange={setMode}
-              items={[
-                { value: "actuel", label: "Processus Actuel" },
-                { value: "recommande", label: "Processus Recommandé" },
-              ]}
-            />
-          </div>
-        )}
       </div>
-    </div>
+      {/* Bloc local Simulation (blanc sous le header bleu) */}
+      <div className="sticky top-[64px] z-30 bg-white/90 backdrop-blur-md border-b border-slate-200">
+        <div className="max-w-7xl mx-auto px-5 py-3">
+          {/* Ligne 1 : titre + boutons */}
+          <div className="flex flex-wrap items-start gap-3">
+            <div className="flex-1 min-w-[200px]">
+              <h1 className="text-[15px] font-semibold text-[#005EA8]">
+                Simulation des Effectifs - Flux en Cascade
+              </h1>
+              <p className="text-[13px] text-slate-700 -mt-0.5">
+                Sélectionnez les paramètres et lancez la simulation
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 ml-auto">
+              <button
+                onClick={exportRapportPDF}
+                disabled={referentiel.length === 0 && resultats.length === 0}
+                className="inline-flex items-center gap-1.5 px-3 h-9 rounded-lg bg-red-600 text-white hover:shadow-md hover:-translate-y-0.5 transition-all disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-red-500/60"
+                title="Exporter le rapport"
+              >
+                <FileDown className="w-4 h-4" />
+                <span className="text-[13px] leading-none text-left">
+                  Exporter le
+                  <br />
+                  rapport
+                </span>
+              </button>
+
+              <HelpPopover>
+                <span className="inline-flex items-center gap-1.5 text-slate-700 hover:text-slate-900 text-[13px] font-medium">
+                  <Info className="w-4 h-4" />
+                  Aide
+                </span>
+              </HelpPopover>
+            </div>
+          </div>
+
+
+
+          {/* Ligne 3 : Segmented (seulement si pas national) */}
+          {activeFlux !== "national" && (
+            <div className="mt-3 flex flex-wrap items-center">
+              <Segmented
+                value={mode}
+                onChange={setMode}
+                items={[
+                  { value: "actuel", label: "Processus Actuel" },
+                  { value: "recommande", label: "Processus Consolidé" },
+                ]}
+              />
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Contenu */}
       <div className="max-w-7xl mx-auto px-5 pt-0 pb-4 space-y-4 -mt-1">
@@ -1490,7 +1488,7 @@ useEffect(() => {
               onChange={setMode}
               items={[
                 { value: "actuel", label: "Processus Actuel" },
-                { value: "recommande", label: "Processus Recommandé" },
+                { value: "recommande", label: "Processus Consolidé" },
               ]}
             />
           </div>
@@ -1553,13 +1551,13 @@ useEffect(() => {
                     ))}
                   </Select>
                 </Field>
-<Field label="Catégorie" icon={Tag}>
-  <Input
-  value={centreCategorie || "—"}
-  readOnly
-  className="bg-slate-100 cursor-not-allowed text-slate-700"
-/>
-</Field>
+                <Field label="Catégorie" icon={Tag}>
+                  <Input
+                    value={centreCategorie || "—"}
+                    readOnly
+                    className="bg-slate-100 cursor-not-allowed text-slate-700"
+                  />
+                </Field>
               </div>
             </Card>
 
@@ -1674,7 +1672,7 @@ useEffect(() => {
                     value={categorie}
                     onChange={(e) => setCategorie(e.target.value)}
                   >
-                  
+
                   </Select>
                 </Field>
 
@@ -1853,7 +1851,7 @@ useEffect(() => {
                               {hasPhase && (
                                 <td className="px-3 py-2">
                                   {r.ph &&
-                                  String(r.ph).trim().toLowerCase() !== "n/a"
+                                    String(r.ph).trim().toLowerCase() !== "n/a"
                                     ? r.ph
                                     : ""}
                                 </td>
@@ -2027,7 +2025,7 @@ useEffect(() => {
             </div>
             <div className="text-sm text-slate-600">
               {new Date().toLocaleDateString()} • Mode:{" "}
-              {mode === "actuel" ? "Processus Actuel" : "Processus Recommandé"}
+              {mode === "actuel" ? "Processus Actuel" : "Processus Consolidé"}
             </div>
           </div>
         </div>
@@ -2039,7 +2037,7 @@ useEffect(() => {
           </div>
           <div>
             <b>Catégorie:</b>{" "}
-           
+
           </div>
           <div>
             <b>Centre:</b>{" "}
@@ -2050,7 +2048,7 @@ useEffect(() => {
             {poste === "Tous"
               ? "Tous"
               : postesList.find((p) => String(p.id) === String(poste))?.label ||
-                poste}
+              poste}
           </div>
           <div>
             <b>Sacs/j:</b> {sacs}

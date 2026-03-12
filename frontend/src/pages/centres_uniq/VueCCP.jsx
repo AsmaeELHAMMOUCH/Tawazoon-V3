@@ -361,8 +361,8 @@ export default function VueCCP() {
   const [filterFamille, setFilterFamille] = useState("");
 
   // CCI params
-  const [tauxComplexite, setTauxComplexite] = useState(1);
-  const [natureGeo, setNatureGeo] = useState(1);
+  const [tauxComplexite, setTauxComplexite] = useState(0);
+  const [natureGeo, setNatureGeo] = useState(0);
   const [pctCollecte, setPctCollecte] = useState(5.0);
   const [nbrCourrierLiasse, setNbrCourrierLiasse] = useState(0);
   const [annotes, setAnnotes] = useState(0);
@@ -868,7 +868,7 @@ export default function VueCCP() {
       {/* 🔹 TITRE & HEADER (Sticky) */}
       <div className="sticky top-[57px] z-30 flex flex-col gap-2">
         <SimulationHeader
-          title="Centre Colis Postaux (CCP)"
+          title="Centre National de Tri (CNTR)"
           region="Region Casa"
           subtitle="Code 1962 - Simulation"
         >

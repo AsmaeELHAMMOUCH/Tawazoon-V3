@@ -10,7 +10,8 @@ export default function OrganigrammeDialog({
     open,
     onOpenChange,
     wizardData,
-    postes = []
+    postes = [],
+    mode
 }) {
     // Helper to detect MOI postes (same as Step4Results/VueIntervenant)
     const isMoiPoste = (p) => {
@@ -98,12 +99,12 @@ export default function OrganigrammeDialog({
                                 </svg>
                             </div>
                             <div>
-                                <h2 className="text-xl font-bold text-slate-800">Organigramme</h2>
+                                <h2 className="text-xl font-bold text-slate-800">Organigramme {mode === "optimise" ? "Optimisé" : mode === "recommande" ? "Consolidé" : "Cible"}</h2>
                                 <p className="text-sm text-slate-500">{centerName}</p>
                             </div>
                         </div>
                         <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-50 border border-blue-200">
-                            <span className="text-xs font-medium text-slate-600">Effectif Total</span>
+                            <span className="text-xs font-medium text-slate-600">Effectif Total ({mode === "optimise" ? "Opt." : mode === "recommande" ? "Cons." : "Cible"})</span>
                             <span className="text-sm font-bold text-slate-900">{Math.round(totalETP)} ETP</span>
                         </div>
                     </DialogTitle>

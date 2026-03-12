@@ -1,7 +1,23 @@
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, field
 from sqlalchemy.orm import Session
+from sqlalchemy import func
+import unicodedata
 from app.models.db_models import Tache, CentrePoste, Poste
+
+def normalize_text(text: str) -> str:
+    """
+    Normalise le texte en supprimant les accents, en mettant en majuscules
+    et en nettoyant les espaces superflus.
+    """
+    if not text:
+        return ""
+    # Décomposer les caractères accentués
+    nfkd_form = unicodedata.normalize('NFKD', str(text))
+    # Filtrer les caractères non-spacing marks (accents) et reconstruire
+    res = "".join([c for c in nfkd_form if not unicodedata.combining(c)])
+    # Tout en majuscule, sans espaces superflus (intermédiaires et bords)
+    return " ".join(res.upper().split())
 
 @dataclass
 class BandoengTaskResult:
@@ -53,8 +69,8 @@ class BandoengParameters:
     colis_amana_par_canva_sac: float = 35.0
     nbr_co_sac: float = 350.0
     nbr_cr_sac: float = 400.0
-    coeff_circ: float = 1.0
-    coeff_geo: float = 1.0
+    coeff_circ: float = 0.0
+    coeff_geo: float = 0.0
     pct_retour: float = 0.0
     pct_collecte: float = 0.0
     pct_axes: float = 0.0
@@ -62,6 +78,10 @@ class BandoengParameters:
     pct_international: float = 0.0
     pct_national: float = 100.0
     pct_marche_ordinaire: float = 0.0
+    pct_vague_master: float = 0.0
+    pct_boite_postale: float = 0.0
+    pct_crbt: float = 0.0
+    pct_hors_crbt: float = 0.0
     productivite: float = 100.0
     idle_minutes: float = 0.0
     shift: int = 1
@@ -102,6 +122,9 @@ class BandoengParameters:
     co_pct_axes_depart: Optional[float] = None
     co_pct_national: Optional[float] = None
     co_pct_international: Optional[float] = None
+    co_pct_marche_ordinaire: Optional[float] = None
+    co_pct_vague_master: Optional[float] = None
+    co_pct_boite_postale: Optional[float] = None
 
     # CR (Courrier Recommandé)
     cr_pct_collecte: Optional[float] = None
@@ -110,6 +133,11 @@ class BandoengParameters:
     cr_pct_axes_depart: Optional[float] = None
     cr_pct_national: Optional[float] = None
     cr_pct_international: Optional[float] = None
+    cr_pct_marche_ordinaire: Optional[float] = None
+    cr_pct_vague_master: Optional[float] = None
+    cr_pct_boite_postale: Optional[float] = None
+    cr_pct_crbt: Optional[float] = None
+    cr_pct_hors_crbt: Optional[float] = None
 
 def safe_float(val: Any) -> float:
     try:
@@ -190,6 +218,14 @@ def detect_flux(produit: str) -> str:
     
     return "general"
 
+def is_factor_role(responsable_label: str) -> bool:
+    """
+    Vérifie si le responsable est un facteur.
+    """
+    if not responsable_label:
+        return False
+    return "FACTEUR" in responsable_label.upper()
+
 def get_flux_param(params: BandoengParameters, flux: str, param_name: str) -> float:
     """
     Récupère un paramètre spécifique au flux s'il existe, sinon la valeur globale.
@@ -209,12 +245,112 @@ def get_flux_param(params: BandoengParameters, flux: str, param_name: str) -> fl
              
     return 0.0
 
+def minus_group(*values: float) -> float:
+    """Helper pour simuler (1 - X - Y) d'Excel."""
+    return 1.0 - sum(values)
+
+def plus_group(*values: float) -> float:
+    """Helper pour simuler (1 + X + Y) d'Excel."""
+    return 1.0 + sum(values)
+
+def apply_factors(base: float, factors: List[float]) -> float:
+    """Multiplie une base par une liste de facteurs (moteur dynamique)."""
+    result = base
+    for f in factors:
+        result *= f
+    return result
+
+def resolve_phase_multipliers(phase: str, flux: str, params: BandoengParameters) -> List[float]:
+    """
+    Résout dynamiquement les multiplicateurs en fonction de la phase et du flux.
+    Centralise la logique métier Excel dans TON moteur.
+    """
+    factors = []
+    
+    # --- RÈGLES SPÉCIFIQUES (User defined) ---
+    
+    # 1) circul_geo => plus_group(coeff_circ, coeff_geo)
+    if phase == "circul_geo":
+        factors.append(plus_group(params.coeff_circ, params.coeff_geo))
+    
+    # 2) crbt_circul_geo => plus_group(coeff_circ, coeff_geo) * pct_crbt/100
+    elif phase == "crbt_circul_geo":
+        factors.append(plus_group(params.coeff_circ, params.coeff_geo))
+        pct_crbt = get_flux_param(params, flux, "pct_crbt") / 100.0
+        factors.append(pct_crbt)
+
+    # 3) hcrbt_circul_geo => plus_group(coeff_circ, coeff_geo) * pct_hors_crbt/100
+    elif phase == "hcrbt_circul_geo":
+        factors.append(plus_group(params.coeff_circ, params.coeff_geo))
+        pct_hcrbt = get_flux_param(params, flux, "pct_hors_crbt") / 100.0
+        factors.append(pct_hcrbt)
+
+    # 4) march_collect => minus_group(pct_march, pct_collecte)
+    elif phase == "march_collect":
+        pct_march = get_flux_param(params, flux, "pct_marche_ordinaire") / 100.0
+        pct_collecte = get_flux_param(params, flux, "pct_collecte") / 100.0
+        factors.append(minus_group(pct_march, pct_collecte))
+    
+    elif "min_retour_crbt" in phase:
+        pct = get_flux_param(params, flux, "pct_retour") / 100.0
+        factors.append(minus_group(pct))
+        factors.append(get_flux_param(params, flux, "pct_crbt") / 100.0)
+
+    # 5) v_master => pct_vague_master / 100
+    elif phase == "v_master":
+        factors.append(get_flux_param(params, flux, "pct_vague_master") / 100.0)
+
+    # 6) b_postale => pct_boite_postale / 100
+    elif phase == "b_postale":
+        factors.append(get_flux_param(params, flux, "pct_boite_postale") / 100.0)
+
+    # 7) collect => pct_collecte / 100
+    elif phase == "collect":
+        factors.append(get_flux_param(params, flux, "pct_collecte") / 100.0)
+
+    # 8) march => pct_marche_ordinaire / 100
+    elif phase == "march":
+        factors.append(get_flux_param(params, flux, "pct_marche_ordinaire") / 100.0)
+
+    # 9) retour_crbt => retour * pct_crbt / 100
+    elif phase == "retour_crbt":
+        factors.append(get_flux_param(params, flux, "pct_retour") / 100.0)
+        factors.append(get_flux_param(params, flux, "pct_crbt") / 100.0)
+    elif phase == "crbt":
+        factors.append(get_flux_param(params, flux, "pct_crbt") / 100.0)
+
+    # --- AUTRES PHASES (Logique existante maintenue pour compatibilité) ---
+    elif "circul_collect" in phase:
+        factors.append(params.coeff_circ)
+        pct = get_flux_param(params, flux, "pct_collecte") / 100.0
+        factors.append(pct)
+
+    elif "circul_march" in phase:
+        factors.append(params.coeff_circ)
+        pct = get_flux_param(params, flux, "pct_marche_ordinaire") / 100.0
+        factors.append(pct)
+        
+    elif "retour" in phase or "retour_day_350" in phase:
+        pct = get_flux_param(params, flux, "pct_retour") / 100.0
+        factors.append(pct)
+
+    # 2. Logique National / International (Cumulable avec les phases ci-dessus)
+    if "national" in phase and "international" not in phase:
+        pct = get_flux_param(params, flux, "pct_national") / 100.0
+        factors.append(pct)
+    elif "international" in phase:
+        pct = get_flux_param(params, flux, "pct_international") / 100.0
+        factors.append(pct)
+        
+    return factors
+
 def get_volume_by_product(produit: str, volumes: BandoengInputVolumes) -> float:
     """
     Mappe le nom du produit (Tache.produit) vers le volume spécifique issu de la grille.
     Logique basée sur les spécifications exactes.
     """
-    p = produit.upper().strip() if produit else ""
+    # Normalisation pour plus de robustesse (accents, espaces)
+    p = normalize_text(produit)
     g = volumes.grid_values
 
     # Helper sums - ✅ UNIQUEMENT local + axes (pas global)
@@ -248,35 +384,33 @@ def get_volume_by_product(produit: str, volumes: BandoengInputVolumes) -> float:
         return (get_grid_val(g, ['cr', 'med', 'local']) + 
                 get_grid_val(g, ['cr', 'med', 'axes']))
 
-    # Direct Mappings
-    if p in ["AMANA REÇU TOTAL","AMANA REÇU"]:
+    # Direct Mappings (Utilisant des clés normalisées sans accents)
+    if p in ["AMANA RECU TOTAL", "AMANA RECU"]:
         return sum_amana_recu()
     
-    if p == "CR ARRIVÉ":
+    if p == "CR ARRIVE":
         return sum_cr_arrive()
 
-    if p == "CO ARRIVÉ AXES":
+    if p == "CO ARRIVE AXES":
         return get_grid_val(g, ['co', 'arrive', 'axes'])
     
-
-
-    if p == "AMANA REÇU AXES":
+    if p == "AMANA RECU AXES":
         # GC Axes + Part Axes
         return (get_grid_val(g, ['amana', 'recu', 'gc', 'axes']) + 
                 get_grid_val(g, ['amana', 'recu', 'part', 'axes']))
     
-    if p == "CR ARRIVÉ AXES":
+    if p == "CR ARRIVE AXES":
         return get_grid_val(g, ['cr', 'arrive', 'axes'])
     
-    if p == "CO ARRIVÉ LOCAL":
+    if p == "CO ARRIVE LOCAL":
         return get_grid_val(g, ['co', 'arrive', 'local'])
     
-    if p == "AMANA REÇU LOCAL":
+    if p == "AMANA RECU LOCAL":
         # GC Local + Part Local
         return (get_grid_val(g, ['amana', 'recu', 'gc', 'local']) + 
                 get_grid_val(g, ['amana', 'recu', 'part', 'local']))
     
-    if p == "CR ARRIVÉ LOCAL":
+    if p == "CR ARRIVE LOCAL":
         return get_grid_val(g, ['cr', 'arrive', 'local'])
     
     if p == "CO MED AXES":
@@ -288,18 +422,18 @@ def get_volume_by_product(produit: str, volumes: BandoengInputVolumes) -> float:
     if p == "CR MED AXES":
         return get_grid_val(g, ['cr', 'med', 'axes'])
     
-    if p == "AMANA DÉPÔT LOCAL":
+    if p == "AMANA DEPOT LOCAL":
         return (get_grid_val(g, ['amana', 'depot', 'gc', 'local']) + 
                 get_grid_val(g, ['amana', 'depot', 'part', 'local']))
     
     if p == "CR MED":
         return sum_cr_med()
     
-    if p == "AMANA DÉPÔT AXES":
+    if p == "AMANA DEPOT AXES":
         return (get_grid_val(g, ['amana', 'depot', 'gc', 'axes']) + 
                 get_grid_val(g, ['amana', 'depot', 'part', 'axes']))
     
-    if p in ["AMANA DÉPÔT TOTAL","AMANA DEPOT","AMANA DÉPÔT","AMANA DEPÔT"]:
+    if p in ["AMANA DEPOT TOTAL", "AMANA DEPOT"]:
         return sum_amana_depot()
     
     if p == "CO LOCAL":
@@ -318,9 +452,8 @@ def get_volume_by_product(produit: str, volumes: BandoengInputVolumes) -> float:
     if p == "CR MED LOCAL":
         return get_grid_val(g, ['cr', 'med', 'local'])
     
-    if p in ["CO ARRIVÉ", "CO ARRIVE", "CO ARRIVÉ TOTAL"]:
+    if p in ["CO ARRIVE", "CO ARRIVE TOTAL"]:
         # User defined: Total des volumes CO Arrivé axes et local (sans global/part?)
-        # "on garde juste CO Arrivé (le total des volumes CO Arrivé axes et local)"
         return (get_grid_val(g, ['co', 'arrive', 'local']) + 
                 get_grid_val(g, ['co', 'arrive', 'axes']))
 
@@ -338,14 +471,14 @@ def get_volume_by_product(produit: str, volumes: BandoengInputVolumes) -> float:
     if p in ["E BARKIA MED", "ELBARKIA MED", "EL BARKIA MED"]:
         return get_grid_val(g, ['ebarkia', 'med'])
     
-    if p in ["E BARKIA ARRIVÉ", "ELBARKIA ARRIVÉ", "EL BARKIA ARRIVÉ", "E BARKIA ARRIVE", "ELBARKIA ARRIVE", "EL BARKIA ARRIVE"]:
+    if p in ["E BARKIA ARRIVE", "ELBARKIA ARRIVE", "EL BARKIA ARRIVE"]:
         return get_grid_val(g, ['ebarkia', 'arrive'])
 
     # LRH mappings (structure simplifiée : seulement med et arrive)
     if p in ["LRH MED"]:
         return get_grid_val(g, ['lrh', 'med'])
 
-    if p in ["LRH ARRIVÉ", "LRH ARRIVE"]:
+    if p in ["LRH ARRIVE"]:
         return get_grid_val(g, ['lrh', 'arrive'])
 
     # Fallback to old flat volumes if no match (legacy safety)
@@ -353,14 +486,15 @@ def get_volume_by_product(produit: str, volumes: BandoengInputVolumes) -> float:
         if "AMANA" in p: return volumes.amana_export
         if "CO" in p: return volumes.courrier_ordinaire_export
         if "CR" in p: return volumes.courrier_recommande_export
-    
+
     return 0.0
 
 def calculate_task_duration(
-    task: Tache,
+    task: Any,  # Use Any to support both DB models and mock objects for tests
     volumes: BandoengInputVolumes,
     params: BandoengParameters,
-    poste_map: Dict[str, str] = None
+    poste_map: Dict[str, str] = None,
+    role_mapping: Dict[str, str] = None
 ) -> BandoengTaskResult:
     nom_tache = str(task.nom_tache or "").strip()
     unite = str(task.unite_mesure or "").upper().strip()
@@ -429,6 +563,9 @@ def calculate_task_duration(
     elif "CAISSON" in unite or "BAC" in unite:
         divisor = max(1.0, params.cr_par_caisson) 
         formula_unit_part = f" / {divisor:.0f} (Caisson)"
+    elif "DNL" in unite:
+        divisor = max(1.0, 5) 
+        formula_unit_part = f" / {divisor:.0f} (DNL)"
     elif "SAC" in unite:
         if flux == "amana":
             divisor = max(1.0, params.colis_amana_par_canva_sac)
@@ -442,46 +579,10 @@ def calculate_task_duration(
         else:
              divisor = max(1.0, params.nbr_co_sac) 
 
-    # 4. Apply Phase Multiplier
-    multiplier = 1.0
-    phase_part = ""
-    
-    if "circul_geo" in phase:
-        m = params.coeff_circ * params.coeff_geo
-        multiplier *= m
-        phase_part = f" * Coeff({m:.2f})"
-        
-    elif "circul_collect" in phase:
-        pct_collecte = get_flux_param(params, flux, "pct_collecte")
-        pct = (pct_collecte / 100.0)
-        m = params.coeff_circ * pct
-        multiplier *= m
-        phase_part = f" * Circ*Collect({m:.4f})"
-
-    elif "circul_march" in phase:
-        pct_march = get_flux_param(params, flux, "pct_marche_ordinaire")
-        pct = (pct_march / 100.0)
-        m = params.coeff_circ * pct
-        multiplier *= m
-        phase_part = f" * Circ*March({m:.4f})"
-        
-    elif "retour" in phase or "retour_day_350" in phase:
-        pct_retour = get_flux_param(params, flux, "pct_retour")
-        pct = (pct_retour / 100.0)
-        multiplier *= pct
-        phase_part = f" * Retour({pct:.2f})"
-
-    # --- National / International Logic ---
-    if "national" in phase and "international" not in phase:
-        pct_nat = get_flux_param(params, flux, "pct_national")
-        pct = (pct_nat / 100.0)
-        multiplier *= pct
-        phase_part += f" * Natl({pct:.2f})"
-    elif "international" in phase:
-        pct_intl = get_flux_param(params, flux, "pct_international")
-        pct = (pct_intl / 100.0)
-        multiplier *= pct
-        phase_part += f" * Intl({pct:.2f})"
+    # 4. Apply Phase Multiplier (Dynamic Engine)
+    factors = resolve_phase_multipliers(phase, flux, params)
+    multiplier = apply_factors(1.0, factors)
+    phase_part = f" * Factors({multiplier:.4f})" if factors else ""
 
     # Final Calculation
     # Let's assume inputs are DAILY volumes because "Vol/Jour" is standard.
@@ -509,6 +610,10 @@ def calculate_task_duration(
                 # base_calcul = 100% → on utilise directement, pas d'ajustement ED
                 ed_factor = 1.0
                 ed_label = "100% (base_calcul=100)"
+            elif phase == "sac":
+                # Si la phase est "sac", on utilise (100 - %ED)
+                ed_factor = (100.0 - params.ed_percent) / 100.0
+                ed_label = f"{100 - params.ed_percent}% (non-ED car phase=sac)"
             else:
                 ed_factor = params.ed_percent / 100.0
                 ed_label = f"{params.ed_percent}% (ED)"
@@ -519,6 +624,9 @@ def calculate_task_duration(
             else:
                 ed_factor = (100.0 - params.ed_percent) / 100.0
                 ed_label = f"{100 - params.ed_percent}% (non-ED)"
+        else:
+            ed_factor = 1.0
+            ed_label = "1.0"
 
     # Final Calculation
     # Step A: Vol Jour Adjusted = (Vol / Days) / UnitDivisor * Multiplier
@@ -539,12 +647,19 @@ def calculate_task_duration(
     
     # Retrieve Responsable and Family
     responsable = "N/A"
-    famille = str(task.famille_uo or "").strip()
-    cp_id = task.centre_poste_id
+    famille = str(getattr(task, 'famille_uo', "") or "").strip()
+    cp_id = getattr(task, 'centre_poste_id', 0)
     
-    if task.centre_poste:
+    # Try to get responsable from virtual attribute first
+    if hasattr(task, 'responsable_label') and task.responsable_label:
+        responsable = str(task.responsable_label)
+    elif hasattr(task, 'centre_poste') and task.centre_poste:
         code_resp = task.centre_poste.code_resp
-        # ✅ Priorité au Code pour la résolution du nom (Demande User)
+        
+        # --- Apply Role Mapping (Recommended Process) ---
+        if role_mapping and code_resp in role_mapping:
+            code_resp = role_mapping[code_resp]
+
         if poste_map and code_resp and code_resp in poste_map:
              responsable = poste_map[code_resp]
         elif task.centre_poste.poste:
@@ -586,10 +701,14 @@ def calculate_task_duration(
 
 def run_bandoeng_simulation(
     db: Session,
-    centre_id: int,
+    centre_id: Optional[int],
     volumes: BandoengInputVolumes,
     params: BandoengParameters,
-    poste_code: Optional[str] = None
+    poste_code: Optional[str] = None,
+    role_mapping: Optional[Dict[str, str]] = None,
+    tasks_override: Optional[List[Tache]] = None,
+    excluded_task_ids: Optional[List[int]] = None,
+    excluded_task_quadruplets: Optional[List[tuple]] = None
 ) -> BandoengSimulationResult:
     
     # 0. Appliquer la croissance sur les grid_values avant la simulation
@@ -620,19 +739,37 @@ def run_bandoeng_simulation(
         local_volumes = deepcopy(volumes)
         local_volumes.grid_values = updated_grid
 
-    # 1. Récupérer les tâches associées aux postes MOD uniquement
-    query = (
-        db.query(Tache)
-        .join(CentrePoste)
-        .join(Poste, CentrePoste.code_resp == Poste.Code)  # ✅ Join avec la table Poste via Code (plus robuste)
-        .filter(CentrePoste.centre_id == centre_id)
-        .filter(Poste.type_poste == 'MOD')  # ✅ Strictement MOD uniquement
-    )
-    
-    if poste_code:
-        query = query.filter(CentrePoste.code_resp == poste_code)
+    # 1. Source des tâches : BDD ou Override (Simulation Virtuelle)
+    if tasks_override is not None:
+        taches = tasks_override
+        actual_moi = 0.0
+    else:
+        # 1. Récupérer les tâches associées aux postes MOD uniquement
+        query = (
+            db.query(Tache)
+            .join(CentrePoste)
+            .join(Poste, CentrePoste.code_resp == Poste.Code)
+            .filter(CentrePoste.centre_id == centre_id)
+            .filter(Poste.type_poste == 'MOD')
+            .order_by(Tache.ordre, Tache.id)
+        )
         
-    taches = query.all()
+        # 0.5 Calculer l'actual_moi si on est en global
+        actual_moi = 0.0
+        if not poste_code and centre_id:
+            moi_total = (
+                db.query(func.sum(CentrePoste.effectif_actuel))
+                .join(Poste, CentrePoste.code_resp == Poste.Code)
+                .filter(CentrePoste.centre_id == centre_id)
+                .filter(Poste.type_poste != 'MOD')
+                .scalar()
+            ) or 0.0
+            actual_moi = float(moi_total)
+        
+        if poste_code:
+            query = query.filter(CentrePoste.code_resp == poste_code)
+            
+        taches = query.all()
     
     # ✅ Pre-fetch Poste labels by Code
     poste_map = {}
@@ -645,6 +782,12 @@ def run_bandoeng_simulation(
     seen_families = set()
     filtered_count = 0
     
+    # Normalisation stricte pour la comparaison typologie (sans espaces, minuscule)
+    def clean_q(s):
+        if not s: return ""
+        return "".join(str(s).split()).lower()
+
+    processed_tasks = []
     for t in taches:
         # Filtre "Guichet" : si has_guichet=0, on ignore les tâches de la famille GUICHET
         famille_uo = str(t.famille_uo or "").upper().strip()
@@ -655,7 +798,27 @@ def run_bandoeng_simulation(
             # print(f"DEBUG: Filtering out Guichet task: {t.nom_tache}")
             continue
             
-        res = calculate_task_duration(t, local_volumes, params, poste_map)
+        if excluded_task_ids and t.id in excluded_task_ids:
+            filtered_count += 1
+            # print(f"DEBUG: Filtering out excluded task (Optimized mode): {t.id} - {t.nom_tache}")
+            continue
+        
+        if excluded_task_quadruplets:
+            t_q = (
+                clean_q(t.nom_tache),
+                clean_q(t.produit),
+                clean_q(t.famille_uo),
+                clean_q(t.unite_mesure)
+            )
+            if t_q in excluded_task_quadruplets:
+                filtered_count += 1
+                # print(f"DEBUG: Filtering out excluded task by quadruplet: {t.id} - {t.nom_tache}")
+                continue
+        
+        processed_tasks.append(t)
+
+    for t in processed_tasks:
+        res = calculate_task_duration(t, local_volumes, params, poste_map, role_mapping)
         task_results.append(res)
         total_heures += res.heures_calculees
         
@@ -665,28 +828,37 @@ def run_bandoeng_simulation(
     heures_prod = 8.0 * (params.productivite / 100.0)
     capacite_nette = max(0.1, heures_prod - (params.idle_minutes/60.0))
     
-    # ETP Calculé = Total Heures Nécessaires / Capacité Nette d'un agent
-    fte_calcule = total_heures / capacite_nette
-    print(f"DEBUG: centre={centre_id} total_heures={total_heures} capacite_nette={capacite_nette} fte_calcule={fte_calcule}")
-    if total_heures > 0:
-        print(f"DEBUG: Sample tasks responsible for load: {[ (t.task_name, t.heures_calculees) for t in task_results[:5] ]}")
-    
+    # Capacité Facteur = Capacité Nette - (Trajet A/R)
+    # duree_trajet est en minutes pour un aller simple (x2 pour A/R)
+    capacite_facteur = max(0.1, capacite_nette - ((params.duree_trajet * 2) / 60.0))
+
     # Calcul des ressources par poste (Intervenant)
     ressources_par_poste = {}
     for res in task_results:
         resp = res.responsable
         if resp not in ressources_par_poste:
             ressources_par_poste[resp] = 0.0
-        # ETP pour cette tâche = Heures / Capacité Nette
-        ressources_par_poste[resp] += (res.heures_calculees / capacite_nette)
+        
+        # Choisir la capacité appropriée : Facteur ou Standard
+        capa_eff = capacite_facteur if is_factor_role(resp) else capacite_nette
+        
+        # ETP pour cette tâche = Heures / Capacité Effective
+        ressources_par_poste[resp] += (res.heures_calculees / capa_eff)
 
+    # ETP Calculé = Somme des ETPs par poste
+    fte_calcule = sum(ressources_par_poste.values())
+    
+    print(f"DEBUG: centre={centre_id} total_heures={total_heures} capacite_nette={capacite_nette} capacite_facteur={capacite_facteur} fte_calcule={fte_calcule}")
+    if total_heures > 0:
+        print(f"DEBUG: Sample tasks responsible for load: {[ (t.task_name, t.heures_calculees) for t in task_results[:5] ]}")
+    
     return BandoengSimulationResult(
         tasks=task_results,
         total_heures=total_heures,
         heures_net_jour=capacite_nette,
         fte_calcule=fte_calcule,
-        fte_arrondi=int(round(fte_calcule)),
-        total_ressources_humaines=fte_calcule,
+        fte_arrondi=int(round(fte_calcule + actual_moi)),
+        total_ressources_humaines=fte_calcule + actual_moi,
         ressources_par_poste=ressources_par_poste,
         grid_values=local_volumes.grid_values,
         debug_info={

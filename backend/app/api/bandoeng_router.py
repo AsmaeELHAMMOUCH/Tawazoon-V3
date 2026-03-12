@@ -20,7 +20,11 @@ router = APIRouter(prefix="/bandoeng", tags=["Bandoeng Simulation"])
 # Constants
 BANDOENG_CENTRE_ID = 1942
 
-from app.models.db_models import normalize_ws, sql_normalize_ws
+from app.models.db_models import (
+    normalize_ws, sql_normalize_ws, MappingPosteRecommande, 
+    TacheExclueOptimisee, Centre, CentrePoste, Poste, Tache, 
+    HierarchiePostes, Ville, Categorie
+)
 
 # --- Pydantic Models for API ---
 
@@ -38,66 +42,80 @@ class BandoengVolumesIn(BaseModel):
     grid_values: dict = {}
 
 class BandoengParamsIn(BaseModel):
-    ed_percent: float = 40.0
-    colis_amana_par_canva_sac: float = 35.0
-    nbr_co_sac: float = 350.0
-    nbr_cr_sac: float = 400.0
-    coeff_circ: float = 1.0
-    coeff_geo: float = 1.0
-    pct_retour: float = 0.0
-    pct_collecte: float = 0.0
-    pct_axes: float = 0.0
-    pct_local: float = 0.0
-    pct_international: float = 0.0
-    pct_national: float = 0.0
-    pct_marche_ordinaire: float = 0.0
+    model_config = {"populate_by_name": True}
+
+    ed_percent: float = Field(40.0, alias="edPercent")
+    colis_amana_par_canva_sac: float = Field(35.0, alias="colisAmanaParCanvaSac")
+    nbr_co_sac: float = Field(350.0, alias="nbrCoSac")
+    nbr_cr_sac: float = Field(400.0, alias="nbrCrSac")
+    coeff_circ: float = Field(0.0, alias="coeffCirc")
+    coeff_geo: float = Field(0.0, alias="coeffGeo")
+    pct_retour: float = Field(0.0, alias="pctRetour")
+    pct_collecte: float = Field(0.0, alias="pctCollecte")
+    pct_axes: float = Field(0.0, alias="pctAxes")
+    pct_local: float = Field(0.0, alias="pctLocal")
+    pct_international: float = Field(0.0, alias="pctInternational")
+    pct_national: float = Field(0.0, alias="pctNational")
+    pct_marche_ordinaire: float = Field(0.0, alias="pctMarcheOrdinaire")
+    pct_vague_master: float = Field(0.0, alias="pctVagueMaster")
+    pct_boite_postale: float = Field(0.0, alias="pctBoitePostale")
+    pct_crbt: float = Field(50.0, alias="pctCrbt")
+    pct_hors_crbt: float = Field(50.0, alias="pctHorsCrbt")
     productivite: float = 100.0
-    idle_minutes: float = 0.0
+    idle_minutes: float = Field(0.0, alias="idleMinutes")
     shift: int = 1
-    duree_trajet: float = 0.0
-    has_guichet: int = 1
-    cr_par_caisson: float = 40.0
-    pct_mois: Optional[float] = None
+    duree_trajet: float = Field(0.0, alias="dureeTrajet")
+    has_guichet: int = Field(1, alias="hasGuichet")
+    cr_par_caisson: float = Field(40.0, alias="crParCaisson")
+    pct_mois: Optional[float] = Field(None, alias="pctMois")
     # --- Saisonnalité mensuelle par flux ---
-    pct_mois_amana:   Optional[float] = None
-    pct_mois_co:      Optional[float] = None
-    pct_mois_cr:      Optional[float] = None
-    pct_mois_lrh:     Optional[float] = None
-    pct_mois_ebarkia: Optional[float] = None
-    pct_annee: Optional[float] = None # Pour le forecast
+    pct_mois_amana:   Optional[float] = Field(None, alias="pctMoisAmana")
+    pct_mois_co:      Optional[float] = Field(None, alias="pctMoisCo")
+    pct_mois_cr:      Optional[float] = Field(None, alias="pctMoisCr")
+    pct_mois_lrh:     Optional[float] = Field(None, alias="pctMoisLrh")
+    pct_mois_ebarkia: Optional[float] = Field(None, alias="pctMoisEbarkia")
+    pct_annee: Optional[float] = Field(None, alias="pctAnnee")
     # --- Taux de croissance par flux ---
-    amana_pct_annee:   Optional[float] = None
-    co_pct_annee:      Optional[float] = None
-    cr_pct_annee:      Optional[float] = None
-    lrh_pct_annee:     Optional[float] = None
-    ebarkia_pct_annee: Optional[float] = None
+    amana_pct_annee:   Optional[float] = Field(None, alias="amanaPctAnnee")
+    co_pct_annee:      Optional[float] = Field(None, alias="coPctAnnee")
+    cr_pct_annee:      Optional[float] = Field(None, alias="crPctAnnee")
+    lrh_pct_annee:     Optional[float] = Field(None, alias="lrhPctAnnee")
+    ebarkia_pct_annee: Optional[float] = Field(None, alias="ebarkiaPctAnnee")
     
     # --- Flux specific overrides (amana_) ---
-    amana_pct_collecte: Optional[float] = None
-    amana_pct_retour: Optional[float] = None
-    amana_pct_axes_arrivee: Optional[float] = None
-    amana_pct_axes_depart: Optional[float] = None
-    amana_pct_national: Optional[float] = None
-    amana_pct_international: Optional[float] = None
-    amana_pct_marche_ordinaire: Optional[float] = None
-    amana_pct_crbt: Optional[float] = None
-    amana_pct_hors_crbt: Optional[float] = None
+    amana_pct_collecte: Optional[float] = Field(None, alias="amana_pctCollecte")
+    amana_pct_retour: Optional[float] = Field(None, alias="amana_pctRetour")
+    amana_pct_axes_arrivee: Optional[float] = Field(None, alias="amana_pctAxesArrivee")
+    amana_pct_axes_depart: Optional[float] = Field(None, alias="amana_pctAxesDepart")
+    amana_pct_national: Optional[float] = Field(None, alias="amana_pctNational")
+    amana_pct_international: Optional[float] = Field(None, alias="amana_pctInternational")
+    amana_pct_marche_ordinaire: Optional[float] = Field(None, alias="amana_pctMarcheOrdinaire")
+    amana_pct_crbt: Optional[float] = Field(None, alias="amana_pctCrbt")
+    amana_pct_hors_crbt: Optional[float] = Field(None, alias="amana_pctHorsCrbt")
 
     # --- Flux specific overrides (co_) ---
-    co_pct_collecte: Optional[float] = None
-    co_pct_retour: Optional[float] = None
-    co_pct_axes_arrivee: Optional[float] = None
-    co_pct_axes_depart: Optional[float] = None
-    co_pct_national: Optional[float] = None
-    co_pct_international: Optional[float] = None
+    co_pct_collecte: Optional[float] = Field(None, alias="co_pctCollecte")
+    co_pct_retour: Optional[float] = Field(None, alias="co_pctRetour")
+    co_pct_axes_arrivee: Optional[float] = Field(None, alias="co_pctAxesArrivee")
+    co_pct_axes_depart: Optional[float] = Field(None, alias="co_pctAxesDepart")
+    co_pct_national: Optional[float] = Field(None, alias="co_pctNational")
+    co_pct_international: Optional[float] = Field(None, alias="co_pctInternational")
+    co_pct_marche_ordinaire: Optional[float] = Field(None, alias="co_pctMarcheOrdinaire")
+    co_pct_vague_master: Optional[float] = Field(None, alias="co_pctVagueMaster")
+    co_pct_boite_postale: Optional[float] = Field(None, alias="co_pctBoitePostale")
 
     # --- Flux specific overrides (cr_) ---
-    cr_pct_collecte: Optional[float] = None
-    cr_pct_retour: Optional[float] = None
-    cr_pct_axes_arrivee: Optional[float] = None
-    cr_pct_axes_depart: Optional[float] = None
-    cr_pct_national: Optional[float] = None
-    cr_pct_international: Optional[float] = None
+    cr_pct_collecte: Optional[float] = Field(None, alias="cr_pctCollecte")
+    cr_pct_retour: Optional[float] = Field(None, alias="cr_pctRetour")
+    cr_pct_axes_arrivee: Optional[float] = Field(None, alias="cr_pctAxesArrivee")
+    cr_pct_axes_depart: Optional[float] = Field(None, alias="cr_pctAxesDepart")
+    cr_pct_national: Optional[float] = Field(None, alias="cr_pctNational")
+    cr_pct_international: Optional[float] = Field(None, alias="cr_pctInternational")
+    cr_pct_marche_ordinaire: Optional[float] = Field(None, alias="cr_pctMarcheOrdinaire")
+    cr_pct_vague_master: Optional[float] = Field(None, alias="cr_pctVagueMaster")
+    cr_pct_boite_postale: Optional[float] = Field(None, alias="cr_pctBoitePostale")
+    cr_pct_crbt: Optional[float] = Field(None, alias="cr_pctCrbt")
+    cr_pct_hors_crbt: Optional[float] = Field(None, alias="cr_pctHorsCrbt")
 
 class BandoengSimulateRequest(BaseModel):
     centre_id: int = 1942
@@ -130,6 +148,7 @@ class BandoengSimulateResponse(BaseModel):
     fte_arrondi: int
     total_ressources_humaines: float
     ressources_par_poste: dict = {}
+    ressources_actuelles_par_poste: dict = {}
     grid_values: Optional[dict] = None
     debug_info: dict = {}
 
@@ -165,6 +184,10 @@ def simulate_bandoeng(request: BandoengSimulateRequest, db: Session = Depends(ge
             pct_international=request.params.pct_international,
             pct_national=request.params.pct_national,
             pct_marche_ordinaire=request.params.pct_marche_ordinaire,
+            pct_vague_master=request.params.pct_vague_master,
+            pct_boite_postale=request.params.pct_boite_postale,
+            pct_crbt=request.params.pct_crbt,
+            pct_hors_crbt=request.params.pct_hors_crbt,
             productivite=request.params.productivite,
             idle_minutes=request.params.idle_minutes,
             shift=request.params.shift,
@@ -202,13 +225,21 @@ def simulate_bandoeng(request: BandoengSimulateRequest, db: Session = Depends(ge
             co_pct_axes_depart=request.params.co_pct_axes_depart,
             co_pct_national=request.params.co_pct_national,
             co_pct_international=request.params.co_pct_international,
+            co_pct_marche_ordinaire=request.params.co_pct_marche_ordinaire,
+            co_pct_vague_master=request.params.co_pct_vague_master,
+            co_pct_boite_postale=request.params.co_pct_boite_postale,
             # CR
             cr_pct_collecte=request.params.cr_pct_collecte,
             cr_pct_retour=request.params.cr_pct_retour,
             cr_pct_axes_arrivee=request.params.cr_pct_axes_arrivee,
             cr_pct_axes_depart=request.params.cr_pct_axes_depart,
             cr_pct_national=request.params.cr_pct_national,
-            cr_pct_international=request.params.cr_pct_international
+            cr_pct_international=request.params.cr_pct_international,
+            cr_pct_marche_ordinaire=request.params.cr_pct_marche_ordinaire,
+            cr_pct_vague_master=request.params.cr_pct_vague_master,
+            cr_pct_boite_postale=request.params.cr_pct_boite_postale,
+            cr_pct_crbt=request.params.cr_pct_crbt,
+            cr_pct_hors_crbt=request.params.cr_pct_hors_crbt
         )
         
         print(f"DEBUG: simulate_bandoeng received grid_values: {request.volumes.grid_values}")
@@ -261,6 +292,7 @@ class SimplifiedBandoengRequest(BaseModel):
     poste_code: Optional[str] = Field(default=None, description="Code du poste (optionnel)")
     grid_values: dict = Field(default_factory=dict, description="Valeurs de la grille Bandoeng")
     parameters: dict = Field(default_factory=dict, description="Paramètres de simulation")
+    mode: str = Field(default="actuel", description="Mode de simulation: 'actuel', 'recommande' ou 'optimise'")
 
 @router.post("/simulate-bandoeng", response_model=BandoengSimulateResponse)
 def simulate_bandoeng_direct(request: SimplifiedBandoengRequest, db: Session = Depends(get_db)):
@@ -308,6 +340,10 @@ def simulate_bandoeng_direct(request: SimplifiedBandoengRequest, db: Session = D
             duree_trajet=float(p.get('duree_trajet', p.get('dureeTrajet', 0.0))),
             has_guichet=int(p.get('has_guichet', p.get('hasGuichet', 1))),
             pct_mois=p.get('pct_mois'),
+            pct_vague_master=p.get('pct_vague_master', p.get('pctVagueMaster', 0.0)),
+            pct_boite_postale=p.get('pct_boite_postale', p.get('pctBoitePostale', 0.0)),
+            pct_crbt=p.get('pct_crbt', p.get('pctCrbt', 50.0)),
+            pct_hors_crbt=p.get('pct_hors_crbt', p.get('pctHorsCrbt', 50.0)),
             # Saisonnalité par flux
             pct_mois_amana=p.get('pct_mois_amana'),
             pct_mois_co=p.get('pct_mois_co'),
@@ -323,42 +359,138 @@ def simulate_bandoeng_direct(request: SimplifiedBandoengRequest, db: Session = D
             lrh_pct_annee=p.get('lrh_pct_annee'),
             ebarkia_pct_annee=p.get('ebarkia_pct_annee'),
             # AMANA
-            amana_pct_collecte=p.get('amana_pct_collecte'),
-            amana_pct_retour=p.get('amana_pct_retour'),
-            amana_pct_axes_arrivee=p.get('amana_pct_axes_arrivee'),
-            amana_pct_axes_depart=p.get('amana_pct_axes_depart'),
-            amana_pct_national=p.get('amana_pct_national'),
-            amana_pct_international=p.get('amana_pct_international'),
-            amana_pct_marche_ordinaire=p.get('amana_pct_marche_ordinaire'),
-            amana_pct_crbt=p.get('amana_pct_crbt'),
-            amana_pct_hors_crbt=p.get('amana_pct_hors_crbt'),
+            amana_pct_collecte=p.get('amana_pct_collecte', p.get('amana_pctCollecte')),
+            amana_pct_retour=p.get('amana_pct_retour', p.get('amana_pctRetour')),
+            amana_pct_axes_arrivee=p.get('amana_pct_axes_arrivee', p.get('amana_pctAxesArrivee')),
+            amana_pct_axes_depart=p.get('amana_pct_axes_depart', p.get('amana_pctAxesDepart')),
+            amana_pct_national=p.get('amana_pct_national', p.get('amana_pctNational')),
+            amana_pct_international=p.get('amana_pct_international', p.get('amana_pctInternational')),
+            amana_pct_marche_ordinaire=p.get('amana_pct_marche_ordinaire', p.get('amana_pctMarcheOrdinaire')),
+            amana_pct_crbt=p.get('amana_pct_crbt', p.get('amana_pctCrbt')),
+            amana_pct_hors_crbt=p.get('amana_pct_hors_crbt', p.get('amana_pctHorsCrbt')),
             # CO
-            co_pct_collecte=p.get('co_pct_collecte'),
-            co_pct_retour=p.get('co_pct_retour'),
-            co_pct_axes_arrivee=p.get('co_pct_axes_arrivee'),
-            co_pct_axes_depart=p.get('co_pct_axes_depart'),
-            co_pct_national=p.get('co_pct_national'),
-            co_pct_international=p.get('co_pct_international'),
+            co_pct_collecte=p.get('co_pct_collecte', p.get('co_pctCollecte')),
+            co_pct_retour=p.get('co_pct_retour', p.get('co_pctRetour')),
+            co_pct_axes_arrivee=p.get('co_pct_axes_arrivee', p.get('co_pctAxesArrivee')),
+            co_pct_axes_depart=p.get('co_pct_axes_depart', p.get('co_pctAxesDepart')),
+            co_pct_national=p.get('co_pct_national', p.get('co_pctNational')),
+            co_pct_international=p.get('co_pct_international', p.get('co_pctInternational')),
+            co_pct_marche_ordinaire=p.get('co_pct_marche_ordinaire', p.get('co_pctMarcheOrdinaire')),
+            co_pct_vague_master=p.get('co_pct_vague_master', p.get('co_pctVagueMaster')),
+            co_pct_boite_postale=p.get('co_pct_boite_postale', p.get('co_pctBoitePostale')),
             # CR
-            cr_pct_collecte=p.get('cr_pct_collecte'),
-            cr_pct_retour=p.get('cr_pct_retour'),
-            cr_pct_axes_arrivee=p.get('cr_pct_axes_arrivee'),
-            cr_pct_axes_depart=p.get('cr_pct_axes_depart'),
-            cr_pct_national=p.get('cr_pct_national'),
-            cr_pct_international=p.get('cr_pct_international')
+            cr_pct_collecte=p.get('cr_pct_collecte', p.get('cr_pctCollecte')),
+            cr_pct_retour=p.get('cr_pct_retour', p.get('cr_pctRetour')),
+            cr_pct_axes_arrivee=p.get('cr_pct_axes_arrivee', p.get('cr_pctAxesArrivee')),
+            cr_pct_axes_depart=p.get('cr_pct_axes_depart', p.get('cr_pctAxesDepart')),
+            cr_pct_national=p.get('cr_pct_national', p.get('cr_pctNational')),
+            cr_pct_international=p.get('cr_pct_international', p.get('cr_pctInternational')),
+            cr_pct_marche_ordinaire=p.get('cr_pct_marche_ordinaire', p.get('cr_pctMarcheOrdinaire')),
+            cr_pct_vague_master=p.get('cr_pct_vague_master', p.get('cr_pctVagueMaster')),
+            cr_pct_boite_postale=p.get('cr_pct_boite_postale', p.get('cr_pctBoitePostale')),
+            cr_pct_crbt=p.get('cr_pct_crbt', p.get('cr_pctCrbt')),
+            cr_pct_hors_crbt=p.get('cr_pct_hors_crbt', p.get('cr_pctHorsCrbt'))
         )
         
+        # 2.5 Charger le mapping des responsables si mode recommande
+        role_mapping = None
+        if request.mode == "recommande":
+            mappings = db.query(MappingPosteRecommande).all()
+            # On construit un dictionnaire {source_code: cible_code}
+            # En utilisant les relations pour récupérer les Codes
+            role_mapping = {}
+            for m in mappings:
+                if m.poste_source and m.poste_cible:
+                    role_mapping[m.poste_source.Code] = m.poste_cible.Code
+
         print(f"DEBUG: simulate_bandoeng_direct received grid_values: {request.grid_values}")
+        
+        # 3.6 Gérer les exclusions pour le mode optimisé
+        excluded_task_ids = None
+        excluded_task_quadruplets = None
+        
+        if request.mode == "optimise":
+            # --- 1. Exclusions par ID (Centre spécifique) ---
+            excl_ids_query = db.query(TacheExclueOptimisee.tache_id).filter(
+                TacheExclueOptimisee.centre_id == request.centre_id,
+                TacheExclueOptimisee.tache_id.isnot(None)
+            )
+            excluded_task_ids = [r[0] for r in excl_ids_query.all()]
+            
+            # --- 2. Exclusions par Typologie (Quadruplet) ---
+            centre = db.query(Centre).filter(Centre.id == request.centre_id).first()
+            if centre and centre.categorie_id:
+                excl_quads_query = db.query(
+                    TacheExclueOptimisee.nom_tache,
+                    TacheExclueOptimisee.produit,
+                    TacheExclueOptimisee.famille_uo,
+                    TacheExclueOptimisee.unite_mesure
+                ).filter(
+                    TacheExclueOptimisee.categorie_id == centre.categorie_id,
+                    TacheExclueOptimisee.nom_tache.isnot(None)
+                )
+                
+                # Normalisation pour match efficace dans l'engine
+                def clean_q(s):
+                    if not s: return ""
+                    return "".join(str(s).split()).lower()
+                
+                excluded_task_quadruplets = [
+                    (clean_q(q.nom_tache), clean_q(q.produit), clean_q(q.famille_uo), clean_q(q.unite_mesure))
+                    for q in excl_quads_query.all()
+                ]
+
         # 3. Appeler run_bandoeng_simulation
         result = run_bandoeng_simulation(
             db=db,
             centre_id=request.centre_id,
             volumes=volumes,
             params=params,
-            poste_code=request.poste_code
+            poste_code=request.poste_code,
+            role_mapping=role_mapping,
+            excluded_task_ids=excluded_task_ids,
+            excluded_task_quadruplets=excluded_task_quadruplets
         )
         print(f"DEBUG: result.total_heures={result.total_heures}, result.total_ressources_humaines={result.total_ressources_humaines}")
         
+        # 3.5 Calculer les ressources actuelles agrégées par poste si mode recommande
+        ressources_actuelles_par_poste = {}
+        # Récupérer les effectifs actuels de tous les postes du centre
+        cps = db.query(CentrePoste).filter(CentrePoste.centre_id == request.centre_id).all()
+        
+        # Maps robustes pour le calcul
+        code_to_val = {}    # Code -> effectif actuel brute
+        code_to_label = {}  # Code -> Label affiché
+        label_to_val = {}   # Label -> Somme des effectifs (initiale)
+        
+        for cp in cps:
+            if cp.poste:
+                code = cp.poste.Code
+                lbl = cp.poste.label or cp.poste.nom
+                val = float(cp.effectif_actuel or 0)
+                
+                code_to_val[code] = val
+                code_to_label[code] = lbl
+                label_to_val[lbl] = label_to_val.get(lbl, 0.0) + val
+
+        if request.mode == "recommande" and role_mapping:
+            # On travaille sur une copie de la somme par label
+            aggregated = dict(label_to_val)
+            for s_code, c_code in role_mapping.items():
+                s_lbl = code_to_label.get(s_code)
+                c_lbl = code_to_label.get(c_code)
+                
+                if s_lbl and c_lbl and s_lbl != c_lbl:
+                    # On transfère l'effectif spécifique au code source
+                    val_to_transfer = code_to_val.get(s_code, 0.0)
+                    if val_to_transfer > 0:
+                        aggregated[c_lbl] = aggregated.get(c_lbl, 0.0) + val_to_transfer
+                        aggregated[s_lbl] = aggregated.get(s_lbl, 0.0) - val_to_transfer
+            
+            ressources_actuelles_par_poste = aggregated
+        else:
+            ressources_actuelles_par_poste = label_to_val
+
         # 4. Convertir le résultat
         tasks_out = [
             BandoengTaskOut(
@@ -387,7 +519,10 @@ def simulate_bandoeng_direct(request: SimplifiedBandoengRequest, db: Session = D
             fte_calcule=result.fte_calcule,
             fte_arrondi=result.fte_arrondi,
             total_ressources_humaines=result.total_ressources_humaines,
-            ressources_par_poste=result.ressources_par_poste, grid_values=result.grid_values
+            ressources_par_poste=result.ressources_par_poste,
+            ressources_actuelles_par_poste=ressources_actuelles_par_poste,
+            grid_values=result.grid_values,
+            debug_info=result.debug_info
         )
         
     except Exception as e:
@@ -406,9 +541,12 @@ class BandoengCentreDetailsResponse(BaseModel):
     mod_global: int
     total_global: int
     task_count: int = 0
-
-# Importer les modèles nécessaires
-from app.models.db_models import Centre, CentrePoste, Poste, Tache, HierarchiePostes
+    # Paramètres Ville
+    nature_geo: Optional[float] = 0.0
+    taux_complexite: Optional[float] = 0.0
+    duree_trajet: Optional[float] = 0.0
+    classe_actuelle: Optional[str] = "SANS"
+    categorie_label: Optional[str] = None
 
 @router.get("/centre-details/{centre_id}", response_model=BandoengCentreDetailsResponse)
 def get_bandoeng_centre_details(centre_id: int, db: Session = Depends(get_db)):
@@ -443,7 +581,10 @@ def get_bandoeng_centre_details(centre_id: int, db: Session = Depends(get_db)):
             else:
                 mod_sum += eff
         
-        # 3. Compter les tâches du centre
+        # 3. Récupérer les données de la Ville liée
+        ville_data = db.query(Ville).filter(Ville.code == centre.code_ville).first()
+        
+        # 4. Compter les tâches du centre
         task_count = db.query(Tache).join(CentrePoste).filter(CentrePoste.centre_id == centre_id).count()
                 
         return BandoengCentreDetailsResponse(
@@ -453,7 +594,12 @@ def get_bandoeng_centre_details(centre_id: int, db: Session = Depends(get_db)):
             moi_global=int(moi_sum),
             mod_global=int(mod_sum),
             total_global=int(moi_sum + mod_sum),
-            task_count=task_count
+            task_count=task_count,
+            nature_geo=float(ville_data.geographie) if ville_data else 0.0,
+            taux_complexite=float(ville_data.circulation) if ville_data else 0.0,
+            duree_trajet=float(ville_data.trajet) if ville_data else 0.0,
+            classe_actuelle=centre.categorisation.label if centre.categorisation else "SANS",
+            categorie_label=centre.categorie.label if getattr(centre, "categorie", None) else None
         )
 
     except Exception as e:
@@ -1206,3 +1352,491 @@ async def export_rejections(request: ExportRejectionsRequest):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Erreur lors de l'export des rejets : {str(e)}")
+
+
+#    return mapping
+
+
+# --- Task Exclusions (Optimized Process) ---
+
+# --- Task Exclusions (Optimized Process) ---
+
+class ToggleExclusionIn(BaseModel):
+    tache_id: Optional[int] = None
+    centre_id: Optional[int] = None
+    # For Typology
+    categorie_id: Optional[int] = None
+    nom_tache: Optional[str] = None
+    famille_uo: Optional[str] = None
+    produit: Optional[str] = None
+    unite_mesure: Optional[str] = None
+
+@router.get("/pm/exclusions")
+def get_exclusions(centre_id: Optional[int] = None, categorie_id: Optional[int] = None, db: Session = Depends(get_db)):
+    query = db.query(TacheExclueOptimisee)
+    if centre_id:
+        query = query.filter(TacheExclueOptimisee.centre_id == centre_id)
+    if categorie_id:
+        query = query.filter(TacheExclueOptimisee.categorie_id == categorie_id)
+    
+    exclusions = query.all()
+    
+    # On renvoie à la fois les IDs (si centre) et les quadruplets (si typologie)
+    ids = [e.tache_id for e in exclusions if e.tache_id]
+    quads = [
+        {
+            "nom": e.nom_tache,
+            "famille": e.famille_uo,
+            "produit": e.produit,
+            "unite": e.unite_mesure
+        }
+        for e in exclusions if e.nom_tache
+    ]
+    return {"ids": ids, "quadruplets": quads}
+
+@router.post("/pm/exclusions/toggle")
+def toggle_exclusion(data: ToggleExclusionIn, db: Session = Depends(get_db)):
+    if data.tache_id:
+        # Mode par centre
+        existing = db.query(TacheExclueOptimisee).filter(
+            TacheExclueOptimisee.tache_id == data.tache_id,
+            TacheExclueOptimisee.centre_id == data.centre_id
+        ).first()
+    else:
+        # Mode par typologie (Quadruplet)
+        existing = db.query(TacheExclueOptimisee).filter(
+            TacheExclueOptimisee.categorie_id == data.categorie_id,
+            TacheExclueOptimisee.nom_tache == data.nom_tache,
+            TacheExclueOptimisee.famille_uo == data.famille_uo,
+            TacheExclueOptimisee.produit == data.produit,
+            TacheExclueOptimisee.unite_mesure == data.unite_mesure
+        ).first()
+    
+    if existing:
+        db.delete(existing)
+        db.commit()
+        return {"status": "removed"}
+    else:
+        new_excl = TacheExclueOptimisee(**data.dict())
+        db.add(new_excl)
+        db.commit()
+        return {"status": "added"}
+
+@router.get("/categories")
+def get_categories(db: Session = Depends(get_db)):
+    cats = db.query(Categorie).all()
+    return [{"id": c.id, "label": c.label} for c in cats]
+
+@router.get("/pm/standard-tasks/{categorie_id}")
+def get_standard_tasks(categorie_id: int, db: Session = Depends(get_db)):
+    """Lit les tâches standards depuis les fichiers Excel de typologie."""
+    import os
+    import openpyxl
+    from pathlib import Path
+
+    cat = db.query(Categorie).filter(Categorie.id == categorie_id).first()
+    if not cat:
+        raise HTTPException(status_code=404, detail="Catégorie non trouvée")
+
+    typology_label = str(cat.label).upper()
+    filename = "Standard.xlsx"
+    
+    # Mapping logic
+    if "AGENCE MESSAGERIE" in typology_label or typology_label.startswith("AM"): filename = "AM.xlsx"
+    elif "CENTRE MESSAGERIE" in typology_label or typology_label.startswith("CM"): filename = "CM.xlsx"
+    elif "CENTRE DE DISTRIBUTION" in typology_label or typology_label.startswith("CD"): filename = "CD.xlsx"
+    elif "CENTRE COURRIER COLIS" in typology_label or typology_label.startswith("CCC"): filename = "CCC.xlsx"
+    elif "CELLULE DE DISTRIBUTION" in typology_label or typology_label.startswith("CLD"): filename = "CLD.xlsx"
+    elif "CENTRE DE TRAITEMENT ET DISTRIBUTION" in typology_label or typology_label.startswith("CTD"): filename = "CTD.xlsx"
+
+    # Absolute path resolution
+    base_dir = Path(__file__).resolve().parent.parent # app/
+    resources_dir = base_dir / "resources" / "typologies"
+    file_path = resources_dir / filename
+
+    if not file_path.exists():
+        file_path = resources_dir / "Standard.xlsx"
+
+    print(f"DEBUG PM: Loading typology tasks from {file_path} for category {typology_label}")
+
+    tasks = []
+    if not file_path.exists():
+        print(f"DEBUG PM: File NOT FOUND at {file_path}")
+        return tasks
+
+    try:
+        # data_only=True pour les valeurs calculées, read_only pour la performance
+        wb = openpyxl.load_workbook(str(file_path), data_only=True)
+        # Utiliser la première feuille au lieu de 'active' pour plus de robustesse
+        ws = wb.worksheets[0]
+        
+        # Parcourir les lignes à partir de la 2ème (ignorer l'entête)
+        # On utilise une boucle manuelle au cas où max_row est imprécis
+        for row_idx in range(2, 1000): # Limite raisonnable pour éviter les boucles infinies sur fichiers corrompus
+            if row_idx > ws.max_row and ws.max_row > 1: break # Respecter max_row s'il est cohérent
+            
+            # Lecture des 5 colonnes : Nom, Produit, Famille, Phase, Unité
+            cells = [ws.cell(row=row_idx, column=col_idx).value for col_idx in range(1, 6)]
+            
+            # Si le nom de la tâche est vide, on arrête (fin des données)
+            if not cells[0]: break
+            
+            tasks.append({
+                "nom": str(cells[0] or "").strip(),
+                "produit": str(cells[1] or "").strip(),
+                "famille": str(cells[2] or "").strip(),
+                "phase": str(cells[3] or "").strip(),
+                "unite": str(cells[4] or "").strip()
+            })
+        wb.close()
+    except Exception as e:
+        print(f"Error reading {file_path}: {e}")
+        import traceback
+        traceback.print_exc()
+        
+    return tasks
+@router.get("/exclusions/template")
+def download_exclusion_template():
+    import openpyxl
+    from io import BytesIO
+    from fastapi.responses import StreamingResponse
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Template Exclusions"
+    
+    # Headers
+    headers = ["Nom Tâche", "Produit", "Famille / UO", "Unité Mesure"]
+    ws.append(headers)
+    
+    # Sample Row
+    ws.append(["EXEMPLE TACHE", "EXEMPLE PRODUIT", "EXEMPLE FAMILLE", "H"])
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=template_exclusions_optimise.xlsx"}
+    )
+
+@router.post("/exclusions/import/{categorie_id}")
+async def import_exclusions(
+    categorie_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    import openpyxl
+    from io import BytesIO
+    from fastapi.responses import StreamingResponse
+
+    cat = db.query(Categorie).filter(Categorie.id == categorie_id).first()
+    if not cat:
+        raise HTTPException(status_code=404, detail="Typologie non trouvée")
+
+    content = await file.read()
+    wb = openpyxl.load_workbook(BytesIO(content), data_only=True)
+    ws = wb.worksheets[0]
+
+    # Get standard tasks for this typology to validate
+    standard_tasks = get_standard_tasks(categorie_id, db)
+    standard_set = set()
+    for st in standard_tasks:
+        key = (
+            str(st['nom'] or '').strip().upper(),
+            str(st['produit'] or '').strip().upper(),
+            str(st['famille'] or '').strip().upper(),
+            str(st['unite'] or '').strip().upper()
+        )
+        standard_set.add(key)
+
+    created_count = 0
+    failed_rows = []
+
+    # Iterate rows (skip header)
+    for row_idx in range(2, ws.max_row + 1):
+        cells = [ws.cell(row=row_idx, column=c).value for c in range(1, 5)]
+        if not cells[0]: continue
+
+        nom, produit, famille, unite = [str(c or '').strip() for c in cells]
+        key = (nom.upper(), produit.upper(), famille.upper(), unite.upper())
+
+        if key not in standard_set:
+            failed_rows.append({
+                "line": row_idx,
+                "data": cells,
+                "error": "Tâche non trouvée dans le référentiel standard de cette typologie"
+            })
+            continue
+
+        # Check if already excluded
+        existing = db.query(TacheExclueOptimisee).filter(
+            TacheExclueOptimisee.categorie_id == categorie_id,
+            TacheExclueOptimisee.nom_tache == nom,
+            TacheExclueOptimisee.produit == produit,
+            TacheExclueOptimisee.famille_uo == famille,
+            TacheExclueOptimisee.unite_mesure == unite
+        ).first()
+
+        if not existing:
+            new_excl = TacheExclueOptimisee(
+                categorie_id=categorie_id,
+                nom_tache=nom,
+                produit=produit,
+                famille_uo=famille,
+                unite_mesure=unite
+            )
+            db.add(new_excl)
+            created_count += 1
+
+    db.commit()
+
+    if failed_rows:
+        # Generate Rejection Excel
+        wb_rej = openpyxl.Workbook()
+        ws_rej = wb_rej.active
+        ws_rej.title = "Rejets Exclusions"
+        ws_rej.append(["Ligne", "Nom Tâche", "Produit", "Famille", "Unité", "Erreur"])
+        
+        for f in failed_rows:
+            ws_rej.append([f['line']] + f['data'] + [f['error']])
+        
+        output_rej = BytesIO()
+        wb_rej.save(output_rej)
+        output_rej.seek(0)
+        
+        return StreamingResponse(
+            output_rej,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={
+                "Content-Disposition": "attachment; filename=rejets_exclusions.xlsx",
+                "X-Created-Count": str(created_count),
+                "X-Error-Count": str(len(failed_rows))
+            }
+        )
+
+    return {"status": "success", "created": created_count}
+
+
+# --- Simulation Endpoints ---
+
+class MappingPosteIn(BaseModel):
+    poste_source_id: int
+    poste_cible_id: int
+    centre_id: Optional[int] = None
+
+class MappingPosteOut(BaseModel):
+    id: int
+    poste_source_id: int
+    poste_cible_id: int
+    poste_source_code: Optional[str] = None
+    poste_cible_code: Optional[str] = None
+    centre_id: Optional[int] = None
+    poste_source_label: Optional[str] = None
+    poste_cible_label: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+@router.get("/mappings", response_model=List[MappingPosteOut])
+def get_mappings(db: Session = Depends(get_db)):
+    mappings = db.query(MappingPosteRecommande).all()
+    out = []
+    for m in mappings:
+        item = MappingPosteOut.from_orm(m)
+        if m.poste_source:
+             item.poste_source_label = m.poste_source.label
+             item.poste_source_code = m.poste_source.Code
+        if m.poste_cible:
+             item.poste_cible_label = m.poste_cible.label
+             item.poste_cible_code = m.poste_cible.Code
+        out.append(item)
+    return out
+
+@router.post("/mappings", response_model=MappingPosteOut)
+def create_mapping(mapping: MappingPosteIn, db: Session = Depends(get_db)):
+    # Vérifier si un mapping existe déjà pour ce poste source
+    existing = db.query(MappingPosteRecommande).filter(
+        MappingPosteRecommande.poste_source_id == mapping.poste_source_id,
+        MappingPosteRecommande.centre_id == mapping.centre_id
+    ).first()
+    
+    if existing:
+        existing.poste_cible_id = mapping.poste_cible_id
+    else:
+        db_mapping = MappingPosteRecommande(**mapping.dict())
+        db.add(db_mapping)
+        existing = db_mapping
+        
+    db.commit()
+    db.refresh(existing)
+    
+    # Enrich for response
+    out = MappingPosteOut.from_orm(existing)
+    if existing.poste_source:
+        out.poste_source_label = existing.poste_source.label
+        out.poste_source_code = existing.poste_source.Code
+    if existing.poste_cible:
+        out.poste_cible_label = existing.poste_cible.label
+        out.poste_cible_code = existing.poste_cible.Code
+    return out
+
+@router.delete("/mappings/{mapping_id}")
+def delete_mapping(mapping_id: int, db: Session = Depends(get_db)):
+    db_mapping = db.query(MappingPosteRecommande).filter(MappingPosteRecommande.id == mapping_id).first()
+    if not db_mapping:
+        raise HTTPException(status_code=404, detail="Mapping non trouvé")
+    db.delete(db_mapping)
+    db.commit()
+    return {"success": True}
+
+@router.get("/mappings/template")
+def get_mappings_template():
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Modele Mapping"
+    ws.append(["Poste Source (Actuel)", "Poste Cible (Recommande)", "Centre ID (Optionnel)"])
+    
+    # Exemples
+    ws.append(["AGENT DE FACTURATION", "AGENTS SUPPORT", ""])
+    ws.append(["CONTROLEUR CABINE DES CHARGEMENTS", "AGENTS CONTRÔLE", ""])
+    
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    
+    return Response(
+        content=buffer.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=Modele_Mapping_Postes.xlsx"}
+    )
+
+@router.post("/mappings/import")
+async def import_mappings(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    try:
+        content = await file.read()
+        wb = load_workbook(io.BytesIO(content), data_only=True)
+        ws = wb.active
+        
+        created = 0
+        updated = 0
+        failed_rows = []
+        
+        # Headers pour le rapport de rejets
+        headers = ["Poste Source (Actuel)", "Poste Cible (Recommande)", "Centre ID (Optionnel)", "Raison du rejet"]
+        
+        for row_idx in range(2, ws.max_row + 1):
+            source_lbl = ws.cell(row=row_idx, column=1).value
+            target_lbl = ws.cell(row=row_idx, column=2).value
+            c_id = ws.cell(row=row_idx, column=3).value
+            
+            if source_lbl is None and target_lbl is None:
+                continue
+                
+            if not source_lbl or not target_lbl:
+                failed_rows.append([source_lbl, target_lbl, c_id, "Libellé source ou cible manquant"])
+                continue
+                
+            # Resolution Source
+            p_source = db.query(Poste).filter(sql_normalize_ws(Poste.label) == normalize_ws(str(source_lbl))).first()
+            # Resolution Cible
+            p_target = db.query(Poste).filter(sql_normalize_ws(Poste.label) == normalize_ws(str(target_lbl))).first()
+            
+            if not p_source or not p_target:
+                missing = []
+                if not p_source: missing.append(f"Source '{source_lbl}'")
+                if not p_target: missing.append(f"Cible '{target_lbl}'")
+                failed_rows.append([source_lbl, target_lbl, c_id, f"Non trouvé: {', '.join(missing)}"])
+                continue
+            
+            centre_id = None
+            if c_id:
+                try: centre_id = int(c_id)
+                except: pass
+
+            # Update or Create
+            existing = db.query(MappingPosteRecommande).filter(
+                MappingPosteRecommande.poste_source_id == p_source.id,
+                MappingPosteRecommande.centre_id == centre_id
+            ).first()
+            
+            if existing:
+                existing.poste_cible_id = p_target.id
+                updated += 1
+            else:
+                new_m = MappingPosteRecommande(
+                    poste_source_id=p_source.id,
+                    poste_cible_id=p_target.id,
+                    centre_id=centre_id
+                )
+                db.add(new_m)
+                created += 1
+        
+        db.commit()
+        
+        if failed_rows:
+            ewb = Workbook()
+            ews = ewb.active
+            ews.title = "Rejets Mapping"
+            ews.append(headers)
+            for fr in failed_rows:
+                ews.append(fr)
+            
+            eout = io.BytesIO()
+            ewb.save(eout)
+            eout.seek(0)
+            
+            return Response(
+                content=eout.read(),
+                headers={
+                    'Content-Disposition': 'attachment; filename="rejet_mapping_postes.xlsx"',
+                    'X-Error-Count': str(len(failed_rows)),
+                    'X-Created-Count': str(created),
+                    'X-Updated-Count': str(updated)
+                },
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
+        return {"created": created, "updated": updated, "errors": []}
+    except Exception as e:
+        db.rollback()
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/mappings/unmapped-report")
+def get_unmapped_report(db: Session = Depends(get_db)):
+    # Récupérer tous les postes qui existent dans CentrePoste (donc actifs dans un centre)
+    # et qui n'ont pas de mapping global (centre_id IS NULL)
+    
+    sql = """
+    SELECT DISTINCT p.id, p.label, p.Code
+    FROM dbo.postes p
+    INNER JOIN dbo.centre_postes cp ON p.Code = cp.code_resp
+    LEFT JOIN dbo.mapping_postes_recommandes m ON p.id = m.poste_source_id AND m.centre_id IS NULL
+    WHERE m.id IS NULL
+    ORDER BY p.label
+    """
+    
+    from sqlalchemy import text
+    unmapped = db.execute(text(sql)).mappings().all()
+    
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Postes Non Mappes"
+    ws.append(["ID Poste", "Libellé Poste", "Code Poste"])
+    
+    for row in unmapped:
+        ws.append([row['id'], row['label'], row['Code']])
+        
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    
+    return Response(
+        content=buffer.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=Postes_Non_Mappes.xlsx"}
+    )

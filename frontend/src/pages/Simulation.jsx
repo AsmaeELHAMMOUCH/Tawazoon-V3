@@ -1069,11 +1069,11 @@ const ComparatifRegional = () => {
 
   const barOptions = {
     title: {
-      text: "Comparaison ETP Actuel vs Recommandé (par DR)",
+      text: "Comparaison ETP Actuel vs Consolidé (par DR)",
       left: "center",
     },
     tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
-    legend: { data: ["ETP Actuel", "ETP Recommandé"], top: 20 },
+    legend: { data: ["ETP Actuel", "ETP Consolidé"], top: 20 },
     grid: { left: "3%", right: "4%", bottom: "12%", containLabel: true },
     xAxis: {
       type: "category",
@@ -1093,7 +1093,7 @@ const ComparatifRegional = () => {
         itemStyle: { color: "#005EA8" },
       },
       {
-        name: "ETP Recommandé",
+        name: "ETP Consolidé",
         type: "bar",
         data: regionsData.map((r) => r.etpRecommande),
         itemStyle: { color: "#00A0E0" },
@@ -1177,7 +1177,7 @@ const ComparatifRegional = () => {
           value={kpiData.totalETP}
           subtitle={
             <span className="text-slate-600">
-              Recommandé&nbsp;:{" "}
+              Consolidé&nbsp;:{" "}
               <span className="text-sky-600 font-semibold">
                 {kpiData.totalRecommande}
               </span>
@@ -1210,7 +1210,7 @@ const ComparatifRegional = () => {
                 <th className="px-4 py-2 text-right">Centres</th>
                 <th className="px-4 py-2 text-right">ETP Actuel</th>
                 <th className="px-4 py-2 text-right">ETP Calculé</th>
-                <th className="px-4 py-2 text-right">ETP Recommandé</th>
+                <th className="px-4 py-2 text-right">ETP Consolidé</th>
                 <th className="px-4 py-2 text-right">Écart</th>
                 <th className="px-4 py-2 text-right">Taux Occupation</th>
               </tr>
@@ -3147,7 +3147,7 @@ export default function SimulationEffectifs() {
             </div>
             <div className="text-sm text-slate-600">
               {new Date().toLocaleDateString()} • Mode:{" "}
-              {mode === "actuel" ? "Processus Actuel" : "Processus Recommandé"}
+              {mode === "actuel" ? "Processus Actuel" : "Processus Consolidé"}
             </div>
           </div>
         </div>

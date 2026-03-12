@@ -168,7 +168,7 @@ export default function SimulationForm({
             <span className="text-sm font-semibold text-gray-900 uppercase tracking-wide mr-2">Mode</span>
             <div className="inline-flex rounded-md border border-gray-200 overflow-hidden">
               <button type="button" onClick={() => setMode("actuel")} className={`px-3 py-1.5 text-xs md:text-sm ${mode === "actuel" ? "bg-[#005EA8] text-white" : "bg-white hover:bg-gray-50"}`}>Actuel</button>
-              <button type="button" onClick={() => setMode("recommande")} className={`px-3 py-1.5 text-xs md:text-sm ${mode === "recommande" ? "bg-[#005EA8] text-white" : "bg-white hover:bg-gray-50"}`}>Recommandé</button>
+              <button type="button" onClick={() => setMode("recommande")} className={`px-3 py-1.5 text-xs md:text-sm ${mode === "recommande" ? "bg-[#005EA8] text-white" : "bg-white hover:bg-gray-50"}`}>Consolidé</button>
             </div>
           </div>
 

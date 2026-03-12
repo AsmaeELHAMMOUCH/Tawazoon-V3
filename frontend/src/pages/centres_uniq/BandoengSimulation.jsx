@@ -73,6 +73,10 @@ const DEFAULT_PARAMS = {
     pct_international: 0,
     pct_national: 100,
     pct_marche_ordinaire: 0,
+    pct_vague_master: 0,
+    pct_boite_postale: 0,
+    pct_crbt: 50,
+    pct_hors_crbt: 50,
     productivite: 100,
     idle_minutes: 0,
     shift: 1,
@@ -94,13 +98,19 @@ const DEFAULT_PARAMS = {
     co_pct_axes_depart: null,
     co_pct_national: null,
     co_pct_international: null,
+    co_pct_vague_master: null,
+    co_pct_boite_postale: null,
     // CR
     cr_pct_collecte: null,
     cr_pct_retour: null,
     cr_pct_axes_arrivee: null,
     cr_pct_axes_depart: null,
     cr_pct_national: null,
-    cr_pct_international: null
+    cr_pct_international: null,
+    cr_pct_vague_master: null,
+    cr_pct_boite_postale: null,
+    cr_pct_crbt: null,
+    cr_pct_hors_crbt: null
 };
 
 const FormattedInput = ({ value, onChange, className, suffix }) => {
@@ -783,9 +793,9 @@ export default function BandoengSimulation() {
                 {/* Header Style VueIntervenant sticky */}
                 <div className="sticky top-[57px] z-20 grid grid-cols-1 xl:grid-cols-2 gap-2">
                     <SimulationHeader
-                        title="Simulation des Effectifs-Bandoeng"
+                        title="Simulation des Effectifs-PNC"
                         region="Region Casa"
-                        subtitle="Agence Courrier Bandoeung"
+                        subtitle="Pôle National Courrier (PNC)"
                     >
                         <div className="flex items-center gap-2 min-w-[180px] flex-1">
                             <div className="flex flex-col flex-1 relative group">
@@ -902,8 +912,16 @@ export default function BandoengSimulation() {
                             setPctMarcheOrdinaire={(v) => handleParamChange('pct_marche_ordinaire', v)}
                             pctInternational={params.pct_international}
                             setPctInternational={(v) => handleParamChange('pct_international', v)}
+                            pctVagueMaster={params.pct_vague_master}
+                            setPctVagueMaster={(v) => handleParamChange('pct_vague_master', v)}
+                            pctBoitePostale={params.pct_boite_postale}
+                            setPctBoitePostale={(v) => handleParamChange('pct_boite_postale', v)}
                             pctNational={params.pct_national}
                             setPctNational={(v) => handleParamChange('pct_national', v)}
+                            pctCrbt={params.pct_crbt}
+                            setPctCrbt={(v) => handleParamChange('pct_crbt', v)}
+                            pctHorsCrbt={params.pct_hors_crbt}
+                            setPctHorsCrbt={(v) => handleParamChange('pct_hors_crbt', v)}
                             edPercent={params.ed_percent}
                             setEdPercent={(v) => handleParamChange('ed_percent', v)}
                             className="shrink-0"

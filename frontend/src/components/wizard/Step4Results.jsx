@@ -32,6 +32,8 @@ import ForecastingDialog from "@/components/wizard/ForecastingDialog";
 import AdequationDialog from "@/components/wizard/AdequationDialog";
 import CapaciteNominaleDialog from "@/components/wizard/CapaciteNominaleDialog";
 import ChiffrageDialog from "@/components/wizard/ChiffrageDialog";
+import CategorisationDialog from "@/components/wizard/CategorisationDialog";
+import SchemaDialog from "@/components/wizard/SchemaDialog";
 import * as XLSX from 'xlsx';
 
 // KPI Card Component (copied from VueIntervenant)
@@ -43,6 +45,7 @@ const KPICardGlass = ({
     emphasize = false,
     children,
     onDetailClick,
+    subLabel,
 }) => {
     const T = {
         blue: {
@@ -89,7 +92,7 @@ const KPICardGlass = ({
     };
 
     return (
-        <div className={`group relative overflow-hidden rounded-2xl border ${T.border} bg-gradient-to-br from-white via-white to-slate-50/30 backdrop-blur-xl p-2 min-h-[65px] pb-1.5 ring-1 ${T.ring} shadow-[0_8px_30px_-8px_rgba(0,0,0,0.12)] hover:shadow-[0_12px_40px_-8px_rgba(0,0,0,0.18)] transition-all duration-300 hover:-translate-y-0.5`}>
+        <div className={`group relative overflow-hidden rounded-2xl border ${T.border} bg-gradient-to-br from-white via-white to-slate-50/30 backdrop-blur-xl p-2.5 pb-2 flex flex-col ring-1 ${T.ring} shadow-[0_8px_30px_-8px_rgba(0,0,0,0.12)] hover:shadow-[0_12px_40px_-8px_rgba(0,0,0,0.18)] transition-all duration-300 hover:-translate-y-0.5 h-full`}>
             <div aria-hidden className={`pointer-events-none absolute -right-14 -top-14 h-28 w-28 rounded-full blur-2xl bg-gradient-to-br ${T.halo} to-transparent opacity-60 group-hover:opacity-80 transition-opacity duration-300`} />
 
             {onDetailClick && (
@@ -98,43 +101,66 @@ const KPICardGlass = ({
                         e.stopPropagation();
                         onDetailClick();
                     }}
-                    className={`absolute left-48 -top-1.5 z-10 p-1.5 rounded-lg ${T.iconBg} hover:bg-white text-slate-500 hover:text-slate-700 transition-all duration-200 shadow-sm hover:shadow-md border ${T.border}`}
-                    title="Voir le détail par poste"
+                    className={`absolute right-2 top-2 z-10 p-1 rounded-lg ${T.iconBg} hover:bg-white text-slate-500 hover:text-slate-700 transition-all duration-200 shadow-sm border ${T.border}`}
                 >
-                    <Eye className="w-3.5 h-3.5" />
+                    <Eye className="w-3 h-3" />
                 </button>
             )}
 
             {Icon && <Icon aria-hidden className="pointer-events-none absolute right-2 bottom-0.5 w-6 h-6 opacity-10 text-slate-700 group-hover:opacity-15 transition-opacity" />}
-            <div className="text-[10px] font-bold text-center text-slate-600 px-3 uppercase tracking-wide">{label}</div>
-            <div className="mt-0 text-center text-lg font-extrabold text-slate-900 leading-tight">
-                <span className={emphasize ? T.text : ""}>{total}</span>
+
+            <div className="flex flex-col items-center mb-1.5">
+                <div className="h-[26px] flex items-center justify-center">
+                    <span className="text-[10px] font-bold text-center text-slate-600 uppercase tracking-tight leading-[11px] px-1">
+                        {label}
+                    </span>
+                </div>
+                <div className="text-center flex flex-col items-center justify-center h-[24px]">
+                    <div className="flex items-baseline gap-1 leading-none">
+                        <span className={`text-xl font-extrabold ${emphasize ? T.text : "text-slate-900"}`}>{total}</span>
+                        {subLabel && (
+                            <span className={`text-[9px] font-bold uppercase tracking-tighter ${emphasize ? T.text + " opacity-70" : "text-slate-400"}`}>
+                                {subLabel}
+                            </span>
+                        )}
+                    </div>
+                </div>
             </div>
-            {children && <div className="mt-1 border-t border-slate-200/60 pt-1">{children}</div>}
+
+            {children && (
+                <div className="flex-1 flex flex-col justify-center pt-1.5 border-t border-slate-200/60 w-full">
+                    {children}
+                </div>
+            )}
         </div>
     );
 };
 
 const EffectifFooter = ({ totalLabel, totalValue, modValue, moiValue, apsLabel, apsValue }) => (
-    <div className="text-[10px] text-slate-600 space-y-1.5">
-        {totalValue !== undefined && (
-            <div className="flex flex-wrap items-center justify-center gap-2 rounded-full bg-slate-50 px-2 py-1">
-                {totalLabel && <span className="font-semibold text-slate-700">{totalLabel}</span>}
-                <span className="px-2 py-0.5 rounded-full bg-white text-slate-800 font-semibold shadow-sm">Total : {totalValue}</span>
-            </div>
-        )}
-        <div className="flex items-center justify-center gap-2">
-            <span className="px-1.5 py-0.5 rounded-full bg-blue-50 text-[#005EA8]">MOD : {modValue}</span>
-            {moiValue !== undefined && moiValue !== null && (
-                <span className="px-1.5 py-0.5 rounded-full bg-fuchsia-50 text-fuchsia-700">MOI : {moiValue}</span>
-            )}
+    <div className="text-[10px] text-slate-600 space-y-1 w-full">
+        {/* Ligne 1: Total */}
+        <div className={`flex items-center justify-center gap-1.5 rounded-full px-2 py-0.5 border ${totalValue !== undefined ? 'bg-slate-50 border-slate-100' : 'opacity-0'}`}>
+            <span className="font-bold text-slate-400 text-[8px] uppercase">{totalLabel || "TOTAL"}:</span>
+            <span className="text-slate-800 font-extrabold">{totalValue || "0"}</span>
         </div>
-        {(apsValue !== undefined && apsValue !== null) && (
-            <div className="flex flex-wrap items-center justify-center gap-2 rounded-full bg-emerald-50/70 px-2 py-1">
-                <span className="font-semibold text-emerald-800">{apsLabel || "APS"}</span>
-                <span className="px-2 py-0.5 rounded-full bg-white/90 text-emerald-700 font-semibold shadow-sm">Total APS : {apsValue}</span>
+
+        {/* Ligne 2: MOD / MOI */}
+        <div className="flex items-center justify-center gap-1">
+            <div className="flex-1 flex items-center justify-between px-1.5 py-0.5 rounded bg-blue-50/50 text-[#005EA8] border border-blue-100/50">
+                <span className="text-blue-400 font-bold text-[8px]">MOD:</span>
+                <span className="font-extrabold">{modValue}</span>
             </div>
-        )}
+            <div className={`flex-1 flex items-center justify-between px-1.5 py-0.5 rounded border ${moiValue !== undefined && moiValue !== null ? 'bg-fuchsia-50/50 text-fuchsia-700 border-fuchsia-100/50' : 'opacity-0'}`}>
+                <span className="text-fuchsia-400 font-bold text-[8px]">MOI:</span>
+                <span className="font-extrabold">{moiValue || "0"}</span>
+            </div>
+        </div>
+
+        {/* Ligne 3: APS */}
+        <div className={`flex items-center justify-center gap-1.5 rounded-full px-2 py-0.5 border ${apsValue !== undefined && apsValue !== null ? 'bg-emerald-50 text-emerald-700 border-emerald-100/50' : 'opacity-0'}`}>
+            <span className="font-bold text-emerald-400 text-[8px] uppercase">{apsLabel || "APS"}:</span>
+            <span className="font-extrabold">{apsValue || "0"}</span>
+        </div>
     </div>
 );
 
@@ -149,7 +175,7 @@ export default function Step4Results({
     const [selectedIntervenant, setSelectedIntervenant] = useState("");
     // Filter states
     const [filterFamille, setFilterFamille] = useState("");
-    const [filterProduit, setFilterProduit] = useState("");
+    const [filterPrestation, setFilterPrestation] = useState("");
 
     // Dialogs state
     const [detailDialog, setDetailDialog] = useState({ open: false, title: "", data: [], tone: "blue" });
@@ -159,10 +185,12 @@ export default function Step4Results({
     const [showAdequationDialog, setShowAdequationDialog] = useState(false);
     const [showCapaciteNominaleDialog, setShowCapaciteNominaleDialog] = useState(false);
     const [showChiffrageDialog, setShowChiffrageDialog] = useState(false);
+    const [showCategorisationDialog, setShowCategorisationDialog] = useState(false);
+    const [showSchemaDialog, setShowSchemaDialog] = useState(false);
     const [showAdditionalSections, setShowAdditionalSections] = useState(false);
     const [showReferentielDialog, setShowReferentielDialog] = useState(false);
     const [refFilterFamille, setRefFilterFamille] = useState("");
-    const [refFilterProduit, setRefFilterProduit] = useState("");
+    const [refFilterPrestation, setRefFilterPrestation] = useState("");
 
     // Helper pour extraire le premier mot (avec gestion spéciale pour e Barkia)
     const getFirstWord = (str) => {
@@ -188,10 +216,51 @@ export default function Step4Results({
         return type === "MOI" || type === "INDIRECT" || type === "STRUCTURE" || !!p.is_moi;
     };
 
+    // Filter available postes based on simulation results for recommended mode
+    const filteredPostes = useMemo(() => {
+        // Collect all unique responsibles from tasks
+        const tasks = simulationResults?.tasks || [];
+        const activeResponsibles = new Set(
+            tasks.map(t => (t.responsable || "").toUpperCase().trim())
+        );
+
+        // 1. Start with existing postes that are active in tasks
+        const existingActive = postes.filter(p => {
+            const label = (p.label || p.nom || "").toUpperCase().trim();
+            return activeResponsibles.has(label);
+        });
+
+        // 2. Add roles that are present in simulation results but NOT in the center's postes list
+        // (common in recommended/optimized mode when new roles are introduced via mapping)
+        const processedLabels = new Set(existingActive.map(p => (p.label || p.nom || "").toUpperCase().trim()));
+
+        const newRoles = Array.from(activeResponsibles)
+            .filter(label => label && !processedLabels.has(label))
+            .map((label, index) => ({
+                id: `mapped-${label}`, // Unique ID for the filter
+                label: label,
+                nom: label,
+                isNew: true
+            }));
+
+        const result = [...existingActive, ...newRoles];
+
+        // If no filters are active or we are in "actuel" mode, 
+        // fallback to standard postes if no tasks are yet calculated
+        if (result.length === 0 && (data.mode === 'actuel' || !simulationResults)) {
+            return postes;
+        }
+
+        return result.sort((a, b) =>
+            (a.label || a.nom || "").localeCompare(b.label || b.nom || "")
+        );
+    }, [postes, simulationResults, data.mode]);
+
     const selectedPosteObj = useMemo(() => {
         if (!selectedIntervenant) return null;
-        return postes.find(p => String(p.id) === String(selectedIntervenant));
-    }, [postes, selectedIntervenant]);
+        // Search in filteredPostes because some responsibles in Recommended mode might not be in the initial center postes
+        return filteredPostes.find(p => String(p.id) === String(selectedIntervenant));
+    }, [filteredPostes, selectedIntervenant]);
 
     const isGlobalView = !selectedIntervenant;
 
@@ -228,8 +297,8 @@ export default function Step4Results({
         if (filterFamille) {
             filteredTasks = filteredTasks.filter(t => t.famille === filterFamille);
         }
-        if (filterProduit) {
-            filteredTasks = filteredTasks.filter(t => getFirstWord(t.produit) === filterProduit);
+        if (filterPrestation) {
+            filteredTasks = filteredTasks.filter(t => getFirstWord(t.produit) === filterPrestation);
         }
 
         const totalLoad = filteredTasks.reduce((acc, t) => acc + (t.heures_calculees || 0), 0);
@@ -241,12 +310,15 @@ export default function Step4Results({
         let actualMOI = 0;
         let actualAPS = 0;
 
-        if (isGlobalView && centreDetails) {
+        if (isGlobalView && centreDetails && !data.isVirtual) {
             actualMOD = Number(centreDetails.mod_global || 0);
             actualMOI = Number(centreDetails.moi_global || 0);
             actualAPS = Number(centreDetails.aps || 0);
-        } else if (selectedPosteObj) {
-            const val = Number(selectedPosteObj.effectif_actuel || 0);
+        } else if (selectedPosteObj && !data.isVirtual) {
+            const posteLabel = (selectedPosteObj.label || selectedPosteObj.nom || "").trim();
+            // Use aggregated headcount from backend if available, fallback to poste attribute
+            const val = Number((simulationResults.ressources_actuelles_par_poste || {})[posteLabel] ?? (selectedPosteObj.effectif_actuel || 0));
+
             if (isMoiPoste(selectedPosteObj)) {
                 actualMOI = val;
             } else {
@@ -266,27 +338,33 @@ export default function Step4Results({
         const totalCalculated = targetCalculatedMOD + targetCalculatedMOI;
 
         const targetFinalMOD = isGlobalView ? Math.round(fteCalculated) : (isMOD ? Math.round(individualCalculated) : 0);
-        const targetFinalMOI = isGlobalView ? actualMOI : (isMoiPoste(selectedPosteObj) ? Math.round(individualCalculated || actualMOI) : 0);
-        const totalFinal = targetFinalMOD + targetFinalMOI;
+        const targetFinalMOI = isGlobalView ? Math.round(actualMOI) : (isMoiPoste(selectedPosteObj) ? Math.round(individualCalculated || actualMOI) : 0);
+        const totalFinal = Math.round(totalCalculated);
 
-        const gapStatutaire = targetFinalMOD + targetFinalMOI - actualStatutaire;
-
-        let diffStatutaire = 0;
-        let apsDelta = 0;
-
-        if (gapStatutaire > 0) {
-            diffStatutaire = 0;
-            apsDelta = gapStatutaire;
-        } else if (gapStatutaire < 0) {
-            const surplus = Math.abs(gapStatutaire);
-            if (surplus <= actualAPS) {
-                apsDelta = -surplus;
-                diffStatutaire = 0;
-            } else {
-                apsDelta = -actualAPS;
-                diffStatutaire = actualAPS - surplus;
-            }
+        // Nouvelle logique APS pour ETP Final
+        const ecartGlobal = totalCalculated - actualStatutaire;
+        let finalAPS = 0;
+        if (ecartGlobal > 0) {
+            finalAPS = Math.round(ecartGlobal);
+        } else {
+            const surplusStatutaire = Math.abs(ecartGlobal);
+            finalAPS = Math.max(0, Math.round(actualAPS - surplusStatutaire));
         }
+
+        // Logique spécifique pour la carte Besoin (dernière carte)
+        // Écart Statutaire réel : diff entre final et actuel
+        // On ne change le statutaire (MOD) que si le surplus dépasse l'APS
+        const diffStatutaireReel = Math.round(Math.min(0, totalCalculated - actualStatutaire + actualAPS));
+
+        // Variation APS : Écart entre APS Final et Actuel
+        const apsDiff = Math.round(finalAPS - actualAPS);
+
+        // Écart global (Variation Statutaire + Variation APS)
+        const totalGap = diffStatutaireReel + apsDiff;
+
+        // Détail MOD / MOI pour le footer
+        const modDiff = diffStatutaireReel;
+        const moiDiff = 0; // Le MOI reste à 0 selon la demande
 
         return {
             actualMOD,
@@ -300,12 +378,15 @@ export default function Step4Results({
             targetFinalMOD,
             targetFinalMOI,
             totalFinal,
-            gapStatutaire,
-            diffStatutaire,
-            apsDelta,
+            finalAPS,
+            totalGap,
+            diffStatutaireReel,
+            apsDiff,
+            modDiff,
+            moiDiff,
             totalLoad,
         };
-    }, [simulationResults, isGlobalView, selectedPosteObj, centreDetails, data.heuresNet, filterFamille, filterProduit]);
+    }, [simulationResults, isGlobalView, selectedPosteObj, centreDetails, data.heuresNet, filterFamille, filterPrestation]);
 
     // Table columns
     const columns = [
@@ -318,15 +399,57 @@ export default function Step4Results({
         { key: "heures_calculees", label: "Charge (h)", width: "100px", align: "right", highlight: true },
     ];
 
-    // Transform backend data to add sequence numbers and format values
+    // Transform backend data to group identical tasks with different responsibles
     const tableData = useMemo(() => {
         if (!simulationResults?.tasks) return [];
-        return simulationResults.tasks.map((task, index) => ({
-            ...task,
+
+        const groups = {};
+        simulationResults.tasks.forEach((task) => {
+            // Create a unique key for the task (excluding the specific responsible/centre_poste_id)
+            const key = [
+                task.task_name || "",
+                task.produit || "",
+                task.famille || "",
+                task.unite_mesure || "",
+                task.phase || "",
+                task.moyenne_min?.toFixed(4) || "0"
+            ].join("|||");
+
+            if (!groups[key]) {
+                groups[key] = {
+                    ...task,
+                    responsables: [task.responsable],
+                    // Use raw volume and calculate grouped hours
+                    raw_volume: task.volume_journalier || 0,
+                    raw_hours: task.heures_calculees || 0
+                };
+            } else {
+                // If the same responsible is already there (unlikely given the request), don't add
+                if (!groups[key].responsables.includes(task.responsable)) {
+                    groups[key].responsables.push(task.responsable);
+                }
+                // Accumulate volume and hours if it's the same task split
+                // (Though usually it's the SAME task with SAME volume assigned to two people)
+                // USER: "c'est la meme tache avec deux responsables"
+                // If it's the same task, maybe the volumes in DB are already split or duplicated.
+                // If duplicated, we should maybe not sum them? 
+                // However, usually in these systems, if one task is 10h and split, 
+                // the engine returns two rows of 5h or two rows of 10h?
+                // Given "deux lignes identiques", I will assume we might need to show the TOTAL or just the first one if identical.
+                // Let's assume we sum them to get the total impact of that task.
+                groups[key].raw_volume += (task.volume_journalier || 0);
+                groups[key].raw_hours += (task.heures_calculees || 0);
+            }
+        });
+
+        return Object.values(groups).map((group, index) => ({
+            ...group,
             seq: index + 1,
-            volume_journalier: task.volume_journalier?.toFixed(2) || "0.00",
-            moyenne_min: task.moyenne_min?.toFixed(2) || "0.00",
-            heures_calculees: task.heures_calculees?.toFixed(2) || "0.00",
+            resp1: group.responsables[0] || "-",
+            resp2: group.responsables[1] || "-",
+            volume_journalier: group.raw_volume.toFixed(2),
+            moyenne_min: group.moyenne_min?.toFixed(2) || "0.00",
+            heures_calculees: group.raw_hours.toFixed(2),
         }));
     }, [simulationResults]);
 
@@ -337,7 +460,7 @@ export default function Step4Results({
         return familles.sort();
     }, [tableData]);
 
-    const uniqueProduits = useMemo(() => {
+    const uniquePrestations = useMemo(() => {
         if (!tableData) return [];
         const produits = [...new Set(tableData.map(t => getFirstWord(t.produit)).filter(Boolean))];
         return produits.sort();
@@ -355,9 +478,24 @@ export default function Step4Results({
                 t.unite_mesure || "",
                 t.phase || ""
             ].join("|||");
-            if (!groups[key]) groups[key] = t;
+
+            if (!groups[key]) {
+                groups[key] = {
+                    ...t,
+                    responsables: [t.responsable]
+                };
+            } else {
+                if (!groups[key].responsables.includes(t.responsable)) {
+                    groups[key].responsables.push(t.responsable);
+                }
+            }
         });
-        return Object.values(groups);
+
+        return Object.values(groups).map(g => ({
+            ...g,
+            resp1: g.responsables[0] || "-",
+            resp2: g.responsables[1] || "-"
+        }));
     }, [simulationResults]);
 
     const uniqueRefFamilles = useMemo(() => {
@@ -365,7 +503,7 @@ export default function Step4Results({
         return familles.sort();
     }, [referentielTasks]);
 
-    const uniqueRefProduits = useMemo(() => {
+    const uniqueRefPrestations = useMemo(() => {
         const produits = [...new Set(referentielTasks.map(t => getFirstWord(t.produit)).filter(Boolean))];
         return produits.sort();
     }, [referentielTasks]);
@@ -375,11 +513,11 @@ export default function Step4Results({
         if (refFilterFamille) {
             filtered = filtered.filter(t => t.famille === refFilterFamille);
         }
-        if (refFilterProduit) {
-            filtered = filtered.filter(t => getFirstWord(t.produit) === refFilterProduit);
+        if (refFilterPrestation) {
+            filtered = filtered.filter(t => getFirstWord(t.produit) === refFilterPrestation);
         }
         return filtered;
-    }, [referentielTasks, refFilterFamille, refFilterProduit]);
+    }, [referentielTasks, refFilterFamille, refFilterPrestation]);
 
     // Apply filters to table data
     const filteredTableData = useMemo(() => {
@@ -397,26 +535,36 @@ export default function Step4Results({
         if (filterFamille) {
             filtered = filtered.filter(t => t.famille === filterFamille);
         }
-        if (filterProduit) {
-            filtered = filtered.filter(t => getFirstWord(t.produit) === filterProduit);
+        if (filterPrestation) {
+            filtered = filtered.filter(t => getFirstWord(t.produit) === filterPrestation);
         }
         return filtered;
-    }, [tableData, filterFamille, filterProduit, selectedPosteObj]);
+    }, [tableData, filterFamille, filterPrestation, selectedPosteObj]);
 
     const handleExportExcel = () => {
         if (!filteredTableData || filteredTableData.length === 0) return;
 
+        // Build a lookup map from task_id for raw (unformatted) values
+        const rawTaskMap = {};
+        (simulationResults?.tasks || []).forEach(t => {
+            rawTaskMap[t.task_id] = t;
+        });
+
         // Export tasks respecting active filters
-        const dataToExport = filteredTableData.map(t => ({
-            "Famille": t.famille,
-            "Tâche": t.task_name,
-            "Produit": t.produit,
-            "Unité": t.unite_mesure,
-            "Volume Journalier": Number(t.volume_journalier || 0),
-            "Temps Unitaire (min)": Number(t.moyenne_min || 0),
-            "Heures Calculées": Number(t.heures_calculees || 0),
-            "Formule": t.formule
-        }));
+        const dataToExport = filteredTableData.map(t => {
+            return {
+                "Famille": t.famille,
+                "Tâche": t.task_name,
+                "Prestation": t.produit,
+                "Responsable 1": t.resp1,
+                "Responsable 2": t.resp2,
+                "Unité": t.unite_mesure,
+                "Volume Journalier": Number(t.volume_journalier.replace(',', '.') || 0),
+                "Temps Unitaire (min)": Number(t.moyenne_min.replace(',', '.') || 0),
+                "Heures Calculées": Number(t.heures_calculees.replace(',', '.') || 0),
+                "Formule": t.formule
+            };
+        });
 
         const ws = XLSX.utils.json_to_sheet(dataToExport);
         const wb = XLSX.utils.book_new();
@@ -435,13 +583,13 @@ export default function Step4Results({
             // 1. Filter tasks for this post (respecting active filters)
             let postTasks = (simulationResults.tasks || []).filter(t => (t.responsable || "").toUpperCase().trim() === respName);
             if (filterFamille) postTasks = postTasks.filter(t => t.famille === filterFamille);
-            if (filterProduit) postTasks = postTasks.filter(t => getFirstWord(t.produit) === filterProduit);
+            if (filterPrestation) postTasks = postTasks.filter(t => getFirstWord(t.produit) === filterPrestation);
 
             const load = postTasks.reduce((acc, t) => acc + (t.heures_calculees || 0), 0);
 
             // 2. FTE and Calc logic
             const fteCalc = (simulationResults.ressources_par_poste || {})[label] || 0;
-            const actual = Number(p.effectif_actuel || 0);
+            const actual = Number((simulationResults.ressources_actuelles_par_poste || {})[label] ?? (p.effectif_actuel || 0));
 
             // Handle MOI specific values if they are not in ressources_par_poste
             const targetFteCalc = isMoi ? (fteCalc || actual) : fteCalc;
@@ -468,7 +616,7 @@ export default function Step4Results({
     };
 
     const BreakdownDialog = () => {
-        const isComparison = detailDialog.type === "fte_final";
+        const isComparison = detailDialog.type === "fte_final" || detailDialog.type === "fte_calc";
 
         return (
             <Dialog open={detailDialog.open} onOpenChange={(open) => setDetailDialog(prev => ({ ...prev, open }))}>
@@ -494,7 +642,7 @@ export default function Step4Results({
                                         {isComparison ? (
                                             <>
                                                 <TableHead className="text-[10px] font-extrabold text-slate-600 text-right uppercase tracking-wider">Actuel</TableHead>
-                                                <TableHead className="text-[10px] font-extrabold text-slate-600 text-right uppercase tracking-wider">Cible</TableHead>
+                                                <TableHead className="text-[10px] font-extrabold text-slate-600 text-right uppercase tracking-wider">Calculé</TableHead>
                                                 <TableHead className="text-[10px] font-extrabold text-slate-600 text-right uppercase tracking-wider">Écart</TableHead>
                                             </>
                                         ) : (
@@ -517,7 +665,9 @@ export default function Step4Results({
                                                         <span className="px-2 py-1 bg-slate-50 rounded-md">{item.actual}</span>
                                                     </TableCell>
                                                     <TableCell className="py-3 text-right font-bold text-slate-900 text-xs">
-                                                        <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded-md">{item.value}</span>
+                                                        <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded-md">
+                                                            {detailDialog.type === "fte_calc" ? item.value.toFixed(2).replace('.', ',') : item.value}
+                                                        </span>
                                                     </TableCell>
                                                     <TableCell className="py-3 text-right text-xs">
                                                         <Badge className={`text-[10px] px-2 py-0.5 h-5 font-bold shadow-sm ${item.gap > 0
@@ -526,16 +676,19 @@ export default function Step4Results({
                                                                 ? 'bg-gradient-to-br from-emerald-50 to-emerald-100 text-emerald-700 border border-emerald-200'
                                                                 : 'bg-gradient-to-br from-slate-50 to-slate-100 text-slate-500 border border-slate-200'
                                                             }`}>
-                                                            {item.gap > 0 ? `+${item.gap}` : item.gap}
+                                                            {detailDialog.type === "fte_calc"
+                                                                ? (item.value - item.actual).toFixed(2).replace('.', ',')
+                                                                : (item.gap > 0 ? `+${item.gap}` : item.gap)
+                                                            }
                                                         </Badge>
                                                     </TableCell>
                                                 </>
                                             ) : (
                                                 <TableCell className="py-3 text-right font-bold text-slate-900 text-xs">
                                                     <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded-md">
-                                                        {detailDialog.title.includes("Charge") || detailDialog.title.includes("Calculé")
+                                                        {detailDialog.type === "load" || detailDialog.type === "fte_calc"
                                                             ? item.value.toFixed(2).replace('.', ',')
-                                                            : (item.value > 0 ? `+${item.value}` : item.value)
+                                                            : item.value
                                                         }
                                                     </span>
                                                 </TableCell>
@@ -579,10 +732,24 @@ export default function Step4Results({
             <BreakdownDialog />
             <div className="text-center mb-1">
                 <h2 className="text-lg font-bold text-slate-800 mb-0">
-                    Résultats de la Simulation
+                    {data.isVirtual
+                        ? `Simulation Virtuelle : ${data.virtualTypology}`
+                        : data.mode === "optimise"
+                            ? "Simulation Processus Optimisé"
+                            : data.mode === "recommande"
+                                ? "Simulation Processus Consolidé"
+                                : "Simulation Processus Actuel"
+                    }
                 </h2>
                 <p className="text-xs text-slate-500">
-                    Lancez la simulation et analysez les résultats par intervenant
+                    {data.isVirtual
+                        ? "Test basé sur le référentiel standard"
+                        : data.mode === "optimise"
+                            ? "Analyse avec exclusions de tâches appliquées"
+                            : data.mode === "recommande"
+                                ? "Analyse avec organisation cible (Mapping)"
+                                : "Analyse de l'organisation existante"
+                    }
                 </p>
             </div>
 
@@ -597,10 +764,12 @@ export default function Step4Results({
                                 </div>
                                 <div>
                                     <h3 className="text-base font-bold text-slate-800 mb-2">
-                                        Aucune simulation disponible
+                                        {data.isVirtual ? `Simulation Virtuelle : ${data.virtualTypology || 'Typologie'}` : "Aucune simulation disponible"}
                                     </h3>
                                     <p className="text-xs text-slate-500 leading-relaxed">
-                                        Lancez la simulation pour calculer les besoins en ressources et analyser les résultats par intervenant.
+                                        {data.isVirtual
+                                            ? "Lancez le moteur pour tester ce scénario basé sur le référentiel Excel."
+                                            : "Lancez la simulation pour calculer les besoins en ressources et analyser les résultats par intervenant."}
                                     </p>
                                 </div>
                                 <Button
@@ -644,7 +813,7 @@ export default function Step4Results({
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="all">-- Tous les intervenants --</SelectItem>
-                                            {postes.map((p) => (
+                                            {filteredPostes.map((p) => (
                                                 <SelectItem key={p.id} value={String(p.id)}>
                                                     {p.label || p.nom}
                                                 </SelectItem>
@@ -665,39 +834,47 @@ export default function Step4Results({
                                 emphasize
                                 total={Number(kpiData.totalLoad || 0).toFixed(2)}
                                 onDetailClick={isGlobalView ? () => handleShowDetail("load", "Charge Totale", "blue") : null}
+                                subLabel="H/J"
                             >
-                                <div className="flex justify-center mt-1">
-                                    <span className="text-[9px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full font-medium">heures / jour</span>
+                                <div className="text-[10px] text-slate-600 space-y-1 w-full flex flex-col items-center">
+                                    <div className="opacity-0 pointer-events-none h-[22px]" aria-hidden="true">Placeholder Top</div>
+                                    <div className="flex items-center justify-center gap-1.5 rounded-full px-3 py-1 bg-slate-50 border border-slate-100 shadow-sm h-[24px]">
+                                        <span className="text-[#005EA8] font-bold text-[9px] uppercase tracking-tighter">heures / jour</span>
+                                    </div>
+                                    <div className="opacity-0 pointer-events-none h-[22px]" aria-hidden="true">Placeholder Bottom</div>
                                 </div>
                             </KPICardGlass>
 
-                            {/* Effectif Actuel */}
-                            <KPICardGlass
-                                label="Effectif Actuel"
-                                icon={User}
-                                tone="cyan"
-                                emphasize
-                                total={Math.round(kpiData.actualTotal)}
-                            >
-                                {isGlobalView && (
-                                    <EffectifFooter
-                                        totalLabel="Statutaire"
-                                        totalValue={Math.round(kpiData.actualStatutaire)}
-                                        modValue={Math.round(kpiData.actualMOD)}
-                                        moiValue={Math.round(kpiData.actualMOI)}
-                                        apsLabel="APS"
-                                        apsValue={Math.round(kpiData.actualAPS)}
-                                    />
-                                )}
-                            </KPICardGlass>
+                            {!data.isVirtual && (
+                                <KPICardGlass
+                                    label="Effectif Actuel"
+                                    icon={User}
+                                    tone="cyan"
+                                    emphasize
+                                    total={Math.round(kpiData.actualTotal)}
+                                    onDetailClick={isGlobalView ? () => handleShowDetail("actual", "Effectif Actuel", "cyan") : null}
+                                >
+                                    {isGlobalView && (
+                                        <EffectifFooter
+                                            totalLabel="Statutaire"
+                                            totalValue={Math.round(kpiData.actualStatutaire)}
+                                            modValue={Math.round(kpiData.actualMOD)}
+                                            moiValue={Math.round(kpiData.actualMOI)}
+                                            apsLabel="APS"
+                                            apsValue={Math.round(kpiData.actualAPS)}
+                                        />
+                                    )}
+                                </KPICardGlass>
+                            )}
 
                             {/* ETP Calculé */}
                             <KPICardGlass
-                                label="ETP Calculé"
+                                label={data.mode === "optimise" ? "ETP Optimisé (Calculé)" : data.mode === "recommande" ? "ETP Consolidé (Calculé)" : "ETP Calculé"}
                                 icon={Calculator}
                                 tone="blue"
                                 emphasize
                                 total={formatSmallNumber(kpiData.totalCalculated)}
+                                onDetailClick={isGlobalView ? () => handleShowDetail("fte_calc", data.mode === "optimise" ? "ETP Optimisé" : data.mode === "recommande" ? "ETP Consolidé" : "ETP Calculé", "blue") : null}
                             >
                                 {isGlobalView && (
                                     <EffectifFooter
@@ -709,45 +886,55 @@ export default function Step4Results({
 
                             {/* ETP Final */}
                             <KPICardGlass
-                                label="ETP Final"
+                                label={data.mode === "optimise" ? "ETP Optimisé (Final)" : data.mode === "recommande" ? "ETP Consolidé (Final)" : "ETP Final"}
                                 icon={CheckCircle2}
                                 tone="amber"
                                 emphasize
                                 total={Math.round(kpiData.totalFinal)}
-                                onDetailClick={isGlobalView ? () => handleShowDetail("fte_final", "ETP Final", "amber") : null}
+                                onDetailClick={isGlobalView ? () => handleShowDetail("fte_final", data.mode === "optimise" ? "Calculé Optimisé" : data.mode === "recommande" ? "Calculé Consolidé" : "ETP Final", "amber") : null}
                             >
                                 {isGlobalView && (
                                     <EffectifFooter
                                         totalLabel="Statutaire"
-                                        totalValue={Math.round(kpiData.targetFinalMOD + kpiData.targetFinalMOI)}
+                                        totalValue={Math.round(kpiData.actualStatutaire)}
                                         modValue={Math.round(kpiData.targetFinalMOD)}
-                                        moiValue={formatSmallNumber(kpiData.targetFinalMOI)}
+                                        moiValue={Math.round(kpiData.actualMOI)}
                                         apsLabel="APS"
-                                        apsValue={Math.round(kpiData.actualAPS + kpiData.apsDelta)}
+                                        apsValue={kpiData.finalAPS}
                                     />
                                 )}
                             </KPICardGlass>
 
-                            {/* Besoin */}
+                            {/* Ecart (anciennement Besoin) */}
                             <KPICardGlass
-                                label="Besoin"
-                                icon={kpiData.gapStatutaire > 0 ? TrendingUp : CheckCircle2}
-                                tone={kpiData.gapStatutaire > 0 ? "rose" : "emerald"}
+                                label={data.isVirtual ? "Ressources Nécessaires" : "Écart"}
+                                icon={kpiData.totalGap > 0 || data.isVirtual ? TrendingUp : CheckCircle2}
+                                tone={kpiData.totalGap > 0 || data.isVirtual ? "rose" : "emerald"}
                                 emphasize
-                                total={isGlobalView
-                                    ? (kpiData.gapStatutaire > 0 ? formatSigned(Math.round(kpiData.apsDelta)) : (kpiData.diffStatutaire !== 0 ? formatSigned(Math.round(kpiData.diffStatutaire)) : formatSigned(Math.round(kpiData.apsDelta))))
-                                    : formatSigned(Math.round(kpiData.gapStatutaire))
+                                total={data.isVirtual
+                                    ? Math.round(kpiData.totalFinal)
+                                    : formatSigned(kpiData.totalGap)
                                 }
+                                subLabel={!data.isVirtual ? (kpiData.totalGap > 0 ? "Besoin" : kpiData.totalGap < 0 ? "Surplus" : "") : ""}
                             >
-                                {isGlobalView && (
+                                {isGlobalView && !data.isVirtual && (
                                     <EffectifFooter
                                         totalLabel="Ecart Statutaire"
-                                        totalValue={formatSigned(Math.round(kpiData.diffStatutaire))}
-                                        modValue={formatSigned(Math.round(kpiData.diffStatutaire - (kpiData.targetFinalMOI - kpiData.actualMOI)))}
-                                        moiValue={formatSigned(Math.round(kpiData.targetFinalMOI - kpiData.actualMOI))}
+                                        totalValue={formatSigned(kpiData.diffStatutaireReel)}
+                                        modValue={formatSigned(kpiData.modDiff)}
+                                        moiValue={formatSigned(kpiData.moiDiff)}
                                         apsLabel="Var. APS"
-                                        apsValue={formatSigned(Math.round(kpiData.apsDelta))}
+                                        apsValue={formatSigned(kpiData.apsDiff)}
                                     />
+                                )}
+                                {isGlobalView && data.isVirtual && (
+                                    <div className="text-[10px] text-slate-600 space-y-1 w-full flex flex-col items-center">
+                                        <div className="opacity-0 pointer-events-none h-[22px]" aria-hidden="true">Placeholder Top</div>
+                                        <div className="flex items-center justify-center gap-1.5 rounded-full px-3 py-1 bg-slate-50 border border-slate-100 shadow-sm h-[24px]">
+                                            <span className="text-slate-500 font-bold text-[9px] italic">Besoins bruts calculés</span>
+                                        </div>
+                                        <div className="opacity-0 pointer-events-none h-[22px]" aria-hidden="true">Placeholder Bottom</div>
+                                    </div>
                                 )}
                             </KPICardGlass>
                         </div>
@@ -778,22 +965,22 @@ export default function Step4Results({
                                     )}
                                 </div>
 
-                                {/* Filtre Produit */}
+                                {/* Filtre Prestation */}
                                 <div className="flex items-center gap-2">
-                                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Produit:</span>
+                                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Prestation:</span>
                                     <select
                                         className="bg-white border border-slate-200 text-[10px] text-slate-700 rounded px-2 py-0.5 focus:outline-none focus:border-blue-500 w-full max-w-[150px] h-6"
-                                        value={filterProduit}
-                                        onChange={e => setFilterProduit(e.target.value)}
+                                        value={filterPrestation}
+                                        onChange={e => setFilterPrestation(e.target.value)}
                                     >
-                                        <option value="">Tous ({uniqueProduits.length})</option>
-                                        {uniqueProduits.map(p => (
+                                        <option value="">Tous ({uniquePrestations.length})</option>
+                                        {uniquePrestations.map(p => (
                                             <option key={p} value={p}>{p}</option>
                                         ))}
                                     </select>
-                                    {filterProduit && (
+                                    {filterPrestation && (
                                         <button
-                                            onClick={() => setFilterProduit("")}
+                                            onClick={() => setFilterPrestation("")}
                                             className="text-[10px] text-red-500 hover:text-red-700 font-medium px-1.5 py-0.5 bg-red-50 rounded border border-red-100 transition-colors"
                                         >
                                             ✕
@@ -809,7 +996,7 @@ export default function Step4Results({
                                         className="h-7 text-[10px] gap-2 font-bold px-3 bg-white text-[#005EA8] border-blue-200 hover:bg-blue-50 transition-all shadow-sm"
                                     >
                                         <Eye className="w-3.5 h-3.5" />
-                                        Afficher
+                                        Référentiel
                                         <Badge variant="secondary" className="h-4 px-1.5 text-[9px] bg-blue-100 text-blue-700 border-blue-200">
                                             {referentielTasks.length}
                                         </Badge>
@@ -841,16 +1028,20 @@ export default function Step4Results({
                                         tooltip="Volumes × temps → heures nécessaires"
                                         icon={CheckCircle2}
                                         columns={[
-                                            { key: 'produit', label: 'Produit', align: 'left', width: '100px', ellipsis: true },
+                                            { key: 'produit', label: 'Prestation', align: 'left', width: '100px', ellipsis: true },
                                             { key: 'task', label: 'Tâche', align: 'left', ellipsis: true },
                                             { key: 'unite', label: 'Unité', align: 'left', width: '80px', ellipsis: true },
+                                            { key: 'resp1', label: 'Responsable 1', align: 'left', width: '120px', ellipsis: true },
+                                            { key: 'resp2', label: 'Responsable 2', align: 'left', width: '120px', ellipsis: true },
                                             { key: 'nombre_Unite', label: 'Vol. (/jour)', align: 'right', width: '100px', render: (val) => Number(val || 0).toFixed(1) },
                                             { key: 'heures', label: 'Heures', align: 'right', width: '80px', bold: true, render: (val) => Number(val || 0).toFixed(2) }
                                         ]}
-                                        data={filteredTableData.filter(t => Number(t.heures_calculees) > 0).map(task => ({
+                                        data={filteredTableData.filter(t => Number(t.heures_calculees.replace(',', '.')) > 0).map(task => ({
                                             produit: getFirstWord(task.produit) || "-",
                                             task: task.task_name,
                                             unite: task.unite_mesure,
+                                            resp1: task.resp1,
+                                            resp2: task.resp2,
                                             nombre_Unite: task.volume_journalier,
                                             heures: task.heures_calculees
                                         }))}
@@ -897,7 +1088,7 @@ export default function Step4Results({
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                                             {/* Catégorisation */}
                                             <button
-                                                onClick={() => console.log('Catégorisation clicked')}
+                                                onClick={() => setShowCategorisationDialog(true)}
                                                 className="group relative overflow-hidden rounded-xl border border-purple-200/60 bg-gradient-to-br from-white via-purple-50/30 to-purple-100/20 p-6 text-left transition-all duration-300 hover:shadow-xl hover:-translate-y-1 hover:border-purple-300"
                                             >
                                                 <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-gradient-to-br from-purple-400/20 to-transparent blur-2xl transition-opacity group-hover:opacity-100 opacity-60" />
@@ -985,7 +1176,7 @@ export default function Step4Results({
 
                                             {/* Schéma */}
                                             <button
-                                                onClick={() => console.log('Schéma clicked')}
+                                                onClick={() => setShowSchemaDialog(true)}
                                                 className="group relative overflow-hidden rounded-xl border border-indigo-200/60 bg-gradient-to-br from-white via-indigo-50/30 to-indigo-100/20 p-6 text-left transition-all duration-300 hover:shadow-xl hover:-translate-y-1 hover:border-indigo-300"
                                             >
                                                 <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-gradient-to-br from-indigo-400/20 to-transparent blur-2xl transition-opacity group-hover:opacity-100 opacity-60" />
@@ -1053,6 +1244,7 @@ export default function Step4Results({
                 postes={postes}
                 tasks={simulationResults?.tasks || []}
                 wizardData={data}
+                mode={data.mode}
             />
 
             <OrganigrammeDialog
@@ -1060,6 +1252,7 @@ export default function Step4Results({
                 onOpenChange={setShowOrgChartDialog}
                 wizardData={data}
                 postes={postes}
+                mode={data.mode}
             />
 
             <SeasonalityDialog
@@ -1067,6 +1260,7 @@ export default function Step4Results({
                 onOpenChange={setShowSeasonalityDialog}
                 wizardData={data}
                 postes={postes}
+                mode={data.mode}
             />
 
             <AdequationDialog
@@ -1075,6 +1269,7 @@ export default function Step4Results({
                 simulationResults={simulationResults}
                 postes={postes}
                 centreDetails={centreDetails}
+                mode={data.mode}
             />
 
             <CapaciteNominaleDialog
@@ -1084,6 +1279,7 @@ export default function Step4Results({
                 simulationResults={simulationResults}
                 postes={postes}
                 centreDetails={centreDetails}
+                mode={data.mode}
             />
 
             <ChiffrageDialog
@@ -1091,6 +1287,22 @@ export default function Step4Results({
                 onOpenChange={setShowChiffrageDialog}
                 simulationResults={simulationResults}
                 postes={postes}
+                mode={data.mode}
+            />
+
+            <CategorisationDialog
+                open={showCategorisationDialog}
+                onOpenChange={setShowCategorisationDialog}
+                wizardData={data}
+                simulationResults={simulationResults}
+                centreDetails={centreDetails}
+                mode={data.mode}
+            />
+
+            <SchemaDialog
+                open={showSchemaDialog}
+                onOpenChange={setShowSchemaDialog}
+                typologie={data.isVirtual ? data.virtualTypology : centreDetails?.categorie_label}
             />
 
             <Dialog open={showReferentielDialog} onOpenChange={setShowReferentielDialog}>
@@ -1119,23 +1331,23 @@ export default function Step4Results({
                                 </select>
                             </div>
                             <div className="flex items-center gap-2">
-                                <span className="text-[10px] font-bold text-slate-500 uppercase">Produit:</span>
+                                <span className="text-[10px] font-bold text-slate-500 uppercase">Prestation:</span>
                                 <select
                                     className="bg-slate-50 border border-slate-200 text-[11px] text-slate-700 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500 min-w-[150px]"
-                                    value={refFilterProduit}
-                                    onChange={e => setRefFilterProduit(e.target.value)}
+                                    value={refFilterPrestation}
+                                    onChange={e => setRefFilterPrestation(e.target.value)}
                                 >
-                                    <option value="">Tous ({uniqueRefProduits.length})</option>
-                                    {uniqueRefProduits.map(p => (
+                                    <option value="">Tous ({uniqueRefPrestations.length})</option>
+                                    {uniqueRefPrestations.map(p => (
                                         <option key={p} value={p}>{p}</option>
                                     ))}
                                 </select>
                             </div>
-                            {(refFilterFamille || refFilterProduit) && (
+                            {(refFilterFamille || refFilterPrestation) && (
                                 <Button
                                     variant="ghost"
                                     size="sm"
-                                    onClick={() => { setRefFilterFamille(""); setRefFilterProduit(""); }}
+                                    onClick={() => { setRefFilterFamille(""); setRefFilterPrestation(""); }}
                                     className="h-7 text-[10px] text-red-500 hover:text-red-600 hover:bg-red-50"
                                 >
                                     Réinitialiser
@@ -1157,16 +1369,20 @@ export default function Step4Results({
                                 tooltip="Temps moyen nécessaire par unité (colis, sac, etc.)"
                                 icon={Clock}
                                 columns={[
-                                    { key: 'p', label: 'Produit', align: 'left', width: '120px', ellipsis: true },
-                                    { key: 'f', label: 'Famille', align: 'left', width: '140px', ellipsis: true },
+                                    { key: 'p', label: 'Prestation', align: 'left', width: '100px', ellipsis: true },
+                                    { key: 'f', label: 'Famille', align: 'left', width: '120px', ellipsis: true },
                                     { key: 't', label: 'Tâche', align: 'left', ellipsis: true },
-                                    { key: 'u', label: 'Unité', align: 'left', width: '100px', ellipsis: true },
-                                    { key: 's', label: 'Sec', align: 'right', width: '70px', render: (val) => Number(val || 0).toFixed(0) }
+                                    { key: 'r1', label: 'Responsable 1', align: 'left', width: '100px', ellipsis: true },
+                                    { key: 'r2', label: 'Responsable 2', align: 'left', width: '100px', ellipsis: true },
+                                    { key: 'u', label: 'Unité', align: 'left', width: '80px', ellipsis: true },
+                                    { key: 's', label: 'Sec', align: 'right', width: '60px', render: (val) => Number(val || 0).toFixed(2) }
                                 ]}
                                 data={filteredReferentielTasks.map((task, i) => ({
                                     p: getFirstWord(task.produit) || "-",
                                     f: task.famille || "",
-                                    t: (task.task_name || "").replace(/\s*\([^)]*\)/g, "").trim(),
+                                    t: task.task_name,
+                                    r1: task.resp1,
+                                    r2: task.resp2,
                                     u: task.unite_mesure,
                                     s: Number(task.moy_sec) || 0
                                 }))}

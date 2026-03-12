@@ -224,8 +224,21 @@ export const importAps = async (file) => {
             headers: {
                 "Content-Type": "multipart/form-data",
             },
+            responseType: 'blob',
         });
-        return response.data;
+
+        const contentType = response.headers['content-type'];
+        if (contentType && contentType.includes('application/json')) {
+            const text = await response.data.text();
+            return JSON.parse(text);
+        }
+
+        return {
+            isErrorFile: true,
+            data: response.data,
+            errorCount: response.headers['x-error-count'],
+            updatedCount: response.headers['x-updated-count']
+        };
     } catch (error) {
         console.error("Import Error:", error);
         throw error;
@@ -284,8 +297,24 @@ export const importEffectifs = async (file) => {
             headers: {
                 "Content-Type": "multipart/form-data",
             },
+            responseType: 'blob', // Important since the server might return an Excel file of errors
         });
-        return response.data;
+
+        // If successful, the server returns JSON despite expecting a blob, so we must manually parse it
+        const contentType = response.headers['content-type'];
+        if (contentType && contentType.includes('application/json')) {
+            const text = await response.data.text();
+            return JSON.parse(text);
+        }
+
+        // If the server returns a blob, it means there are rejected rows
+        return {
+            isErrorFile: true,
+            data: response.data,
+            errorCount: response.headers['x-error-count'],
+            updatedCount: response.headers['x-updated-count'],
+            createdCount: response.headers['x-created-count']
+        };
     } catch (error) {
         console.error("Import Error:", error);
         throw error;

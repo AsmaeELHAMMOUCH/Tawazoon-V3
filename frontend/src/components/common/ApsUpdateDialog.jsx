@@ -32,17 +32,27 @@ export default function ApsUpdateDialog({ open, onOpenChange, onSuccess, filters
         try {
             const result = await importAps(file);
 
-            if (result && result.status === "success") {
+            if (result && result.isErrorFile) {
+                const url = window.URL.createObjectURL(new Blob([result.data]));
+                const link = document.createElement('a');
+                link.href = url;
+                link.setAttribute('download', 'Lignes_Rejetees_APS.xlsx');
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+
+                toast.error(
+                    `${result.errorCount} lignes rejetées. ${result.updatedCount} centres mis à jour. Veuillez corriger le fichier téléchargé.`,
+                    { id: toastId, duration: 6000 }
+                );
+
+                onOpenChange(false);
+                if (onSuccess) onSuccess();
+            } else if (result && result.status === "success") {
                 toast.success(
                     `${result.message}.`,
                     { id: toastId, duration: 5000 }
                 );
-
-                if (result.errors && result.errors.length > 0) {
-                    // Log errors locally but notify user
-                    console.warn("Certaines lignes ont échoué :", result.errors);
-                    toast.error(`${result.errors.length} centres n'ont pas été trouvés.`, { duration: 6000 });
-                }
 
                 onOpenChange(false);
                 if (onSuccess) onSuccess();

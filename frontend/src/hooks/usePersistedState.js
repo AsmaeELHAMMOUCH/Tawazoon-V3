@@ -42,8 +42,8 @@ export function useSimulationParams() {
   // Paramètres de performance
   const [productivite, setProductivite] = usePersistedState('sim_productivite', 100);
   const [idleMinutes, setIdleMinutes] = usePersistedState('sim_idleMinutes', 0);
-  const [tauxComplexite, setTauxComplexite] = usePersistedState('sim_tauxComplexite', 1.0);
-  const [natureGeo, setNatureGeo] = usePersistedState('sim_natureGeo', 1.0);
+  const [tauxComplexite, setTauxComplexite] = usePersistedState('sim_tauxComplexite', 0.0);
+  const [natureGeo, setNatureGeo] = usePersistedState('sim_natureGeo', 0.0);
 
   // Paramètres ED et ratios
   const [edPercent, setEdPercent] = usePersistedState('sim_edPercent', 60);

@@ -11,6 +11,7 @@ from app.schemas.volumes_ui import VolumesUIInput, VolumeItem, GuichetVolumesInp
 # Schemas
 from app.schemas.direction_sim import VolumeMatriciel, CentreSimulationData, CentreParams
 from app.models.db_models import CentrePoste, Poste
+from app.services.taches_service import auto_import_tasks_if_empty
 
 # Mappings (ID -> CODE)
 FLUX_ID_MAP = {1: "AMANA", 2: "CO", 3: "CR", 4: "E-BARKIA", 5: "LRH"}
@@ -120,6 +121,9 @@ def process_national_simulation(
     g_nature = float(global_params.get("nature_geo", 1.0))
 
     for cid in centre_ids:
+        # ✅ AUTO-IMPORT if empty
+        auto_import_tasks_if_empty(db, cid)
+
         centre_meta = centres_map.get(cid)
         if not centre_meta: continue
         

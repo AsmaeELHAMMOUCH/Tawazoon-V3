@@ -653,10 +653,10 @@ function GraphResultats({
     mode === "barCap"
       ? barCapOptions
       : mode === "donut"
-      ? donutOptions
-      : mode === "gauge"
-      ? gaugeOptions
-      : barCapOptions;
+        ? donutOptions
+        : mode === "gauge"
+          ? gaugeOptions
+          : barCapOptions;
 
   if (loading)
     return <div className="px-3 py-2 text-slate-500">Calcul en cours…</div>;
@@ -869,11 +869,10 @@ function KpiStat({
       )}
       {typeof delta !== "undefined" && (
         <div
-          className={`mt-2 inline-flex items-center rounded-full px-2 py-0.5 text[11px] font-medium ${
-            positive
-              ? "bg-emerald-50 text-emerald-700"
-              : "bg-rose-50 text-rose-700"
-          }`}
+          className={`mt-2 inline-flex items-center rounded-full px-2 py-0.5 text[11px] font-medium ${positive
+            ? "bg-emerald-50 text-emerald-700"
+            : "bg-rose-50 text-rose-700"
+            }`}
         >
           {delta}
         </div>
@@ -907,7 +906,7 @@ function KpiGauge({ title, percent, icon: Icon }) {
             Objectif: <span className="font-medium">100%</span>
           </div>
           <div>
-           Sous Charge: <span className="font-medium">{100 - p}%</span>
+            Sous Charge: <span className="font-medium">{100 - p}%</span>
           </div>
         </div>
       </div>
@@ -1088,88 +1087,88 @@ const VueNationale = ({
     d > 95
       ? "#7f1d1d"
       : d > 90
-      ? "#b91c1c"
-      : d > 85
-      ? "#dc2626"
-      : d > 80
-      ? "#ef4444"
-      : d > 75
-      ? "#f97316"
-      : d > 70
-      ? "#facc15"
-      : "#22c55e";
+        ? "#b91c1c"
+        : d > 85
+          ? "#dc2626"
+          : d > 80
+            ? "#ef4444"
+            : d > 75
+              ? "#f97316"
+              : d > 70
+                ? "#facc15"
+                : "#22c55e";
 
   const barOptions = {
-  title: {
-    text: "Comparaison ETP Actuel vs Recommandé (par DR)",
-    left: "center",
-  },
-  tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
-  legend: { data: ["ETP Actuel", "ETP Recommandé"], top: 20 },
-  grid: { left: "3%", right: "4%", bottom: "12%", containLabel: true },
-  xAxis: {
-    type: "category",
-    data: regionsData.map((r) => r.nom),
+    title: {
+      text: "Comparaison ETP Actuel vs Consolidé (par DR)",
+      left: "center",
+    },
+    tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+    legend: { data: ["ETP Actuel", "ETP Consolidé"], top: 20 },
+    grid: { left: "3%", right: "4%", bottom: "12%", containLabel: true },
+    xAxis: {
+      type: "category",
+      data: regionsData.map((r) => r.nom),
 
-    // ✅ IMPORTANT : on force l’affichage de TOUS les labels
-    axisLabel: {
-      interval: 0,                        // ← n’en saute aucun
-      rotate: 15,                         // ← tourne un peu les textes
-      formatter: (v) => shortLabel(v, 24) // ← coupe si trop long
+      // ✅ IMPORTANT : on force l’affichage de TOUS les labels
+      axisLabel: {
+        interval: 0,                        // ← n’en saute aucun
+        rotate: 15,                         // ← tourne un peu les textes
+        formatter: (v) => shortLabel(v, 24) // ← coupe si trop long
+      },
     },
-  },
-  yAxis: { type: "value" },
-  series: [
-    {
-      name: "ETP Actuel",
-      type: "bar",
-      data: regionsData.map((r) => r.etpActuel),
-      itemStyle: { color: "#005EA8" },
-    },
-    {
-      name: "ETP Recommandé",
-      type: "bar",
-      data: regionsData.map((r) => r.etpRecommande),
-      itemStyle: { color: "#00A0E0" },
-    },
-  ],
-};
+    yAxis: { type: "value" },
+    series: [
+      {
+        name: "ETP Actuel",
+        type: "bar",
+        data: regionsData.map((r) => r.etpActuel),
+        itemStyle: { color: "#005EA8" },
+      },
+      {
+        name: "ETP Consolidé",
+        type: "bar",
+        data: regionsData.map((r) => r.etpRecommande),
+        itemStyle: { color: "#00A0E0" },
+      },
+    ],
+  };
 
 
   const lineOptions = {
-  title: {
-    text: "Taux d'Occupation par Direction Régionale (%)",
-    left: "center",
-  },
-  tooltip: { trigger: "axis" },
-  xAxis: {
-    type: "category",
-    data: regionsData.map((r) => r.nom),
-    boundaryGap: false,
-    axisLabel: {
-      interval: 0,
-      rotate: 15,
-      formatter: (v) => shortLabel(v, 26),
+    title: {
+      text: "Taux d'Occupation par Direction Régionale (%)",
+      left: "center",
     },
-  },
-  yAxis: { type: "value", min: 0, max: 110 },
-  series: [
-    {
-      name: "Taux d'Occupation",
-      type: "line",
-      data: regionsData.map((r) => r.tauxOccupation),
-
-      // ✅ un point visible pour CHAQUE DR
-      symbol: "circle",
-      symbolSize: 8,
-      showAllSymbol: true,
-
-      itemStyle: { color: "#00A0E0" },
-      areaStyle: { color: "rgba(0,160,224,0.2)" },
-      smooth: true,
+    tooltip: { trigger: "axis" },
+    xAxis: {
+      type: "category",
+      data: regionsData.map((r) => r.nom),
+      boundaryGap: false,
+      axisLabel: {
+        interval: 0,
+        rotate: 15,
+        formatter: (v) => shortLabel(v, 26),
+      },
     },
-  ],
-};
+    yAxis: { type: "value", min: 0, max: 110 },
+    series: [
+      {
+        name: "Taux d'Occupation",
+        type: "line",
+        data: regionsData.map((r) => r.tauxOccupation),
+
+        // ✅ un point visible pour CHAQUE DR
+        symbol: "circle",
+        symbolSize: 8,
+        showAllSymbol: true,
+
+        itemStyle: { color: "#00A0E0" },
+        areaStyle: { color: "rgba(0,160,224,0.2)" },
+        smooth: true,
+      },
+    ],
+  };
 
 
   const pieOptions = {
@@ -1207,7 +1206,7 @@ const VueNationale = ({
       <Card
         title="Paramètres de simulation"
         actions={
-          <button onClick={() => {}} className="btn-cta">
+          <button onClick={() => { }} className="btn-cta">
             <Play className="w-3.5 h-3.5" />
             Lancer Simulation
           </button>
@@ -1264,13 +1263,12 @@ const VueNationale = ({
           value={kpisNationaux.etpActuelTotal}
           subtitle={
             <span className="text-slate-600">
-              Recommandé&nbsp;:{" "}
+              Consolidé&nbsp;:{" "}
               <span className="text-sky-600 font-semibold">{"2150"}</span>
             </span>
           }
-          delta={`${
-            kpisNationaux.surplusDeficit >= 0 ? "+" : ""
-          }${"199"} (surplus)`}
+          delta={`${kpisNationaux.surplusDeficit >= 0 ? "+" : ""
+            }${"199"} (surplus)`}
           positive={kpisNationaux.surplusDeficit >= 0}
           icon={User}
         />
@@ -1296,7 +1294,7 @@ const VueNationale = ({
                 <th className="px-4 py-2 text-right">Centres</th>
                 <th className="px-4 py-2 text-right">ETP Actuel</th>
                 <th className="px-4 py-2 text-right">ETP Calculé</th>
-                <th className="px-4 py-2 text-right">ETP Recommandé</th>
+                <th className="px-4 py-2 text-right">ETP Consolidé</th>
                 <th className="px-4 py-2 text-right">Écart</th>
                 <th className="px-4 py-2 text-right">Taux Occupation</th>
               </tr>
@@ -1350,7 +1348,7 @@ const VueNationale = ({
       </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card title="Comparaison ETP Actuel vs Recommandé">
+        <Card title="Comparaison ETP Actuel vs Consolidé">
           <div className="h-80">
             <ReactECharts
               option={barOptions}
@@ -1391,7 +1389,7 @@ const VueNationale = ({
                     <div>
                       <p className="font-bold">{r.nom}</p>
                       <p>ETP Actuel: {r.etpActuel}</p>
-                      <p>ETP Recommandé: {r.etpRecommande}</p>
+                      <p>ETP Consolidé: {r.etpRecommande}</p>
                       <p>Taux d'occupation: {r.tauxOccupation}%</p>
                     </div>
                   </Popup>
@@ -1483,11 +1481,11 @@ const ComparatifRegional = () => {
 
   const barOptions = {
     title: {
-      text: "Comparaison ETP Actuel vs Recommandé (par DR)",
+      text: "Comparaison ETP Actuel vs Consolidé (par DR)",
       left: "center",
     },
     tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
-    legend: { data: ["ETP Actuel", "ETP Recommandé"], top: 20 },
+    legend: { data: ["ETP Actuel", "ETP Consolidé"], top: 20 },
     grid: { left: "3%", right: "4%", bottom: "12%", containLabel: true },
     xAxis: {
       type: "category",
@@ -1507,7 +1505,7 @@ const ComparatifRegional = () => {
         itemStyle: { color: "#005EA8" },
       },
       {
-        name: "ETP Recommandé",
+        name: "ETP Consolidé",
         type: "bar",
         data: regionsData.map((r) => r.etpRecommande),
         itemStyle: { color: "#00A0E0" },
@@ -1516,36 +1514,36 @@ const ComparatifRegional = () => {
   };
 
   const lineOptions = {
-  title: { text: "Taux d'Occupation par Direction Régionale (%)", left: "center" },
-  tooltip: { trigger: "axis" },
-  xAxis: {
-    type: "category",
-    data: regionsData.map((r) => r.nom),
-    boundaryGap: false,          // ✅ la courbe commence au 1er point
-    axisLabel: {
-      interval: 0,
-      rotate: 15,
-      formatter: (v) => shortLabel(v, 26),
+    title: { text: "Taux d'Occupation par Direction Régionale (%)", left: "center" },
+    tooltip: { trigger: "axis" },
+    xAxis: {
+      type: "category",
+      data: regionsData.map((r) => r.nom),
+      boundaryGap: false,          // ✅ la courbe commence au 1er point
+      axisLabel: {
+        interval: 0,
+        rotate: 15,
+        formatter: (v) => shortLabel(v, 26),
+      },
     },
-  },
-  yAxis: { type: "value", min: 0, max: 110 },
-  series: [
-    {
-      name: "Taux d'Occupation",
-      type: "line",
-      data: regionsData.map((r) => r.tauxOccupation),
+    yAxis: { type: "value", min: 0, max: 110 },
+    series: [
+      {
+        name: "Taux d'Occupation",
+        type: "line",
+        data: regionsData.map((r) => r.tauxOccupation),
 
-      // ✅ ici la magie :
-      symbol: "circle",
-      symbolSize: 8,
-      showAllSymbol: true,       // ← affiche un point pour CHAQUE DR
+        // ✅ ici la magie :
+        symbol: "circle",
+        symbolSize: 8,
+        showAllSymbol: true,       // ← affiche un point pour CHAQUE DR
 
-      itemStyle: { color: "#00A0E0" },
-      areaStyle: { color: "rgba(0,160,224,0.2)" },
-      smooth: true,
-    },
-  ],
-};
+        itemStyle: { color: "#00A0E0" },
+        areaStyle: { color: "rgba(0,160,224,0.2)" },
+        smooth: true,
+      },
+    ],
+  };
 
 
   const pieOptions = {
@@ -1591,15 +1589,14 @@ const ComparatifRegional = () => {
           value={kpiData.totalETP}
           subtitle={
             <span className="text-slate-600">
-              Recommandé&nbsp;:{" "}
+              Consolidé&nbsp;:{" "}
               <span className="text-sky-600 font-semibold">
                 {kpiData.totalRecommande}
               </span>
             </span>
           }
-          delta={`${kpiData.ecartTotal >= 0 ? "+" : ""}${
-            kpiData.ecartTotal
-          } (surplus)`}
+          delta={`${kpiData.ecartTotal >= 0 ? "+" : ""}${kpiData.ecartTotal
+            } (surplus)`}
           positive={kpiData.ecartTotal >= 0}
           icon={User}
         />
@@ -1625,7 +1622,7 @@ const ComparatifRegional = () => {
                 <th className="px-4 py-2 text-right">Centres</th>
                 <th className="px-4 py-2 text-right">ETP Actuel</th>
                 <th className="px-4 py-2 text-right">ETP Calculé</th>
-                <th className="px-4 py-2 text-right">ETP Recommandé</th>
+                <th className="px-4 py-2 text-right">ETP Consolidé</th>
                 <th className="px-4 py-2 text-right">Écart</th>
                 <th className="px-4 py-2 text-right">Taux Occupation</th>
               </tr>
@@ -2022,8 +2019,8 @@ export default function SimulationEffectifs() {
           setReferentiel([]);
           setErr(
             e?.response?.data?.detail ||
-              e?.message ||
-              "Erreur lors du chargement des tâches"
+            e?.message ||
+            "Erreur lors du chargement des tâches"
           );
         } finally {
           if (!cancelled) setLoading((l) => ({ ...l, referentiel: false }));
@@ -2045,93 +2042,93 @@ export default function SimulationEffectifs() {
   }, [productivite]);
 
   /* ---------- Simulation ---------- */
-const onSimuler = async (overrides = {}) => {
-  setLoading((l) => ({ ...l, simulation: true }));
-  setErr(null);
+  const onSimuler = async (overrides = {}) => {
+    setLoading((l) => ({ ...l, simulation: true }));
+    setErr(null);
 
-  const overrideVolumes = overrides.volumes || {};
+    const overrideVolumes = overrides.volumes || {};
 
-  console.log(
-    "DEBUG colisAmanaParSac state =",
-    colisAmanaParSac,
-    "override =",
-    overrides.colis_amana_par_sac,
-    "override.volumes =",
-    overrideVolumes.colis_amana_par_sac
-  );
+    console.log(
+      "DEBUG colisAmanaParSac state =",
+      colisAmanaParSac,
+      "override =",
+      overrides.colis_amana_par_sac,
+      "override.volumes =",
+      overrideVolumes.colis_amana_par_sac
+    );
 
-  const heures_net_calculees =
-    heuresNet && !Number.isNaN(Number(heuresNet))
-      ? Number(heuresNet)
-      : (8 * productivite) / 100;
+    const heures_net_calculees =
+      heuresNet && !Number.isNaN(Number(heuresNet))
+        ? Number(heuresNet)
+        : (8 * productivite) / 100;
 
-  const courrier_total =
-    overrideVolumes.courrier !== undefined
-      ? Number(overrideVolumes.courrier || 0)
-      : Number(courrier ?? 0) +
+    const courrier_total =
+      overrideVolumes.courrier !== undefined
+        ? Number(overrideVolumes.courrier || 0)
+        : Number(courrier ?? 0) +
         Number(ebarkia ?? 0) +
         Number(lrh ?? 0) +
         Number(courrierOrdinaire ?? 0) +
         Number(courrierRecommande ?? 0);
 
-  const colis_total =
-    overrideVolumes.colis !== undefined
-      ? Number(overrideVolumes.colis || 0)
-      : Number(colis ?? 0) + Number(amana ?? 0);
+    const colis_total =
+      overrideVolumes.colis !== undefined
+        ? Number(overrideVolumes.colis || 0)
+        : Number(colis ?? 0) + Number(amana ?? 0);
 
-  const pid =
-    poste && poste !== ALL_ID && !Number.isNaN(Number(poste))
-      ? Number(poste)
-      : null;
+    const pid =
+      poste && poste !== ALL_ID && !Number.isNaN(Number(poste))
+        ? Number(poste)
+        : null;
 
-  const colisCollecteOverride =
-    overrides.colis_par_collecte ?? overrideVolumes.colis_par_collecte;
-  const colisCollecteVal =
-    colisCollecteOverride !== undefined
-      ? Number(colisCollecteOverride || 0)
-      : Number(colisParCollecte || 0);
+    const colisCollecteOverride =
+      overrides.colis_par_collecte ?? overrideVolumes.colis_par_collecte;
+    const colisCollecteVal =
+      colisCollecteOverride !== undefined
+        ? Number(colisCollecteOverride || 0)
+        : Number(colisParCollecte || 0);
 
-  const colisAmanaOverride =
-    overrides.colis_amana_par_sac ?? overrideVolumes.colis_amana_par_sac;
-  const colisAmanaFinal =
-    colisAmanaOverride !== undefined
-      ? Number(colisAmanaOverride || 0)
-      : Number(colisAmanaParSac || 0);
+    const colisAmanaOverride =
+      overrides.colis_amana_par_sac ?? overrideVolumes.colis_amana_par_sac;
+    const colisAmanaFinal =
+      colisAmanaOverride !== undefined
+        ? Number(colisAmanaOverride || 0)
+        : Number(colisAmanaParSac || 0);
 
-  const courriersParSacOverride =
-    overrides.courriers_par_sac ?? overrideVolumes.courriers_par_sac;
-  const courriersParSacFinal =
-    courriersParSacOverride !== undefined
-      ? Number(courriersParSacOverride || 0)
-      : Number(courriersParSac ?? 0);
+    const courriersParSacOverride =
+      overrides.courriers_par_sac ?? overrideVolumes.courriers_par_sac;
+    const courriersParSacFinal =
+      courriersParSacOverride !== undefined
+        ? Number(courriersParSacOverride || 0)
+        : Number(courriersParSac ?? 0);
 
-  const payload = {
-    centre_id: centre ? Number(centre) : null,
-    poste_id: pid,
-    productivite: Number(productivite),
-    heures_net: Number(heures_net_calculees),
-    idle_minutes:
-      overrides.idle_minutes !== undefined
-        ? Number(overrides.idle_minutes || 0)
-        : undefined,
-    volumes: {
-      sacs: Number(
-        overrideVolumes.sacs !== undefined ? overrideVolumes.sacs || 0 : sacs ?? 0
-      ),
-      colis: Number(colis_total),
-      courrier: Number(courrier_total),
-      scelle: Number(
-        overrideVolumes.scelle !== undefined
-          ? overrideVolumes.scelle || 0
-          : scelle ?? 0
-      ),
-      colis_amana_par_sac: colisAmanaFinal,
-      courriers_par_sac: Number(courriersParSacFinal),
-      colis_par_collecte: colisCollecteVal || 1,
-    },
-  };
+    const payload = {
+      centre_id: centre ? Number(centre) : null,
+      poste_id: pid,
+      productivite: Number(productivite),
+      heures_net: Number(heures_net_calculees),
+      idle_minutes:
+        overrides.idle_minutes !== undefined
+          ? Number(overrides.idle_minutes || 0)
+          : undefined,
+      volumes: {
+        sacs: Number(
+          overrideVolumes.sacs !== undefined ? overrideVolumes.sacs || 0 : sacs ?? 0
+        ),
+        colis: Number(colis_total),
+        courrier: Number(courrier_total),
+        scelle: Number(
+          overrideVolumes.scelle !== undefined
+            ? overrideVolumes.scelle || 0
+            : scelle ?? 0
+        ),
+        colis_amana_par_sac: colisAmanaFinal,
+        courriers_par_sac: Number(courriersParSacFinal),
+        colis_par_collecte: colisCollecteVal || 1,
+      },
+    };
 
-  console.log("[DEBUG front payload]", JSON.stringify(payload, null, 2));
+    console.log("[DEBUG front payload]", JSON.stringify(payload, null, 2));
 
     try {
       const res = await api.simulate(payload);
@@ -2142,11 +2139,11 @@ const onSimuler = async (overrides = {}) => {
         : [];
       const tot = res
         ? {
-            total_heures: res.total_heures ?? 0,
-            fte_calcule: res.fte_calcule ?? 0,
-            fte_arrondi: res.fte_arrondi ?? 0,
-            heures_net: res.heures_net_jour ?? heures_net_calculees,
-          }
+          total_heures: res.total_heures ?? 0,
+          fte_calcule: res.fte_calcule ?? 0,
+          fte_arrondi: res.fte_arrondi ?? 0,
+          heures_net: res.heures_net_jour ?? heures_net_calculees,
+        }
         : null;
 
       setResultats(details_taches);
@@ -2159,8 +2156,8 @@ const onSimuler = async (overrides = {}) => {
       setTotaux(null);
       setErr(
         e?.response?.data?.detail ||
-          e?.message ||
-          "Erreur lors du calcul de simulation"
+        e?.message ||
+        "Erreur lors du calcul de simulation"
       );
     } finally {
       setLoading((l) => ({ ...l, simulation: false }));
@@ -2348,7 +2345,7 @@ const onSimuler = async (overrides = {}) => {
             </div>
             <div className="text-sm text-slate-600">
               {new Date().toLocaleDateString()} • Mode:{" "}
-              {mode === "actuel" ? "Processus Actuel" : "Processus Recommandé"}
+              {mode === "actuel" ? "Processus Actuel" : "Processus Consolidé"}
             </div>
           </div>
         </div>
@@ -2370,7 +2367,7 @@ const onSimuler = async (overrides = {}) => {
             {poste === ALL_ID
               ? "Tous"
               : postesOptions.find((p) => String(p.id) === String(poste))
-                  ?.label ?? poste}
+                ?.label ?? poste}
           </div>
           <div>
             <b>Sacs/j:</b> {sacs}

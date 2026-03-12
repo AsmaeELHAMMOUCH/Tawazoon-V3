@@ -384,7 +384,7 @@ export default function ForecastingModule({
                             <div className="w-5 h-5 rounded-md bg-[#005EA8]/10 flex items-center justify-center">
                                 <ArrowUpRight className="w-3 h-3 text-[#005EA8]" />
                             </div>
-                            Taux de Croissance par Flux (%)
+                            Taux de Croissance par Prestation (%)
                         </h4>
 
                         {/* Tableau matriciel */}
@@ -392,7 +392,7 @@ export default function ForecastingModule({
                             <table className="w-full text-[10px] border-collapse">
                                 <thead>
                                     <tr className="bg-slate-50 border-b border-slate-200">
-                                        <th className="px-2 py-2 text-left font-black text-slate-500 uppercase tracking-wider min-w-[80px]">Flux</th>
+                                        <th className="px-2 py-2 text-left font-black text-slate-500 uppercase tracking-wider min-w-[80px]">Prestation</th>
                                         {[1, 2, 3, 4, 5].map(offset => (
                                             <th key={offset} className="px-1 py-2 text-center font-black min-w-[52px]">
                                                 <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full bg-blue-50 text-[#005EA8] text-[9px] font-black">
@@ -437,7 +437,7 @@ export default function ForecastingModule({
                         </div>
 
                         <p className="text-[9px] text-slate-400 italic">
-                            💡 Cliquez sur un flux pour propager le taux 2026 sur toutes les années.
+                            💡 Cliquez sur une prestation pour propager le taux 2026 sur toutes les années.
                         </p>
 
                         <Button
@@ -451,7 +451,7 @@ export default function ForecastingModule({
 
                         <div className="p-3 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-100/80">
                             <p className="text-[10px] text-slate-500 leading-relaxed">
-                                <span className="font-black text-[#005EA8]">ⓘ</span> Croissance composée par flux · Le taux global utilisé est la moyenne Amana/CO/CR.
+                                <span className="font-black text-[#005EA8]">ⓘ</span> Croissance composée par prestation · Le taux global utilisé est la moyenne Amana/CO/CR.
                             </p>
                         </div>
                     </div>

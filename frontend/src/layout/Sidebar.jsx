@@ -44,9 +44,11 @@ export default function Sidebar({
     showActuel: true,
     showRecommande: true,
     showVueGlobale: true,
-    showParametrage: false,
-    showSimActuel: false,
-    showSimRecommande: false,
+    showParametrage: true,
+    showSimActuel: true,
+    showSimRecommande: true,
+    showOptimise: true,
+    showSimOptimise: true,
   });
 
   const toggle = (key) =>
@@ -58,19 +60,13 @@ export default function Sidebar({
     if (isMobile && onToggle) onToggle(); // Close sheet
   };
 
-  const commonElements = [
-    { label: "Capacité Nominale", icon: FileText, key: "capacite-nominale" },
-    { label: "Référentiel", icon: BookText, key: "referentiel" },
-    { label: "Schéma", icon: Workflow, key: "schema" },
-  ];
+  /* Removed commonElements: Capacité Nominale, Référentiel, Schéma */
 
   const simulationItems = [
-    { label: "Par Intervenant", slug: "", flux: "poste" },
-    { label: "Par Centre", slug: "centre", flux: "centre" },
-    { label: "Par Région", slug: "direction", flux: "direction" },
-    { label: "Nationale", slug: "national", flux: "national" },
-    { label: "Niveau Siège", slug: "region", flux: "siege" },
-    { label: "Centres Uniques", slug: "centres-uniques", flux: "centres-uniques" },
+    { label: "Par Intervenant/Centre", slug: "wizard", flux: "poste" },
+    { label: "Par Région", slug: "regional", flux: "regional" },
+    { label: "Nationale", slug: "national-batch", flux: "national" },
+    { label: "Centres Spécifiques", slug: "centres-uniques", flux: "centres-uniques" },
   ];
 
   const vueGlobaleSub = [
@@ -210,7 +206,8 @@ export default function Sidebar({
               key={`${openKey}-${item.flux}`}
               onClick={() => {
                 const path = item.slug ? `${basePath}/${item.slug}` : basePath;
-                navigate(path, { state: { flux: item.flux, mode: mode } });
+                // ✅ Correction : Utilisation des paramètres d'URL au lieu du state pour forcer le re-render
+                navigate(`${path}?mode=${mode}&flux=${item.flux}`);
                 if (isMobile && onToggle) onToggle();
               }}
               className="relative pl-6 items-start leading-tight text-left"
@@ -289,26 +286,15 @@ export default function Sidebar({
                 openKey="showSimActuel"
                 mode="actuel"
               />
-
-              {commonElements.map(({ label, key }) => (
-                <ItemButton
-                  key={`actuel-${key}`}
-                  onClick={() => handleNav(`/app/actuel/${key}`)}
-                  className="relative pl-6"
-                >
-                  <span className="pointer-events-none absolute left-2 top-1.5 w-3 h-3 border-l border-t border-slate-200/80 rounded-tl" />
-                  {label}
-                </ItemButton>
-              ))}
             </div>
           )}
         </div>
 
-        {/* 🟢 Processus Recommandé */}
+        {/* 🟢 Processus Consolidé */}
         <div>
           <SectionHeader
             variant="recommande"
-            title="Processus Recommandé"
+            title="Processus Consolidé"
             showKey="showRecommande"
             icon={BookText}
             collapsed={collapsed}
@@ -325,16 +311,57 @@ export default function Sidebar({
                 mode="recommande"
               />
 
-              {commonElements.map(({ label, key }) => (
-                <ItemButton
-                  key={`recommande-${key}`}
-                  onClick={() => handleNav(`/app/recommande/${key}`)}
-                  className="relative pl-6"
-                >
-                  <span className="pointer-events-none absolute left-2 top-1.5 w-3 h-3 border-l border-t border-slate-200/80 rounded-tl" />
-                  {label}
-                </ItemButton>
-              ))}
+              {/* 🆕 Lien Mapping Responsables (Masqué à la demande de l'utilisateur)
+              <button
+                onClick={() => handleNav('/app/simulation/mapping-responsables')}
+                className={
+                  "relative w-full text-left rounded-md hover:bg-emerald-50 text-emerald-700 " +
+                  "pl-6 pr-2 py-2 mt-2 font-bold bg-white border border-emerald-100 shadow-sm " +
+                  "text-[clamp(9px,0.75vw,11px)] transition"
+                }
+              >
+                <ArrowLeftRight className="w-3.5 h-3.5 inline mr-2" />
+                Mapping des Responsables
+              </button>
+              */}
+            </div>
+          )}
+        </div>
+
+        {/* 🟡 Processus Optimisé */}
+        <div>
+          <SectionHeader
+            variant="globale"
+            title="Processus Optimisé"
+            showKey="showOptimise"
+            icon={Zap}
+            collapsed={collapsed}
+            menuPath="/app/optimise/menu"
+          />
+
+          {!collapsed && openSections.showOptimise && (
+            <div className="relative ml-2 pl-2">
+              <div className="absolute left-2 top-1.5 bottom-1.5 w-px bg-slate-200/80" />
+
+              <SimulationSubGroup
+                basePath="/app/simulation"
+                openKey="showSimOptimise"
+                mode="optimise"
+              />
+
+              {/* 🆕 Lien Exclusion de Tâches (Masqué à la demande de l'utilisateur)
+              <button
+                onClick={() => handleNav('/app/simulation/exclusion-taches')}
+                className={
+                  "relative w-full text-left rounded-md hover:bg-amber-50 text-amber-700 " +
+                  "pl-6 pr-2 py-2 mt-2 font-bold bg-white border border-amber-100 shadow-sm " +
+                  "text-[clamp(9px,0.75vw,11px)] transition"
+                }
+              >
+                <Zap className="w-3.5 h-3.5 inline mr-2" />
+                Exclusion de Tâches
+              </button>
+              */}
             </div>
           )}
         </div>
@@ -352,8 +379,6 @@ export default function Sidebar({
 
           {!collapsed && openSections.showVueGlobale && (
             <div className="relative ml-2 pl-2 mb-0.5">
-              <div className="absolute left-2 top-1.5 bottom-1.5 w-px bg-slate-200/80" />
-
               {vueGlobaleSub.map((item) => (
                 <button
                   key={item.label}

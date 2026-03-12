@@ -9,9 +9,6 @@ import {
   FileText,
   Layers,
   UserCog,
-  ListChecks,
-  BookText,
-  Workflow,
   TimerReset,
   Sparkles,
   History,
@@ -28,7 +25,7 @@ const CARD_H = 120;
 export default function MenuAnalyseEffectifs() {
   const navigate = useNavigate();
   const { section } = useParams();
-  const sectionKey = ["vue-globale", "actuel", "recommande"].includes(section)
+  const sectionKey = ["vue-globale", "actuel", "recommande", "optimise"].includes(section)
     ? section
     : "vue-globale";
 
@@ -40,6 +37,12 @@ export default function MenuAnalyseEffectifs() {
   }, []);
 
   // ===== Données =====
+  const simulationSimItems = [
+    { icon: UserCog, title: "Par Intervenant/Centre", key: "wizard", flux: "poste" },
+    { icon: Users, title: "Par Région", key: "simulation", flux: "regional" },
+    { icon: Building, title: "Nationale", key: "simulation", flux: "national" },
+  ];
+
   const sectionsMap = {
     "vue-globale": {
       key: "vue-globale",
@@ -57,33 +60,19 @@ export default function MenuAnalyseEffectifs() {
       key: "actuel",
       title: "Processus Actuel",
       chipClass: CHIP_BLUE,
-      items: [
-        { icon: UserCog, title: "Simulation Par Intervenant", key: "simulation", flux: "poste" },
-        { icon: Sparkles, title: "Simulation Intervenant Avancée", key: "simulation-avancee", flux: "intervenant-avancee" },
-        { icon: ClipboardList, title: "Simulation Par Centre", key: "simulation", flux: "centre" },
-
-        { icon: Users, title: "Simulation par Région", key: "simulation", flux: "regional" },
-        { icon: Building, title: "Simulation Nationale", key: "simulation", flux: "national" },
-        { icon: FileText, title: "Capacité Nominale", key: "capacite-nominale" },
-        { icon: BookText, title: "Référentiel", key: "referentiel" },
-        { icon: Workflow, title: "Schéma", key: "schema" },
-      ],
+      items: simulationSimItems,
     },
     recommande: {
       key: "recommande",
-      title: "Processus Recommandé",
+      title: "Processus Consolidé",
       chipClass: CHIP_BLUE,
-      items: [
-        { icon: UserCog, title: "Simulation Par Intervenant", key: "simulation", flux: "poste" },
-        { icon: Sparkles, title: "Simulation Intervenant Avancée", key: "simulation-avancee", flux: "intervenant-avancee" },
-        { icon: ClipboardList, title: "Simulation Par Centre", key: "simulation", flux: "centre" },
-
-        { icon: Users, title: "Simulation par Région", key: "simulation", flux: "regional" },
-        { icon: Building, title: "Simulation Nationale", key: "simulation", flux: "national" },
-        { icon: FileText, title: "Capacité Nominale", key: "capacite-nominale" },
-        { icon: BookText, title: "Référentiel", key: "referentiel" },
-        { icon: Workflow, title: "Schéma", key: "schema" },
-      ],
+      items: simulationSimItems,
+    },
+    optimise: {
+      key: "optimise",
+      title: "Processus Optimisé",
+      chipClass: CHIP_BLUE,
+      items: simulationSimItems,
     },
   };
 
@@ -93,9 +82,8 @@ export default function MenuAnalyseEffectifs() {
     if (sectionKey === "vue-globale")
       return { simItems: currentSection.items, docItems: [] };
 
-    const sims = currentSection.items.filter((i) => i.key === "simulation");
-    const docs = currentSection.items.filter((i) => i.key !== "simulation");
-    return { simItems: sims, docItems: docs };
+    // Now all items are simulations in these sections
+    return { simItems: currentSection.items, docItems: [] };
   }, [sectionKey, currentSection]);
 
   const handleCardClick = (item) => {
@@ -111,30 +99,30 @@ export default function MenuAnalyseEffectifs() {
       return;
     }
 
-    if (item.key === "simulation") {
-      // Pour tous les flux, y compris "poste", passer le flux dans le state
-      if (item.flux === "poste") {
-        return navigate("/app/simulation", { state: { flux: "poste" } });
-      }
+    const mode = sectionKey;
 
+    if (item.key === "wizard") {
+      // ✅ Correction : Utilisation des paramètres d'URL (?mode=...&flux=...)
+      return navigate(`/app/simulation/wizard?mode=${mode}&flux=poste`);
+    }
+
+    if (item.key === "simulation") {
       const routesByFlux = {
-        centre: "/app/simulation/centre",
         direction: "/app/simulation/direction",
-        regional: "/app/simulation/region",
-        national: "/app/simulation/national",
+        regional: "/app/simulation/regional", // Note: Correction 'regional' vs 'region' selon App.jsx
+        national: "/app/simulation/national-batch", // Note: Correction selon App.jsx
       };
 
       if (routesByFlux[item.flux]) {
-        return navigate(routesByFlux[item.flux], { state: { flux: item.flux } });
+        // ✅ Correction : Utilisation des paramètres d'URL
+        return navigate(`${routesByFlux[item.flux]}?mode=${mode}&flux=${item.flux}`);
       }
       return;
     }
 
-    // Gestion de la simulation avancée
-    if (item.key === "simulation-avancee") {
-      return navigate("/app/simulation/intervenant-avancee", { state: { flux: "intervenant-avancee" } });
+    if (item.key === "centres-uniques") {
+      return navigate(`/app/simulation/centres-uniques?mode=${mode}&flux=centres-uniques`);
     }
-
 
     navigate(`/app/${sectionKey}/${item.key}`);
   };
@@ -323,19 +311,16 @@ export default function MenuAnalyseEffectifs() {
               ))}
             </motion.div>
           ) : (
-            <div className="space-y-6">
-              {/* Simulations */}
+            <div className="flex flex-col items-center justify-center space-y-8 min-h-[50vh]">
+              {/* Simulations centered */}
               <motion.div
-                initial={{ opacity: 0, x: -50 }}
-                animate={{ opacity: 1, x: 0 }}
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5 }}
+                className="w-full"
               >
-                <div className="mb-3 ml-1 text-[13px] font-bold text-[#0B2B44]/80 uppercase tracking-wide flex items-center gap-2">
-                  <div className="h-1 w-8 bg-gradient-to-r from-[#007BFF] to-[#00C6FF] rounded-full" />
-                  Simulations
-                </div>
                 <motion.div
-                  className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 max-w-full"
+                  className="flex flex-wrap justify-center gap-8 max-w-[1200px] mx-auto"
                   initial="hidden"
                   animate="visible"
                   variants={{
@@ -347,43 +332,6 @@ export default function MenuAnalyseEffectifs() {
                   }}
                 >
                   {simItems.map((item, idx) => (
-                    <motion.div
-                      key={item.title}
-                      variants={{
-                        hidden: { opacity: 0, y: 30, scale: 0.9 },
-                        visible: { opacity: 1, y: 0, scale: 1 },
-                      }}
-                    >
-                      <Card item={item} />
-                    </motion.div>
-                  ))}
-                </motion.div>
-              </motion.div>
-
-              {/* Documents */}
-              <motion.div
-                initial={{ opacity: 0, x: -50 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.5, delay: 0.3 }}
-              >
-                <div className="mb-3 ml-1 text-[13px] font-bold text-[#0B2B44]/80 uppercase tracking-wide flex items-center gap-2">
-                  <div className="h-1 w-8 bg-gradient-to-r from-[#007BFF] to-[#00C6FF] rounded-full" />
-                  Documents de process
-                </div>
-                <motion.div
-                  className="flex flex-wrap justify-center gap-6 max-w-[1050px] mx-auto"
-                  initial="hidden"
-                  animate="visible"
-                  variants={{
-                    visible: {
-                      transition: {
-                        staggerChildren: 0.08,
-                        delayChildren: 0.4,
-                      },
-                    },
-                  }}
-                >
-                  {docItems.map((item, idx) => (
                     <motion.div
                       key={item.title}
                       variants={{
