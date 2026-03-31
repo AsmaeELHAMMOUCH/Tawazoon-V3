@@ -207,37 +207,6 @@ const EnterpriseTable = memo(({
                             Export
                         </button>
                     )}
-
-                    {showViewToggle && (
-                        <div className="flex rounded border border-slate-300 overflow-hidden">
-                            <button
-                                onClick={() => onViewChange?.('table')}
-                                className={`
-                    px-2 py-1 text-[10px] font-medium transition-colors flex items-center gap-1
-                    ${currentView === 'table'
-                                        ? 'bg-[#005EA8] text-white'
-                                        : 'bg-white text-slate-600 hover:bg-slate-50'
-                                    }
-                  `}
-                            >
-                                <TableIcon className="w-3 h-3" />
-                                Tableau
-                            </button>
-                            <button
-                                onClick={() => onViewChange?.('graph')}
-                                className={`
-                    px-2 py-1 text-[10px] font-medium transition-colors flex items-center gap-1 border-l border-slate-300
-                    ${currentView === 'graph'
-                                        ? 'bg-[#005EA8] text-white'
-                                        : 'bg-white text-slate-600 hover:bg-slate-50'
-                                    }
-                  `}
-                            >
-                                <BarChart3 className="w-3 h-3" />
-                                Graphe
-                            </button>
-                        </div>
-                    )}
                 </div>
             </div>
 

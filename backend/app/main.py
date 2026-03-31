@@ -25,6 +25,7 @@ from app.api.ccp import router as ccp_router # 🆕 CCP Standalone Module
 from app.api.cna import router as cna_router # 🆕 CNA Standalone Module
 from app.api.cci import router as cci_router # 🆕 CCI Standalone Module
 from app.api.batch_simulation import router as batch_router # 🆕 Simulation Régionale/Nationale
+from app.api.sites_mgmt import router as sites_mgmt_router # 🆕 Sites Rattachés Module
 
 from app.core.db import engine, Base, get_db
 from app.models import db_models, scoring_models, categorisation_models
@@ -131,6 +132,10 @@ app.include_router(taches_mgmt_router, prefix="/api")
 print("--- MOUNTING POSTES MGMT ROUTER ---")
 app.include_router(postes_mgmt_router, prefix="/api")
 print("--- POSTES MGMT ROUTER MOUNTED ---")
+
+print("--- MOUNTING SITES MGMT ROUTER ---")
+app.include_router(sites_mgmt_router, prefix="/api")
+print("--- SITES MGMT ROUTER MOUNTED ---")
 
 app.include_router(simuler_centre_par_type_router, prefix="/api")
 

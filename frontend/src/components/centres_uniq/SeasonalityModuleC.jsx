@@ -167,7 +167,7 @@ export default function SeasonalityModuleC({
                             <CalendarDays className="w-4 h-4 text-white" />
                         </div>
                         <div>
-                            <CardTitle className="text-sm font-black text-white tracking-tight">Saisonnalité ({mode === "optimise" ? "Optimisée" : mode === "recommande" ? "Consolidée" : "Cible"})</CardTitle>
+                            <CardTitle className="text-sm font-black text-white tracking-tight">Saisonnalité ({mode === "optimise" ? "Optimisée" : mode === "recommande" ? "Consolidée" : "Calculée"})</CardTitle>
                             <p className="text-[10px] text-white/60 font-medium">Répartition mensuelle par prestation</p>
                         </div>
                     </div>

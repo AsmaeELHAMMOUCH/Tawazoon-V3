@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import {
     Dialog,
     DialogContent,
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
+import "@/styles/dialog-animations.css";
 import { Button } from "@/components/ui/button";
 import { Tag, CheckCircle2, XCircle, Layers, BarChart2, Globe, Users } from "lucide-react";
 
@@ -248,6 +249,20 @@ function BlockCard({ title, icon: Icon, color, children, blockScore }) {
 export default function CategorisationDialog({ open, onOpenChange, wizardData, simulationResults, centreDetails, mode }) {
     const [chefLieuIdx, setChefLieuIdx] = useState(0);
     const [sitesIdx, setSitesIdx] = useState(0);
+    const [animKey, setAnimKey] = useState(0);
+    useEffect(() => { if (open) setAnimKey((k) => k + 1); }, [open]);
+
+    // Automate sitesIdx based on real sites_count
+    useEffect(() => {
+        if (centreDetails?.sites_count !== undefined) {
+            const count = centreDetails.sites_count;
+            if (count <= 2) setSitesIdx(0);
+            else if (count <= 4) setSitesIdx(1);
+            else if (count <= 6) setSitesIdx(2);
+            else if (count <= 8) setSitesIdx(3);
+            else setSitesIdx(4);
+        }
+    }, [centreDetails?.sites_count]);
 
     const scoring = useMemo(() => {
         if (!wizardData) return null;
@@ -371,12 +386,16 @@ export default function CategorisationDialog({ open, onOpenChange, wizardData, s
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-none sm:max-w-5xl max-h-[92vh] overflow-y-auto p-0 border border-slate-200 bg-slate-50 shadow-2xl rounded-2xl">
+            <DialogContent
+              key={animKey}
+              className="dlg-enter max-w-none sm:max-w-5xl max-h-[92vh] overflow-y-auto p-0 border border-slate-200 bg-slate-50 shadow-2xl rounded-2xl"
+            >
                 {/* HEADER */}
-                <DialogHeader className="px-6 py-4 bg-white border-b border-slate-200 rounded-t-2xl sticky top-0 z-10">
+                <DialogHeader className="dlg-header-enter px-6 py-4 bg-white border-b border-slate-200 rounded-t-2xl sticky top-0 z-10">
                     <DialogTitle className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                            <div className="p-2 bg-indigo-50 rounded-xl">
+                            <div className="dlg-icon-hover dlg-icon-enter p-2 bg-indigo-50 rounded-xl"
+                              style={{ animationDelay: "0.1s" }}>
                                 <Tag className="w-5 h-5 text-indigo-600" />
                             </div>
                             <div>

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import {
@@ -25,6 +25,7 @@ import {
   HelpCircle, // 🆕 Import
   TrendingUp,
   Database,
+  GitCompareArrows,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import tawazoonLogo from "@/assets/LOGO_Tawazoon_RH.png";
@@ -49,6 +50,7 @@ export default function Sidebar({
     showSimRecommande: true,
     showOptimise: true,
     showSimOptimise: true,
+    showComparatif: true,
   });
 
   const toggle = (key) =>
@@ -67,6 +69,12 @@ export default function Sidebar({
     { label: "Par Région", slug: "regional", flux: "regional" },
     { label: "Nationale", slug: "national-batch", flux: "national" },
     { label: "Centres Spécifiques", slug: "centres-uniques", flux: "centres-uniques" },
+  ];
+
+  const comparatifItems = [
+    { label: "Par centre", path: "/app/simulation/comparatif-processus" },
+    { label: "Par Région", path: "/app/simulation/comparatif-regional" },
+    { label: "Nationale", path: "/app/simulation/comparatif-national" },
   ];
 
   const vueGlobaleSub = [
@@ -366,6 +374,37 @@ export default function Sidebar({
           )}
         </div>
 
+        ⚖️ Comparatif (3 niveaux)
+        <div>
+          <SectionHeader
+            variant="globale"
+            title="Comparatif"
+            showKey="showComparatif"
+            icon={GitCompareArrows}
+            collapsed={collapsed}
+          />
+
+          {!collapsed && openSections.showComparatif && (
+            <div className="relative ml-2 pl-2 mb-0.5">
+              <div className="absolute left-2 top-1.5 bottom-1.5 w-px bg-slate-200/80" />
+              {comparatifItems.map((item) => (
+                <button
+                  key={item.path}
+                  onClick={() => handleNav(item.path)}
+                  className={
+                    "relative w-full text-left rounded-md hover:bg-violet-50 text-gray-700 " +
+                    "pl-6 pr-2 py-[clamp(2px,0.25vw,4px)] " +
+                    "text-[clamp(9px,0.75vw,11px)] transition"
+                  }
+                >
+                  <span className="pointer-events-none absolute left-2 top-1.5 w-3 h-3 border-l border-t border-slate-200/80 rounded-tl" />
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* 🌍 Vue Globale */}
         <div>
           <SectionHeader
@@ -445,6 +484,18 @@ export default function Sidebar({
               >
                 <span className="pointer-events-none absolute left-2 top-1.5 w-3 h-3 border-l border-t border-slate-200/80 rounded-tl" />
                 Gestion Postes
+              </button>
+
+              <button
+                onClick={() => handleNav('/app/sites-manager')}
+                className={
+                  "relative w-full text-left rounded-md hover:bg-slate-100 text-gray-700 " +
+                  "pl-6 pr-2 py-[clamp(2px,0.25vw,4px)] " +
+                  "text-[clamp(9px,0.75vw,11px)] transition"
+                }
+              >
+                <span className="pointer-events-none absolute left-2 top-1.5 w-3 h-3 border-l border-t border-slate-200/80 rounded-tl" />
+                Sites Rattachés
               </button>
 
               <button

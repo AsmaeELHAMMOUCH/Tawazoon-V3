@@ -43,7 +43,7 @@ class CNASimulationRequest(BaseModel):
                     "param_collecte": 100,
                     "param_marche_ordinaire": 100,
                     "productivite": 100,
-                    "heures_net": 8.0,
+                    "heures_net": 8.5,
                     "idle_minutes": 0,
                     "taux_complexite": 1.0,
                     "nature_geo": 1.0

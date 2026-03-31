@@ -17,6 +17,7 @@ import {
 import { cn } from "@/lib/utils";
 import { api } from "../../lib/api";
 import { toast } from "react-hot-toast";
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
 
 export default function CentresTypologieManager() {
     const fileInputRef = useRef(null);
@@ -268,19 +269,14 @@ export default function CentresTypologieManager() {
                                 <MapPin className="w-3 h-3" />
                                 Région
                             </label>
-                            <select
+                            <SearchableSelect
+                                options={regions.map(r => ({ value: r.id, label: r.label }))}
                                 value={selectedRegion}
-                                onChange={(e) => setSelectedRegion(e.target.value)}
+                                onChange={setSelectedRegion}
+                                placeholder="Toutes les régions (Optionnel)"
+                                className="h-9 px-3 rounded-lg border-slate-200 bg-slate-50"
                                 disabled={loading.regions}
-                                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all disabled:opacity-50"
-                            >
-                                <option value="">Toutes les régions (Optionnel)</option>
-                                {regions.map((r) => (
-                                    <option key={r.id} value={r.id}>
-                                        {r.label}
-                                    </option>
-                                ))}
-                            </select>
+                            />
                         </div>
 
                         {/* Centre Select */}
@@ -289,25 +285,15 @@ export default function CentresTypologieManager() {
                                 <Building className="w-3 h-3" />
                                 Centre individuel
                             </label>
-                            <select
+                            <SearchableSelect
+                                options={centres.map(c => ({ value: c.id, label: c.label }))}
                                 value={selectedCentre}
-                                onChange={(e) => setSelectedCentre(e.target.value)}
+                                onChange={setSelectedCentre}
+                                placeholder={loading.centres ? "Chargement..." : !selectedRegion ? "Sélectionnez d'abord une région" : "Sélectionner un centre spécifique"}
+                                emptyMessage="Aucun centre trouvé."
+                                className="h-9 px-3 rounded-lg border-slate-200 bg-slate-50"
                                 disabled={!selectedRegion || loading.centres}
-                                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all disabled:opacity-50"
-                            >
-                                <option value="">
-                                    {loading.centres
-                                        ? "Chargement..."
-                                        : !selectedRegion
-                                            ? "Sélectionnez d'abord une région"
-                                            : "Sélectionner un centre spécifique"}
-                                </option>
-                                {centres.map((c) => (
-                                    <option key={c.id} value={c.id}>
-                                        {c.label}
-                                    </option>
-                                ))}
-                            </select>
+                            />
                         </div>
                     </div>
                 </div>

@@ -43,7 +43,7 @@ class CNDPParamsIn(BaseModel):
     colis_par_sac: float = Field(5.0, ge=1, description="Number of parcels per sac")
     nb_jours_ouvres_an: int = Field(264, ge=1, description="Working days per year")
     productivite: float = Field(100.0, ge=1, le=200, description="Productivity %")
-    heures_par_jour: float = Field(8.0, ge=1, le=24, description="Hours per day")
+    heures_par_jour: float = Field(8.5, ge=1, le=24, description="Hours per day")
     idle_minutes: float = Field(0.0, ge=0, description="Dead time in minutes")
     shift: int = Field(1, ge=1, description="Number of shifts")
 

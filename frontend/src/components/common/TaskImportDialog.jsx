@@ -12,12 +12,12 @@ import {
 import toast from 'react-hot-toast';
 import { downloadBandoengTasksTemplate, importBandoengTasks } from "@/services/api";
 
-export default function TaskImportDialog({ open, onOpenChange, onSuccess, centreId }) {
+export default function TaskImportDialog({ open, onOpenChange, onSuccess, centreId, regionId }) {
     const taskFileInputRef = useRef(null);
 
     const handleDownloadTemplate = async () => {
         try {
-            await downloadBandoengTasksTemplate();
+            await downloadBandoengTasksTemplate(centreId, regionId);
             toast.success("Modèle tâches téléchargé avec succès");
         } catch (error) {
             toast.error("Erreur téléchargement modèle tâches");
@@ -110,7 +110,7 @@ export default function TaskImportDialog({ open, onOpenChange, onSuccess, centre
                                 <p className="text-xs text-slate-500">
                                     Sélectionnez votre fichier rempli pour mettre à jour les chronos et responsables.
                                 </p>
-                                <div className="mt-2">
+                                <div className="mt-2 text-center">
                                     <input
                                         type="file"
                                         ref={taskFileInputRef}
@@ -120,7 +120,7 @@ export default function TaskImportDialog({ open, onOpenChange, onSuccess, centre
                                     />
                                     <Button
                                         onClick={() => taskFileInputRef.current?.click()}
-                                        className="h-8 text-xs bg-[#005EA8] hover:bg-[#004e8a] text-white"
+                                        className="h-8 text-xs bg-[#005EA8] hover:bg-[#004e8a] text-white w-full"
                                     >
                                         <Upload className="w-3.5 h-3.5 mr-2" />
                                         Mettre à jour

@@ -41,7 +41,7 @@ class BandoengTaskResult:
 class BandoengSimulationResult:
     tasks: List[BandoengTaskResult] = field(default_factory=list)
     total_heures: float = 0.0
-    heures_net_jour: float = 8.0
+    heures_net_jour: float = 8.5
     fte_calcule: float = 0.0
     fte_arrondi: int = 0
     total_ressources_humaines: float = 0.0
@@ -73,6 +73,7 @@ class BandoengParameters:
     coeff_geo: float = 0.0
     pct_retour: float = 0.0
     pct_collecte: float = 0.0
+    pct_guichet: float = 0.0
     pct_axes: float = 0.0
     pct_local: float = 0.0
     pct_international: float = 0.0
@@ -106,6 +107,7 @@ class BandoengParameters:
     # --- Paramètres Découplés par Flux ---
     # AMANA
     amana_pct_collecte: Optional[float] = None
+    amana_pct_guichet: Optional[float] = None
     amana_pct_retour: Optional[float] = None
     amana_pct_axes_arrivee: Optional[float] = None
     amana_pct_axes_depart: Optional[float] = None
@@ -117,6 +119,7 @@ class BandoengParameters:
 
     # CO (Courrier Ordinaire)
     co_pct_collecte: Optional[float] = None
+    co_pct_guichet: Optional[float] = None
     co_pct_retour: Optional[float] = None
     co_pct_axes_arrivee: Optional[float] = None
     co_pct_axes_depart: Optional[float] = None
@@ -128,6 +131,7 @@ class BandoengParameters:
 
     # CR (Courrier Recommandé)
     cr_pct_collecte: Optional[float] = None
+    cr_pct_guichet: Optional[float] = None
     cr_pct_retour: Optional[float] = None
     cr_pct_axes_arrivee: Optional[float] = None
     cr_pct_axes_depart: Optional[float] = None
@@ -311,6 +315,20 @@ def resolve_phase_multipliers(phase: str, flux: str, params: BandoengParameters)
     # 8) march => pct_marche_ordinaire / 100
     elif phase == "march":
         factors.append(get_flux_param(params, flux, "pct_marche_ordinaire") / 100.0)
+    
+    # 8.5) national_guichet => pct_national * pct_guichet
+    elif "national_guichet" in phase:
+        factors.append(get_flux_param(params, flux, "pct_national") / 100.0)
+        factors.append(get_flux_param(params, flux, "pct_guichet") / 100.0)
+
+    # 8.6) inter_guichet => pct_international * pct_guichet
+    elif "inter_guichet" in phase:
+        factors.append(get_flux_param(params, flux, "pct_international") / 100.0)
+        factors.append(get_flux_param(params, flux, "pct_guichet") / 100.0)
+
+    # 8.7) guichet => pct_guichet / 100
+    elif "guichet" in phase:
+        factors.append(get_flux_param(params, flux, "pct_guichet") / 100.0)
 
     # 9) retour_crbt => retour * pct_crbt / 100
     elif phase == "retour_crbt":
@@ -335,10 +353,10 @@ def resolve_phase_multipliers(phase: str, flux: str, params: BandoengParameters)
         factors.append(pct)
 
     # 2. Logique National / International (Cumulable avec les phases ci-dessus)
-    if "national" in phase and "international" not in phase:
+    if "national" in phase and "international" not in phase and "national_guichet" not in phase:
         pct = get_flux_param(params, flux, "pct_national") / 100.0
         factors.append(pct)
-    elif "international" in phase:
+    elif "international" in phase and "inter_guichet" not in phase:
         pct = get_flux_param(params, flux, "pct_international") / 100.0
         factors.append(pct)
         
@@ -676,10 +694,21 @@ def calculate_task_duration(
         "TRIEUR" in resp_upper or
         resp_upper.startswith("CONTR")
     ):
-        shift_factor = params.shift
-        if shift_factor > 1:
-            heures_tache *= shift_factor
-            friendly_formula += f" * Shift({shift_factor})"
+        # Shift strictement borné pour éviter tout effet inattendu
+        try:
+            shift_factor = int(round(float(params.shift)))
+        except Exception:
+            shift_factor = 1
+        if shift_factor not in (1, 2, 3):
+            shift_factor = 1
+
+        if shift_factor >= 2:
+            actual_multiplier = shift_factor
+            if shift_factor == 3 and "AGENT OP" not in resp_upper:
+                actual_multiplier = 2
+                
+            heures_tache *= actual_multiplier
+            friendly_formula += f" * Shift({actual_multiplier})"
 
     return BandoengTaskResult(
         task_id=task.id,
@@ -825,7 +854,8 @@ def run_bandoeng_simulation(
     # Calcul Capacité Nette (Net Capacity)
     # Heures Prod = 8h * Productivité
     # Capacité Nette = Heures Prod - Temps Mort
-    heures_prod = 8.0 * (params.productivite / 100.0)
+    # Capacité "heures nettes" basée sur une journée standard de 8h30
+    heures_prod = 8.5 * (params.productivite / 100.0)
     capacite_nette = max(0.1, heures_prod - (params.idle_minutes/60.0))
     
     # Capacité Facteur = Capacité Nette - (Trajet A/R)
@@ -833,9 +863,11 @@ def run_bandoeng_simulation(
     capacite_facteur = max(0.1, capacite_nette - ((params.duree_trajet * 2) / 60.0))
 
     # Calcul des ressources par poste (Intervenant)
+    # Les clés sont normalisées (UPPERCASE + strip) pour garantir la cohérence
+    # avec les labels envoyés au frontend (qui compare toujours en .toUpperCase())
     ressources_par_poste = {}
     for res in task_results:
-        resp = res.responsable
+        resp = (res.responsable or "N/A").strip().upper()
         if resp not in ressources_par_poste:
             ressources_par_poste[resp] = 0.0
         
@@ -862,6 +894,7 @@ def run_bandoeng_simulation(
         ressources_par_poste=ressources_par_poste,
         grid_values=local_volumes.grid_values,
         debug_info={
+            "shift_received": params.shift,
             "has_guichet_received": params.has_guichet,
             "seen_families": list(seen_families),
             "filtered_guichet_count": filtered_count,

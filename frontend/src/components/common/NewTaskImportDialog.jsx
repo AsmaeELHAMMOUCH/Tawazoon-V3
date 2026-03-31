@@ -109,7 +109,7 @@ export default function NewTaskImportDialog({ open, onOpenChange, onSuccess, cen
                                 <p className="text-xs text-slate-500">
                                     Insérez les tâches dans la base. Le système gère les doublons de responsables.
                                 </p>
-                                <div className="mt-2">
+                                <div className="mt-2 text-center">
                                     <input
                                         type="file"
                                         ref={fileInputRef}
@@ -119,7 +119,7 @@ export default function NewTaskImportDialog({ open, onOpenChange, onSuccess, cen
                                     />
                                     <Button
                                         onClick={() => fileInputRef.current?.click()}
-                                        className="h-8 text-xs bg-indigo-600 hover:bg-indigo-700 text-white"
+                                        className="h-8 text-xs bg-indigo-600 hover:bg-indigo-700 text-white w-full"
                                     >
                                         <PlusCircle className="w-3.5 h-3.5 mr-2" />
                                         Importer et Créer

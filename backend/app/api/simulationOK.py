@@ -47,7 +47,7 @@ def calculer_heures_nettes(productivite: float, heures_net_input: Optional[float
     """Si heures_net_input fourni -> on le prend. Sinon : 8h * productivité (%)."""
     if heures_net_input and heures_net_input > 0:
         return float(heures_net_input)
-    return (8.0 * float(productivite or 0)) / 100.0
+    return (8.5 * float(productivite or 0)) / 100.0
 
 
 def calculer_simulation(

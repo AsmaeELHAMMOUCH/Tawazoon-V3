@@ -154,7 +154,14 @@ const StaffGroupRenderer = ({ staffList }) => {
 
                             {/* Category Label */}
                             <div className="bg-white px-3 py-1 rounded-full text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-3 border border-slate-200 shadow-sm relative z-10">
-                                {group.name}
+                                <div className="flex items-center gap-2 justify-center w-full">
+                                    <span className="truncate">{group.name}</span>
+                                    {typeof group.count === "number" && (
+                                        <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full bg-slate-50 border border-slate-200 text-[9px] font-extrabold text-slate-700">
+                                            {Math.round(group.count)}
+                                        </span>
+                                    )}
+                                </div>
                                 {/* Vertical Connector Down from Category */}
                                 <div className="absolute left-1/2 -translate-x-1/2 top-full w-0.5 h-3 bg-slate-300"></div>
                             </div>

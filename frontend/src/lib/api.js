@@ -138,9 +138,13 @@ function normalizePostes(payload) {
     centre_id: p.centre_id ?? null,
     centre_poste_id: p.centre_poste_id ?? null,
     effectif_actuel: Number(p.effectif_actuel ?? p.effectif ?? 0),
+    effectif_actuel_mod: Number(p.effectif_actuel_mod ?? 0),
     charge_salaire: Number(p.charge_salaire ?? 0),
     type_poste: p.type_poste ?? null,
-    category: p.category ?? p.categorie ?? null, // ✅ Capture category
+    category: p.category ?? p.categorie ?? null,
+    categorie: p.categorie ?? null, // Label hiérarchique
+    raw_hie: p.raw_hie ?? null, // Code hiérarchie pour le tri
+    aps: Number(p.aps ?? 0),
   }));
 }
 
@@ -175,6 +179,7 @@ function normalizeTaches(payload) {
       moy_sec: t.moy_sec ?? t.min_sec ?? null, // ✅ Capture moy_sec correctly
       centre_poste_id: t.centre_poste_id ?? null,
       ordre: t.ordre ?? null, // ✅ Ordre d'affichage
+      
     };
   });
 }
@@ -250,6 +255,17 @@ export const api = {
     const data = await http(`/postes${query}`);
     const out = normalizePostes(data);
     console.debug("postes(api): raw=", data, " normalized=", out);
+    return out;
+  },
+
+  /**
+   * Récupère les postes Bandoeng (avec APS) pour un centre
+   */
+  bandoengPostes: async (centreId) => {
+    if (!centreId) return [];
+    const data = await http(`/bandoeng/postes?centre_id=${encodeURIComponent(centreId)}`);
+    const out = normalizePostes(data);
+    console.debug("bandoengPostes(api): raw=", data, " normalized=", out);
     return out;
   },
 
@@ -837,7 +853,10 @@ export const api = {
   getRegions: async () => api.regions(),
   getCategories: async (regionId = null) => api.categories(regionId),
   getCentres: async (regionId = null, categorieId = null) => api.centres(regionId, categorieId),
-  getPostes: async (centreId = null, regionId = null) => api.postes(centreId, regionId),
+  getPostes: async (centreId = null, regionId = null) => {
+    if (centreId) return api.bandoengPostes(centreId);
+    return api.postes(centreId, regionId);
+  },
   bandoengSimulate: async (payload) => await http("/bandoeng/simulate-bandoeng", { method: "POST", body: payload }),
 
   // --- Batch Simulation (Régionale / Nationale) ---
@@ -868,7 +887,7 @@ export const api = {
     window.URL.revokeObjectURL(urlDl);
   },
 
-  simulateBatch: async (file) => {
+  simulateBatch: async (file, regionId = null, processMode = "actuel") => {
     const t = getToken();
     const headers = {};
     if (t) headers.Authorization = `Bearer ${t}`;
@@ -876,7 +895,14 @@ export const api = {
     const formData = new FormData();
     formData.append("file", file);
 
-    const res = await fetch(`${API_BASE}/batch/simulate`, {
+    const params = new URLSearchParams();
+    if (regionId) params.append("region_id", encodeURIComponent(regionId));
+    if (processMode && processMode !== "actuel") params.append("process_mode", processMode);
+    const qs = params.toString() ? `?${params.toString()}` : "";
+
+    const url = `${API_BASE}/batch/simulate${qs}`;
+
+    const res = await fetch(url, {
       method: "POST",
       headers,
       body: formData,
@@ -885,6 +911,31 @@ export const api = {
     if (!res.ok) {
       const txt = await res.text();
       throw new Error(txt || "Erreur simulation batch");
+    }
+    return await res.json();
+  },
+
+  simulateBatchComparatif: async (file, regionId = null) => {
+    const t = getToken();
+    const headers = {};
+    if (t) headers.Authorization = `Bearer ${t}`;
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const params = new URLSearchParams();
+    if (regionId) params.append("region_id", encodeURIComponent(regionId));
+    const qs = params.toString() ? `?${params.toString()}` : "";
+
+    const res = await fetch(`${API_BASE}/batch/simulate-comparatif${qs}`, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error(txt || "Erreur simulation comparatif batch");
     }
     return await res.json();
   },

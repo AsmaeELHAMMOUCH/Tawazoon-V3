@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 import { useState } from "react";
 import { motion } from "framer-motion";
 import {
@@ -241,9 +241,6 @@ function HeroSection() {
       className="relative min-h-screen bg-cover bg-center bg-no-repeat flex items-center justify-center"
       style={{ backgroundImage: "url('/img/bg-barid-esign.jpg')" }}
     >
-      {/* Couche transparente */}
-      <div className="absolute inset-0 bg-white/30"></div>
-
       {/* Background glow */}
       <div
         aria-hidden
@@ -722,7 +719,7 @@ function FaqSection() {
     >
       {/* Background Image */}
       <div
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-80 pointer-events-none"
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat pointer-events-none"
         style={{ backgroundImage: "url('/bg-barid-esign.jpg')" }}
       />
       <div className="absolute inset-0 bg-white/60 pointer-events-none"></div>

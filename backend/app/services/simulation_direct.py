@@ -17,7 +17,7 @@ def calculer_simulation_direct(
     centre_poste_id: int,
     volumes_ui: VolumesUIInput,
     productivite: float = 100.0,
-    heures_par_jour: float = 8.0,
+    heures_par_jour: float = 8.5,
     idle_minutes: float = 0.0,
     debug: bool = True
 ) -> SimulationResponse:
@@ -208,7 +208,7 @@ def calculer_simulation_multi_centres(
     centre_poste_ids: List[int],
     volumes_ui: VolumesUIInput,
     productivite: float = 100.0,
-    heures_par_jour: float = 8.0,
+    heures_par_jour: float = 8.5,
     idle_minutes: float = 0.0,
     debug: bool = False
 ) -> SimulationResponse:

@@ -3,6 +3,10 @@ import axios from 'axios';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001';
 
 export const builderService = {
+  getVilles: async () => {
+    const res = await axios.get(`${API_URL}/api/bandoeng/villes`);
+    return res.data;
+  },
   getRefPostes: async () => {
     const res = await axios.get(`${API_URL}/api/builder/ref/postes`);
     return res.data;

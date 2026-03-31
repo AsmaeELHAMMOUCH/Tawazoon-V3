@@ -9,6 +9,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, File, UploadFile
 from fastapi.responses import StreamingResponse
 import pandas as pd
 import io
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from pydantic import BaseModel
@@ -44,7 +46,7 @@ def get_all_centre_postes(db: Session = Depends(get_db)):
             "centre_label": c.label,
             "region_label": region_label,
             "effectif_actuel": cp.effectif_actuel,
-            "effectif_aps": c.t_aps if c.t_aps is not None else 0
+            "effectif_aps": cp.aps if cp.aps is not None else 0
         })
     return result
 
@@ -94,6 +96,34 @@ def export_aps_template(
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df.to_excel(writer, index=False, sheet_name='Update_APS')
+        workbook = writer.book
+        worksheet = writer.sheets['Update_APS']
+        
+        # Styles
+        header_fill = PatternFill(start_color="005EA8", end_color="005EA8", fill_type="solid")
+        header_font = Font(color="FFFFFF", bold=True, size=11)
+        center_align = Alignment(horizontal="center", vertical="center")
+        border = Border(
+            left=Side(style='thin', color='DDDDDD'),
+            right=Side(style='thin', color='DDDDDD'),
+            top=Side(style='thin', color='DDDDDD'),
+            bottom=Side(style='thin', color='DDDDDD')
+        )
+        
+        # Formater l'en-tête
+        for col_num, column_title in enumerate(df.columns, 1):
+            cell = worksheet.cell(row=1, column=col_num)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = center_align
+            cell.border = border
+            
+            # Largeur automatique
+            max_length = max(df[column_title].astype(str).map(len).max(), len(column_title)) + 5
+            worksheet.column_dimensions[get_column_letter(col_num)].width = max_length
+            
+        # Figer les volets
+        worksheet.freeze_panes = 'A2'
     
     output.seek(0)
     
@@ -197,12 +227,13 @@ def export_effectifs_template(
                 r.label as region,
                 c.label as centre,
                 p.label as poste,
-                COALESCE(cp.effectif_actuel, 0) as effectif
+                COALESCE(cp.effectif_actuel, 0) as effectif,
+                COALESCE(cp.aps, 0) as aps
             FROM dbo.centres c
             JOIN dbo.regions r ON r.id = c.region_id
-            LEFT JOIN dbo.centre_postes cp ON cp.centre_id = c.id
-            LEFT JOIN dbo.postes p ON p.Code = cp.code_resp
-            WHERE c.id = :centre_id
+            JOIN dbo.centre_postes cp ON cp.centre_id = c.id
+            JOIN dbo.postes p ON p.Code = cp.code_resp
+            WHERE c.id = :centre_id AND (COALESCE(cp.effectif_actuel, 0) > 0 OR COALESCE(cp.aps, 0) > 0)
         """)
         rows = db.execute(query, {"centre_id": centre_id}).mappings().all()
     else:
@@ -216,18 +247,20 @@ def export_effectifs_template(
             filters.append("c.categorie_id = :typologie_id")
             params["typologie_id"] = typologie_id
         
-        filter_str = " AND ".join(filters) if filters else "1=1"
+        filters.append("(COALESCE(cp.effectif_actuel, 0) > 0 OR COALESCE(cp.aps, 0) > 0)")
+        filter_str = " AND ".join(filters)
         
         query = text(f"""
             SELECT 
                 r.label as region,
                 c.label as centre,
                 p.label as poste,
-                COALESCE(cp.effectif_actuel, 0) as effectif
+                COALESCE(cp.effectif_actuel, 0) as effectif,
+                COALESCE(cp.aps, 0) as aps
             FROM dbo.centres c
             JOIN dbo.regions r ON r.id = c.region_id
-            LEFT JOIN dbo.centre_postes cp ON cp.centre_id = c.id
-            LEFT JOIN dbo.postes p ON p.id = cp.poste_id
+            JOIN dbo.centre_postes cp ON cp.centre_id = c.id
+            JOIN dbo.postes p ON p.Code = cp.code_resp
             WHERE {filter_str}
             ORDER BY c.label, p.label
         """)
@@ -239,14 +272,51 @@ def export_effectifs_template(
             "Région": row["region"],
             "Centre": row["centre"],
             "Poste": row["poste"] if row["poste"] else "",
-            "Effectif Actuel": row["effectif"]
+            "Statutaires": row["effectif"],
+            "APS": row["aps"]
         })
     
     # Sincérité des colonnes même si data est vide
-    df = pd.DataFrame(data, columns=["Région", "Centre", "Poste", "Effectif Actuel"])
+    df = pd.DataFrame(data, columns=["Région", "Centre", "Poste", "Statutaires", "APS"])
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False, sheet_name='Update_Effectifs')
+        df.to_excel(writer, index=False, sheet_name='Update_Effectifs', startrow=1)
+        workbook = writer.book
+        worksheet = writer.sheets['Update_Effectifs']
+        
+        # Ajouter l'instruction sur la première ligne
+        worksheet.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(df.columns))
+        instruction_cell = worksheet.cell(row=1, column=1)
+        instruction_cell.value = "💡 NOTE : Pour affecter un nouveau poste à un centre, ajoutez simplement une ligne dans le fichier avec le nom du centre, du poste et les effectifs."
+        instruction_cell.font = Font(italic=True, color="444444", size=10, bold=True)
+        instruction_cell.alignment = Alignment(horizontal="left", vertical="center")
+        worksheet.row_dimensions[1].height = 25
+        
+        # Styles pour les en-têtes (à la ligne 2)
+        header_fill = PatternFill(start_color="005EA8", end_color="005EA8", fill_type="solid")
+        header_font = Font(color="FFFFFF", bold=True, size=11)
+        center_align = Alignment(horizontal="center", vertical="center")
+        border = Border(
+            left=Side(style='thin', color='DDDDDD'),
+            right=Side(style='thin', color='DDDDDD'),
+            top=Side(style='thin', color='DDDDDD'),
+            bottom=Side(style='thin', color='DDDDDD')
+        )
+        
+        # Formater l'en-tête (ligne 2)
+        for col_num, column_title in enumerate(df.columns, 1):
+            cell = worksheet.cell(row=2, column=col_num)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = center_align
+            cell.border = border
+            
+            # Largeur automatique
+            max_length = max(df[column_title].astype(str).map(len).max(), len(column_title)) + 8
+            worksheet.column_dimensions[get_column_letter(col_num)].width = max_length
+            
+        # Figer les volets
+        worksheet.freeze_panes = 'A3'
     
     output.seek(0)
     
@@ -263,11 +333,20 @@ async def import_effectifs(file: UploadFile = File(...), db: Session = Depends(g
     """
     try:
         contents = await file.read()
-        df = pd.read_excel(io.BytesIO(contents))
         
-        required_cols = ["Centre", "Poste", "Effectif Actuel"]
-        if not all(col in df.columns for col in required_cols):
-            raise HTTPException(status_code=400, detail=f"Colonnes manquantes. Requis: {required_cols}")
+        # Détection automatique du début du tableau
+        df_temp = pd.read_excel(io.BytesIO(contents), nrows=5)
+        skip = 0
+        if "Centre" not in df_temp.columns:
+            df_check = pd.read_excel(io.BytesIO(contents), skiprows=1, nrows=5)
+            if "Centre" in df_check.columns:
+                skip = 1
+        
+        df = pd.read_excel(io.BytesIO(contents), skiprows=skip)
+        
+        required_cols = ["Centre", "Poste", "Statutaires"]
+        # On rend "APS" optionnel pour la compatibilité avec les anciens templates
+        has_aps_col = "APS" in df.columns
         
         updated_count = 0
         created_count = 0
@@ -275,45 +354,74 @@ async def import_effectifs(file: UploadFile = File(...), db: Session = Depends(g
         
         # Track processed combinations to prevent IntegrityError on duplicates
         processed_combinations = set()
+        # Track which centers were touched and which posts were actually in the file
+        affected_center_ids = set()
+        successfully_processed_keys = set() # Set of (centre_id, poste_id)
         
+        import re
+        def norm(s):
+            if not s: return ""
+            return re.sub(r'\s+', '', str(s)).lower()
+
         # Pré-charger les centres et les postes pour éviter trop de requêtes unitaires
-        all_centres = {(c.label.lower().replace(' ', '') if c.label else ''): c.id for c in db.query(Centre).all()}
-        all_postes = {(p.label.lower().replace(' ', '') if p.label else ''): (p.id, p.Code) for p in db.query(Poste).all()}
+        all_centres = {norm(c.label): c.id for c in db.query(Centre).all()}
+        all_postes_by_label = {norm(p.label): (p.id, p.Code) for p in db.query(Poste).all()}
         
         for index, row in df.iterrows():
             centre_name_raw = str(row["Centre"]).strip()
             poste_label_raw = str(row["Poste"]).strip()
-            new_val = row["Effectif Actuel"]
+            new_val = row["Statutaires"]
             try:
                 if pd.isna(new_val) or str(new_val).strip() == "":
                     new_val_float = 0.0
                 else:
                     new_val_float = float(str(new_val).replace(',', '.'))
+                
+                new_aps_float = 0.0
+                if has_aps_col:
+                    aps_val = row["APS"]
+                    if not pd.isna(aps_val) and str(aps_val).strip() != "":
+                        new_aps_float = float(str(aps_val).replace(',', '.'))
             except ValueError:
-                errors.append(f"Ligne {index+2}: Valeur d'effectif invalide '{new_val}'")
+                errors.append(f"Ligne {index+2}: Valeur d'effectif ou APS invalide")
                 continue
-            
-            centre_key = centre_name_raw.lower().replace(' ', '')
-            poste_key = poste_label_raw.lower().replace(' ', '')
-            
+            centre_key = norm(centre_name_raw)
             centre_id = all_centres.get(centre_key)
-            poste_info = all_postes.get(poste_key)
+            
+            poste_id = None
+            poste_code = None
+            
+            # Identification par libellé
+            poste_key = norm(poste_label_raw)
+            p_info = all_postes_by_label.get(poste_key)
+            if p_info:
+                poste_id, poste_code = p_info
+
+            if centre_id and poste_id:
+                combo_key = (centre_id, poste_id)
+                if combo_key in processed_combinations:
+                    continue
+                processed_combinations.add(combo_key)
+                affected_center_ids.add(centre_id)
+                successfully_processed_keys.add(combo_key)
+            
+            # Données de base de la ligne pour le fichier de rejets
+            row_context = {
+                "Région": row.get("Région", ""),
+                "Centre": centre_name_raw,
+                "Poste": poste_label_raw,
+                "Statutaires": new_val_float,
+                "APS": new_aps_float
+            }
             
             if not centre_id:
-                errors.append(f"Ligne {index+2}: Centre '{centre_name_raw}' non trouvé")
+                row_context["Erreur"] = f"Centre '{centre_name_raw}' non trouvé"
+                errors.append(row_context)
                 continue
-            if not poste_info:
-                errors.append(f"Ligne {index+2}: Poste '{poste_label_raw}' non trouvé dans le référentiel")
+            if not poste_id:
+                row_context["Erreur"] = f"Poste '{poste_label_raw}' non trouvé dans le référentiel"
+                errors.append(row_context)
                 continue
-            
-            poste_id, poste_code = poste_info
-            
-            combo_key = (centre_id, poste_id)
-            if combo_key in processed_combinations:
-                errors.append(f"Ligne {index+2}: Doublon ignoré pour le centre '{centre_name_raw}' et le poste '{poste_label_raw}'")
-                continue
-            
-            processed_combinations.add(combo_key)
             
             # Recherche de l'association existante
             # On cherche par poste_id ou par code_resp pour être résilient
@@ -324,6 +432,8 @@ async def import_effectifs(file: UploadFile = File(...), db: Session = Depends(g
             
             if cp:
                 cp.effectif_actuel = new_val_float
+                if has_aps_col:
+                    cp.aps = new_aps_float
                 updated_count += 1
             else:
                 # Création d'une nouvelle association
@@ -331,23 +441,31 @@ async def import_effectifs(file: UploadFile = File(...), db: Session = Depends(g
                     centre_id=centre_id,
                     poste_id=poste_id,
                     code_resp=poste_code,
-                    effectif_actuel=new_val_float
+                    effectif_actuel=new_val_float,
+                    aps=new_aps_float if has_aps_col else 0.0
                 )
                 db.add(new_cp)
                 created_count += 1
         
+        # Logic to zero-out missing posts for affected centers
+        zeroed_count = 0
+        if affected_center_ids:
+            # Find all existing CentrePoste relations for these centers
+            existing_relations = db.query(CentrePoste).filter(CentrePoste.centre_id.in_(list(affected_center_ids))).all()
+            for rel in existing_relations:
+                key = (rel.centre_id, rel.poste_id)
+                if key not in successfully_processed_keys:
+                    # This post was in the DB for one of the uploaded centers, but not in the Excel
+                    if rel.effectif_actuel != 0 or rel.aps != 0:
+                        rel.effectif_actuel = 0
+                        rel.aps = 0
+                        zeroed_count += 1
+
         db.commit()
         
         if errors:
             # S'il y a des erreurs, on génère un fichier excel de rejets
-            error_data = []
-            for err_msg in errors:
-                # Extraire la ligne si possible pour le contexte, sinon on met juste l'erreur
-                error_data.append({
-                    "Erreur": err_msg
-                })
-            
-            df_errors = pd.DataFrame(error_data)
+            df_errors = pd.DataFrame(errors)
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
                 df_errors.to_excel(writer, index=False, sheet_name='Lignes_Rejetees')
@@ -355,10 +473,11 @@ async def import_effectifs(file: UploadFile = File(...), db: Session = Depends(g
             
             headers = {
                 "Content-Disposition": "attachment; filename=rejets_import_effectifs.xlsx",
-                "Access-Control-Expose-Headers": "X-Error-Count, X-Updated-Count, X-Created-Count",
+                "Access-Control-Expose-Headers": "X-Error-Count, X-Updated-Count, X-Created-Count, X-Zeroed-Count",
                 "X-Error-Count": str(len(errors)),
                 "X-Updated-Count": str(updated_count),
-                "X-Created-Count": str(created_count)
+                "X-Created-Count": str(created_count),
+                "X-Zeroed-Count": str(zeroed_count)
             }
             return StreamingResponse(
                 output,
@@ -368,7 +487,7 @@ async def import_effectifs(file: UploadFile = File(...), db: Session = Depends(g
             
         return {
             "status": "success", 
-            "message": f"{updated_count} effectifs mis à jour, {created_count} nouveaux postes affectés.",
+            "message": f"{updated_count} effectifs mis à jour, {created_count} nouveaux postes affectés, {zeroed_count} postes remis à 0 car absents du fichier.",
             "errors": []
         }
     except Exception as e:
@@ -417,6 +536,7 @@ class PosteCentreItem(BaseModel):
     """Représente un poste dans un centre avec ses effectifs."""
     centre_poste_id: int
     poste_id: int
+    code_poste: Optional[str] = None
     poste_label: str
     type_poste: Optional[str] = "MOD"
     effectif_actuel: float = 0.0
@@ -426,12 +546,32 @@ class PosteCentreItem(BaseModel):
 class PosteCentreUpdate(BaseModel):
     """Données pour mise à jour d'un poste dans un centre."""
     effectif_actuel: Optional[float] = None
+    effectif_aps: Optional[float] = None
 
 
 class PosteCentreCreate(BaseModel):
     """Données pour créer un nouveau poste dans un centre."""
     poste_id: int
     effectif_actuel: float = 0.0
+    effectif_aps: float = 0.0
+
+
+@router.patch("/centre-postes/{cp_id}")
+def update_centre_poste(cp_id: int, update: PosteCentreUpdate, db: Session = Depends(get_db)):
+    """
+    Met à jour les effectifs d'un poste spécifique.
+    """
+    cp = db.query(CentrePoste).filter(CentrePoste.id == cp_id).first()
+    if not cp:
+        raise HTTPException(status_code=404, detail="Association poste-centre non trouvée")
+    
+    if update.effectif_actuel is not None:
+        cp.effectif_actuel = update.effectif_actuel
+    if update.effectif_aps is not None:
+        cp.aps = update.effectif_aps
+    
+    db.commit()
+    return {"status": "success", "message": "Poste mis à jour"}
 
 
 # ==================== ENDPOINTS ====================
@@ -455,13 +595,13 @@ def get_postes_by_centre(
         SELECT 
             cp.id as centre_poste_id,
             cp.poste_id,
-            COALESCE(p.label, 'N/A') as poste_label,
+            p.Code as code_poste,
+            p.label as poste_label,
             COALESCE(p.type_poste, 'MOD') as type_poste,
-            COALESCE(cp.effectif_actuel, 0) as effectif_actuel,
-            c.aps as effectif_aps
+            COALESCE(cp.effectif_actuel, 0) as effectif,
+            COALESCE(cp.aps, 0) as effectif_aps
         FROM dbo.centre_postes cp
-        LEFT JOIN dbo.postes p ON p.Code = cp.code_resp
-        LEFT JOIN dbo.centres c ON c.id = cp.centre_id
+        INNER JOIN dbo.postes p ON p.Code = cp.code_resp
         WHERE cp.centre_id = :centre_id
         ORDER BY p.label
     """)
@@ -472,9 +612,10 @@ def get_postes_by_centre(
         PosteCentreItem(
             centre_poste_id=row["centre_poste_id"],
             poste_id=row["poste_id"],
+            code_poste=row["code_poste"],
             poste_label=row["poste_label"],
             type_poste=row["type_poste"],
-            effectif_actuel=float(row["effectif_actuel"] or 0),
+            effectif_actuel=float(row["effectif"] or 0),
             effectif_aps=float(row["effectif_aps"]) if row["effectif_aps"] is not None else None
         )
         for row in rows
@@ -495,7 +636,7 @@ def get_available_postes(
             "id": p.id,
             "label": p.label,
             "type_poste": p.type_poste,
-            "Code": p.Code
+            "code_poste": p.Code
         }
         for p in postes
     ]

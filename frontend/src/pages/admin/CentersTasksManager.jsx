@@ -22,6 +22,7 @@ import FlexNavbar from "@/components/FluxNavbar";
 import { useSimulationParams } from "@/hooks/usePersistedState";
 import TaskImportDialog from '@/components/common/TaskImportDialog';
 import NewTaskImportDialog from '@/components/common/NewTaskImportDialog';
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
 
 export default function CentersTasksManager() {
     // --- Etats de sélection ---
@@ -52,19 +53,6 @@ export default function CentersTasksManager() {
     // Mode Edition / Création
     const [editingId, setEditingId] = useState(null); // ID de la tâche en cours d'édition
     const [editForm, setEditForm] = useState({});
-    const [isCreating, setIsCreating] = useState(false);
-    const [newForm, setNewForm] = useState({
-        nom_tache: "",
-        famille_uo: "",
-        produit: "",
-        phase: "",
-        unite_mesure: "",
-        moyenne_min: 0,
-        base_calcul: 100,
-        centre_poste_id: "",
-        centre_poste_id_2: "",
-    });
-
     const [isImportOpen, setIsImportOpen] = useState(false);
     const [isNewImportOpen, setIsNewImportOpen] = useState(false);
 
@@ -228,65 +216,6 @@ export default function CentersTasksManager() {
         }
     };
 
-    const handleCreate = async () => {
-        if (!centre) {
-            setError("Veuillez sélectionner un centre.");
-            return;
-        }
-        if (!newForm.centre_poste_id) {
-            setError("Veuillez sélectionner au moins le Responsable 1.");
-            return;
-        }
-
-        setSaving(true);
-        try {
-            // First Task
-            const payload1 = { ...newForm };
-            delete payload1.centre_poste_id_2; // clean up
-
-            const p1 = api.createTache(payload1);
-
-            let p2 = Promise.resolve(null);
-
-            // Second Task (if selected)
-            if (newForm.centre_poste_id_2) {
-                const payload2 = {
-                    ...newForm,
-                    centre_poste_id: newForm.centre_poste_id_2
-                };
-                delete payload2.centre_poste_id_2;
-                p2 = api.createTache(payload2);
-            }
-
-            const [created1, created2] = await Promise.all([p1, p2]);
-
-            // Refresh tasks list completely to ensure sync
-            const refreshed = await api.taches({ centreId: centre, posteId: poste || null });
-            setTasks(refreshed);
-
-            setIsCreating(false);
-            setNewForm({
-                nom_tache: "",
-                famille_uo: "",
-                produit: "",
-                phase: "",
-                unite_mesure: "",
-                moyenne_min: 0,
-                base_calcul: 100,
-                centre_poste_id: "",
-                centre_poste_id_2: "",
-            });
-
-            let msg = "Tâche créée avec succès";
-            if (created2) msg += " pour les 2 postes !";
-            showSuccess(msg);
-
-        } catch (error) {
-            setError("Erreur lors de la création : " + error.message);
-        } finally {
-            setSaving(false);
-        }
-    };
 
     // --- Filtrage Frontend ---
     const [familleFilter, setFamilleFilter] = useState("");
@@ -440,50 +369,32 @@ export default function CentersTasksManager() {
                 <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-blue-600 to-cyan-400 opacity-90" />
 
                 {/* Région */}
-                <div className="w-48 space-y-1 group">
+                <div className="w-56 space-y-1 group">
                     <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5 group-focus-within:text-blue-600 transition-colors">
                         <MapPin size={10} className="opacity-70" /> Région
                     </label>
-                    <div className="relative">
-                        <select
-                            className="w-full appearance-none border border-slate-200 bg-slate-50/50 hover:bg-white rounded-lg px-3 py-1.5 text-xs font-medium text-slate-700 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 transition-all cursor-pointer shadow-sm"
-                            value={region}
-                            onChange={(e) => setRegion(e.target.value)}
-                        >
-                            <option value="">-- Choisir --</option>
-                            {regions.map((r) => (
-                                <option key={r.id} value={r.id}>{r.label}</option>
-                            ))}
-                        </select>
-                        <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
-                        </div>
-                    </div>
+                    <SearchableSelect
+                        options={regions.map(r => ({ value: r.id, label: r.label }))}
+                        value={region}
+                        onChange={setRegion}
+                        placeholder="-- Choisir --"
+                        className="h-8 px-3 rounded-lg border-slate-200"
+                    />
                 </div>
 
                 {/* Typologie */}
-                <div className="w-48 space-y-1 group">
+                <div className="w-56 space-y-1 group">
                     <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5 group-focus-within:text-blue-600 transition-colors">
                         <Tag size={10} className="opacity-70" /> Typologie
                     </label>
-                    <div className="relative">
-                        <select
-                            className="w-full appearance-none border border-slate-200 bg-slate-50/50 hover:bg-white rounded-lg px-3 py-1.5 text-xs font-medium text-slate-700 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 transition-all cursor-pointer shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                            value={selectedTypology}
-                            onChange={(e) => setSelectedTypology(e.target.value)}
-                            disabled={!region}
-                        >
-                            <option value="">-- Toutes --</option>
-                            {categories.map((c) => (
-                                <option key={c.id} value={c.id}>{c.label}</option>
-                            ))}
-                        </select>
-                        {!(!region) && (
-                            <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
-                            </div>
-                        )}
-                    </div>
+                    <SearchableSelect
+                        options={categories.map(c => ({ value: c.id, label: c.label }))}
+                        value={selectedTypology}
+                        onChange={setSelectedTypology}
+                        placeholder="-- Toutes --"
+                        className="h-8 px-3 rounded-lg border-slate-200"
+                        disabled={!region}
+                    />
                 </div>
 
                 {/* Centre */}
@@ -491,24 +402,15 @@ export default function CentersTasksManager() {
                     <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5 group-focus-within:text-blue-600 transition-colors">
                         <Building size={10} className="opacity-70" /> Centre
                     </label>
-                    <div className="relative">
-                        <select
-                            className="w-full appearance-none border border-slate-200 bg-slate-50/50 hover:bg-white rounded-lg px-3 py-1.5 text-xs font-medium text-slate-700 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 transition-all cursor-pointer shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                            value={centre}
-                            onChange={(e) => setCentre(e.target.value)}
-                            disabled={!region}
-                        >
-                            <option value="">-- Choisir un centre --</option>
-                            {centres.map((c) => (
-                                <option key={c.id} value={c.id}>{c.label}</option>
-                            ))}
-                        </select>
-                        {!(!region) && (
-                            <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
-                            </div>
-                        )}
-                    </div>
+                    <SearchableSelect
+                        options={centres.map(c => ({ value: c.id, label: c.label }))}
+                        value={centre}
+                        onChange={setCentre}
+                        placeholder="-- Choisir un centre --"
+                        emptyMessage="Aucun centre trouvé."
+                        className="h-8 px-3 rounded-lg border-slate-200"
+                        disabled={!region}
+                    />
                 </div>
 
                 {/* ... Hidden fields kept hidden ... */}
@@ -551,76 +453,9 @@ export default function CentersTasksManager() {
                                 <Upload size={14} /> Mise à jour
                             </button>
                         )}
-                        {centre && (
-                            <button
-                                onClick={() => setIsNewImportOpen(true)}
-                                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-blue-200 text-blue-600 rounded-lg text-xs font-medium hover:bg-blue-50 transition cursor-pointer"
-                                title="Ajouter de nouvelles tâches (Import Excel)"
-                            >
-                                <Plus size={14} /> Nouvelles tâches
-                            </button>
-                        )}
                     </div>
                 </div>
 
-                {/* Ligne Création Inline */}
-                {isCreating && (
-                    <div className="p-3 bg-blue-50/50 border-b border-blue-100 grid grid-cols-11 gap-3 items-end animate-in slide-in-from-top-2">
-                        <div className="col-span-2">
-                            <InputField label="Nom Tâche" value={newForm.nom_tache} onChange={e => setNewForm({ ...newForm, nom_tache: e.target.value })} />
-                        </div>
-                        <div className="col-span-1">
-                            <InputField label="Famille" value={newForm.famille_uo} onChange={e => setNewForm({ ...newForm, famille_uo: e.target.value })} />
-                        </div>
-                        <div className="col-span-1">
-                            <InputField label="Produit" value={newForm.produit} onChange={e => setNewForm({ ...newForm, produit: e.target.value })} />
-                        </div>
-                        <div className="col-span-2 flex flex-col gap-1">
-                            <label className="text-[9px] uppercase font-bold text-slate-500">Resp. 1</label>
-                            <select
-                                className="border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-500 bg-white"
-                                value={newForm.centre_poste_id}
-                                onChange={e => setNewForm({ ...newForm, centre_poste_id: Number(e.target.value) })}
-                            >
-                                <option value="">-- Choisir --</option>
-                                {postes.map((p) => (
-                                    <option key={p.id} value={p.centre_poste_id}>{p.label}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div className="col-span-2 flex flex-col gap-1">
-                            <label className="text-[9px] uppercase font-bold text-slate-500 text-blue-600">Resp. 2 (Optionnel)</label>
-                            <select
-                                className="border border-blue-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-500 bg-white"
-                                value={newForm.centre_poste_id_2}
-                                onChange={e => setNewForm({ ...newForm, centre_poste_id_2: Number(e.target.value) })}
-                            >
-                                <option value="">-- Aucun --</option>
-                                {postes.map((p) => (
-                                    <option key={p.id} value={p.centre_poste_id}>{p.label}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div className="col-span-1">
-                            <InputField label="Phase" value={newForm.phase} onChange={e => setNewForm({ ...newForm, phase: e.target.value })} />
-                        </div>
-                        <div className="col-span-1">
-                            <InputField label="Unité" value={newForm.unite_mesure} onChange={e => setNewForm({ ...newForm, unite_mesure: e.target.value })} />
-                        </div>
-                        <div className="col-span-1">
-                            <InputField label="Min/U" type="number" value={newForm.moyenne_min} onChange={e => setNewForm({ ...newForm, moyenne_min: e.target.value })} />
-                        </div>
-
-                        <div className="col-span-11 flex justify-end gap-2 pt-2 border-t border-blue-200/50 mt-1">
-                            <button onClick={handleCreate} disabled={saving} className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide">
-                                <Check size={12} /> Créer Tâche(s)
-                            </button>
-                            <button onClick={() => setIsCreating(false)} className="px-3 py-1 bg-slate-200 text-slate-600 rounded hover:bg-slate-300 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide">
-                                <X size={12} /> Annuler
-                            </button>
-                        </div>
-                    </div>
-                )}
 
                 {/* Tableau */}
                 <div className="overflow-x-auto">
@@ -844,6 +679,7 @@ export default function CentersTasksManager() {
                         .catch((err) => console.error("Erreur second refresh:", err));
                 }}
                 centreId={centre}
+                regionId={region}
             />
 
             <NewTaskImportDialog

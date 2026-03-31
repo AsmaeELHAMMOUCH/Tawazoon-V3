@@ -12,7 +12,7 @@ class GlobalParamsOut(BaseModel):
 
 def compute_global_params(p: GlobalParamsIn) -> GlobalParamsOut:
     # Formula:
-    # Heures / Jour = (Productivité / 100) * 8.0  (assuming 8h base)
+    # Heures / Jour = (Productivité / 100) * 8.5  (assuming 8h30 base)
     # Heures Nettes / Jour = Heures / Jour - (Temps Mort / 60)
     
     # Base constant
@@ -22,7 +22,7 @@ def compute_global_params(p: GlobalParamsIn) -> GlobalParamsOut:
     # Frontend Context used "const [heuresParJour, setHeuresParJour] = useState(8);"
     # So we stick to 8.0.
     
-    h_jour = (p.productivite / 100.0) * 8.0
+    h_jour = (p.productivite / 100.0) * 8.5
     
     # Subtract temps mort (min -> hour)
     t_mort_h = p.temps_mort_min / 60.0

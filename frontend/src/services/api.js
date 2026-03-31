@@ -74,16 +74,22 @@ export const importBandoengVolumes = async (file) => {
     }
 };
 
-export const downloadBandoengTasksTemplate = async () => {
+export const downloadBandoengTasksTemplate = async (centreId, regionId) => {
     try {
-        const response = await axios.get(`${API_BASE_URL}/bandoeng/import-template`, {
+        let url = `${API_BASE_URL}/bandoeng/import-template`;
+        const params = [];
+        if (centreId) params.push(`centre_id=${centreId}`);
+        if (regionId) params.push(`region_id=${regionId}`);
+        if (params.length > 0) url += `?${params.join('&')}`;
+
+        const response = await axios.get(url, {
             responseType: 'blob',
         });
 
-        const url = window.URL.createObjectURL(new Blob([response.data]));
+        const url_blob = window.URL.createObjectURL(new Blob([response.data]));
         const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', 'Modele_Mise_a_jour_Taches.xlsx');
+        link.href = url_blob;
+        link.setAttribute('download', `Modele_Mise_a_jour_Taches_${centreId || regionId || 'Global'}.xlsx`);
         document.body.appendChild(link);
         link.click();
         link.remove();
@@ -255,6 +261,16 @@ export const updateCentreAps = async (centreId, aps) => {
     }
 };
 
+export const updateCentrePoste = async (cpId, data) => {
+    try {
+        const response = await axios.patch(`${API_BASE_URL}/pm/centre-postes/${cpId}`, data);
+        return response.data;
+    } catch (error) {
+        console.error("Update Centre Poste Error:", error);
+        throw error;
+    }
+};
+
 export const downloadEffectifsTemplate = async (regionId, typologieId, centreId) => {
     try {
         let url = `${API_BASE_URL}/pm/effectifs/export-template`;
@@ -301,9 +317,15 @@ export const importEffectifs = async (file) => {
         });
 
         // If successful, the server returns JSON despite expecting a blob, so we must manually parse it
-        const contentType = response.headers['content-type'];
-        if (contentType && contentType.includes('application/json')) {
-            const text = await response.data.text();
+        const contentType = response.headers['content-type'] || '';
+        if (contentType.includes('application/json')) {
+            const blob = response.data;
+            const text = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsText(blob);
+            });
             return JSON.parse(text);
         }
 
@@ -313,7 +335,8 @@ export const importEffectifs = async (file) => {
             data: response.data,
             errorCount: response.headers['x-error-count'],
             updatedCount: response.headers['x-updated-count'],
-            createdCount: response.headers['x-created-count']
+            createdCount: response.headers['x-created-count'],
+            zeroedCount: response.headers['x-zeroed-count']
         };
     } catch (error) {
         console.error("Import Error:", error);
@@ -334,6 +357,98 @@ export const clearEffectifs = async (regionId, typologieId, centreId) => {
         return response.data;
     } catch (error) {
         console.error("Clear Effectifs Error:", error);
+        throw error;
+    }
+};
+
+// ==================== SITES RATTACHÉS ====================
+
+export const fetchSitesByCentre = async (centreId) => {
+    try {
+        const response = await axios.get(`${API_BASE_URL}/sites/centre/${centreId}`);
+        return response.data;
+    } catch (error) {
+        console.error("Fetch Sites Error:", error);
+        throw error;
+    }
+};
+
+export const createSite = async (data) => {
+    try {
+        const response = await axios.post(`${API_BASE_URL}/sites`, data);
+        return response.data;
+    } catch (error) {
+        console.error("Create Site Error:", error);
+        throw error;
+    }
+};
+
+export const updateSite = async (siteId, data) => {
+    try {
+        const response = await axios.patch(`${API_BASE_URL}/sites/${siteId}`, data);
+        return response.data;
+    } catch (error) {
+        console.error("Update Site Error:", error);
+        throw error;
+    }
+};
+
+export const deleteSite = async (siteId) => {
+    try {
+        const response = await axios.delete(`${API_BASE_URL}/sites/${siteId}`);
+        return response.data;
+    } catch (error) {
+        console.error("Delete Site Error:", error);
+        throw error;
+    }
+};
+
+export const downloadSitesTemplate = async (regionId, centreId) => {
+    try {
+        let url = `${API_BASE_URL}/sites/export-template`;
+        const params = [];
+        if (regionId) params.push(`region_id=${regionId}`);
+        if (centreId) params.push(`centre_id=${centreId}`);
+        if (params.length > 0) url += `?${params.join('&')}`;
+
+        const response = await axios.get(url, { responseType: 'blob' });
+        const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.setAttribute('download', 'template_sites_rattaches.xlsx');
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+    } catch (error) {
+        console.error("Download Error:", error);
+        throw error;
+    }
+};
+
+export const importSites = async (file) => {
+    try {
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const response = await axios.post(`${API_BASE_URL}/sites/import`, formData, {
+            headers: { "Content-Type": "multipart/form-data" },
+            responseType: 'blob',
+        });
+
+        const contentType = response.headers['content-type'];
+        if (contentType && contentType.includes('application/json')) {
+            const text = await response.data.text();
+            return JSON.parse(text);
+        }
+
+        return {
+            isErrorFile: true,
+            data: response.data,
+            errorCount: response.headers['x-error-count'],
+            successCount: response.headers['x-success-count']
+        };
+    } catch (error) {
+        console.error("Import Error:", error);
         throw error;
     }
 };

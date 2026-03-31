@@ -1,8 +1,9 @@
 import React, { useState, useCallback, useEffect } from "react";
-import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
+import { useSearchParams, useLocation, useNavigate } from "react-router-dom";
 import WizardStepper from "@/components/wizard/WizardStepper";
 import WizardNavigation from "@/components/wizard/WizardNavigation";
 import Step1CentreSelection from "@/components/wizard/Step1CentreSelection";
+import Step2RawImport from "@/components/wizard/Step2RawImport";
 import Step2ParametersConfig from "@/components/wizard/Step2ParametersConfig";
 import Step3VolumeInput from "@/components/wizard/Step3VolumeInput";
 import Step4Results from "@/components/wizard/Step4Results";
@@ -16,11 +17,25 @@ import "@/styles/wizard.css";
 const recalculateGridValues = (gridValues, wizardData) => {
     const recalculated = JSON.parse(JSON.stringify(gridValues)); // Deep clone
 
+    // Helper to sync Standard details (Guichet, Collecte, Marche) for CR/CO/AMANA
+    const syncStandardDetails = (fluxKey, flowType, subKey, localVal) => {
+        const pctCollecte = Number(wizardData[`${fluxKey}_pctCollecte`] !== undefined ? wizardData[`${fluxKey}_pctCollecte`] : (wizardData.pctCollecte || 0));
+        const pctMarche = Number(wizardData[`${fluxKey}_pctMarcheOrdinaire`] !== undefined ? wizardData[`${fluxKey}_pctMarcheOrdinaire`] : (wizardData.pctMarcheOrdinaire || 0));
+        const pctGuichet = Number(wizardData[`${fluxKey}_pctGuichet`] !== undefined ? wizardData[`${fluxKey}_pctGuichet`] : (wizardData.pctGuichet || 0));
+
+        const collecte = Math.round(localVal * (pctCollecte / 100));
+        const marche = Math.round(localVal * (pctMarche / 100));
+        const guichet = Math.round(localVal * (pctGuichet / 100));
+
+        if (!recalculated[fluxKey].localDetails) recalculated[fluxKey].localDetails = {};
+        const detailKey = subKey ? `${flowType}_${subKey}` : flowType;
+        recalculated[fluxKey].localDetails[detailKey] = { guichet, collecte, marche };
+    };
+
     // Helper to recalculate a single flow object with flux-specific percentages
-    const recalcFlow = (flowObj, fluxKey) => {
+    const recalcFlow = (flowObj, fluxKey, flowType) => {
         if (!flowObj || typeof flowObj !== 'object') return;
 
-        // Try to get flux-specific percentages, fallback to global
         const pctAxes = Number(wizardData[`${fluxKey}_pctAxesArrivee`] !== undefined ? wizardData[`${fluxKey}_pctAxesArrivee`] : (wizardData.pctAxesArrivee || 0));
         const pctLocal = Number(wizardData[`${fluxKey}_pctAxesDepart`] !== undefined ? wizardData[`${fluxKey}_pctAxesDepart`] : (wizardData.pctAxesDepart || 0));
 
@@ -30,54 +45,53 @@ const recalculateGridValues = (gridValues, wizardData) => {
                 const sub = flowObj[subKey];
                 if (sub && sub.global !== undefined) {
                     const globalVal = parseFloat(String(sub.global).replace(',', '.')) || 0;
-
-                    if (globalVal > 0) {
-                        sub.local = String(Math.round(globalVal * (pctLocal / 100)));
-                        sub.axes = String(Math.round(globalVal * (pctAxes / 100)));
-                    } else {
-                        sub.local = "0";
-                        sub.axes = "0";
-                    }
+                    const localVal = Math.round(globalVal * (pctLocal / 100));
+                    
+                    sub.local = String(localVal);
+                    sub.axes = String(Math.round(globalVal * (pctAxes / 100)));
+                    
+                    // Sync ventilation for AMANA
+                    syncStandardDetails(fluxKey, flowType, subKey, localVal);
                 }
             });
         }
         // Handle simple global/local/axes structure (cr, co)
         else if (flowObj.global !== undefined) {
             const globalVal = parseFloat(String(flowObj.global).replace(',', '.')) || 0;
+            const localVal = Math.round(globalVal * (pctLocal / 100));
+            flowObj.local = String(localVal);
+            flowObj.axes = String(Math.round(globalVal * (pctAxes / 100)));
 
-            if (globalVal > 0) {
-                flowObj.local = String(Math.round(globalVal * (pctLocal / 100)));
-                flowObj.axes = String(Math.round(globalVal * (pctAxes / 100)));
-            } else {
-                flowObj.local = "0";
-                flowObj.axes = "0";
+            // Sync ventilation for CR/CO
+            if (['cr', 'co'].includes(fluxKey)) {
+                syncStandardDetails(fluxKey, flowType, null, localVal);
             }
         }
     };
 
     // Recalculate each flux with its specific parameters
     if (recalculated.amana) {
-        recalcFlow(recalculated.amana.depot, 'amana');
-        recalcFlow(recalculated.amana.recu, 'amana');
+        recalcFlow(recalculated.amana.depot, 'amana', 'depot');
+        recalcFlow(recalculated.amana.recu, 'amana', 'recu');
     }
 
     if (recalculated.cr) {
-        recalcFlow(recalculated.cr.med, 'cr');
-        recalcFlow(recalculated.cr.arrive, 'cr');
+        recalcFlow(recalculated.cr.med, 'cr', 'med');
+        recalcFlow(recalculated.cr.arrive, 'cr', 'arrive');
     }
 
     if (recalculated.co) {
-        recalcFlow(recalculated.co.med, 'co');
-        recalcFlow(recalculated.co.arrive, 'co');
+        recalcFlow(recalculated.co.med, 'co', 'med');
+        recalcFlow(recalculated.co.arrive, 'co', 'arrive');
     }
 
     return recalculated;
 };
 
 export default function StepWizardSimulation() {
-    const navigate = useNavigate();
     const location = useLocation();
     const [searchParams] = useSearchParams();
+    const navigate = useNavigate();
 
     // Mode Detection (from URL or state)
     const mode = location.state?.mode || searchParams.get("mode") || "actuel";
@@ -88,6 +102,19 @@ export default function StepWizardSimulation() {
     const testCatId = searchParams.get("catId");
     const testName = searchParams.get("name") || "CENTRE TEST";
 
+    const toNum = (v, fallback = 0) => {
+        const raw = v ?? "";
+        const normalized = String(raw).replace(",", ".");
+        const n = parseFloat(normalized);
+        return Number.isFinite(n) ? n : fallback;
+    };
+
+    // En mode test, on pré-remplit les paramètres "ville" depuis la DB
+    const testCoeffGeo = isTestMode ? toNum(searchParams.get("coeffGeo"), 0) : 0;
+    const testCoeffCirc = isTestMode ? toNum(searchParams.get("coeffCirc"), 0) : 0;
+    const testDureeTrajet = isTestMode ? toNum(searchParams.get("dureeTrajet"), 0) : 0;
+
+    // En mode "test" (Nouvelle création), on veut commencer sur l'import brut.
     const [currentStep, setCurrentStep] = useState(isTestMode ? 2 : 1);
     const [loading, setLoading] = useState(false);
     const [postes, setPostes] = useState([]);
@@ -106,9 +133,10 @@ export default function StepWizardSimulation() {
         // Volume
         pctCollecte: 5,
         pctMarcheOrdinaire: 0,
+        pctGuichet: 95,
         pctRetour: 0,
         pctAxesArrivee: 0,
-        pctAxesDepart: 0,
+        pctAxesDepart: 100,
         pctNational: 100,
         pctInternational: 0,
         crParCaisson: 40,
@@ -119,14 +147,15 @@ export default function StepWizardSimulation() {
         shift: 1,
 
         // Distribution
-        natureGeo: 0,
-        tauxComplexite: 0,
-        dureeTrajet: 0,
+        natureGeo: testCoeffGeo,
+        tauxComplexite: testCoeffCirc,
+        dureeTrajet: testDureeTrajet,
         hasGuichet: 1,
         nbrCoSac: 350,
         nbrCrSac: 400,
 
         // Step 3: Volumes
+        rawGridValues: null,
         gridValues: {
             amana: {
                 depot: {
@@ -140,11 +169,13 @@ export default function StepWizardSimulation() {
             },
             cr: {
                 med: { global: "0", local: "0", axes: "0" },
-                arrive: { global: "0", local: "0", axes: "0" }
+                arrive: { global: "0", local: "0", axes: "0" },
+                localDetails: {}
             },
             co: {
                 med: { global: "0", local: "0", axes: "0" },
-                arrive: { global: "0", local: "0", axes: "0" }
+                arrive: { global: "0", local: "0", axes: "0" },
+                localDetails: {}
             },
             ebarkia: {
                 med: "0",
@@ -159,30 +190,33 @@ export default function StepWizardSimulation() {
         amana_pctCollecte: 5,
         amana_pctRetour: 0,
         amana_pctAxesArrivee: 0,
-        amana_pctAxesDepart: 0,
+        amana_pctAxesDepart: 100,
         amana_pctNational: 100,
         amana_pctInternational: 0,
         amana_pctMarcheOrdinaire: 0,
+        amana_pctGuichet: 95,
         amana_pctCrbt: 50,
         amana_pctHorsCrbt: 50,
 
         co_pctCollecte: 5,
         co_pctRetour: 0,
         co_pctAxesArrivee: 0,
-        co_pctAxesDepart: 0,
+        co_pctAxesDepart: 100,
         co_pctNational: 100,
         co_pctInternational: 0,
         co_pctMarcheOrdinaire: 0,
+        co_pctGuichet: 95,
         co_pctVagueMaster: 0,
         co_pctBoitePostale: 0,
 
         cr_pctCollecte: 5,
         cr_pctRetour: 0,
         cr_pctAxesArrivee: 0,
-        cr_pctAxesDepart: 0,
+        cr_pctAxesDepart: 100,
         cr_pctNational: 100,
         cr_pctInternational: 0,
         cr_pctMarcheOrdinaire: 0,
+        cr_pctGuichet: 95,
         cr_pctVagueMaster: 0,
         cr_pctBoitePostale: 0,
         cr_pctCrbt: 50,
@@ -196,15 +230,187 @@ export default function StepWizardSimulation() {
         colisAmanaParCanvaSac: 35,
         edPercent: 40,
         simulationResults: null,
+        needsRelaunch: false,
     };
 
     // Validation states for each step
     const [step1Valid, setStep1Valid] = useState(isTestMode);
+    // En mode "test", on veut que Step 2 (Import brut) soit requis.
     const [step2Valid, setStep2Valid] = useState(false);
     const [step3Valid, setStep3Valid] = useState(false);
+    const [step4Valid, setStep4Valid] = useState(false);
 
     // Wizard data state
     const [wizardData, setWizardData] = useState(initialWizardData);
+
+    const PRESERVE_KEY = "sim_wizard_preserved_from_test_v1";
+
+    // IMPORTANT: React Router peut ne pas remonter ce composant quand seulement les query params changent.
+    // On force donc la mise à jour du "mode" + de l'étape affichée à chaque changement.
+    useEffect(() => {
+        setCurrentStep(isTestMode ? 2 : 1);
+        setStep1Valid(isTestMode);
+        setStep2Valid(false);
+        setStep3Valid(false);
+        setStep4Valid(false);
+
+        setWizardData((prev) => ({
+            ...prev,
+            isVirtual: isTestMode,
+            virtualTypology: isTestMode ? testTypology : null,
+            virtualName: isTestMode ? testName : null,
+            // En sortant du mode test, on repart sur une sélection réelle du centre
+            region: isTestMode ? prev.region : null,
+            typologie: isTestMode ? prev.typologie : null,
+            centre: isTestMode ? prev.centre : null,
+            simulationResults: null,
+            needsRelaunch: false,
+        }));
+    }, [isTestMode, testTypology, testName]);
+
+    // Restaurer des volumes/imports quand on bascule vers une simulation réelle
+    useEffect(() => {
+        if (isTestMode) return;
+        if (typeof window === "undefined") return;
+
+        const raw = window.localStorage.getItem(PRESERVE_KEY);
+        if (!raw) return;
+
+        try {
+            const preserved = JSON.parse(raw);
+            // On force la simulation réelle : centre sélectionné à l'étape 1.
+            setWizardData(prev => ({
+                ...prev,
+                ...preserved,
+                isVirtual: false,
+                virtualTypology: null,
+                virtualName: null,
+                centre: null,
+                simulationResults: null,
+                needsRelaunch: false,
+            }));
+        } catch (e) {
+            console.error("Failed to restore wizard preserved data:", e);
+        } finally {
+            window.localStorage.removeItem(PRESERVE_KEY);
+        }
+    }, [isTestMode]);
+
+    const handleExitTestMode = useCallback(() => {
+        if (typeof window === "undefined") return;
+        try {
+            const preserved = {
+                // On garde l'import + paramètres déjà définis
+                rawGridValues: wizardData.rawGridValues,
+                gridValues: wizardData.gridValues,
+
+                // Productivité / distribution / coefficients ville
+                productivite: wizardData.productivite,
+                idleMinutes: wizardData.idleMinutes,
+                shift: wizardData.shift,
+                natureGeo: wizardData.natureGeo,
+                tauxComplexite: wizardData.tauxComplexite,
+                dureeTrajet: wizardData.dureeTrajet,
+                hasGuichet: wizardData.hasGuichet,
+                nbrCoSac: wizardData.nbrCoSac,
+                nbrCrSac: wizardData.nbrCrSac,
+                // Flux %
+                pctCollecte: wizardData.pctCollecte,
+                pctMarcheOrdinaire: wizardData.pctMarcheOrdinaire,
+                pctGuichet: wizardData.pctGuichet,
+                pctRetour: wizardData.pctRetour,
+                pctAxesArrivee: wizardData.pctAxesArrivee,
+                pctAxesDepart: wizardData.pctAxesDepart,
+                pctNational: wizardData.pctNational,
+                pctInternational: wizardData.pctInternational,
+                crParCaisson: wizardData.crParCaisson,
+                amana_pctCollecte: wizardData.amana_pctCollecte,
+                amana_pctRetour: wizardData.amana_pctRetour,
+                amana_pctAxesArrivee: wizardData.amana_pctAxesArrivee,
+                amana_pctAxesDepart: wizardData.amana_pctAxesDepart,
+                amana_pctNational: wizardData.amana_pctNational,
+                amana_pctInternational: wizardData.amana_pctInternational,
+                amana_pctMarcheOrdinaire: wizardData.amana_pctMarcheOrdinaire,
+                amana_pctGuichet: wizardData.amana_pctGuichet,
+                amana_pctCrbt: wizardData.amana_pctCrbt,
+                amana_pctHorsCrbt: wizardData.amana_pctHorsCrbt,
+                co_pctCollecte: wizardData.co_pctCollecte,
+                co_pctRetour: wizardData.co_pctRetour,
+                co_pctAxesArrivee: wizardData.co_pctAxesArrivee,
+                co_pctAxesDepart: wizardData.co_pctAxesDepart,
+                co_pctNational: wizardData.co_pctNational,
+                co_pctInternational: wizardData.co_pctInternational,
+                co_pctMarcheOrdinaire: wizardData.co_pctMarcheOrdinaire,
+                co_pctGuichet: wizardData.co_pctGuichet,
+                co_pctVagueMaster: wizardData.co_pctVagueMaster,
+                co_pctBoitePostale: wizardData.co_pctBoitePostale,
+                cr_pctCollecte: wizardData.cr_pctCollecte,
+                cr_pctRetour: wizardData.cr_pctRetour,
+                cr_pctAxesArrivee: wizardData.cr_pctAxesArrivee,
+                cr_pctAxesDepart: wizardData.cr_pctAxesDepart,
+                cr_pctNational: wizardData.cr_pctNational,
+                cr_pctInternational: wizardData.cr_pctInternational,
+                cr_pctMarcheOrdinaire: wizardData.cr_pctMarcheOrdinaire,
+                cr_pctGuichet: wizardData.cr_pctGuichet,
+                cr_pctVagueMaster: wizardData.cr_pctVagueMaster,
+                cr_pctBoitePostale: wizardData.cr_pctBoitePostale,
+                cr_pctCrbt: wizardData.cr_pctCrbt,
+                cr_pctHorsCrbt: wizardData.cr_pctHorsCrbt,
+                pctVagueMaster: wizardData.pctVagueMaster,
+                pctBoitePostale: wizardData.pctBoitePostale,
+                pctCrbt: wizardData.pctCrbt,
+                pctHorsCrbt: wizardData.pctHorsCrbt,
+                colisAmanaParCanvaSac: wizardData.colisAmanaParCanvaSac,
+                edPercent: wizardData.edPercent,
+            };
+
+            window.localStorage.setItem(PRESERVE_KEY, JSON.stringify(preserved));
+        } catch (e) {
+            console.error("Failed to preserve wizard data:", e);
+        }
+
+        // Basculer en simulation réelle (centre réel à sélectionner à l'étape 1)
+        navigate(`/app/simulation/wizard?mode=actuel`);
+    }, [navigate, wizardData]);
+
+    // Update wizard data with robust change detection
+    const updateWizardData = useCallback((newData) => {
+        setWizardData(prev => {
+            // Check for actual data changes (excluding results and internal flags)
+            const changedKeys = Object.keys(newData).filter(key => {
+                if (key === 'simulationResults' || key === 'needsRelaunch') return false;
+                if (typeof newData[key] === 'object' && newData[key] !== null) {
+                    return JSON.stringify(prev[key]) !== JSON.stringify(newData[key]);
+                }
+                return prev[key] !== newData[key];
+            });
+
+            const isSettingResults = 'simulationResults' in newData && newData.simulationResults !== null;
+
+            // CASE 1: Data changed -> Invalidate results
+            if (changedKeys.length > 0) {
+                return { 
+                    ...prev, 
+                    ...newData,
+                    simulationResults: null,
+                    needsRelaunch: !!prev.simulationResults || !!newData.simulationResults
+                };
+            }
+
+            // CASE 2: No data changed, but we are providing new results (e.g. from API)
+            if (isSettingResults) {
+                return { ...prev, ...newData, needsRelaunch: false };
+            }
+
+            // CASE 3: No real change
+            return prev;
+        });
+    }, []);
+
+    // Update wizard data and invalidate simulation results (Legacy helper)
+    const handleParameterChange = useCallback((newData) => {
+        updateWizardData(newData);
+    }, [updateWizardData]);
 
     // Force validation of pre-filled steps in test mode
     useEffect(() => {
@@ -248,8 +454,8 @@ export default function StepWizardSimulation() {
                     toast.error("Erreur lors du chargement des détails du centre");
                 }
 
-                // 2. Charger les postes existants
-                let postesList = await api.getPostes(wizardData.centre);
+                // 2. Charger les postes existants (version Bandoeng pour récupérer APS par poste)
+                let postesList = await api.bandoengPostes(wizardData.centre);
 
                 // 3. Trigger Auto-import si :
                 // - Pas de tâches (même si des postes existent)
@@ -308,43 +514,34 @@ export default function StepWizardSimulation() {
     const heuresNet = React.useMemo(() => {
         const prod = Number(wizardData.productivite || 100) / 100;
         const idleH = Number(wizardData.idleMinutes || 0) / 60;
-        return Math.max(0, 8 * prod - idleH).toFixed(2);
+        // Capacité "heures nettes" basée sur une journée standard de 8h30
+        return Math.max(0, 8.5 * prod - idleH).toFixed(2);
     }, [wizardData.productivite, wizardData.idleMinutes]);
 
     // Recalculate grid values when percentage parameters change
     useEffect(() => {
-        if (wizardData.gridValues) {
-            const recalculated = recalculateGridValues(wizardData.gridValues, wizardData);
+        const sourceGrid = wizardData.rawGridValues || wizardData.gridValues;
+        if (sourceGrid) {
+            const recalculated = recalculateGridValues(sourceGrid, wizardData);
             // Only update if values actually changed to avoid infinite loop
-            const currentStr = JSON.stringify(wizardData.gridValues);
-            const newStr = JSON.stringify(recalculated);
-            if (currentStr !== newStr) {
-                setWizardData(prev => ({
-                    ...prev,
-                    gridValues: recalculated
-                }));
+            if (JSON.stringify(wizardData.gridValues) !== JSON.stringify(recalculated)) {
+                // Use updateWizardData to ensure invalidation logic is applied
+                updateWizardData({ gridValues: recalculated });
             }
         }
     }, [
+        wizardData.rawGridValues,
+        wizardData.gridValues,
         wizardData.pctAxesArrivee, wizardData.pctAxesDepart,
         wizardData.amana_pctAxesArrivee, wizardData.amana_pctAxesDepart,
         wizardData.co_pctAxesArrivee, wizardData.co_pctAxesDepart,
-        wizardData.cr_pctAxesArrivee, wizardData.cr_pctAxesDepart
+        wizardData.cr_pctAxesArrivee, wizardData.cr_pctAxesDepart,
+        wizardData.pctCollecte, wizardData.pctMarcheOrdinaire, wizardData.pctGuichet,
+        wizardData.amana_pctCollecte, wizardData.amana_pctMarcheOrdinaire, wizardData.amana_pctGuichet,
+        wizardData.co_pctCollecte, wizardData.co_pctMarcheOrdinaire, wizardData.co_pctGuichet,
+        wizardData.cr_pctCollecte, wizardData.cr_pctMarcheOrdinaire, wizardData.cr_pctGuichet,
+        updateWizardData
     ]);
-
-    // Update wizard data
-    const updateWizardData = useCallback((newData) => {
-        setWizardData(prev => ({ ...prev, ...newData }));
-    }, []);
-
-    // Update wizard data and invalidate simulation results
-    const handleParameterChange = useCallback((newData) => {
-        setWizardData(prev => ({
-            ...prev,
-            ...newData,
-            simulationResults: null  // Clear simulation results when parameters change
-        }));
-    }, []);
 
     // Export PDF handler
     const handleExportPDF = useCallback(() => {
@@ -494,13 +691,16 @@ export default function StepWizardSimulation() {
 
     // Navigation handlers
     const handleNext = useCallback(() => {
-        if (currentStep < 4) {
+        if (currentStep < 5) {
+            if (currentStep === 4 && wizardData.needsRelaunch) {
+                toast("Données modifiées : Pensez à relancer la simulation", { icon: "🔄", duration: 4000 });
+            }
             setCurrentStep(prev => prev + 1);
         } else {
             // Finish wizard - Export PDF
             handleExportPDF();
         }
-    }, [currentStep, handleExportPDF]);
+    }, [currentStep, handleExportPDF, wizardData.needsRelaunch]);
 
     const handlePrevious = useCallback(() => {
         if (currentStep > 1) {
@@ -520,6 +720,7 @@ export default function StepWizardSimulation() {
             setStep1Valid(false);
             setStep2Valid(false);
             setStep3Valid(false);
+            setStep4Valid(false);
         }
     }, []);
 
@@ -543,6 +744,7 @@ export default function StepWizardSimulation() {
                     pct_national: wizardData.pctNational,
                     pct_international: wizardData.pctInternational,
                     pct_collecte: wizardData.pctCollecte,
+                    pct_guichet: wizardData.pctGuichet,
                     pct_retour: wizardData.pctRetour,
                     pct_marche_ordinaire: wizardData.pctMarcheOrdinaire,
                     pct_vague_master: wizardData.pctVagueMaster,
@@ -557,6 +759,7 @@ export default function StepWizardSimulation() {
                     has_guichet: wizardData.hasGuichet,
                     // AMANA
                     amana_pct_collecte: wizardData.amana_pctCollecte,
+                    amana_pct_guichet: wizardData.amana_pctGuichet,
                     amana_pct_retour: wizardData.amana_pctRetour,
                     amana_pct_axes_arrivee: wizardData.amana_pctAxesArrivee,
                     amana_pct_axes_depart: wizardData.amana_pctAxesDepart,
@@ -567,6 +770,7 @@ export default function StepWizardSimulation() {
                     amana_pct_hors_crbt: wizardData.amana_pctHorsCrbt,
                     // CO
                     co_pct_collecte: wizardData.co_pctCollecte,
+                    co_pct_guichet: wizardData.co_pctGuichet,
                     co_pct_retour: wizardData.co_pctRetour,
                     co_pct_axes_arrivee: wizardData.co_pctAxesArrivee,
                     co_pct_axes_depart: wizardData.co_pctAxesDepart,
@@ -577,6 +781,7 @@ export default function StepWizardSimulation() {
                     co_pct_boite_postale: wizardData.co_pctBoitePostale,
                     // CR
                     cr_pct_collecte: wizardData.cr_pctCollecte,
+                    cr_pct_guichet: wizardData.cr_pctGuichet,
                     cr_pct_retour: wizardData.cr_pctRetour,
                     cr_pct_axes_arrivee: wizardData.cr_pctAxesArrivee,
                     cr_pct_axes_depart: wizardData.cr_pctAxesDepart,
@@ -620,9 +825,8 @@ export default function StepWizardSimulation() {
         try {
             const gridValues = await api.importBandoengVolumes(file);
             if (gridValues && typeof gridValues === 'object') {
-                // Recalculate local/axes based on percentages
-                const recalculated = recalculateGridValues(gridValues, wizardData);
-                updateWizardData({ gridValues: recalculated });
+                // Store raw import then calculate ventilation in subsequent steps
+                updateWizardData({ rawGridValues: gridValues, gridValues });
                 toast.success("Volumes importés avec succès");
                 toast.dismiss(toastId);
             } else {
@@ -655,16 +859,33 @@ export default function StepWizardSimulation() {
             case 3:
                 return step3Valid;
             case 4:
+                return step4Valid;
+            case 5:
                 return true;
             default:
                 return false;
         }
-    }, [currentStep, step1Valid, step2Valid, step3Valid]);
+    }, [currentStep, step1Valid, step2Valid, step3Valid, step4Valid]);
 
     return (
         <div className="wizard-container">
             {/* Stepper */}
-            <WizardStepper currentStep={currentStep} />
+            <WizardStepper currentStep={currentStep} mode={mode} isTestMode={isTestMode} />
+
+            {isTestMode && (
+                <div className="flex items-center justify-center gap-2 bg-blue-600/90 backdrop-blur-sm px-4 py-1 text-white text-[10px]">
+                    <span className="font-black uppercase tracking-widest opacity-80">Mode test</span>
+                    <span className="w-px h-3 bg-white/30" />
+                    <span className="font-medium opacity-75 hidden sm:inline">Simulation virtuelle — aucune donnée réelle affectée.</span>
+                    <button
+                        type="button"
+                        onClick={handleExitTestMode}
+                        className="ml-1 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white/20 hover:bg-white/30 font-bold transition-colors"
+                    >
+                        Quitter
+                    </button>
+                </div>
+            )}
 
             {/* Step Content */}
             <div className="flex-1 overflow-auto">
@@ -676,23 +897,32 @@ export default function StepWizardSimulation() {
                     />
                 )}
                 {currentStep === 2 && (
-                    <Step2ParametersConfig
-                        data={{ ...wizardData, heuresNet }}
-                        onDataChange={updateWizardData}
-                        handleParameterChange={handleParameterChange}
-                        onValidationChange={setStep2Valid}
-                    />
-                )}
-                {currentStep === 3 && (
-                    <Step3VolumeInput
+                    <Step2RawImport
                         data={wizardData}
                         onDataChange={updateWizardData}
-                        onValidationChange={setStep3Valid}
+                        onValidationChange={setStep2Valid}
                         onImportBandoeng={handleImportBandoeng}
                         onDownloadTemplate={handleDownloadTemplate}
                     />
                 )}
+                {currentStep === 3 && (
+                    <Step2ParametersConfig
+                        data={{ ...wizardData, heuresNet }}
+                        onDataChange={updateWizardData}
+                        handleParameterChange={handleParameterChange}
+                        onValidationChange={setStep3Valid}
+                    />
+                )}
                 {currentStep === 4 && (
+                    <Step3VolumeInput
+                        data={wizardData}
+                        onDataChange={updateWizardData}
+                        onValidationChange={setStep4Valid}
+                        onImportBandoeng={handleImportBandoeng}
+                        onDownloadTemplate={handleDownloadTemplate}
+                    />
+                )}
+                {currentStep === 5 && (
                     <Step4Results
                         data={{ ...wizardData, heuresNet, mode }}
                         onLaunchSimulation={handleLaunchSimulation}
@@ -707,12 +937,12 @@ export default function StepWizardSimulation() {
             {/* Navigation */}
             <WizardNavigation
                 currentStep={currentStep}
-                totalSteps={4}
+                totalSteps={5}
                 onPrevious={handlePrevious}
                 onNext={handleNext}
                 onReset={handleReset}
                 canGoNext={canGoNext}
-                isLastStep={currentStep === 4}
+                isLastStep={currentStep === 5}
                 loading={loading}
             />
 

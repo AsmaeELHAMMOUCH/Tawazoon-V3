@@ -35,7 +35,7 @@ class CNDPSimulationResult:
     """Complete simulation result for CNDP."""
     tasks: List[CNDPTaskResult] = field(default_factory=list)
     total_heures: float = 0.0
-    heures_net_jour: float = 8.0
+    heures_net_jour: float = 8.5
     fte_calcule: float = 0.0
     fte_arrondi: int = 0
     debug_info: Dict[str, Any] = field(default_factory=dict)
@@ -60,7 +60,8 @@ class CNDPParameters:
     colis_par_sac: float = 5.0  # Ratio: combien de colis par sac
     nb_jours_ouvres_an: int = 264
     productivite: float = 100.0
-    heures_par_jour: float = 8.0
+    # Capacité standard "heures nettes" basée sur une journée de 8h30
+    heures_par_jour: float = 8.5
     idle_minutes: float = 0.0
     shift: int = 1              # Nombre de shifts (multiplicateur pour certains postes)
     
@@ -159,8 +160,12 @@ def calculate_task_duration(
     ):
         shift_factor = params.shift
         if shift_factor > 1:
-            heures_tache *= shift_factor
-            formula_parts.append(f"× Shift({shift_factor})")
+            actual_multiplier = shift_factor
+            if shift_factor == 3 and "AGENT OP" not in resp_upper:
+                actual_multiplier = 2
+
+            heures_tache *= actual_multiplier
+            formula_parts.append(f"× Shift({actual_multiplier})")
 
     # H. Apply productivity (Optional/Legacy - kept for consistency if needed)
     # if params.productivite > 0:

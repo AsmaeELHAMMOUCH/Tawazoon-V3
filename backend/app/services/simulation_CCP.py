@@ -91,7 +91,7 @@ def calculate_ccp_simulation(
     
     # Extract parameters
     productivite = float(params.get('productivite', 100.0))
-    heures_net = float(params.get('heures_net', 8.0))
+    heures_net = float(params.get('heures_net', 8.5))
     idle_minutes = float(params.get('idle_minutes', 0.0))
     taux_complexite = float(params.get('taux_complexite', 1.0))
     nature_geo = float(params.get('nature_geo', 1.0))
@@ -356,8 +356,13 @@ def calculate_ccp_simulation(
         is_shift_role = p_label in target_roles
         
         if is_shift_role and shift_val > 1.0:
-            workload_minutes = workload_minutes * shift_val
-            formule_parts.append(f"× {shift_val:.0f} (Shift)")
+            actual_multiplier = shift_val
+            is_agent_op = p_label in ["AGENT OPÉRATION", "AGENT OPERATION"]
+            if shift_val == 3.0 and not is_agent_op:
+                actual_multiplier = 2.0
+                
+            workload_minutes = workload_minutes * actual_multiplier
+            formule_parts.append(f"× {actual_multiplier:.0f} (Shift)")
         
         # DEBUG: Removed
         # formule_parts.append(f"[{p_label}|S:{shift_val}]") 

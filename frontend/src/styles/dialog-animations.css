@@ -1,0 +1,150 @@
+/* ═══════════════════════════════════════════════════════════════
+   dialog-animations.css
+   Shared entry & hover animations for all wizard dialogs.
+   Import this file in any dialog component and apply the
+   utility classes listed below.
+═══════════════════════════════════════════════════════════════ */
+
+/* ─── Keyframes ───────────────────────────────────────────────────────────── */
+
+@keyframes dlg-fade-slide-up {
+  from { opacity: 0; transform: translateY(28px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0)    scale(1);    }
+}
+
+@keyframes dlg-fade-slide-down {
+  from { opacity: 0; transform: translateY(-18px); }
+  to   { opacity: 1; transform: translateY(0);     }
+}
+
+@keyframes dlg-fade-scale-in {
+  from { opacity: 0; transform: scale(0.93) translateY(10px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0);    }
+}
+
+@keyframes dlg-row-slide-in {
+  from { opacity: 0; transform: translateX(-14px); }
+  to   { opacity: 1; transform: translateX(0);     }
+}
+
+@keyframes dlg-float-a {
+  0%, 100% { transform: translate(0px,   0px)   scale(1);    }
+  50%      { transform: translate(10px, -10px)  scale(1.06); }
+}
+
+@keyframes dlg-float-b {
+  0%, 100% { transform: translate(0px,  0px)   scale(1);    }
+  50%      { transform: translate(-8px, 6px)   scale(1.04); }
+}
+
+@keyframes dlg-float-c {
+  0%, 100% { transform: translate(0px, 0px)   scale(1);    }
+  50%      { transform: translate(6px, 8px)   scale(1.08); }
+}
+
+@keyframes dlg-icon-pop {
+  0%   { transform: scale(0.6)  rotate(-15deg); opacity: 0; }
+  60%  { transform: scale(1.15) rotate(4deg);   opacity: 1; }
+  100% { transform: scale(1)    rotate(0deg);   opacity: 1; }
+}
+
+@keyframes dlg-table-in {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+
+@keyframes dlg-badge-pop {
+  0%   { transform: scale(1);    }
+  40%  { transform: scale(1.25); }
+  100% { transform: scale(1.1);  }
+}
+
+/* ─── Entry animation classes ─────────────────────────────────────────────── */
+/*  Use animation-delay inline for stagger:                                    */
+/*    <div className="dlg-card-enter" style={{ animationDelay: "0.2s" }}>      */
+
+.dlg-enter {
+  animation: dlg-fade-slide-up 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.dlg-header-enter {
+  animation: dlg-fade-slide-down 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.dlg-card-enter {
+  animation: dlg-fade-scale-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.dlg-row-enter {
+  animation: dlg-row-slide-in 0.35s ease both;
+}
+
+.dlg-table-enter {
+  animation: dlg-table-in 0.45s ease both;
+}
+
+.dlg-icon-enter {
+  animation: dlg-icon-pop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* ─── Floating blobs (continuous loop) ───────────────────────────────────── */
+
+.dlg-blob-a { animation: dlg-float-a 6s ease-in-out infinite; }
+.dlg-blob-b { animation: dlg-float-b 8s ease-in-out infinite; }
+.dlg-blob-c { animation: dlg-float-c 5s ease-in-out infinite; }
+
+/* ─── Hover: KPI / direction card ────────────────────────────────────────── */
+
+.dlg-card-hover {
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.25s ease;
+  cursor: default;
+}
+.dlg-card-hover:hover {
+  transform: translateY(-4px) scale(1.01);
+}
+
+/* ─── Hover: scenario row inside a card ──────────────────────────────────── */
+
+.dlg-scenario-row {
+  transition: background 0.18s ease, padding-left 0.18s ease;
+}
+.dlg-scenario-row:hover {
+  background: #f1f5f9 !important;
+  padding-left: 22px;
+}
+
+/* ─── Hover: table body rows ─────────────────────────────────────────────── */
+
+.dlg-table-row {
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+  position: relative;
+}
+.dlg-table-row:hover {
+  background: #f0f9ff !important;
+  box-shadow: inset 3px 0 0 #0284c7;
+}
+.dlg-table-row:hover td:first-child span {
+  color: #005EA8;
+}
+
+/* ─── Hover: impact / delta badge ────────────────────────────────────────── */
+
+.dlg-badge {
+  transition: transform 0.15s ease, filter 0.15s ease;
+  display: inline-flex;
+  cursor: default;
+}
+.dlg-badge:hover {
+  animation: dlg-badge-pop 0.3s ease forwards;
+  filter: brightness(1.08);
+}
+
+/* ─── Hover: header icon ─────────────────────────────────────────────────── */
+
+.dlg-icon-hover {
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.dlg-icon-hover:hover {
+  transform: rotate(15deg) scale(1.15);
+}

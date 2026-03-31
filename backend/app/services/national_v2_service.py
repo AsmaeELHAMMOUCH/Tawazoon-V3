@@ -278,7 +278,7 @@ def process_national_simulation(db: Session, request: NationalSimRequest) -> Nat
                 # Mais on veut lister tous les postes du centre, même si 0 heures ?
                 # Pour l'instant on liste ceux qui ont des heures (actifs dans la simu)
                 
-                heures_net_jour = getattr(sim_res, "heures_net_jour", 8.0) or 8.0
+                heures_net_jour = getattr(sim_res, "heures_net_jour", 8.5) or 8.5
                 
                 # On veut aussi inclure les postes présents mais avec 0 heures calculées
                 # On utilise cp_info_map pour ce centre

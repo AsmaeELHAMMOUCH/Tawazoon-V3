@@ -15,7 +15,7 @@ class SimulerCentreParTypeRequest(BaseModel):
 
     centre_id: Optional[int] = Field(None, alias="centreId")
     volumes: VolumesParType
-    heures_net_disponibles: float = Field(8.0, gt=0, alias="heuresNetDisponibles")
+    heures_net_disponibles: float = Field(8.5, gt=0, alias="heuresNetDisponibles")
 
     @model_validator(mode="before")
     def _normalize(cls, values: Dict[str, Any]) -> Dict[str, Any]:

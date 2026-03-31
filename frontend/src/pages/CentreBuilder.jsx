@@ -1,234 +1,249 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { builderService } from '../services/builderService';
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import {
-    Building2, MapPin, Users, Package, Layers, Sparkles,
-    ChevronRight, ArrowLeft, Check, Plus, Trash2, Save, FileSpreadsheet, Search
+    Building2, MapPin, Users, Tag, Layers, Sparkles,
+    ArrowLeft, AlertCircle, Loader2, FlaskConical, ChevronRight, Map
 } from 'lucide-react';
-
-const Steps = ({ current, steps }) => (
-    <div className="flex items-center justify-center mb-8">
-        {steps.map((step, idx) => (
-            <React.Fragment key={idx}>
-                <div className={`flex flex-col items-center z-10 ${idx <= current ? 'text-blue-600' : 'text-slate-400'}`}>
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-colors
-            ${idx < current ? 'bg-blue-600 border-blue-600 text-white' :
-                            idx === current ? 'bg-white border-blue-600 text-blue-600' :
-                                'bg-white border-slate-300 text-slate-400'}`}>
-                        {idx < current ? <Check className="w-4 h-4" /> : idx + 1}
-                    </div>
-                    <span className="text-xs font-medium mt-1 uppercase tracking-wide">{step}</span>
-                </div>
-                {idx < steps.length - 1 && (
-                    <div className={`w-20 h-0.5 -mt-5 transition-colors ${idx < current ? 'bg-blue-600' : 'bg-slate-200'}`} />
-                )}
-            </React.Fragment>
-        ))}
-    </div>
-);
 
 export default function CentreBuilder() {
     const navigate = useNavigate();
-    const [step, setStep] = useState(0);
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(null); // 🆕 Error state
+    const [refsLoading, setRefsLoading] = useState(true);
+    const [error, setError] = useState(null);
 
-    // References
     const [regions, setRegions] = useState([]);
-    const [refPostes, setRefPostes] = useState([]);
-    const [refProduits, setRefProduits] = useState([]);
-    const [refFamilles, setRefFamilles] = useState([]);
-    const [refCategories, setRefCategories] = useState([]); // 🆕 Typologies
-    const [refDirections, setRefDirections] = useState([]); // 🆕 Directions
+    const [villes, setVilles] = useState([]);
+    const [refCategories, setRefCategories] = useState([]);
 
-    // Form State
-    const [identity, setIdentity] = useState({ nom: '', region_id: '', direction_id: '', categorie_id: '' });
-    const [selectedPostes, setSelectedPostes] = useState([]); // Labels
-    const [posteSearch, setPosteSearch] = useState(""); // Hoisted state for StepPostes
+    const [identity, setIdentity] = useState({
+        nom: '',
+        region_id: '',
+        ville_code: '',
+        direction_id: '',
+        categorie_id: ''
+    });
 
-    // Load Refs
     useEffect(() => {
         const loadRefs = async () => {
-            setLoading(true);
+            setRefsLoading(true);
             setError(null);
             try {
                 const results = await Promise.allSettled([
                     builderService.getRegions(),
-                    builderService.getRefPostes(),
-                    builderService.getRefProduits(),
-                    builderService.getRefFamilles(),
                     builderService.getRefCategories(),
-                    builderService.getRefDirections()
+                    builderService.getVilles()
                 ]);
 
-                // Regions
                 if (results[0].status === 'fulfilled') setRegions(results[0].value || []);
-                else console.error("Regions failed:", results[0].reason);
+                if (results[1].status === 'fulfilled') setRefCategories(results[1].value || []);
+                if (results[2].status === 'fulfilled') setVilles(results[2].value || []);
 
-                // Postes
-                if (results[1].status === 'fulfilled') setRefPostes(results[1].value || []);
-                else console.error("Postes failed:", results[1].reason);
-
-                // Produits
-                if (results[2].status === 'fulfilled') setRefProduits(results[2].value || []);
-                else console.error("Produits failed:", results[2].reason);
-
-                // Familles
-                if (results[3].status === 'fulfilled') setRefFamilles(results[3].value || []);
-                else console.error("Familles failed:", results[3].reason);
-
-                // Typologies (Categories)
-                if (results[4].status === 'fulfilled') setRefCategories(results[4].value || []);
-                else console.error("Categories failed:", results[4].reason);
-
-                // Directions
-                if (results[5].status === 'fulfilled') setRefDirections(results[5].value || []);
-                else console.error("Directions failed:", results[5].reason);
-
-                // Global error check to show user
                 const failures = results.filter(r => r.status === 'rejected');
                 if (failures.length > 0) {
-                    setError(`Erreur de chargement: ${failures.length} ressources introuvables. Vérifiez la console.`);
+                    setError(`${failures.length} ressource(s) introuvable(s). Vérifiez la connexion.`);
                 }
-
             } catch (err) {
-                console.error("Critical Ref Load error", err);
-                setError("Erreur critique chargement: " + err.message);
+                setError("Erreur critique de chargement : " + err.message);
             } finally {
-                setLoading(false);
+                setRefsLoading(false);
             }
         };
         loadRefs();
     }, []);
 
-
-
-    const handleNext = () => setStep(s => s + 1);
-    const handleBack = () => setStep(s => s - 1);
-
-    const togglePosteSelection = (label) => {
-        setSelectedPostes(prev =>
-            prev.includes(label) ? prev.filter(l => l !== label) : [...prev, label]
-        );
-    };
-
-
-
-    const handleSubmit = async () => {
-        setLoading(true);
-        try {
-            const payload = {
-                nom: identity.nom,
-                region_id: parseInt(identity.region_id),
-                direction_id: identity.direction_id ? parseInt(identity.direction_id) : null,
-                categorie_id: identity.categorie_id ? parseInt(identity.categorie_id) : null,
-                postes_labels: selectedPostes,
-                tasks_mapping: [] // No tasks anymore
-            };
-
-            const res = await builderService.createCentre(payload);
-
-
-
-            // Persister le centre créé pour la simulation
-            window.localStorage.setItem("sim_centre", JSON.stringify(res.id));
-            window.localStorage.setItem("sim_poste", JSON.stringify("__ALL__"));
-            window.localStorage.removeItem("sim_is_test");
-
-            // Redirect to Simulation (Vue Intervenant)
-            navigate(`/app/simulation?flux=poste`);
-        } catch (err) {
-            alert("Erreur lors de la création: " + err.message);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-
-
-
-
     const handleSimulationTest = async () => {
         if (!identity.categorie_id) return;
+        const selectedVille = villes.find(v => String(v.code) === String(identity.ville_code));
+        if (!selectedVille) return;
 
         const selectedCat = refCategories.find(c => String(c.value) === String(identity.categorie_id));
         const catLabel = selectedCat ? selectedCat.label : "Standard";
 
-        // Nettoyage local storage pour éviter les conflits
         window.localStorage.removeItem("sim_is_test");
         window.localStorage.removeItem("sim_centre");
 
-        // Navigate to Wizard in Test Mode
-        navigate(`/app/simulation/wizard?mode=test&typology=${catLabel}&catId=${identity.categorie_id}&name=${encodeURIComponent(identity.nom || 'CENTRE TEST')}`);
+        navigate(
+            `/app/simulation/wizard?mode=test` +
+            `&typology=${encodeURIComponent(catLabel)}` +
+            `&catId=${encodeURIComponent(identity.categorie_id)}` +
+            `&name=${encodeURIComponent(identity.nom || 'CENTRE TEST')}` +
+            `&coeffGeo=${encodeURIComponent(String(selectedVille.geographie ?? 0))}` +
+            `&coeffCirc=${encodeURIComponent(String(selectedVille.circulation ?? 0))}` +
+            `&dureeTrajet=${encodeURIComponent(String(selectedVille.trajet ?? 0))}`
+        );
     };
 
+    const canSubmit = identity.categorie_id && identity.ville_code && !loading;
+
+    const fields = [
+        {
+            id: 'nom',
+            label: 'Nom du Centre',
+            icon: Building2,
+            iconBg: 'bg-blue-50',
+            iconColor: 'text-[#005EA8]',
+            type: 'text',
+            placeholder: 'Ex : Centre de Tri Principal',
+            required: false,
+        },
+        {
+            id: 'region_id',
+            label: 'Région',
+            icon: Map,
+            iconBg: 'bg-indigo-50',
+            iconColor: 'text-indigo-600',
+            type: 'select',
+            options: regions.map(r => ({ value: String(r.id), label: r.label || r.nom || String(r.id) })),
+            placeholder: 'Sélectionner une région',
+            emptyMessage: 'Aucune région trouvée',
+        },
+        {
+            id: 'ville_code',
+            label: 'Ville',
+            icon: MapPin,
+            iconBg: 'bg-cyan-50',
+            iconColor: 'text-cyan-600',
+            type: 'select',
+            options: villes.map(v => ({ value: String(v.code), label: v.label || String(v.code) })),
+            placeholder: 'Sélectionner une ville',
+            emptyMessage: 'Aucune ville trouvée',
+            required: true,
+        },
+        {
+            id: 'categorie_id',
+            label: 'Typologie',
+            icon: Tag,
+            iconBg: 'bg-purple-50',
+            iconColor: 'text-purple-600',
+            type: 'select',
+            options: refCategories.map(c => ({ value: String(c.value), label: c.label || String(c.value) })),
+            placeholder: 'Sélectionner une typologie',
+            emptyMessage: 'Aucune typologie trouvée',
+            required: true,
+        },
+    ];
+
     return (
-        <div className="min-h-screen bg-slate-50 p-6">
-            <button onClick={() => navigate('/app/simulation')} className="mb-6 flex items-center gap-2 text-slate-500 hover:text-slate-700 transition-colors">
-                <ArrowLeft className="w-4 h-4" /> Retour Simulation
-            </button>
+        <div className="min-h-screen bg-gradient-to-br from-[#eef6ff] via-white to-[#f4f9ff] flex flex-col">
 
-            {error && (
-                <div className="mb-4 p-3 bg-red-50 text-red-700 rounded border border-red-200 text-sm font-medium">
-                    ⚠️ {error}
+            {/* Header */}
+            <div className="bg-white border-b border-blue-100 shadow-sm">
+                <div className="max-w-2xl mx-auto px-6 py-4 flex items-center gap-3">
+                    <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#005EA8] to-[#48cae4] flex items-center justify-center shadow-md shadow-blue-200">
+                            <FlaskConical className="w-4.5 h-4.5 text-white" />
+                        </div>
+                        <div>
+                            <h1 className="text-sm font-black text-[#0b3f6f] leading-none">Simulation Test</h1>
+                            <p className="text-[11px] text-slate-400 mt-0.5">Configurer un centre virtuel pour tester</p>
+                        </div>
+                    </div>
                 </div>
-            )}
+            </div>
 
-            {/* <Steps ... /> Removed as requested */}
+            {/* Body */}
+            <div className="flex-1 flex items-start justify-center px-4 py-10">
+                <div className="w-full max-w-lg space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-400">
 
-            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                {/* Single Step View */}
-                <div className="max-w-md mx-auto bg-white p-6 rounded-lg shadow-sm border border-slate-200">
-                    <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-                        <Building2 className="w-5 h-5 text-blue-500" /> Identité du Centre
-                    </h2>
-                    <div className="space-y-4">
-                        <div>
-                            <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Nom du Centre</label>
-                            <input
-                                type="text"
-                                className="w-full px-3 py-2 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 outline-none"
-                                value={identity.nom}
-                                onChange={e => setIdentity({ ...identity, nom: e.target.value })}
-                                placeholder="Ex: Centre de Tri Principal"
-                            />
+                    {/* Error Banner */}
+                    {error && (
+                        <div className="flex items-start gap-3 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+                            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                            <span className="font-medium">{error}</span>
                         </div>
-                        <div>
-                            <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Région</label>
-                            <select
-                                className="w-full px-3 py-2 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 outline-none"
-                                value={identity.region_id}
-                                onChange={e => setIdentity({ ...identity, region_id: e.target.value })}
-                                disabled={regions.length === 0}
-                            >
-                                <option value="">Sélectionner...</option>
-                                {regions.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
-                            </select>
+                    )}
+
+                    {/* Form Card */}
+                    <div className="bg-white rounded-2xl border border-blue-100 shadow-md shadow-blue-50 overflow-hidden">
+                        <div className="px-5 py-3.5 border-b border-slate-100 flex items-center gap-2 bg-slate-50/60">
+                            <Building2 className="w-4 h-4 text-[#005EA8]" />
+                            <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest">
+                                Identité du Centre
+                            </span>
                         </div>
-                        {/* Direction Removed */}
-                        <div>
-                            <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Typologie</label>
-                            <select
-                                className="w-full px-3 py-2 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 outline-none"
-                                value={identity.categorie_id}
-                                onChange={e => setIdentity({ ...identity, categorie_id: e.target.value })}
-                                disabled={refCategories.length === 0}
-                            >
-                                <option value="">Sélectionner...</option>
-                                {refCategories.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-                            </select>
+
+                        <div className="p-5 space-y-4">
+                            {refsLoading ? (
+                                <div className="flex flex-col items-center gap-3 py-8 text-slate-400">
+                                    <Loader2 className="w-6 h-6 animate-spin text-[#005EA8]" />
+                                    <span className="text-xs font-medium">Chargement des références…</span>
+                                </div>
+                            ) : (
+                                fields.map(field => {
+                                    const Icon = field.icon;
+                                    return (
+                                        <div key={field.id} className="group">
+                                            <label className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+                                                {field.label}
+                                                {field.required && <span className="text-red-400">*</span>}
+                                            </label>
+                                            <div className="flex items-center gap-2.5">
+                                                <div className={`w-9 h-9 rounded-lg ${field.iconBg} ${field.iconColor} flex items-center justify-center shrink-0 border border-white shadow-sm`}>
+                                                    <Icon className="w-4 h-4" />
+                                                </div>
+                                                <div className="flex-1">
+                                                    {field.type === 'text' ? (
+                                                        <input
+                                                            type="text"
+                                                            value={identity[field.id]}
+                                                            onChange={e => setIdentity({ ...identity, [field.id]: e.target.value })}
+                                                            placeholder={field.placeholder}
+                                                            className="w-full h-9 px-3 text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400 transition-all placeholder:text-slate-300"
+                                                        />
+                                                    ) : (
+                                                        <SearchableSelect
+                                                            options={field.options}
+                                                            value={identity[field.id]}
+                                                            onChange={val => setIdentity({ ...identity, [field.id]: val })}
+                                                            placeholder={field.placeholder}
+                                                            emptyMessage={field.emptyMessage}
+                                                            disabled={field.options.length === 0}
+                                                        />
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })
+                            )}
                         </div>
                     </div>
-                    <div className="mt-6 flex justify-center">
-                        <button
-                            onClick={handleSimulationTest}
-                            disabled={!identity.categorie_id || loading}
-                            className="w-full bg-gradient-to-r from-[#0077b6] to-[#48cae4] text-white px-4 py-3 rounded text-sm font-bold hover:shadow-[0_4px_14px_rgba(0,118,182,0.4)] disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm transition-all active:scale-95"
-                            title="Lancer la simulation"
-                        >
-                            <Sparkles className="w-5 h-5" /> Lancer la Simulation Test
-                        </button>
-                    </div>
+
+                    {/* Info hint */}
+                    {identity.ville_code && (() => {
+                        const v = villes.find(v => String(v.code) === String(identity.ville_code));
+                        if (!v) return null;
+                        return (
+                            <div className="flex items-center gap-3 px-4 py-3 bg-cyan-50 border border-cyan-100 rounded-xl text-[11px] text-cyan-700">
+                                <MapPin className="w-3.5 h-3.5 shrink-0 text-cyan-500" />
+                                <span>
+                                    <span className="font-black">Coefficients détectés :</span>{" "}
+                                    Géographie <span className="font-bold">{v.geographie ?? 0}</span> · Circulation <span className="font-bold">{v.circulation ?? 0}</span> · Trajet <span className="font-bold">{v.trajet ?? 0} min</span>
+                                </span>
+                            </div>
+                        );
+                    })()}
+
+                    {/* CTA */}
+                    <button
+                        onClick={handleSimulationTest}
+                        disabled={!canSubmit}
+                        className="w-full flex items-center justify-center gap-2.5 h-12 rounded-xl bg-gradient-to-r from-[#0077b6] to-[#48cae4] text-white text-sm font-black shadow-lg shadow-blue-300/40 hover:shadow-blue-400/50 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 transition-all duration-200"
+                    >
+                        {loading ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                            <Sparkles className="w-4 h-4" />
+                        )}
+                        Lancer la Simulation Test
+                        {!loading && <ChevronRight className="w-4 h-4 opacity-70" />}
+                    </button>
+
+                    <p className="text-center text-[10px] text-slate-400">
+                        La ville et la typologie sont obligatoires pour lancer la simulation.
+                    </p>
                 </div>
             </div>
         </div>

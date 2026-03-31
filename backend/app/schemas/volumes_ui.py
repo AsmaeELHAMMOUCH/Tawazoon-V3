@@ -78,8 +78,8 @@ class VolumesUIInput(BaseModel):
     colis_par_collecte: float = Field(default=1.0, description="Nb colis par collecte")
     
     # 🆕 Paramètres de répartition Axes vs Distribution
-    pct_axes_arrivee: float = Field(default=0.40, ge=0.0, le=1.0, description="% Axes Arrivée (0.40 = 40%)")
-    pct_axes_depart: float = Field(default=0.30, ge=0.0, le=1.0, description="% Axes Départ (0.30 = 30%)")
+    pct_axes_arrivee: float = Field(default=0.0, ge=0.0, le=1.0, description="% Axes Arrivée (0.0 = 0%)")
+    pct_axes_depart: float = Field(default=1.0, ge=0.0, le=1.0, description="% Axes Départ (1.0 = 100%)")
     
     # 🆕 Paramètres additionnels (ED, Collecte, Complexité, CNDP)
     ed_percent: float = Field(default=0.0, description="% ED (En Dehors)")
@@ -87,6 +87,10 @@ class VolumesUIInput(BaseModel):
     pct_echantillon: float = Field(default=5.0, description="% échantillon")
     pct_sac: float = Field(default=60.0, description="% SAC")
     pct_collecte: float = Field(default=5.0, description="% Collecte")
+    pct_guichet: float = Field(default=95.0, description="% Guichet")
+    amana_pct_guichet: Optional[float] = Field(default=None, description="% Guichet Amana")
+    co_pct_guichet: Optional[float] = Field(default=None, description="% Guichet CO")
+    cr_pct_guichet: Optional[float] = Field(default=None, description="% Guichet CR")
     taux_complexite: float = Field(default=1.0, description="Coefficient Complexité Circulation (Facteur)")
 
     nature_geo: float = Field(default=1.0, description="Coefficient Complexité Géographique")

@@ -1,4 +1,5 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState, useEffect } from "react";
+import "@/styles/dialog-animations.css";
 import { TrendingUp, DollarSign, Users, Package, Calculator, ArrowRight, Info } from "lucide-react";
 import {
     Dialog,
@@ -20,6 +21,8 @@ const isMod = (p) => {
     const type = (p.type_poste || "").toUpperCase();
     return type === "MOD" || type === "DIRECT" || !!p.is_mod;
 };
+
+const getActuelModValue = (p) => Number(p?.effectif_actuel_mod) || 0;
 
 /* ─── Budget Card ──────────────────────────────────────────── */
 function BudgetCard({ icon: Icon, label, sublabel, monthly, annual, color }) {
@@ -66,7 +69,7 @@ export default function ChiffrageDialog({
             .filter(p => isMod(p))
             .map(p => {
                 const label = (p.label || p.nom || "").trim();
-                const actuel = p.effectif_actuel || 0;
+                const actuel = getActuelModValue(p);
                 const calcule = Math.round(rpp[label] || 0);
                 const salaire = p.charge_salaire || 0;
 
@@ -90,25 +93,35 @@ export default function ChiffrageDialog({
     }, [postes, simulationResults]);
 
 
+    const [animKey, setAnimKey] = useState(0);
+    useEffect(() => { if (open) setAnimKey((k) => k + 1); }, [open]);
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-[95vw] lg:max-w-5xl h-fit max-h-[92vh] p-0 overflow-hidden border-none shadow-2xl rounded-2xl">
+            <DialogContent
+              key={animKey}
+              className="dlg-enter max-w-[95vw] lg:max-w-5xl h-fit max-h-[92vh] p-0 overflow-hidden border-none shadow-2xl rounded-2xl"
+            >
+                <DialogHeader className="sr-only">
+                    <DialogTitle>Chiffrage &amp; Impact Financier</DialogTitle>
+                </DialogHeader>
                 <Card className="overflow-hidden border-0 shadow-none bg-slate-50 h-full flex flex-col">
 
-                    {/* ── Header Harmonisé (Style CapaciteNominale) ── */}
-                    <CardHeader className="relative shrink-0 overflow-hidden bg-gradient-to-br from-[#015294] via-[#005EA8] to-[#00A0E0] py-3 px-5 border-b-0">
+                    {/* ── Header ── */}
+                    <CardHeader className="dlg-header-enter relative shrink-0 overflow-hidden bg-gradient-to-br from-[#015294] via-[#005EA8] to-[#00A0E0] py-3 px-5 border-b-0">
                         <div className="absolute inset-0 opacity-15">
-                            <div className="absolute -right-10 -top-10 w-48 h-48 rounded-full bg-white/20 blur-2xl" />
-                            <div className="absolute left-1/4 -bottom-5 w-32 h-32 rounded-full bg-sky-300/20 blur-xl" />
+                            <div className="absolute -right-10 -top-10 w-48 h-48 rounded-full bg-white/20 blur-2xl dlg-blob-a" />
+                            <div className="absolute left-1/4 -bottom-5 w-32 h-32 rounded-full bg-sky-300/20 blur-xl dlg-blob-b" />
                         </div>
                         <div className="relative flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-xl bg-white/15 backdrop-blur-md border border-white/20 flex items-center justify-center shadow-inner">
+                                <div className="dlg-icon-hover dlg-icon-enter w-10 h-10 rounded-xl bg-white/15 backdrop-blur-md border border-white/20 flex items-center justify-center shadow-inner"
+                                  style={{ animationDelay: "0.1s" }}>
                                     <DollarSign className="w-5 h-5 text-white" />
                                 </div>
                                 <div>
                                     <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
-                                        Chiffrage & Impact Financier ({mode === "optimise" ? "Optimisé" : mode === "recommande" ? "Consolidé" : "Cible"})
+                                        Chiffrage & Impact Financier ({mode === "optimise" ? "Optimisé" : mode === "recommande" ? "Consolidé" : "Calculée"})
                                         <span className="text-[10px] font-medium text-blue-100/80 bg-white/10 px-2 py-0.5 rounded-full border border-white/10 uppercase tracking-widest">
                                             Analyse Mensuelle
                                         </span>
@@ -170,28 +183,32 @@ export default function ChiffrageDialog({
 
                         {/* ── Grille Financière 3 colonnes ── */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                            <BudgetCard
-                                icon={Package}
-                                label="Masse Salariale Actuelle"
-                                sublabel="Budget Initial"
-                                monthly={fmt(chiffrageData.totalBudgetAct)}
-                                annual={fmt(chiffrageData.totalBudgetAct * 12)}
-                                color="#64748b"
-                            />
-                            <BudgetCard
-                                icon={Calculator}
-                                label={`Masse Salariale ${mode === "optimise" ? "Optimisée" : mode === "recommande" ? "Consolidée" : "Calculée"}`}
-                                sublabel={`Budget ${mode === "optimise" ? "Optimisé" : mode === "recommande" ? "Consolidé" : "Calculé"}`}
-                                monthly={fmt(chiffrageData.totalBudgetCal)}
-                                annual={fmt(chiffrageData.totalBudgetCal * 12)}
-                                color="#0ea5e9"
-                            />
+                            <div className="dlg-card-enter" style={{ animationDelay: "0.18s" }}>
+                                <BudgetCard
+                                    icon={Package}
+                                    label="Masse Salariale Actuelle"
+                                    sublabel="Budget Initial"
+                                    monthly={fmt(chiffrageData.totalBudgetAct)}
+                                    annual={fmt(chiffrageData.totalBudgetAct * 12)}
+                                    color="#64748b"
+                                />
+                            </div>
+                            <div className="dlg-card-enter" style={{ animationDelay: "0.26s" }}>
+                                <BudgetCard
+                                    icon={Calculator}
+                                    label={`Masse Salariale ${mode === "optimise" ? "Optimisée" : mode === "recommande" ? "Consolidée" : "Calculée"}`}
+                                    sublabel={`Budget ${mode === "optimise" ? "Optimisé" : mode === "recommande" ? "Consolidé" : "Calculé"}`}
+                                    monthly={fmt(chiffrageData.totalBudgetCal)}
+                                    annual={fmt(chiffrageData.totalBudgetCal * 12)}
+                                    color="#0ea5e9"
+                                />
+                            </div>
 
                             {/* Hero Card — Impact Final */}
-                            <div className={`relative overflow-hidden rounded-xl flex flex-col shadow-md group transition-shadow hover:shadow-lg ${chiffrageData.totalImpact >= 0
-                                ? "bg-gradient-to-b from-emerald-600 to-emerald-700"
-                                : "bg-gradient-to-b from-rose-600 to-rose-700"
-                                }`}>
+                            <div
+                                className={`dlg-card-enter relative overflow-hidden rounded-xl flex flex-col shadow-md group transition-shadow hover:shadow-lg ${chiffrageData.totalImpact >= 0 ? "bg-gradient-to-b from-emerald-600 to-emerald-700" : "bg-gradient-to-b from-rose-600 to-rose-700"}`}
+                                style={{ animationDelay: "0.34s" }}
+                            >
                                 <div className="absolute -right-6 -top-6 w-24 h-24 bg-white/10 rounded-full blur-2xl pointer-events-none" />
 
                                 <div className="relative flex items-center justify-between px-3 pt-2.5 pb-0">
@@ -229,7 +246,8 @@ export default function ChiffrageDialog({
                         </div>
 
                         {/* ── Tableau analytique ── */}
-                        <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+                        <div className="dlg-table-enter rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm"
+                          style={{ animationDelay: "0.38s" }}>
                             <div className="px-4 py-2 bg-slate-50/80 border-b border-slate-200 flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                     <Calculator className="w-3.5 h-3.5 text-slate-500" />
@@ -253,7 +271,9 @@ export default function ChiffrageDialog({
                                     </thead>
                                     <tbody className="divide-y divide-slate-100">
                                         {chiffrageData.rows.map((r, idx) => (
-                                            <tr key={idx} className="hover:bg-blue-50/30 transition-colors group">
+                                            <tr key={idx}
+                                              className="dlg-table-row dlg-row-enter"
+                                              style={{ animationDelay: `${0.42 + idx * 0.04}s` }}>
                                                 <td className="px-4 py-1.5 sticky left-0 z-10 bg-inherit border-r border-slate-100 group-hover:bg-blue-50/50">
                                                     <span className="font-bold text-slate-700 text-[10px] tracking-tight">{r.label}</span>
                                                 </td>

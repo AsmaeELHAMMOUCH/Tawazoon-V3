@@ -72,7 +72,7 @@ def bulk_upsert_volumes(
 def calculate_simulation_results(
     simulation_id: int,
     centre_poste_id: int = None,
-    capacite_nette_h_j: float = 8.0,
+    capacite_nette_h_j: float = 8.5,
     productivite_pct: float = 100.0,
     db: Session = Depends(get_db)
 ) -> Dict:
@@ -128,7 +128,7 @@ def calculate_simulation_results(
 @router.post("/calculate-direct")
 def calculate_direct(
     request: BulkVolumeUpsertRequest,
-    capacite_nette_h_j: float = 8.0,
+    capacite_nette_h_j: float = 8.5,
     productivite_pct: float = 100.0,
     db: Session = Depends(get_db)
 ) -> Dict:

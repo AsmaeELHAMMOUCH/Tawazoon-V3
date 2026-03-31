@@ -32,8 +32,8 @@ class GlobalParamsOut(BaseModel):
     heures_nettes_jour: float
 
 def compute_global_params_inline(p: GlobalParamsIn) -> GlobalParamsOut:
-    # 8.0 base hours
-    h_jour = (p.productivite / 100.0) * 8.0
+    # 8.5 base hours (8h30)
+    h_jour = (p.productivite / 100.0) * 8.5
     # temps mort min -> hours
     t_mort_h = p.temps_mort_min / 60.0
     h_nettes = max(0.0, h_jour - t_mort_h)
@@ -78,7 +78,7 @@ def simulate_effectifs(request: SimulationRequest, db: Session = Depends(get_db)
                 centre_id=request.centre_id,
                 volumes_ui=request.volumes_ui,
                 productivite=request.productivite,
-                heures_par_jour=request.heures_net or 8.0,
+                heures_par_jour=request.heures_net or 8.5,
                 idle_minutes=request.idle_minutes or 0.0,
                 poste_id_filter=request.poste_id
             )
@@ -402,7 +402,7 @@ def simulate_vue_centre_optimisee(
         )
 
         heures_par_poste = sim_result.heures_par_poste or {}
-        heures_net = sim_result.heures_net_jour or 8.0
+        heures_net = sim_result.heures_net_jour or 8.5
 
         # 5) payload postes
         print(f"DEBUG: Found {len(postes_meta)} postes for centre {request.centre_id}")
@@ -546,7 +546,7 @@ def get_vue_centre_optimisee(
     lrh: float = 0.0,
     amana: float = 0.0,
     productivite: float = 100.0,
-    heures_net: float = 8.0,
+    heures_net: float = 8.5,
     colis_amana_par_sac: float = 5.0,
     courriers_par_sac: float = 4500.0,
     idle_minutes: float = 0.0,
@@ -654,7 +654,7 @@ def get_vue_intervenant_details(
             "centre_label": f"Centre {centre_id}",
             "total_effectif_actuel": 0.0,
             "postes": [],
-            "heures_net": 8.0,
+            "heures_net": 8.5,
         }
 
         postes_dict: Dict[Any, Dict[str, Any]] = {}

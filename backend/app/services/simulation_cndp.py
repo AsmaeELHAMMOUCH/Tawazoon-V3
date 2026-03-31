@@ -9,7 +9,7 @@ def calculer_simulation_cndp(
     centre_id: int,
     volumes_ui: VolumesUIInput,
     productivite: float = 100.0,
-    heures_par_jour: float = 8.0,
+    heures_par_jour: float = 8.5,
     idle_minutes: float = 0.0,
     poste_id_filter: Optional[int] = None
 ) -> SimulationResponse:

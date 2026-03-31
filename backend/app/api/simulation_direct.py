@@ -19,7 +19,7 @@ def simulate_intervenant_direct(
     centre_poste_id: int,
     volumes_ui: VolumesUIInput,
     productivite: float = 100.0,
-    heures_par_jour: float = 8.0,
+    heures_par_jour: float = 8.5,
     idle_minutes: float = 0.0,
     debug: bool = True,
     db: Session = Depends(get_db)
@@ -64,7 +64,7 @@ def simulate_centre_direct(
     centre_id: int,
     volumes_ui: VolumesUIInput,
     productivite: float = 100.0,
-    heures_par_jour: float = 8.0,
+    heures_par_jour: float = 8.5,
     idle_minutes: float = 0.0,
     debug: bool = False,
     db: Session = Depends(get_db)

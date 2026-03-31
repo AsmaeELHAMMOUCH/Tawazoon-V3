@@ -42,23 +42,26 @@ export default function EffectifUpdateDialog({ open, onOpenChange, onSuccess, fi
                 link.click();
                 link.remove();
 
+                toast.dismiss(toastId);
                 toast.error(
-                    `${result.errorCount} lignes rejetées. ${result.updatedCount} effectifs mis à jour, ${result.createdCount} affectés. Veuillez corriger le fichier téléchargé.`,
-                    { id: toastId, duration: 6000 }
+                    `${result.errorCount || 0} lignes rejetées. ${result.updatedCount || 0} mis à jour, ${result.createdCount || 0} affectés, ${result.zeroedCount || 0} remis à 0.`,
+                    { duration: 6000 }
                 );
 
                 onOpenChange(false);
                 if (onSuccess) onSuccess();
-            } else if (result && result.status === "success") {
+            } else if (result && (result.status === "success" || result.message)) {
+                toast.dismiss(toastId);
                 toast.success(
-                    `${result.message}.`,
-                    { id: toastId, duration: 5000 }
+                    result.message || "Importation terminée avec succès",
+                    { duration: 5000 }
                 );
 
                 onOpenChange(false);
                 if (onSuccess) onSuccess();
             } else {
-                toast.error("Format de fichier invalide ou erreur serveur.", { id: toastId });
+                toast.dismiss(toastId);
+                toast.error("Format de fichier invalide ou réponse inattendue du serveur.");
             }
         } catch (error) {
             console.error(error);
@@ -74,7 +77,7 @@ export default function EffectifUpdateDialog({ open, onOpenChange, onSuccess, fi
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2 text-[#005EA8]">
                         <Users className="w-5 h-5" />
-                        Mise à jour Massive des Effectifs
+                        Mise à jour Massive des Statutaires
                     </DialogTitle>
                 </DialogHeader>
                 <div className="flex flex-col gap-6 py-4">
@@ -118,7 +121,7 @@ export default function EffectifUpdateDialog({ open, onOpenChange, onSuccess, fi
                                         className="h-8 text-xs bg-[#005EA8] hover:bg-[#004e8a] text-white"
                                     >
                                         <Upload className="w-3.5 h-3.5 mr-2" />
-                                        Importer pour Mise à jour
+                                        Importer les Statutaires
                                     </Button>
                                 </div>
                             </div>
@@ -133,7 +136,7 @@ export default function EffectifUpdateDialog({ open, onOpenChange, onSuccess, fi
                         <div className="flex gap-2 text-xs text-amber-700 bg-amber-50 p-2 rounded border border-amber-100">
                             <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
                             <p>
-                                Pour affecter un **nouveau poste** à un centre, ajoutez simplement une ligne dans le fichier avec le nom du centre et du poste.
+                                Pour affecter un **nouveau poste** à un centre, ajoutez simplement une ligne dans le fichier avec le nom du centre, du poste et le nombre de statutaires.
                             </p>
                         </div>
                     </div>

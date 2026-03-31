@@ -1,4 +1,4 @@
-﻿import {
+import {
   BrowserRouter,
   Routes,
   Route,
@@ -66,6 +66,7 @@ import CentreBuilder from "./pages/CentreBuilder"; // ðŸ†• Page Builder (C
 import AjoutTache from "./pages/admin/AjoutTache"; // ðŸ†• Page Ajout TÃ¢che
 import CentersTasksManager from "./pages/admin/CentersTasksManager"; // ðŸ†• Page gestion TÃ¢ches
 import PostesManager from "./pages/admin/PostesManager"; // ðŸ†• Page gestion Postes
+import SitesManager from "./pages/admin/SitesManager"; // 🆕 Page gestion Sites Rattachés
 import CentresTypologieManager from "./pages/admin/CentresTypologieManager"; // ðŸ†• Page gestion Typologies
 import Glossary from "./pages/help/Glossary"; // ðŸ†• Page Glossaire
 import MainMenu from "./pages/MainMenu"; // ðŸ†• Page Menu Principal
@@ -76,7 +77,9 @@ import GlobalImportPage from "./pages/GlobalImportPage"; // ðŸ†• Global Im
 import SimulationIntervenantAvancee from "./pages/SimulationIntervenantAvancee"; // ðŸ†• Simulation Intervenant AvancÃ©e
 import IndexAdequation from "./pages/IndexAdequation";
 import StepWizardSimulation from "./pages/StepWizardSimulation";
-import SimulationBatchPage from "./pages/SimulationBatchPage"; // 🆕 Simulation Régionale/Nationale
+import ComparatifProcessusWizard from "./pages/ComparatifProcessusWizard";
+import SimulationBatchPage from "./pages/SimulationBatchPage";
+import ComparatifBatchPage from "./pages/ComparatifBatchPage";
 import MappingResponsables from "./pages/process/MappingResponsables";
 import ExclusionTaches from "./pages/process/ExclusionTaches";
 
@@ -256,8 +259,11 @@ export default function App() {
           <Route path="simulation/intervenant-avancee" element={<RouteErrorBoundary><SimulationIntervenantAvancee /></RouteErrorBoundary>} />
           <Route path="simulation/index_Adequation" element={<RouteErrorBoundary><IndexAdequation /></RouteErrorBoundary>} />
           <Route path="simulation/wizard" element={<RouteErrorBoundary><StepWizardSimulation /></RouteErrorBoundary>} />
-          <Route path="simulation/regional" element={<RouteErrorBoundary><SimulationBatchPage mode="regional" /></RouteErrorBoundary>} />
-          <Route path="simulation/national-batch" element={<RouteErrorBoundary><SimulationBatchPage mode="national" /></RouteErrorBoundary>} />
+          <Route path="simulation/comparatif-processus" element={<RouteErrorBoundary><ComparatifProcessusWizard /></RouteErrorBoundary>} />
+          <Route path="simulation/regional" element={<RouteErrorBoundary><SimulationBatchPage key="regional" mode="regional" /></RouteErrorBoundary>} />
+          <Route path="simulation/national-batch" element={<RouteErrorBoundary><SimulationBatchPage key="national" mode="national" /></RouteErrorBoundary>} />
+          <Route path="simulation/comparatif-regional" element={<RouteErrorBoundary><ComparatifBatchPage key="comparatif-regional" mode="regional" /></RouteErrorBoundary>} />
+          <Route path="simulation/comparatif-national" element={<RouteErrorBoundary><ComparatifBatchPage key="comparatif-national" mode="national" /></RouteErrorBoundary>} />
           <Route path="simulation/mapping-responsables" element={<RouteErrorBoundary><MappingResponsables /></RouteErrorBoundary>} />
           <Route path="simulation/exclusion-taches" element={<ExclusionTaches />} />
 
@@ -269,6 +275,7 @@ export default function App() {
           <Route path="builder" element={<RouteErrorBoundary><AjoutTache /></RouteErrorBoundary>} />
           <Route path="taches-manager" element={<RouteErrorBoundary><CentersTasksManager /></RouteErrorBoundary>} />
           <Route path="postes-manager" element={<RouteErrorBoundary><PostesManager /></RouteErrorBoundary>} />
+          <Route path="sites-manager" element={<RouteErrorBoundary><SitesManager /></RouteErrorBoundary>} />
           <Route path="centres-typologie" element={<RouteErrorBoundary><CentresTypologieManager /></RouteErrorBoundary>} />
           <Route path="glossary" element={<RouteErrorBoundary><Glossary /></RouteErrorBoundary>} />
 

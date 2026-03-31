@@ -194,7 +194,7 @@ def calculate_heures_necessaires(
 
 def calculate_etp(
     heures_necessaires: float,
-    capacite_nette_h_j: float = 8.0,
+    capacite_nette_h_j: float = 8.5,
     productivite_pct: float = 100.0
 ) -> Dict[str, float]:
     """

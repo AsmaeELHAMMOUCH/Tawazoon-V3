@@ -25,7 +25,7 @@ def simulate_intervenant_data_driven(
     centre_poste_id: int,
     volumes_ui: VolumesUIInput,
     productivite: float = Query(100.0, ge=0, le=200),
-    heures_par_jour: float = Query(8.0, ge=0, le=24),
+    heures_par_jour: float = Query(8.5, ge=0, le=24),
     idle_minutes: float = Query(0.0, ge=0, le=480),
     ed_percent: float = Query(0.0, ge=0, le=100),  # 🆕 Pourcentage "En Dehors"
     debug: bool = Query(False),
@@ -85,7 +85,7 @@ def simulate_centre_data_driven(
     centre_id: int,
     volumes_ui: VolumesUIInput,
     productivite: float = Query(100.0, ge=0, le=200),
-    heures_par_jour: float = Query(8.0, ge=0, le=24),
+    heures_par_jour: float = Query(8.5, ge=0, le=24),
     idle_minutes: float = Query(0.0, ge=0, le=480),
     ed_percent: float = Query(0.0, ge=0, le=100),  # 🆕 Paramètre ED%
     colis_amana_par_sac: float = Query(1.0, ge=0.1, le=1000), # 🆕 Paramètre Sacs
@@ -149,7 +149,7 @@ def simulate_multi_centres_data_driven(
     centre_ids: List[int],
     volumes_ui: VolumesUIInput,
     productivite: float = Query(100.0, ge=0, le=200),
-    heures_par_jour: float = Query(8.0, ge=0, le=24),
+    heures_par_jour: float = Query(8.5, ge=0, le=24),
     idle_minutes: float = Query(0.0, ge=0, le=480),
     debug: bool = Query(False),
     db: Session = Depends(get_db)
@@ -458,7 +458,7 @@ def debug_compare_totals(
     
     # Paramètres globaux
     productivite = 100.0
-    heures_par_jour = 8.0
+    heures_par_jour = 8.5
     idle_minutes = 0.0
     ed_percent = 0.0
     colis_amana_par_sac = 10.0

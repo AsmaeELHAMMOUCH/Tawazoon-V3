@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, Response, Form
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -23,7 +23,7 @@ BANDOENG_CENTRE_ID = 1942
 from app.models.db_models import (
     normalize_ws, sql_normalize_ws, MappingPosteRecommande, 
     TacheExclueOptimisee, Centre, CentrePoste, Poste, Tache, 
-    HierarchiePostes, Ville, Categorie
+    HierarchiePostes, Ville, Categorie, AttachedSite
 )
 
 # --- Pydantic Models for API ---
@@ -52,8 +52,9 @@ class BandoengParamsIn(BaseModel):
     coeff_geo: float = Field(0.0, alias="coeffGeo")
     pct_retour: float = Field(0.0, alias="pctRetour")
     pct_collecte: float = Field(0.0, alias="pctCollecte")
+    pct_guichet: float = Field(95.0, alias="pctGuichet")
     pct_axes: float = Field(0.0, alias="pctAxes")
-    pct_local: float = Field(0.0, alias="pctLocal")
+    pct_local: float = Field(100.0, alias="pctLocal")
     pct_international: float = Field(0.0, alias="pctInternational")
     pct_national: float = Field(0.0, alias="pctNational")
     pct_marche_ordinaire: float = Field(0.0, alias="pctMarcheOrdinaire")
@@ -84,6 +85,7 @@ class BandoengParamsIn(BaseModel):
     
     # --- Flux specific overrides (amana_) ---
     amana_pct_collecte: Optional[float] = Field(None, alias="amana_pctCollecte")
+    amana_pct_guichet: Optional[float] = Field(None, alias="amana_pctGuichet")
     amana_pct_retour: Optional[float] = Field(None, alias="amana_pctRetour")
     amana_pct_axes_arrivee: Optional[float] = Field(None, alias="amana_pctAxesArrivee")
     amana_pct_axes_depart: Optional[float] = Field(None, alias="amana_pctAxesDepart")
@@ -95,6 +97,7 @@ class BandoengParamsIn(BaseModel):
 
     # --- Flux specific overrides (co_) ---
     co_pct_collecte: Optional[float] = Field(None, alias="co_pctCollecte")
+    co_pct_guichet: Optional[float] = Field(None, alias="co_pctGuichet")
     co_pct_retour: Optional[float] = Field(None, alias="co_pctRetour")
     co_pct_axes_arrivee: Optional[float] = Field(None, alias="co_pctAxesArrivee")
     co_pct_axes_depart: Optional[float] = Field(None, alias="co_pctAxesDepart")
@@ -106,6 +109,7 @@ class BandoengParamsIn(BaseModel):
 
     # --- Flux specific overrides (cr_) ---
     cr_pct_collecte: Optional[float] = Field(None, alias="cr_pctCollecte")
+    cr_pct_guichet: Optional[float] = Field(None, alias="cr_pctGuichet")
     cr_pct_retour: Optional[float] = Field(None, alias="cr_pctRetour")
     cr_pct_axes_arrivee: Optional[float] = Field(None, alias="cr_pctAxesArrivee")
     cr_pct_axes_depart: Optional[float] = Field(None, alias="cr_pctAxesDepart")
@@ -138,6 +142,7 @@ class BandoengTaskOut(BaseModel):
     responsable: str
     moy_sec: float
     centre_poste_id: int
+    poste_code: Optional[str] = None
     phase: Optional[str] = None
 
 class BandoengSimulateResponse(BaseModel):
@@ -149,8 +154,201 @@ class BandoengSimulateResponse(BaseModel):
     total_ressources_humaines: float
     ressources_par_poste: dict = {}
     ressources_actuelles_par_poste: dict = {}
+    volumes_utilises_par_poste: dict = {}
     grid_values: Optional[dict] = None
     debug_info: dict = {}
+
+
+def _to_float(v: Any) -> float:
+    try:
+        return float(v or 0)
+    except Exception:
+        return 0.0
+
+
+def _normalize_produit(produit: Optional[str]) -> str:
+    import unicodedata
+    if not produit:
+        return ""
+    nfkd = unicodedata.normalize("NFKD", str(produit))
+    no_acc = "".join(c for c in nfkd if not unicodedata.combining(c))
+    return " ".join(no_acc.upper().split())
+
+
+def _bucketize_produit(produit: Optional[str], flux_key: str) -> Dict[str, bool]:
+    p = _normalize_produit(produit)
+    empty = {
+        "depLocal": False, "depAxes": False, "arrLocal": False, "arrAxes": False,
+        "depUsed": False, "arrUsed": False, "mapped": False
+    }
+    if not p:
+        return empty
+
+    def _mapped(d):
+        d["mapped"] = any([d["depLocal"], d["depAxes"], d["arrLocal"], d["arrAxes"], d["depUsed"], d["arrUsed"]])
+        return d
+
+    if flux_key == "amana":
+        r = dict(empty)
+        if p in ("AMANA DEPOT", "AMANA DEPOT TOTAL"):
+            r["depLocal"] = True; r["depAxes"] = True
+        elif p == "AMANA DEPOT LOCAL":
+            r["depLocal"] = True
+        elif p == "AMANA DEPOT AXES":
+            r["depAxes"] = True
+        if p in ("AMANA RECU", "AMANA RECU TOTAL"):
+            r["arrLocal"] = True; r["arrAxes"] = True
+        elif p == "AMANA RECU LOCAL":
+            r["arrLocal"] = True
+        elif p == "AMANA RECU AXES":
+            r["arrAxes"] = True
+        return _mapped(r)
+
+    if flux_key == "co":
+        r = dict(empty)
+        if p == "TOTAL CO":
+            r["depLocal"] = r["depAxes"] = r["arrLocal"] = r["arrAxes"] = True
+        elif p == "CO LOCAL":
+            r["depLocal"] = True; r["arrLocal"] = True
+        elif p == "CO MED":
+            r["depLocal"] = True; r["depAxes"] = True
+        elif p == "CO MED LOCAL":
+            r["depLocal"] = True
+        elif p == "CO MED AXES":
+            r["depAxes"] = True
+        elif p in ("CO ARRIVE", "CO ARRIVE TOTAL"):
+            r["arrLocal"] = True; r["arrAxes"] = True
+        elif p == "CO ARRIVE LOCAL":
+            r["arrLocal"] = True
+        elif p == "CO ARRIVE AXES":
+            r["arrAxes"] = True
+        return _mapped(r)
+
+    if flux_key == "cr":
+        r = dict(empty)
+        if p == "TOTAL CR":
+            r["depLocal"] = r["depAxes"] = r["arrLocal"] = r["arrAxes"] = True
+        elif p == "CR LOCAL":
+            r["depLocal"] = True; r["arrLocal"] = True
+        elif p == "CR MED":
+            r["depLocal"] = True; r["depAxes"] = True
+        elif p == "CR MED LOCAL":
+            r["depLocal"] = True
+        elif p == "CR MED AXES":
+            r["depAxes"] = True
+        elif p in ("CR ARRIVE", "CR ARRIVE TOTAL"):
+            r["arrLocal"] = True; r["arrAxes"] = True
+        elif p == "CR ARRIVE LOCAL":
+            r["arrLocal"] = True
+        elif p == "CR ARRIVE AXES":
+            r["arrAxes"] = True
+        return _mapped(r)
+
+    if flux_key == "lrh":
+        r = dict(empty)
+        if p == "LRH MED":
+            r["depUsed"] = True
+        if p == "LRH ARRIVE":
+            r["arrUsed"] = True
+        return _mapped(r)
+
+    if flux_key == "ebarkia":
+        r = dict(empty)
+        if p in ("E BARKIA MED", "ELBARKIA MED") or ("BARKIA" in p and "MED" in p):
+            r["depUsed"] = True
+        if p in ("E BARKIA ARRIVE", "ELBARKIA ARRIVE") or ("BARKIA" in p and "ARRIVE" in p):
+            r["arrUsed"] = True
+        return _mapped(r)
+
+    return empty
+
+
+def _compute_flux_totals(grid_values: Dict[str, Any], flux_key: str) -> Dict[str, float]:
+    gv = grid_values or {}
+    if flux_key == "amana":
+        dep_local = _to_float(gv.get("amana", {}).get("depot", {}).get("gc", {}).get("local")) + _to_float(gv.get("amana", {}).get("depot", {}).get("part", {}).get("local"))
+        dep_axes = _to_float(gv.get("amana", {}).get("depot", {}).get("gc", {}).get("axes")) + _to_float(gv.get("amana", {}).get("depot", {}).get("part", {}).get("axes"))
+        arr_local = _to_float(gv.get("amana", {}).get("recu", {}).get("gc", {}).get("local")) + _to_float(gv.get("amana", {}).get("recu", {}).get("part", {}).get("local"))
+        arr_axes = _to_float(gv.get("amana", {}).get("recu", {}).get("gc", {}).get("axes")) + _to_float(gv.get("amana", {}).get("recu", {}).get("part", {}).get("axes"))
+        dep = dep_local + dep_axes
+        arr = arr_local + arr_axes
+        return {"dep": dep, "arr": arr, "glob": dep + arr, "depLocal": dep_local, "depAxes": dep_axes, "arrLocal": arr_local, "arrAxes": arr_axes}
+    if flux_key == "co":
+        dep_local = _to_float(gv.get("co", {}).get("med", {}).get("local"))
+        dep_axes = _to_float(gv.get("co", {}).get("med", {}).get("axes"))
+        arr_local = _to_float(gv.get("co", {}).get("arrive", {}).get("local"))
+        arr_axes = _to_float(gv.get("co", {}).get("arrive", {}).get("axes"))
+        dep = dep_local + dep_axes
+        arr = arr_local + arr_axes
+        return {"dep": dep, "arr": arr, "glob": dep + arr, "depLocal": dep_local, "depAxes": dep_axes, "arrLocal": arr_local, "arrAxes": arr_axes}
+    if flux_key == "cr":
+        dep_local = _to_float(gv.get("cr", {}).get("med", {}).get("local"))
+        dep_axes = _to_float(gv.get("cr", {}).get("med", {}).get("axes"))
+        arr_local = _to_float(gv.get("cr", {}).get("arrive", {}).get("local"))
+        arr_axes = _to_float(gv.get("cr", {}).get("arrive", {}).get("axes"))
+        dep = dep_local + dep_axes
+        arr = arr_local + arr_axes
+        return {"dep": dep, "arr": arr, "glob": dep + arr, "depLocal": dep_local, "depAxes": dep_axes, "arrLocal": arr_local, "arrAxes": arr_axes}
+    if flux_key == "lrh":
+        dep = _to_float(gv.get("lrh", {}).get("med"))
+        arr = _to_float(gv.get("lrh", {}).get("arrive"))
+        return {"dep": dep, "arr": arr, "glob": dep + arr}
+    if flux_key == "ebarkia":
+        dep = _to_float(gv.get("ebarkia", {}).get("med"))
+        arr = _to_float(gv.get("ebarkia", {}).get("arrive"))
+        return {"dep": dep, "arr": arr, "glob": dep + arr}
+    return {"dep": 0.0, "arr": 0.0, "glob": 0.0}
+
+
+def _compute_used_volumes_by_poste_code(tasks_out: List["BandoengTaskOut"], grid_values: Dict[str, Any], cp_code_map: Dict[int, str]) -> Dict[str, Any]:
+    tasks_by_code: Dict[str, List["BandoengTaskOut"]] = {}
+    for t in tasks_out:
+        code = cp_code_map.get(int(t.centre_poste_id)) if t.centre_poste_id is not None else None
+        if not code:
+            continue
+        tasks_by_code.setdefault(code, []).append(t)
+
+    fluxes = ["amana", "co", "cr", "lrh", "ebarkia"]
+    out: Dict[str, Any] = {}
+    for code, items in tasks_by_code.items():
+        out[code] = {}
+        for flux_key in fluxes:
+            base = _compute_flux_totals(grid_values, flux_key)
+            flags = {"depLocal": False, "depAxes": False, "arrLocal": False, "arrAxes": False, "depUsed": False, "arrUsed": False}
+            any_mapped = False
+            for t in items:
+                if not (_to_float(t.volume_annuel) > 0 or _to_float(t.volume_journalier) > 0):
+                    continue
+                b = _bucketize_produit(t.produit, flux_key)
+                any_mapped = any_mapped or b["mapped"]
+                flags["depLocal"] = flags["depLocal"] or b["depLocal"]
+                flags["depAxes"] = flags["depAxes"] or b["depAxes"]
+                flags["arrLocal"] = flags["arrLocal"] or b["arrLocal"]
+                flags["arrAxes"] = flags["arrAxes"] or b["arrAxes"]
+                flags["depUsed"] = flags["depUsed"] or b["depUsed"]
+                flags["arrUsed"] = flags["arrUsed"] or b["arrUsed"]
+
+            if not any_mapped:
+                out[code][flux_key] = {"dep": 0.0, "arr": 0.0, "glob": 0.0, "full_mode": False}
+                continue
+
+            if flux_key in ("amana", "co", "cr"):
+                full_mode = flags["depLocal"] and flags["depAxes"] and flags["arrLocal"] and flags["arrAxes"]
+                if full_mode:
+                    out[code][flux_key] = {"dep": base["dep"], "arr": base["arr"], "glob": base["glob"], "full_mode": True}
+                else:
+                    dep = (base.get("depLocal", 0.0) if flags["depLocal"] else 0.0) + (base.get("depAxes", 0.0) if flags["depAxes"] else 0.0)
+                    arr = (base.get("arrLocal", 0.0) if flags["arrLocal"] else 0.0) + (base.get("arrAxes", 0.0) if flags["arrAxes"] else 0.0)
+                    out[code][flux_key] = {"dep": dep, "arr": arr, "glob": dep + arr, "full_mode": False}
+            else:
+                full_mode = flags["depUsed"] and flags["arrUsed"]
+                if full_mode:
+                    out[code][flux_key] = {"dep": base["dep"], "arr": base["arr"], "glob": base["glob"], "full_mode": True}
+                else:
+                    dep = base["dep"] if flags["depUsed"] else 0.0
+                    arr = base["arr"] if flags["arrUsed"] else 0.0
+                    out[code][flux_key] = {"dep": dep, "arr": arr, "glob": dep + arr, "full_mode": False}
+    return out
 
 @router.post("/simulate", response_model=BandoengSimulateResponse)
 def simulate_bandoeng(request: BandoengSimulateRequest, db: Session = Depends(get_db)):
@@ -179,6 +377,7 @@ def simulate_bandoeng(request: BandoengSimulateRequest, db: Session = Depends(ge
             coeff_geo=request.params.coeff_geo,
             pct_retour=request.params.pct_retour,
             pct_collecte=request.params.pct_collecte,
+            pct_guichet=request.params.pct_guichet,
             pct_axes=request.params.pct_axes,
             pct_local=request.params.pct_local,
             pct_international=request.params.pct_international,
@@ -210,6 +409,7 @@ def simulate_bandoeng(request: BandoengSimulateRequest, db: Session = Depends(ge
             ebarkia_pct_annee=request.params.ebarkia_pct_annee,
             # AMANA
             amana_pct_collecte=request.params.amana_pct_collecte,
+            amana_pct_guichet=request.params.amana_pct_guichet,
             amana_pct_retour=request.params.amana_pct_retour,
             amana_pct_axes_arrivee=request.params.amana_pct_axes_arrivee,
             amana_pct_axes_depart=request.params.amana_pct_axes_depart,
@@ -220,6 +420,7 @@ def simulate_bandoeng(request: BandoengSimulateRequest, db: Session = Depends(ge
             amana_pct_hors_crbt=request.params.amana_pct_hors_crbt,
             # CO
             co_pct_collecte=request.params.co_pct_collecte,
+            co_pct_guichet=request.params.co_pct_guichet,
             co_pct_retour=request.params.co_pct_retour,
             co_pct_axes_arrivee=request.params.co_pct_axes_arrivee,
             co_pct_axes_depart=request.params.co_pct_axes_depart,
@@ -230,6 +431,7 @@ def simulate_bandoeng(request: BandoengSimulateRequest, db: Session = Depends(ge
             co_pct_boite_postale=request.params.co_pct_boite_postale,
             # CR
             cr_pct_collecte=request.params.cr_pct_collecte,
+            cr_pct_guichet=request.params.cr_pct_guichet,
             cr_pct_retour=request.params.cr_pct_retour,
             cr_pct_axes_arrivee=request.params.cr_pct_axes_arrivee,
             cr_pct_axes_depart=request.params.cr_pct_axes_depart,
@@ -246,6 +448,14 @@ def simulate_bandoeng(request: BandoengSimulateRequest, db: Session = Depends(ge
         result = run_bandoeng_simulation(db, request.centre_id, volumes, params, request.poste_code)
         
         # Convert Engine Result to Response
+        cp_rows = (
+            db.query(CentrePoste.id, Poste.Code)
+            .join(Poste, CentrePoste.poste_id == Poste.id)
+            .filter(CentrePoste.centre_id == request.centre_id)
+            .all()
+        )
+        cp_code_map = {int(cp_id): str(code) for cp_id, code in cp_rows if code is not None}
+
         tasks_out = [
             BandoengTaskOut(
                 task_id=t.task_id,
@@ -262,9 +472,11 @@ def simulate_bandoeng(request: BandoengSimulateRequest, db: Session = Depends(ge
                 responsable=t.responsable,
                 moy_sec=t.moy_sec,
                 centre_poste_id=t.centre_poste_id,
+                poste_code=cp_code_map.get(int(t.centre_poste_id)) if t.centre_poste_id is not None else None,
                 phase=t.phase
             ) for t in result.tasks
         ]
+        volumes_utilises_par_poste = _compute_used_volumes_by_poste_code(tasks_out, result.grid_values or {}, cp_code_map)
         
         return BandoengSimulateResponse(
             tasks=tasks_out,
@@ -273,7 +485,9 @@ def simulate_bandoeng(request: BandoengSimulateRequest, db: Session = Depends(ge
             fte_calcule=result.fte_calcule,
             fte_arrondi=result.fte_arrondi,
             total_ressources_humaines=result.total_ressources_humaines,
-            ressources_par_poste=result.ressources_par_poste, grid_values=result.grid_values
+            ressources_par_poste=result.ressources_par_poste,
+            volumes_utilises_par_poste=volumes_utilises_par_poste,
+            grid_values=result.grid_values
         )
         
     except Exception as e:
@@ -329,6 +543,7 @@ def simulate_bandoeng_direct(request: SimplifiedBandoengRequest, db: Session = D
             coeff_geo=p.get('coeff_geo', p.get('nature_geo', p.get('natureGeo', 1.0))),
             pct_retour=p.get('pct_retour', 0.0),
             pct_collecte=p.get('pct_collecte', 0.0),
+            pct_guichet=p.get('pct_guichet', p.get('pctGuichet', 0.0)),
             pct_axes=p.get('pct_axes', p.get('pct_axes_arrivee', 0.0)),
             pct_local=p.get('pct_local', p.get('pct_axes_depart', 0.0)),
             pct_international=p.get('pct_international', 0.0),
@@ -360,6 +575,7 @@ def simulate_bandoeng_direct(request: SimplifiedBandoengRequest, db: Session = D
             ebarkia_pct_annee=p.get('ebarkia_pct_annee'),
             # AMANA
             amana_pct_collecte=p.get('amana_pct_collecte', p.get('amana_pctCollecte')),
+            amana_pct_guichet=p.get('amana_pct_guichet', p.get('amana_pctGuichet')),
             amana_pct_retour=p.get('amana_pct_retour', p.get('amana_pctRetour')),
             amana_pct_axes_arrivee=p.get('amana_pct_axes_arrivee', p.get('amana_pctAxesArrivee')),
             amana_pct_axes_depart=p.get('amana_pct_axes_depart', p.get('amana_pctAxesDepart')),
@@ -370,6 +586,7 @@ def simulate_bandoeng_direct(request: SimplifiedBandoengRequest, db: Session = D
             amana_pct_hors_crbt=p.get('amana_pct_hors_crbt', p.get('amana_pctHorsCrbt')),
             # CO
             co_pct_collecte=p.get('co_pct_collecte', p.get('co_pctCollecte')),
+            co_pct_guichet=p.get('co_pct_guichet', p.get('co_pctGuichet')),
             co_pct_retour=p.get('co_pct_retour', p.get('co_pctRetour')),
             co_pct_axes_arrivee=p.get('co_pct_axes_arrivee', p.get('co_pctAxesArrivee')),
             co_pct_axes_depart=p.get('co_pct_axes_depart', p.get('co_pctAxesDepart')),
@@ -380,6 +597,7 @@ def simulate_bandoeng_direct(request: SimplifiedBandoengRequest, db: Session = D
             co_pct_boite_postale=p.get('co_pct_boite_postale', p.get('co_pctBoitePostale')),
             # CR
             cr_pct_collecte=p.get('cr_pct_collecte', p.get('cr_pctCollecte')),
+            cr_pct_guichet=p.get('cr_pct_guichet', p.get('cr_pctGuichet')),
             cr_pct_retour=p.get('cr_pct_retour', p.get('cr_pctRetour')),
             cr_pct_axes_arrivee=p.get('cr_pct_axes_arrivee', p.get('cr_pctAxesArrivee')),
             cr_pct_axes_depart=p.get('cr_pct_axes_depart', p.get('cr_pctAxesDepart')),
@@ -466,7 +684,8 @@ def simulate_bandoeng_direct(request: SimplifiedBandoengRequest, db: Session = D
         for cp in cps:
             if cp.poste:
                 code = cp.poste.Code
-                lbl = cp.poste.label or cp.poste.nom
+                # Clé normalisée UPPERCASE+strip pour cohérence avec ressources_par_poste
+                lbl = (cp.poste.label or cp.poste.nom or "").strip().upper()
                 val = float(cp.effectif_actuel or 0)
                 
                 code_to_val[code] = val
@@ -492,6 +711,14 @@ def simulate_bandoeng_direct(request: SimplifiedBandoengRequest, db: Session = D
             ressources_actuelles_par_poste = label_to_val
 
         # 4. Convertir le résultat
+        cp_rows = (
+            db.query(CentrePoste.id, Poste.Code)
+            .join(Poste, CentrePoste.poste_id == Poste.id)
+            .filter(CentrePoste.centre_id == request.centre_id)
+            .all()
+        )
+        cp_code_map = {int(cp_id): str(code) for cp_id, code in cp_rows if code is not None}
+
         tasks_out = [
             BandoengTaskOut(
                 task_id=t.task_id,
@@ -508,9 +735,11 @@ def simulate_bandoeng_direct(request: SimplifiedBandoengRequest, db: Session = D
                 responsable=t.responsable,
                 moy_sec=t.moy_sec,
                 centre_poste_id=t.centre_poste_id,
+                poste_code=cp_code_map.get(int(t.centre_poste_id)) if t.centre_poste_id is not None else None,
                 phase=t.phase
             ) for t in result.tasks
         ]
+        volumes_utilises_par_poste = _compute_used_volumes_by_poste_code(tasks_out, result.grid_values or {}, cp_code_map)
         
         return BandoengSimulateResponse(
             tasks=tasks_out,
@@ -521,6 +750,7 @@ def simulate_bandoeng_direct(request: SimplifiedBandoengRequest, db: Session = D
             total_ressources_humaines=result.total_ressources_humaines,
             ressources_par_poste=result.ressources_par_poste,
             ressources_actuelles_par_poste=ressources_actuelles_par_poste,
+            volumes_utilises_par_poste=volumes_utilises_par_poste,
             grid_values=result.grid_values,
             debug_info=result.debug_info
         )
@@ -537,16 +767,29 @@ class BandoengCentreDetailsResponse(BaseModel):
     centre_id: int
     centre_name: str
     aps: float
-    moi_global: int
-    mod_global: int
+    aps_mod: float = 0.0
+    aps_moi: float = 0.0
+    moi_global: int = 0      # ✅ ajouter
+    mod_global: int = 0      # ✅ ajouter
     total_global: int
     task_count: int = 0
+    sites_count: int = 0
+    sites: List[str] = []
     # Paramètres Ville
     nature_geo: Optional[float] = 0.0
     taux_complexite: Optional[float] = 0.0
     duree_trajet: Optional[float] = 0.0
     classe_actuelle: Optional[str] = "SANS"
     categorie_label: Optional[str] = None
+
+
+class VilleOut(BaseModel):
+    id: int
+    code: str
+    label: str
+    geographie: float = 0.0
+    circulation: float = 0.0
+    trajet: float = 0.0
 
 @router.get("/centre-details/{centre_id}", response_model=BandoengCentreDetailsResponse)
 def get_bandoeng_centre_details(centre_id: int, db: Session = Depends(get_db)):
@@ -559,8 +802,8 @@ def get_bandoeng_centre_details(centre_id: int, db: Session = Depends(get_db)):
         if not centre:
             raise HTTPException(status_code=404, detail="Centre introuvable")
         
-        # 2. Récupérer les CentrePostes et leurs types
-        centre_postes = (
+        # 3. Récupérer les CentrePostes et leurs types
+        rows = (
             db.query(CentrePoste, Poste.type_poste, Poste.label, Poste.Code)
             .join(Poste, CentrePoste.code_resp == Poste.Code)
             .filter(CentrePoste.centre_id == centre_id)
@@ -569,32 +812,44 @@ def get_bandoeng_centre_details(centre_id: int, db: Session = Depends(get_db)):
         
         moi_sum = 0
         mod_sum = 0
+        aps_sum = 0
+        aps_moi_sum = 0
+        aps_mod_sum = 0
         
-        for cp, type_poste, poste_label, poste_code in centre_postes:
+        for cp, type_poste, poste_label, poste_code in rows:
             eff = cp.effectif_actuel or 0
+            aps_val = cp.aps or 0
             # Logique MOI : Type 'MOI', 'INDIRECT' ou 'STRUCTURE'
             t = (type_poste or "").upper()
             is_moi = t in ["MOI", "INDIRECT", "STRUCTURE"]
             
             if is_moi:
                 moi_sum += eff
+                aps_moi_sum += aps_val
             else:
                 mod_sum += eff
+                aps_mod_sum += aps_val
+            
+            aps_sum += aps_val
         
-        # 3. Récupérer les données de la Ville liée
+        # 4. Récupérer les données de la Ville liée
         ville_data = db.query(Ville).filter(Ville.code == centre.code_ville).first()
         
-        # 4. Compter les tâches du centre
+        # 5. Compter les tâches du centre
         task_count = db.query(Tache).join(CentrePoste).filter(CentrePoste.centre_id == centre_id).count()
                 
         return BandoengCentreDetailsResponse(
             centre_id=centre.id,
             centre_name=centre.label,
-            aps=float(centre.aps or 0),
+            aps=float(aps_sum),
+            aps_mod=float(aps_mod_sum),
+            aps_moi=float(aps_moi_sum),
             moi_global=int(moi_sum),
             mod_global=int(mod_sum),
             total_global=int(moi_sum + mod_sum),
             task_count=task_count,
+            sites_count=len(centre.attached_sites) if centre.attached_sites else 0,
+            sites=[s.label for s in centre.attached_sites] if centre.attached_sites else [],
             nature_geo=float(ville_data.geographie) if ville_data else 0.0,
             taux_complexite=float(ville_data.circulation) if ville_data else 0.0,
             duree_trajet=float(ville_data.trajet) if ville_data else 0.0,
@@ -606,6 +861,23 @@ def get_bandoeng_centre_details(centre_id: int, db: Session = Depends(get_db)):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/villes", response_model=List[VilleOut])
+def list_bandoeng_villes(db: Session = Depends(get_db)):
+    """Liste des Villes avec leurs coefficients (coeff geo / circulation / trajet)."""
+    rows = db.query(Ville).order_by(Ville.label).all()
+    return [
+        {
+            "id": v.id,
+            "code": v.code,
+            "label": v.label,
+            "geographie": float(v.geographie or 0.0),
+            "circulation": float(v.circulation or 0.0),
+            "trajet": float(v.trajet or 0.0),
+        }
+        for v in rows
+    ]
 
 
 from sqlalchemy import func
@@ -627,10 +899,12 @@ def list_bandoeng_postes(
                 CentrePoste.id.label("centre_poste_id"),
                 Poste.label,
                 Poste.type_poste,
+                Poste.charge_salaire,
                 func.coalesce(CentrePoste.effectif_actuel, 0).label("effectif_actuel"),
+                func.coalesce(CentrePoste.aps, 0).label("aps"),
                 CentrePoste.code_resp.label("code"), # ✅ Use CentrePoste code as the source of truth
                 HierarchiePostes.label.label("categorie"), # ✅ AJOUT: Catégorie Hiérarchique
-                Poste.hie_poste.label("raw_hie") # ✅ DEBUG: Raw hierarchy code
+                Poste.hie_poste.label("raw_hie") # ✅ Debug: Raw hierarchy code
             )
             .join(CentrePoste, CentrePoste.code_resp == Poste.Code) # ✅ Join via Code as requested
             .outerjoin(HierarchiePostes, Poste.hie_poste == HierarchiePostes.code) # ✅ Join avec la table Hiérarchie via Code
@@ -645,13 +919,17 @@ def list_bandoeng_postes(
             print(f"DEBUG BACKEND: First row category = {rows[0].categorie} | Raw Hie = {rows[0].raw_hie}")
             
         for r in rows:
-             result.append({
+            effectif_actuel = float(r.effectif_actuel or 0)
+            aps = float(r.aps or 0)
+            result.append({
                 "id": r.id,
                 "centre_poste_id": r.centre_poste_id,
                 "label": r.label,
                 "type_poste": r.type_poste,
-                "effectif_actuel": r.effectif_actuel,
-                "code": r.code,
+                "charge_salaire": float(r.charge_salaire or 0),
+                "effectif_actuel": effectif_actuel,
+                "aps": aps,
+                "effectif_actuel_mod": effectif_actuel + aps,
                 "code": r.code,
                 "categorie": r.categorie, # ✅ Return category to frontend
                 "raw_hie": r.raw_hie # ✅ Debug info
@@ -714,35 +992,39 @@ async def import_bandoeng_volumes(file: UploadFile = File(...)):
 
         # --- AMANA (Row 4) ---
         r = 4
-        # Depot GC
-        grid_values["amana"]["depot"]["gc"]["global"] = val(r, 2)
-        grid_values["amana"]["depot"]["gc"]["local"] = val(r, 3)
-        grid_values["amana"]["depot"]["gc"]["axes"] = val(r, 4)
+        # Depot GC (Skip Col 2: Total)
+        grid_values["amana"]["depot"]["gc"]["global"] = val(r, 3) # Col C
+        grid_values["amana"]["depot"]["gc"]["local"] = 0
+        grid_values["amana"]["depot"]["gc"]["axes"] = 0
+        
         # Depot Part
-        grid_values["amana"]["depot"]["part"]["global"] = val(r, 5)
-        grid_values["amana"]["depot"]["part"]["local"] = val(r, 6)
-        grid_values["amana"]["depot"]["part"]["axes"] = val(r, 7)
-        # Recu GC
-        grid_values["amana"]["recu"]["gc"]["global"] = val(r, 8)
-        grid_values["amana"]["recu"]["gc"]["local"] = val(r, 9)
-        grid_values["amana"]["recu"]["gc"]["axes"] = val(r, 10)
+        grid_values["amana"]["depot"]["part"]["global"] = val(r, 4) # Col D
+        grid_values["amana"]["depot"]["part"]["local"] = 0
+        grid_values["amana"]["depot"]["part"]["axes"] = 0
+        
+        # Recu GC (Skip Col 5: Total)
+        grid_values["amana"]["recu"]["gc"]["global"] = val(r, 6) # Col F
+        grid_values["amana"]["recu"]["gc"]["local"] = 0
+        grid_values["amana"]["recu"]["gc"]["axes"] = 0
+        
         # Recu Part
-        grid_values["amana"]["recu"]["part"]["global"] = val(r, 11)
-        grid_values["amana"]["recu"]["part"]["local"] = val(r, 12)
-        grid_values["amana"]["recu"]["part"]["axes"] = val(r, 13)
+        grid_values["amana"]["recu"]["part"]["global"] = val(r, 7) # Col G
+        grid_values["amana"]["recu"]["part"]["local"] = 0
+        grid_values["amana"]["recu"]["part"]["axes"] = 0
 
         # --- CR and CO (Row 9=CR, 10=CO) ---
         rows_map = {9: "cr", 10: "co"}
         
         for r_idx, key in rows_map.items():
-            # MED
-            grid_values[key]["med"]["global"] = val(r_idx, 2)
-            grid_values[key]["med"]["local"] = val(r_idx, 3)
-            grid_values[key]["med"]["axes"] = val(r_idx, 4)
-            # ARRIVE
-            grid_values[key]["arrive"]["global"] = val(r_idx, 5)
-            grid_values[key]["arrive"]["local"] = val(r_idx, 6)
-            grid_values[key]["arrive"]["axes"] = val(r_idx, 7)
+            # MED Global
+            grid_values[key]["med"]["global"] = val(r_idx, 2) # Col B
+            grid_values[key]["med"]["local"] = 0
+            grid_values[key]["med"]["axes"] = 0
+            
+            # ARRIVE Global
+            grid_values[key]["arrive"]["global"] = val(r_idx, 3) # Col C (Back to col C)
+            grid_values[key]["arrive"]["local"] = 0
+            grid_values[key]["arrive"]["axes"] = 0
         
         # --- El Barkia (Row 13: simple MED and Arrivé) ---
         grid_values["ebarkia"]["med"] = val(13, 2)
@@ -761,24 +1043,124 @@ async def import_bandoeng_volumes(file: UploadFile = File(...)):
 
 
 @router.get("/import-template")
-def get_import_template():
+def get_import_template(
+    centre_id: Optional[int] = Query(None),
+    region_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """
+    Génère un modèle Excel pré-rempli avec les tâches existantes pour un centre,
+    une région, ou globalement.
+    Groupement par (nom_tache, produit, famille_uo, unite_mesure).
+    """
+    from app.models.db_models import Tache, CentrePoste, Poste, Centre
+    from sqlalchemy import and_
+
+    # 1. Construction de la requête filtrée
+    query = (
+        db.query(
+            Tache.nom_tache,
+            Tache.produit,
+            Tache.famille_uo,
+            Tache.unite_mesure,
+            Tache.moyenne_min,
+            Tache.moy_sec,
+            Tache.base_calcul,
+            Poste.label.label("responsable")
+        )
+        .join(CentrePoste, Tache.centre_poste_id == CentrePoste.id)
+        .join(Poste, CentrePoste.poste_id == Poste.id)
+    )
+
+    if centre_id:
+        query = query.filter(CentrePoste.centre_id == centre_id)
+    elif region_id:
+        query = query.join(Centre, CentrePoste.centre_id == Centre.id)\
+                     .filter(Centre.region_id == region_id)
+
+    tasks_raw = query.all()
+
+    # 2. Groupement des tâches pour gérer les deux responsables
+    # Key: (nom, produit, famille, unite) -> Values: {resp1, resp2, t_min, t_sec, base}
+    grouped = {}
+    for t in tasks_raw:
+        key = (
+            str(t.nom_tache or "").strip(),
+            str(t.produit or "").strip(),
+            str(t.famille_uo or "").strip(),
+            str(t.unite_mesure or "").strip()
+        )
+        
+        if key not in grouped:
+            grouped[key] = {
+                "resps": [t.responsable],
+                "t_min": t.moyenne_min,
+                "t_sec": t.moy_sec,
+                "base": t.base_calcul
+            }
+        else:
+            if t.responsable not in grouped[key]["resps"]:
+                grouped[key]["resps"].append(t.responsable)
+
+    # 3. Création du Workbook
     wb = Workbook()
     ws = wb.active
     ws.title = "Modele Import"
+    
     headers = [
         "Nom de tâche", "Produit", "Famille", "Unité de mesure", 
         "Responsable 1", "Responsable 2", "Temps_min", "Temps_sec", "Base de calcul"
     ]
     ws.append(headers)
     
+    # Styliser l'en-tête
+    from openpyxl.styles import Font, PatternFill
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="005EA8", end_color="005EA8", fill_type="solid")
+    for cell in ws[1]:
+        cell.font = header_font
+        cell.fill = header_fill
+
+    # Remplir les données
+    for key, data in grouped.items():
+        resps = data["resps"]
+        row = [
+            key[0], # Nom
+            key[1], # Produit
+            key[2], # Famille
+            key[3], # Unité
+            resps[0] if len(resps) > 0 else "", # Resp 1
+            resps[1] if len(resps) > 1 else "", # Resp 2 (si plus, on tronque à 2 pour l'import)
+            data["t_min"],
+            data["t_sec"],
+            data["base"]
+        ]
+        ws.append(row)
+
+    # Ajuster la largeur des colonnes
+    for col in ws.columns:
+        max_length = 0
+        column = col[0].column_letter
+        for cell in col:
+            try:
+                if len(str(cell.value)) > max_length:
+                    max_length = len(str(cell.value))
+            except: pass
+        ws.column_dimensions[column].width = min(max_length + 2, 50)
+
     buffer = io.BytesIO()
     wb.save(buffer)
     buffer.seek(0)
     
+    filename = "Modele_Mise_a_jour_Taches"
+    if centre_id: filename += f"_Centre_{centre_id}"
+    elif region_id: filename += f"_Region_{region_id}"
+    filename += ".xlsx"
+    
     return Response(
         content=buffer.getvalue(),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": "attachment; filename=Modele_Mise_a_jour_Taches.xlsx"}
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
 
 @router.post("/import/tasks")

@@ -16,12 +16,12 @@ import {
     Trash2
 } from 'lucide-react';
 import { api } from '@/lib/api';
-import { updateCentreAps, clearEffectifs } from '@/services/api';
-import ApsUpdateDialog from '@/components/common/ApsUpdateDialog';
+import { clearEffectifs, updateCentrePoste } from '@/services/api';
 import EffectifUpdateDialog from '@/components/common/EffectifUpdateDialog';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import toast from 'react-hot-toast';
 import { Button } from '@/components/button';
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
 
 export default function PostesManager() {
     // États hiérarchiques (Région → Typologie → Centre)
@@ -43,11 +43,13 @@ export default function PostesManager() {
     const [viewAll, setViewAll] = useState(false); // Nouvel état
 
     // États pour la mise à jour des APS
-    const [showApsDialog, setShowApsDialog] = useState(false);
     const [showEffectifDialog, setShowEffectifDialog] = useState(false);
     const [showConfirmClear, setShowConfirmClear] = useState(false);
-    const [editingAps, setEditingAps] = useState(false);
-    const [apsValue, setApsValue] = useState(0);
+    // États pour l'édition en ligne des APS par poste
+    const [editingCpId, setEditingCpId] = useState(null);
+    const [editingField, setEditingField] = useState(null); // 'aps' ou 'effectif'
+    const [tempAps, setTempAps] = useState(0);
+    const [tempEffectif, setTempEffectif] = useState(0);
 
     // Charger les données au montage
     useEffect(() => {
@@ -66,8 +68,6 @@ export default function PostesManager() {
     useEffect(() => {
         if (selectedCentre && !viewAll) {
             loadPostes();
-            const centre = centres.find(c => String(c.id) === String(selectedCentre));
-            if (centre) setApsValue(centre.aps || 0);
         } else if (!viewAll) {
             setPostes([]);
         }
@@ -163,16 +163,28 @@ export default function PostesManager() {
         }
     };
 
-    const handleSaveAps = async () => {
+
+    const handleSavePosteAps = async (cpId) => {
         try {
-            await updateCentreAps(selectedCentre, apsValue);
-            toast.success("APS mis à jour avec succès");
-            setEditingAps(false);
-            // Rafraîchir les données locales
-            await loadAllCentres();
+            await updateCentrePoste(cpId, { effectif_aps: Number(tempAps) });
+            toast.success("APS du poste mis à jour");
+            setEditingCpId(null);
+            setEditingField(null);
             await loadPostes();
         } catch (err) {
-            toast.error("Erreur lors de la mise à jour de l'APS");
+            toast.error("Erreur mise à jour APS du poste");
+        }
+    };
+
+    const handleSavePosteEffectif = async (cpId) => {
+        try {
+            await updateCentrePoste(cpId, { effectif_actuel: Number(tempEffectif) });
+            toast.success("Effectif du poste mis à jour");
+            setEditingCpId(null);
+            setEditingField(null);
+            await loadPostes();
+        } catch (err) {
+            toast.error("Erreur mise à jour effectif du poste");
         }
     };
 
@@ -199,41 +211,29 @@ export default function PostesManager() {
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-slate-50 p-6">
             <div className="max-w-7xl mx-auto">
-                {/* Header */}
-                <div className="mb-4 flex items-start justify-between">
-                    <div>
-                        <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                            <UserRound className="w-5 h-5 text-blue-600" />
-                            Consultation des Postes par Centre
+                {/* Header Section */}
+                <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
+                    <div className="animate-in fade-in slide-in-from-left duration-700">
+                        <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+                            <UserRound className="w-6 h-6 text-[#005EA8]" />
+                            Gestion des Postes
                         </h1>
-                        <p className="text-xs text-slate-600 mt-1">
-                            Consultez les effectifs actuels pour chaque poste d'un centre
-                        </p>
                     </div>
-                    <div className="flex gap-2">
-                        <Button
-                            onClick={() => setShowApsDialog(true)}
-                            className="bg-white text-[#005EA8] border-[#005EA8] hover:bg-blue-50 text-xs font-semibold h-9"
-                            variant="outline"
-                        >
-                            <FileSpreadsheet className="w-4 h-4 mr-2" />
-                            Mise à jour APS
-                        </Button>
+                    <div className="flex items-center gap-3 animate-in fade-in slide-in-from-right duration-700">
                         <Button
                             onClick={() => setShowEffectifDialog(true)}
-                            className="bg-white text-emerald-600 border-emerald-600 hover:bg-emerald-50 text-xs font-semibold h-9"
-                            variant="outline"
+                            className="bg-[#005EA8] hover:bg-[#004e8a] text-white shadow-lg shadow-blue-200/50 border-none transition-all hover:scale-105 active:scale-95"
                         >
                             <Users className="w-4 h-4 mr-2" />
-                            Mise à jour Effectifs
+                            Mise à jour Massive
                         </Button>
                         <Button
                             onClick={() => setShowConfirmClear(true)}
-                            className="bg-white text-red-600 border-red-600 hover:bg-red-50 text-xs font-semibold h-9"
+                            className="bg-white text-red-600 border-red-100 hover:bg-red-50 hover:border-red-200 shadow-sm"
                             variant="outline"
                         >
-                            <Trash2 className="w-4 h-4 mr-2" />
-                            Vider
+                            <Trash2 className="w-4 h-4 mr-2 text-red-500" />
+                            Réinitialiser
                         </Button>
                     </div>
                 </div>
@@ -263,23 +263,18 @@ export default function PostesManager() {
                                 <MapPin className="w-3 h-3 inline mr-1" />
                                 Région
                             </label>
-                            <select
+                            <SearchableSelect
+                                options={regions.map(r => ({ value: r.id, label: r.label }))}
                                 value={selectedRegion}
-                                onChange={(e) => {
-                                    setSelectedRegion(e.target.value);
+                                onChange={(val) => {
+                                    setSelectedRegion(val);
                                     setSelectedTypologie('');
                                     setSelectedCentre('');
                                 }}
-                                className="w-full px-2 py-1 text-xs border border-slate-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                                placeholder="Toutes les régions"
+                                className="h-9 px-3 rounded-md border-slate-300"
                                 disabled={viewAll}
-                            >
-                                <option value="">Toutes les régions</option>
-                                {regions.map(r => (
-                                    <option key={r.id} value={r.id}>
-                                        {r.label}
-                                    </option>
-                                ))}
-                            </select>
+                            />
                         </div>
 
                         {/* Typologie */}
@@ -288,22 +283,17 @@ export default function PostesManager() {
                                 <Tag className="w-3 h-3 inline mr-1" />
                                 Typologie
                             </label>
-                            <select
+                            <SearchableSelect
+                                options={typologies.map(t => ({ value: t.id, label: t.label }))}
                                 value={selectedTypologie}
-                                onChange={(e) => {
-                                    setSelectedTypologie(e.target.value);
+                                onChange={(val) => {
+                                    setSelectedTypologie(val);
                                     setSelectedCentre('');
                                 }}
-                                className="w-full px-2 py-1 text-xs border border-slate-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                                placeholder="Toutes les typologies"
+                                className="h-9 px-3 rounded-md border-slate-300"
                                 disabled={viewAll}
-                            >
-                                <option value="">Toutes les typologies</option>
-                                {typologies.map(t => (
-                                    <option key={t.id} value={t.id}>
-                                        {t.label}
-                                    </option>
-                                ))}
-                            </select>
+                            />
                         </div>
 
                         {/* Centre */}
@@ -312,19 +302,15 @@ export default function PostesManager() {
                                 <Building className="w-3 h-3 inline mr-1" />
                                 Centre
                             </label>
-                            <select
+                            <SearchableSelect
+                                options={centres.map(c => ({ value: c.id, label: c.label }))}
                                 value={selectedCentre}
-                                onChange={(e) => setSelectedCentre(e.target.value)}
-                                className="w-full px-2 py-1 text-xs border border-slate-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                                onChange={setSelectedCentre}
+                                placeholder="-- Choisir un centre --"
+                                emptyMessage="Aucun centre trouvé."
+                                className="h-9 px-3 rounded-md border-slate-300"
                                 disabled={centres.length === 0 || viewAll}
-                            >
-                                <option value="">-- Choisir un centre --</option>
-                                {centres.map(c => (
-                                    <option key={c.id} value={c.id}>
-                                        {c.label}
-                                    </option>
-                                ))}
-                            </select>
+                            />
                             {centres.length === 0 && (selectedRegion || selectedTypologie) && (
                                 <p className="mt-1 text-xs text-amber-600">
                                     Aucun centre ne correspond aux filtres sélectionnés
@@ -352,57 +338,25 @@ export default function PostesManager() {
                     </div>
                 </div>
 
-                {/* Liste des postes */}
+                {/* Content Section */}
                 {(selectedCentre || viewAll) && (
-                    <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
-                        <div className="p-3 border-b border-slate-200 flex items-center justify-between">
-                            <h2 className="text-sm font-bold text-slate-900">
-                                {viewAll ? "Référentiel des Postes (Table Postes)" : `Postes du centre : ${selectedCentreObj?.label}`}
-                            </h2>
-                            {!viewAll && selectedCentreObj && (
-                                <div className="flex items-center gap-3">
-                                    <div className="flex items-center gap-2 px-3 py-1 bg-blue-50 border border-blue-100 rounded-lg">
-                                        <span className="text-[10px] font-bold text-blue-700 uppercase">Total APS</span>
-                                        {editingAps ? (
-                                            <div className="flex items-center gap-1">
-                                                <input
-                                                    type="number"
-                                                    value={apsValue}
-                                                    onChange={(e) => setApsValue(Number(e.target.value))}
-                                                    className="w-16 px-1 py-0.5 border border-blue-300 rounded text-center text-xs focus:ring-1 focus:ring-blue-500"
-                                                    autoFocus
-                                                />
-                                                <button
-                                                    onClick={handleSaveAps}
-                                                    className="p-1 text-green-600 hover:bg-green-100 rounded"
-                                                    title="Sauvegarder APS"
-                                                >
-                                                    <Save className="w-3 h-3" />
-                                                </button>
-                                                <button
-                                                    onClick={() => setEditingAps(false)}
-                                                    className="p-1 text-red-600 hover:bg-red-100 rounded"
-                                                    title="Annuler"
-                                                >
-                                                    <X className="w-3 h-3" />
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            <div className="group flex items-center gap-2 cursor-pointer" onClick={() => setEditingAps(true)} title="Cliquez pour modifier l'APS">
-                                                <span className="text-sm font-black text-blue-900">{apsValue}</span>
-                                                <Pencil className="w-3 h-3 text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                            </div>
-                                        )}
+                    <div className="space-y-6">
+                        <div className="bg-white rounded-3xl shadow-xl shadow-slate-200-50 border border-slate-100 overflow-hidden animate-in fade-in slide-in-from-bottom duration-700 font-sans">
+                            <div className="px-8 py-6 border-b border-slate-50 flex items-center justify-between bg-white/50 backdrop-blur-sm sticky top-0 z-20">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-2 h-8 bg-[#005EA8] rounded-full shadow-lg shadow-blue-200"></div>
+                                    <div>
+                                        <h2 className="text-lg font-black text-slate-800 tracking-tight leading-none">
+                                            {viewAll ? "Référentiel des Postes" : `Effectifs : ${selectedCentreObj?.label}`}
+                                        </h2>
                                     </div>
                                 </div>
-                            )}
-                        </div>
+                            </div>
 
-                        {/* Table */}
-                        <div className="overflow-x-auto">
-                            <table className="w-full">
-                                <thead className="bg-slate-50 border-b border-slate-200">
-                                    <tr>
+                            <div className="overflow-x-auto relative max-h-[70vh] scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
+                                <table className="w-full border-separate border-spacing-0">
+                                    <thead className="sticky top-0 z-30">
+                                        <tr className="bg-slate-50/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
                                         {viewAll ? (
                                             <>
                                                 <th className="px-3 py-2 text-left text-[10px] font-semibold text-slate-700 uppercase min-w-[200px]">
@@ -440,31 +394,47 @@ export default function PostesManager() {
                                                     </div>
                                                 </th>
                                                 <th className="px-3 py-2 text-left text-[10px] font-semibold text-slate-700 uppercase">Type</th>
-                                                <th className="px-3 py-2 text-center text-[10px] font-semibold text-slate-700 uppercase">Effectif Actuel</th>
+                                                <th className="px-3 py-2 text-center text-[10px] font-semibold text-slate-700 uppercase">Statutaires</th>
+                                                <th className="px-3 py-2 text-center text-[10px] font-semibold text-slate-700 uppercase">Effectif APS</th>
                                             </>
                                         )}
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
                                     {loading ? (
-                                        <tr><td colSpan={viewAll ? 2 : 3} className="px-3 py-4 text-center text-slate-500 text-xs">Chargement...</td></tr>
+                                        <tr><td colSpan={viewAll ? 3 : 5} className="px-3 py-10 text-center text-slate-400 text-xs font-medium italic">Chargement des données...</td></tr>
                                     ) : filteredPostes.length === 0 ? (
-                                        <tr><td colSpan={viewAll ? 2 : 3} className="px-3 py-4 text-center text-slate-500 text-xs">
-                                            {postes.length > 0 ? "Aucun poste ne correspond à votre recherche" : "Aucun poste trouvé"}
-                                        </td></tr>
+                                        <tr>
+                                            <td colSpan={viewAll ? 3 : 5} className="px-3 py-16 text-center">
+                                                <div className="flex flex-col items-center gap-3">
+                                                    <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center text-slate-300">
+                                                        <Search className="w-6 h-6" />
+                                                    </div>
+                                                    <p className="text-sm font-semibold text-slate-500">
+                                                        {postes.length > 0 ? "Aucun profil ne correspond à votre recherche" : "Aucun poste configuré pour ce périmètre"}
+                                                    </p>
+                                                    <p className="text-[10px] text-slate-400 max-w-[200px] mx-auto">
+                                                        Vérifiez l'orthographe ou essayez d'élargir vos filtres de sélection.
+                                                    </p>
+                                                </div>
+                                            </td>
+                                        </tr>
                                     ) : (
                                         filteredPostes.map((poste, idx) => (
-                                            <tr key={viewAll ? poste.id : poste.centre_poste_id} className="hover:bg-slate-50 transition-colors">
+                                            <tr 
+                                                key={viewAll ? poste.id : poste.centre_poste_id} 
+                                                className="group hover:bg-slate-50/50 transition-all duration-300 border-b border-slate-50 last:border-0"
+                                            >
                                                 {viewAll ? (
                                                     // VUE GLOBALE (Reference)
                                                     <>
                                                         <td className="px-3 py-2 text-xs font-semibold text-slate-900">
                                                             {poste.label}
                                                         </td>
-                                                        <td className="px-3 py-2">
-                                                            <span className={`inline-flex px-1.5 py-0.5 text-[10px] font-semibold rounded-full ${poste.type_poste === 'MOD'
-                                                                ? 'bg-blue-100 text-blue-700'
-                                                                : 'bg-purple-100 text-purple-700'
+                                                        <td className="px-6 py-4">
+                                                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${poste.type_poste === 'MOD'
+                                                                ? 'bg-blue-50 text-blue-600 border border-blue-100'
+                                                                : 'bg-purple-50 text-purple-600 border border-purple-100'
                                                                 }`}>
                                                                 {poste.type_poste}
                                                             </span>
@@ -476,30 +446,116 @@ export default function PostesManager() {
                                                         <td className="px-3 py-2 text-xs font-medium text-slate-900">
                                                             {poste.poste_label}
                                                         </td>
-                                                        <td className="px-3 py-2">
-                                                            <span className={`inline-flex px-1.5 py-0.5 text-[10px] font-semibold rounded-full ${poste.type_poste === 'MOD'
-                                                                ? 'bg-blue-100 text-blue-700'
-                                                                : 'bg-purple-100 text-purple-700'
+                                                        <td className="px-6 py-4">
+                                                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${poste.type_poste === 'MOD'
+                                                                ? 'bg-blue-50 text-blue-600 border border-blue-100'
+                                                                : 'bg-purple-50 text-purple-600 border border-purple-100'
                                                                 }`}>
                                                                 {poste.type_poste}
                                                             </span>
                                                         </td>
-                                                        <td className="px-3 py-2 text-center">
-                                                            <span className="text-xs font-semibold text-slate-900">{poste.effectif_actuel}</span>
+                                                        <td className="px-6 py-4 text-center">
+                                                            {editingCpId === poste.centre_poste_id && editingField === 'effectif' ? (
+                                                                <div className="flex items-center justify-center gap-1.5 animate-in zoom-in-95 duration-200">
+                                                                    <input
+                                                                        type="number"
+                                                                        value={tempEffectif}
+                                                                        onChange={(e) => setTempEffectif(e.target.value)}
+                                                                        className="w-16 px-2 py-1 text-xs font-bold border-2 border-slate-300 rounded-lg text-center focus:ring-0 shadow-sm outline-none bg-white"
+                                                                        autoFocus
+                                                                    />
+                                                                    <div className="flex flex-col gap-0.5">
+                                                                        <button onClick={() => handleSavePosteEffectif(poste.centre_poste_id)} className="p-1 bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-md transition-all shadow-sm">
+                                                                            <Save className="w-3 h-3" />
+                                                                        </button>
+                                                                        <button onClick={() => { setEditingCpId(null); setEditingField(null); }} className="p-1 bg-red-50 text-red-600 hover:bg-red-600 hover:text-white rounded-md transition-all shadow-sm">
+                                                                            <X className="w-3 h-3" />
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <div 
+                                                                    className="group flex flex-col items-center justify-center cursor-pointer transition-all hover:scale-110"
+                                                                    onClick={() => {
+                                                                        setEditingCpId(poste.centre_poste_id);
+                                                                        setEditingField('effectif');
+                                                                        setTempEffectif(poste.effectif_actuel || 0);
+                                                                    }}
+                                                                >
+                                                                    <span className="text-xs font-bold text-slate-700 bg-slate-50 px-2 py-0.5 rounded-md min-w-[24px] text-center border border-slate-100 group-hover:bg-slate-700 group-hover:text-white transition-colors tracking-tight">
+                                                                        {poste.effectif_actuel}
+                                                                    </span>
+                                                                    <div className="h-0.5 w-0 bg-slate-400 group-hover:w-full transition-all duration-300 mt-0.5 rounded-full"></div>
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                        <td className="px-6 py-4 text-center">
+                                                            {editingCpId === poste.centre_poste_id && editingField === 'aps' ? (
+                                                                <div className="flex items-center justify-center gap-1.5 animate-in zoom-in-95 duration-200">
+                                                                    <input
+                                                                        type="number"
+                                                                        value={tempAps}
+                                                                        onChange={(e) => setTempAps(e.target.value)}
+                                                                        className="w-16 px-2 py-1 text-xs font-bold border-2 border-blue-400 rounded-lg text-center focus:ring-0 shadow-sm outline-none bg-white"
+                                                                        autoFocus
+                                                                    />
+                                                                    <div className="flex flex-col gap-0.5">
+                                                                        <button onClick={() => handleSavePosteAps(poste.centre_poste_id)} className="p-1 bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-md transition-all shadow-sm group">
+                                                                            <Save className="w-3 h-3" />
+                                                                        </button>
+                                                                        <button onClick={() => { setEditingCpId(null); setEditingField(null); }} className="p-1 bg-red-50 text-red-600 hover:bg-red-600 hover:text-white rounded-md transition-all shadow-sm">
+                                                                            <X className="w-3 h-3" />
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <div 
+                                                                    className="group flex flex-col items-center justify-center cursor-pointer transition-all hover:scale-110"
+                                                                    onClick={() => {
+                                                                        setEditingCpId(poste.centre_poste_id);
+                                                                        setEditingField('aps');
+                                                                        setTempAps(poste.effectif_aps || 0);
+                                                                    }}
+                                                                >
+                                                                    <span className="text-xs font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md min-w-[24px] text-center border border-blue-100 group-hover:bg-blue-600 group-hover:text-white transition-colors tracking-tight">
+                                                                        {poste.effectif_aps || 0}
+                                                                    </span>
+                                                                    <div className="h-0.5 w-0 bg-blue-400 group-hover:w-full transition-all duration-300 mt-0.5 rounded-full"></div>
+                                                                </div>
+                                                            )}
                                                         </td>
                                                     </>
                                                 )}
                                             </tr>
                                         ))
                                     )}
-                                    {/* Ligne TOTAL (seulement en mode Centre) */}
                                     {!viewAll && postes.length > 0 && (
-                                        <tr className="bg-slate-100 font-bold border-t-2 border-slate-200">
-                                            <td colSpan={2} className="px-3 py-2 text-right text-slate-700 text-xs">
-                                                TOTAL EFFECTIF ACTUEL
+                                        <tr className="bg-slate-50/95 backdrop-blur-md border-t border-slate-200 sticky bottom-0 z-20 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+                                            <td colSpan={2} className="px-8 py-2 text-right">
+                                                <div className="flex flex-col items-end">
+                                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Récapitulatif Global</span>
+                                                    <span className="text-[10px] font-bold text-slate-500 italic">Valeurs cumulées pour ce centre</span>
+                                                </div>
                                             </td>
-                                            <td className="px-3 py-2 text-center text-slate-900 text-xs">
-                                                {postes.reduce((acc, p) => acc + (Number(p.effectif_actuel) || 0), 0)}
+                                            <td className="px-3 py-2 text-center">
+                                                <div className="flex flex-col items-center">
+                                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1">Statutaires</span>
+                                                    <div className="px-3 py-1 bg-slate-100 rounded-lg border border-slate-200">
+                                                        <span className="text-sm font-black text-slate-900 tracking-tight">
+                                                            {postes.reduce((acc, p) => acc + (Number(p.effectif_actuel) || 0), 0)}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="px-3 py-2 text-center bg-blue-50/50">
+                                                <div className="flex flex-col items-center">
+                                                    <span className="text-[9px] font-black text-blue-500 uppercase tracking-tighter mb-1">Total APS</span>
+                                                    <div className="px-3 py-1 bg-blue-100/50 rounded-lg border border-blue-200">
+                                                        <span className="text-sm font-black text-blue-600 tracking-tight">
+                                                            {postes.reduce((acc, p) => acc + (Number(p.effectif_aps) || 0), 0)}
+                                                        </span>
+                                                    </div>
+                                                </div>
                                             </td>
                                         </tr>
                                     )}
@@ -507,20 +563,9 @@ export default function PostesManager() {
                             </table>
                         </div>
                     </div>
-                )}
+                </div>
+            )}
 
-                <ApsUpdateDialog
-                    open={showApsDialog}
-                    onOpenChange={setShowApsDialog}
-                    onSuccess={() => {
-                        loadAllCentres();
-                        if (selectedCentre) loadPostes();
-                    }}
-                    filters={{
-                        region_id: selectedRegion,
-                        typologie_id: selectedTypologie
-                    }}
-                />
 
                 <EffectifUpdateDialog
                     open={showEffectifDialog}

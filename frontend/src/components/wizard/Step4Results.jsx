@@ -136,15 +136,14 @@ const KPICardGlass = ({
     );
 };
 
-const EffectifFooter = ({ totalLabel, totalValue, modValue, moiValue, apsLabel, apsValue }) => (
+const EffectifFooter = ({ totalLabel, totalValue, modValue, moiValue, apsLabel, apsValue, apsModValue, apsMoiValue }) => (
     <div className="text-[10px] text-slate-600 space-y-1 w-full">
-        {/* Ligne 1: Total */}
+        {/* Ligne 1: Total Statutaire */}
         <div className={`flex items-center justify-center gap-1.5 rounded-full px-2 py-0.5 border ${totalValue !== undefined ? 'bg-slate-50 border-slate-100' : 'opacity-0'}`}>
             <span className="font-bold text-slate-400 text-[8px] uppercase">{totalLabel || "TOTAL"}:</span>
             <span className="text-slate-800 font-extrabold">{totalValue || "0"}</span>
         </div>
-
-        {/* Ligne 2: MOD / MOI */}
+        {/* Ligne 2: MOD / MOI Statutaire */}
         <div className="flex items-center justify-center gap-1">
             <div className="flex-1 flex items-center justify-between px-1.5 py-0.5 rounded bg-blue-50/50 text-[#005EA8] border border-blue-100/50">
                 <span className="text-blue-400 font-bold text-[8px]">MOD:</span>
@@ -155,11 +154,22 @@ const EffectifFooter = ({ totalLabel, totalValue, modValue, moiValue, apsLabel, 
                 <span className="font-extrabold">{moiValue || "0"}</span>
             </div>
         </div>
-
-        {/* Ligne 3: APS */}
-        <div className={`flex items-center justify-center gap-1.5 rounded-full px-2 py-0.5 border ${apsValue !== undefined && apsValue !== null ? 'bg-emerald-50 text-emerald-700 border-emerald-100/50' : 'opacity-0'}`}>
-            <span className="font-bold text-emerald-400 text-[8px] uppercase">{apsLabel || "APS"}:</span>
-            <span className="font-extrabold">{apsValue || "0"}</span>
+        {/* Ligne 3: APS + ventilation MOD/MOI */}
+        <div className={`flex flex-col items-center justify-center gap-0.5 rounded-full px-2 py-0.5 border ${apsValue !== undefined && apsValue !== null ? 'bg-emerald-50 text-emerald-700 border-emerald-100/50' : 'opacity-0'}`}>
+            <div className="flex items-center gap-1.5">
+                <span className="font-bold text-emerald-400 text-[8px] uppercase">{apsLabel || "APS"}:</span>
+                <span className="font-extrabold">{apsValue || "0"}</span>
+            </div>
+            {(apsModValue !== undefined || apsMoiValue !== undefined) && (
+                <div className="flex items-center justify-between w-full text-[9px]">
+                    <span className="text-emerald-500 font-semibold">
+                        MOD: <span className="font-extrabold">{apsModValue || 0}</span>
+                    </span>
+                    <span className="text-emerald-500 font-semibold">
+                        MOI: <span className="font-extrabold">{apsMoiValue || 0}</span>
+                    </span>
+                </div>
+            )}
         </div>
     </div>
 );
@@ -193,6 +203,13 @@ export default function Step4Results({
     const [refFilterPrestation, setRefFilterPrestation] = useState("");
 
     // Helper pour extraire le premier mot (avec gestion spéciale pour e Barkia)
+    // Lookup dans ressources_par_poste / ressources_actuelles_par_poste
+    // Le backend normalise les clés en UPPERCASE+strip — on fait pareil côté frontend
+    const lookupMap = (map, label) => {
+        if (!map || !label) return undefined;
+        return map[(label).trim().toUpperCase()];
+    };
+
     const getFirstWord = (str) => {
         if (!str) return "";
         const parts = str.trim().split(/\s+/);
@@ -309,15 +326,19 @@ export default function Step4Results({
         let actualMOD = 0;
         let actualMOI = 0;
         let actualAPS = 0;
+        let actualAPSMod = 0;
+        let actualAPSMoi = 0;
 
         if (isGlobalView && centreDetails && !data.isVirtual) {
             actualMOD = Number(centreDetails.mod_global || 0);
             actualMOI = Number(centreDetails.moi_global || 0);
             actualAPS = Number(centreDetails.aps || 0);
+            actualAPSMod = Number(centreDetails.aps_mod || 0);
+            actualAPSMoi = Number(centreDetails.aps_moi || 0);
         } else if (selectedPosteObj && !data.isVirtual) {
             const posteLabel = (selectedPosteObj.label || selectedPosteObj.nom || "").trim();
             // Use aggregated headcount from backend if available, fallback to poste attribute
-            const val = Number((simulationResults.ressources_actuelles_par_poste || {})[posteLabel] ?? (selectedPosteObj.effectif_actuel || 0));
+            const val = Number(lookupMap(simulationResults.ressources_actuelles_par_poste, posteLabel) ?? (selectedPosteObj.effectif_actuel || 0));
 
             if (isMoiPoste(selectedPosteObj)) {
                 actualMOI = val;
@@ -331,7 +352,7 @@ export default function Step4Results({
 
         const isMOD = selectedPosteObj ? !isMoiPoste(selectedPosteObj) : false;
         const posteLabel = selectedPosteObj ? (selectedPosteObj.label || selectedPosteObj.nom || "").trim() : "";
-        const individualCalculated = (simulationResults.ressources_par_poste || {})[posteLabel] || 0;
+        const individualCalculated = lookupMap(simulationResults.ressources_par_poste, posteLabel) || 0;
 
         const targetCalculatedMOD = isGlobalView ? fteCalculated : (isMOD ? individualCalculated : 0);
         const targetCalculatedMOI = isGlobalView ? actualMOI : (isMoiPoste(selectedPosteObj) ? individualCalculated || actualMOI : 0);
@@ -370,6 +391,8 @@ export default function Step4Results({
             actualMOD,
             actualMOI,
             actualAPS,
+            actualAPSMod,
+            actualAPSMoi,
             actualStatutaire,
             actualTotal,
             targetCalculatedMOD,
@@ -510,6 +533,19 @@ export default function Step4Results({
 
     const filteredReferentielTasks = useMemo(() => {
         let filtered = referentielTasks;
+        // Apply same "Intervenant" filter on referential table
+        if (selectedPosteObj) {
+            const respName = (selectedPosteObj.label || selectedPosteObj.nom || "").trim().toUpperCase();
+            filtered = filtered.filter(t => {
+                const respList = (t.responsables || []).map(r => String(r || "").trim().toUpperCase());
+                // Fallback for safety if responsibles is missing
+                if (!respList.length) {
+                    respList.push(String(t.resp1 || "").trim().toUpperCase());
+                    respList.push(String(t.resp2 || "").trim().toUpperCase());
+                }
+                return respList.includes(respName);
+            });
+        }
         if (refFilterFamille) {
             filtered = filtered.filter(t => t.famille === refFilterFamille);
         }
@@ -517,29 +553,47 @@ export default function Step4Results({
             filtered = filtered.filter(t => getFirstWord(t.produit) === refFilterPrestation);
         }
         return filtered;
-    }, [referentielTasks, refFilterFamille, refFilterPrestation]);
+    }, [referentielTasks, refFilterFamille, refFilterPrestation, selectedPosteObj]);
 
     // Apply filters to table data
     const filteredTableData = useMemo(() => {
-        let filtered = tableData;
-
-        // Filter by Intervenant if selected
+        // If an intervenant is selected, use raw backend tasks for exact per-intervenant view
+        // (prevents aggregated "resp1/resp2" rows from summing two responsibles together).
         if (selectedPosteObj) {
             const respName = (selectedPosteObj.label || selectedPosteObj.nom || "").trim().toUpperCase();
-            filtered = filtered.filter(task => {
-                const tResp = (task.responsable || "").trim().toUpperCase();
-                return tResp === respName;
-            });
+            let raw = (simulationResults?.tasks || []).filter(
+                (t) => String(t.responsable || "").trim().toUpperCase() === respName
+            );
+
+            if (filterFamille) {
+                raw = raw.filter((t) => t.famille === filterFamille);
+            }
+            if (filterPrestation) {
+                raw = raw.filter((t) => getFirstWord(t.produit) === filterPrestation);
+            }
+
+            return raw.map((t, idx) => ({
+                ...t,
+                seq: idx + 1,
+                resp1: t.responsable || "-",
+                resp2: "-",
+                responsables: [t.responsable || "-"],
+                volume_journalier: Number(t.volume_journalier || 0).toFixed(2),
+                moyenne_min: Number(t.moyenne_min || 0).toFixed(2),
+                heures_calculees: Number(t.heures_calculees || 0).toFixed(2),
+            }));
         }
 
+        // Global view keeps grouped/aggregated table for compactness
+        let filtered = tableData;
         if (filterFamille) {
-            filtered = filtered.filter(t => t.famille === filterFamille);
+            filtered = filtered.filter((t) => t.famille === filterFamille);
         }
         if (filterPrestation) {
-            filtered = filtered.filter(t => getFirstWord(t.produit) === filterPrestation);
+            filtered = filtered.filter((t) => getFirstWord(t.produit) === filterPrestation);
         }
         return filtered;
-    }, [tableData, filterFamille, filterPrestation, selectedPosteObj]);
+    }, [tableData, filterFamille, filterPrestation, selectedPosteObj, simulationResults]);
 
     const handleExportExcel = () => {
         if (!filteredTableData || filteredTableData.length === 0) return;
@@ -575,6 +629,29 @@ export default function Step4Results({
     const handleShowDetail = (type, title, tone) => {
         if (!simulationResults) return;
 
+        const apsByPoste = (simulationResults.aps_par_poste || {});
+        const HIERARCHY_CATEGORY_ORDER = {
+            TERRAIN: 0,
+            GUICHET: 1,
+            "OPERATION CTD": 2,
+            "CHAUFFEUR / COURSIER": 3,
+            "OPERATION ADMIN": 4,
+            MANUTENTION: 5,
+            AUTRES: 6,
+            MOI: 99,
+        };
+
+        const inferCategoryFromLabel = (label = "") => {
+            const l = String(label || "").toUpperCase();
+            if (l.includes("FACTEUR") || l.includes("DISTRIBUTION")) return "TERRAIN";
+            if (l.includes("GUICHET") || l.includes("GAB")) return "GUICHET";
+            if (l.includes("TRI") || l.includes("ACHEMINEMENT") || l.includes("OPERATIONS") || l.includes("BRIGADE") || l.includes("CTD")) return "OPERATION CTD";
+            if (l.includes("CHAUFFEUR") || l.includes("COURSIER")) return "CHAUFFEUR / COURSIER";
+            if (l.includes("ACCUEIL") || l.includes("CLIENTELE") || l.includes("ADMIN") || l.includes("RH") || l.includes("MOYENS")) return "OPERATION ADMIN";
+            if (l.includes("MANUTENTION")) return "MANUTENTION";
+            return "AUTRES";
+        };
+
         const breakdown = postes.map(p => {
             const label = (p.label || p.nom || "").trim();
             const respName = label.toUpperCase();
@@ -588,22 +665,39 @@ export default function Step4Results({
             const load = postTasks.reduce((acc, t) => acc + (t.heures_calculees || 0), 0);
 
             // 2. FTE and Calc logic
-            const fteCalc = (simulationResults.ressources_par_poste || {})[label] || 0;
-            const actual = Number((simulationResults.ressources_actuelles_par_poste || {})[label] ?? (p.effectif_actuel || 0));
+            const fteCalc = lookupMap(simulationResults.ressources_par_poste, label) || 0;
+            const actual = Number(lookupMap(simulationResults.ressources_actuelles_par_poste, label) ?? (p.effectif_actuel || 0));
+            const apsActual = Number(lookupMap(apsByPoste, label) || p.aps || 0);
 
             // Handle MOI specific values if they are not in ressources_par_poste
             const targetFteCalc = isMoi ? (fteCalc || actual) : fteCalc;
             const targetFinal = Math.round(targetFteCalc);
-            const gap = targetFinal - actual;
+            const totalActuel = actual + apsActual;        // ✅ Statutaires + APS
+            const gapCalc = targetFteCalc - totalActuel;
+            const gapFinal = targetFinal - totalActuel;
+
+            let gap = 0;
+            if (type === "fte_calc") gap = gapCalc;
+            else if (type === "fte_final") gap = gapFinal;// ✅ écart vs total réel
 
             let val = 0;
             if (type === "load") val = load;
             else if (type === "actual") val = actual;
             else if (type === "fte_calc") val = targetFteCalc;
             else if (type === "fte_final") val = targetFinal;
-            else if (type === "gap") val = gap;
+            else if (type === "gap") val = gapFinal;
 
-            return { label, value: val, actual, gap, isMoi };
+            return { 
+                label, 
+                value: val, 
+                actual, 
+                apsActual, 
+                totalActuel, 
+                gap, 
+                isMoi,
+                raw_hie: p.raw_hie || "ZZZ", // Fallback for sorting
+                categorie: p.categorie || p.category || (isMoi ? "MOI" : inferCategoryFromLabel(label))
+            };
         }).filter(item => item.value !== 0 || !item.isMoi); // Keep all non-zero or MOD posts
 
         setDetailDialog({
@@ -611,96 +705,301 @@ export default function Step4Results({
             title,
             tone,
             type,
-            data: breakdown.sort((a, b) => b.value - a.value)
+            data: breakdown.sort((a, b) => {
+                // 1. Sort by type (MOD first, MOI last)
+                if (a.isMoi !== b.isMoi) {
+                    return a.isMoi ? 1 : -1;
+                }
+                // 2. For MOD, apply business category hierarchy (Terrain first)
+                if (!a.isMoi && !b.isMoi) {
+                    const aCat = String(a.categorie || inferCategoryFromLabel(a.label || "")).toUpperCase();
+                    const bCat = String(b.categorie || inferCategoryFromLabel(b.label || "")).toUpperCase();
+                    const aCatRank = HIERARCHY_CATEGORY_ORDER[aCat] ?? 50;
+                    const bCatRank = HIERARCHY_CATEGORY_ORDER[bCat] ?? 50;
+                    if (aCatRank !== bCatRank) {
+                        return aCatRank - bCatRank;
+                    }
+                }
+                // 3. Sort by hierarchy code (natural order: 2 before 10)
+                if (a.raw_hie !== b.raw_hie) {
+                    return String(a.raw_hie).localeCompare(String(b.raw_hie), undefined, { numeric: true, sensitivity: "base" });
+                }
+                // 4. Stable alphabetical fallback
+                return String(a.label || "").localeCompare(String(b.label || ""), undefined, { sensitivity: "base" });
+            })
         });
     };
 
     const BreakdownDialog = () => {
         const isComparison = detailDialog.type === "fte_final" || detailDialog.type === "fte_calc";
+        const isActualDetail = detailDialog.type === "actual";
+
+        // Separate and calculate totals
+        const modData = detailDialog.data.filter(item => !item.isMoi);
+        const moiData = detailDialog.data.filter(item => item.isMoi);
+
+        const calculateTotals = (items) => {
+            return items.reduce((acc, item) => ({
+                value: acc.value + (item.value || 0),
+                actual: acc.actual + (item.actual || 0),
+                apsActual: acc.apsActual + (item.apsActual || 0),
+                totalActuel: acc.totalActuel + ((item.actual || 0) + (item.apsActual || 0)),
+                gap: acc.gap + (item.gap || 0)
+            }), { value: 0, actual: 0, apsActual: 0, totalActuel: 0, gap: 0 });
+        };
+
+        const modTotals = calculateTotals(modData);
+        const moiTotals = calculateTotals(moiData);
+        const grandTotals = calculateTotals(detailDialog.data);
+
+        const TotalRow = ({ label, totals, isGrandTotal = false }) => (
+            <TableRow className={`
+                ${isGrandTotal 
+                    ? 'bg-slate-900/5 backdrop-blur-md font-bold border-t-2 border-slate-300 drop-shadow-sm' 
+                    : 'bg-slate-100/40 font-semibold border-t border-slate-200'}
+                transition-all duration-300
+            `}>
+                <TableCell className="py-3.5 text-xs text-slate-900">
+                    <div className="flex items-center gap-3">
+                        {isGrandTotal ? (
+                            <div className="p-1 bg-blue-100 rounded-md shadow-inner">
+                                {/* <TrendingUp className="w-4 h-4 text-blue-600" /> */}
+                            </div>
+                        ) : (
+                            <div className={`w-1.5 h-6 rounded-full ${label.includes('MOD') ? 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.3)]' : 'bg-fuchsia-500 shadow-[0_0_8px_rgba(192,38,211,0.3)]'}`} />
+                        )}
+                        <span className={isGrandTotal ? "tracking-tight uppercase" : ""}>{label}</span>
+                    </div>
+                </TableCell>
+                {isComparison ? (
+                    <>
+                        <TableCell className="py-3.5 text-right text-xs tabular-nums">
+                            <span className="px-2 py-1 bg-white/60 rounded-lg shadow-sm">{totals.totalActuel.toFixed(2).replace('.', ',').replace(',00', '')}</span>
+                        </TableCell>
+                        <TableCell className="py-3.5 text-right text-xs tabular-nums">
+                            <span className={`${isGrandTotal ? 'text-blue-700 bg-blue-50/50' : 'text-slate-900 bg-white/60'} px-2.5 py-1 rounded-lg shadow-sm border border-slate-100/50`}>
+                                {totals.value.toFixed(2).replace('.', ',').replace(',00', '')}
+                            </span>
+                        </TableCell>
+                        <TableCell className="py-3.5 text-right text-xs tabular-nums">
+                            <Badge className={`text-[11px] px-2.5 py-1 font-extrabold shadow-sm transition-transform hover:scale-105 ${totals.gap > 0
+                                ? 'bg-red-500 text-white border-none'
+                                : totals.gap < 0
+                                    ? 'bg-emerald-500 text-white border-none'
+                                    : 'bg-slate-200 text-slate-600 border-none'
+                                }`}>
+                                {totals.gap.toFixed(2).replace('.', ',').replace(',00', '')}
+                            </Badge>
+                        </TableCell>
+                    </>
+                ) : isActualDetail ? (
+                    <>
+                        <TableCell className="py-3.5 text-right text-xs tabular-nums text-slate-800">
+                            <span className="px-2 py-1 bg-white/60 rounded-lg shadow-sm">{totals.actual.toFixed(2).replace('.', ',').replace(',00', '')}</span>
+                        </TableCell>
+                        <TableCell className="py-3.5 text-right text-xs tabular-nums text-slate-800">
+                            <span className="px-2 py-1 bg-white/60 rounded-lg shadow-sm">{totals.apsActual.toFixed(2).replace('.', ',').replace(',00', '')}</span>
+                        </TableCell>
+                        <TableCell className="py-3.5 text-right text-xs tabular-nums text-slate-900 font-bold">
+                            <span className="px-2.5 py-1 bg-slate-900 text-white rounded-lg shadow-md">{totals.totalActuel.toFixed(2).replace('.', ',').replace(',00', '')}</span>
+                        </TableCell>
+                    </>
+                ) : (
+                    <TableCell className="py-3.5 text-right text-xs font-black text-slate-900 tabular-nums">
+                        <span className="px-3 py-1.5 bg-white/70 rounded-xl shadow-inner border border-white/50 ring-1 ring-slate-100">
+                            {totals.value.toFixed(2).replace('.', ',').replace(',00', '')}
+                        </span>
+                    </TableCell>
+                )}
+            </TableRow>
+        );
 
         return (
             <Dialog open={detailDialog.open} onOpenChange={(open) => setDetailDialog(prev => ({ ...prev, open }))}>
-                <DialogContent className="max-w-lg bg-gradient-to-br from-white to-slate-50/30 p-0 overflow-hidden border border-slate-200/60 shadow-[0_20px_70px_-15px_rgba(0,0,0,0.3)] rounded-2xl">
-                    <DialogHeader className={`p-5 bg-gradient-to-br ${detailDialog.tone === 'rose' ? 'from-rose-500 via-rose-600 to-rose-700' : 'from-[#005EA8] via-blue-600 to-blue-700'} text-white relative overflow-hidden`}>
-                        <div aria-hidden className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48cGF0dGVybiBpZD0iZ3JpZCIgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBwYXR0ZXJuVW5pdHM9InVzZXJTcGFjZU9uVXNlIj48cGF0aCBkPSJNIDQwIDAgTCAwIDAgMCA0MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLW9wYWNpdHk9IjAuMDUiIHN0cm9rZS13aWR0aD0iMSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNncmlkKSIvPjwvc3ZnPg==')] opacity-40" />
-                        <DialogTitle className="text-lg font-bold flex items-center gap-3 relative z-10">
-                            <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
-                                <Eye className="w-5 h-5" />
+                <DialogContent className="max-w-xl bg-white/80 backdrop-blur-2xl p-0 overflow-hidden border border-white/40 shadow-[0_25px_80px_-15px_rgba(0,0,0,0.35)] rounded-[2rem] outline-none ring-1 ring-black/5">
+                    <DialogHeader className={`p-7 bg-gradient-to-br ${detailDialog.tone === 'rose' ? 'from-rose-600 via-rose-700 to-rose-800' : 'from-[#004A85] via-[#005EA8] to-blue-700'} text-white relative overflow-hidden`}>
+                        <div aria-hidden className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48cGF0dGVybiBpZD0iZ3JpZCIgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBwYXR0ZXJuVW5pdHM9InVzZXJTcGFjZU9uVXNlIj48cGF0aCBkPSJNIDQwIDAgTCAwIDAgMCA0MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLW9wYWNpdHk9IjAuMDgiIHN0cm9rZS13aWR0aD0iMSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNncmlkKSIvPjwvc3ZnPg==')] opacity-50" />
+                        <div className="absolute top-[-50%] right-[-10%] w-[300px] h-[300px] bg-white/10 rounded-full blur-[100px] pointer-events-none" />
+                        
+                        <DialogTitle className="text-xl font-bold flex items-center gap-4 relative z-10 animate-in fade-in slide-in-from-top-4 duration-500">
+                            <div className="p-3 bg-white/15 rounded-2xl backdrop-blur-md border border-white/20 shadow-xl ring-1 ring-white/10">
+                                <Eye className="w-6 h-6 text-white" />
                             </div>
-                            <div>
-                                <div className="text-xs font-medium opacity-90">Détail par Poste</div>
-                                <div className="text-base font-extrabold">{detailDialog.title}</div>
+                            <div className="space-y-0.5">
+                                <div className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80 leading-none">Analyse Détaillée</div>
+                                <div className="text-xl font-black drop-shadow-sm">{detailDialog.title}</div>
                             </div>
                         </DialogTitle>
                     </DialogHeader>
-                    <div className="p-5 max-h-[65vh] overflow-y-auto custom-scrollbar">
-                        <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow className="bg-gradient-to-r from-slate-50 to-slate-100/50 border-b-2 border-slate-200">
-                                        <TableHead className="text-xs font-extrabold text-slate-700 py-3">Poste / Intervenant</TableHead>
+
+                    <div className="p-6 max-h-[70vh] overflow-y-auto custom-scrollbar bg-slate-50/40">
+                        <div className="bg-white/70 backdrop-blur-sm rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-200/50 overflow-hidden outline-none ring-1 ring-slate-100">
+                            <Table className="border-collapse">
+                                <TableHeader className="z-20">
+                                    <TableRow className="border-b border-slate-200">
+                                        <TableHead className="sticky top-0 z-30 text-[11px] font-black text-slate-500 py-4 pl-6 uppercase tracking-widest bg-slate-50/95 backdrop-blur-md">
+                                            Poste / Intervenant
+                                        </TableHead>
                                         {isComparison ? (
                                             <>
-                                                <TableHead className="text-[10px] font-extrabold text-slate-600 text-right uppercase tracking-wider">Actuel</TableHead>
-                                                <TableHead className="text-[10px] font-extrabold text-slate-600 text-right uppercase tracking-wider">Calculé</TableHead>
-                                                <TableHead className="text-[10px] font-extrabold text-slate-600 text-right uppercase tracking-wider">Écart</TableHead>
+                                                <TableHead className="sticky top-0 z-30 text-[10px] font-black text-slate-500 text-right uppercase tracking-[0.1em] bg-slate-50/95 backdrop-blur-md">
+                                                    Actuel
+                                                </TableHead>
+                                                <TableHead className="sticky top-0 z-30 text-[10px] font-black text-slate-500 text-right uppercase tracking-[0.1em] bg-slate-50/95 backdrop-blur-md">
+                                                    Calculé
+                                                </TableHead>
+                                                <TableHead className="sticky top-0 z-30 text-[10px] font-black text-slate-500 text-right uppercase tracking-[0.1em] pr-6 bg-slate-50/95 backdrop-blur-md">
+                                                    Écart
+                                                </TableHead>
+                                            </>
+                                        ) : isActualDetail ? (
+                                            <>
+                                                <TableHead className="sticky top-0 z-30 text-[10px] font-black text-slate-500 text-right uppercase tracking-[0.1em] bg-slate-50/95 backdrop-blur-md">
+                                                    Statutaires
+                                                </TableHead>
+                                                <TableHead className="sticky top-0 z-30 text-[10px] font-black text-slate-500 text-right uppercase tracking-[0.1em] bg-slate-50/95 backdrop-blur-md">
+                                                    APS
+                                                </TableHead>
+                                                <TableHead className="sticky top-0 z-30 text-[10px] font-black text-slate-500 text-right uppercase tracking-[0.1em] pr-6 bg-slate-50/95 backdrop-blur-md">
+                                                    Total
+                                                </TableHead>
                                             </>
                                         ) : (
-                                            <TableHead className="text-xs font-extrabold text-slate-700 text-right">Valeur</TableHead>
+                                            <TableHead className="sticky top-0 z-30 text-[11px] font-black text-slate-500 text-right uppercase tracking-widest pr-6 bg-slate-50/95 backdrop-blur-md">
+                                                Valeur
+                                            </TableHead>
                                         )}
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {detailDialog.data.map((item, idx) => (
-                                        <TableRow key={idx} className="hover:bg-slate-50/50 transition-colors border-b border-slate-100/50 last:border-0">
-                                            <TableCell className="py-3 text-xs text-slate-700">
-                                                <div className="flex items-center gap-2.5">
-                                                    <span className={`w-2 h-2 rounded-full shadow-sm ${item.isMoi ? 'bg-gradient-to-br from-fuchsia-400 to-fuchsia-500' : 'bg-gradient-to-br from-blue-400 to-blue-500'}`} />
-                                                    <span className="truncate max-w-[180px] font-medium" title={item.label}>{item.label}</span>
+                                    {/* MOD Section */}
+                                    {modData.map((item, idx) => (
+                                        <TableRow key={`mod-${idx}`} className="group hover:bg-blue-50/30 transition-all duration-200 border-b border-slate-100/60 last:border-0">
+                                            <TableCell className="py-4 pl-6 text-xs text-slate-700">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-1.5 h-1.5 rounded-full bg-blue-400 group-hover:scale-125 transition-transform shadow-[0_0_5px_rgba(96,165,250,0.5)]" />
+                                                    <span className="truncate max-w-[200px] font-bold tracking-tight text-slate-800" title={item.label}>{item.label}</span>
                                                 </div>
                                             </TableCell>
                                             {isComparison ? (
                                                 <>
-                                                    <TableCell className="py-3 text-right text-xs text-slate-600 font-medium">
-                                                        <span className="px-2 py-1 bg-slate-50 rounded-md">{item.actual}</span>
+                                                    <TableCell className="py-4 text-right text-xs tabular-nums text-slate-500 font-medium">
+                                                        {(item.actual || 0) + (item.apsActual || 0)}
                                                     </TableCell>
-                                                    <TableCell className="py-3 text-right font-bold text-slate-900 text-xs">
-                                                        <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded-md">
-                                                            {detailDialog.type === "fte_calc" ? item.value.toFixed(2).replace('.', ',') : item.value}
+                                                    <TableCell className="py-4 text-right font-black text-slate-900 text-xs tabular-nums">
+                                                        <span className="px-2 py-1 bg-slate-100/50 rounded-lg group-hover:bg-blue-100/50 transition-colors">
+                                                            {detailDialog.type === "fte_calc"
+                                                                ? item.value.toFixed(2).replace('.', ',')
+                                                                : item.value}
                                                         </span>
                                                     </TableCell>
-                                                    <TableCell className="py-3 text-right text-xs">
-                                                        <Badge className={`text-[10px] px-2 py-0.5 h-5 font-bold shadow-sm ${item.gap > 0
-                                                            ? 'bg-gradient-to-br from-red-50 to-red-100 text-red-700 border border-red-200'
+                                                    <TableCell className="py-4 pr-6 text-right text-xs tabular-nums">
+                                                        <Badge className={`text-[10px] px-2 py-0.5 h-5 font-bold shadow-sm border-none group-hover:scale-105 transition-transform ${item.gap > 0
+                                                            ? 'bg-rose-50 text-rose-600'
                                                             : item.gap < 0
-                                                                ? 'bg-gradient-to-br from-emerald-50 to-emerald-100 text-emerald-700 border border-emerald-200'
-                                                                : 'bg-gradient-to-br from-slate-50 to-slate-100 text-slate-500 border border-slate-200'
+                                                                ? 'bg-emerald-50 text-emerald-600'
+                                                                : 'bg-slate-50 text-slate-400'
                                                             }`}>
                                                             {detailDialog.type === "fte_calc"
-                                                                ? (item.value - item.actual).toFixed(2).replace('.', ',')
+                                                                ? item.gap.toFixed(2).replace('.', ',')
                                                                 : (item.gap > 0 ? `+${item.gap}` : item.gap)
                                                             }
                                                         </Badge>
                                                     </TableCell>
                                                 </>
+                                            ) : isActualDetail ? (
+                                                <>
+                                                    <TableCell className="py-4 text-right text-xs tabular-nums text-slate-500">{item.actual}</TableCell>
+                                                    <TableCell className="py-4 text-right text-xs tabular-nums text-emerald-600 font-bold">{item.apsActual ?? 0}</TableCell>
+                                                    <TableCell className="py-4 pr-6 text-right text-xs tabular-nums font-black text-slate-900 border-l border-slate-50">
+                                                        {(item.actual || 0) + (item.apsActual || 0)}
+                                                    </TableCell>
+                                                </>
                                             ) : (
-                                                <TableCell className="py-3 text-right font-bold text-slate-900 text-xs">
-                                                    <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded-md">
+                                                <TableCell className="py-4 pr-6 text-right font-black text-slate-900 text-xs tabular-nums">
+                                                    <span className="px-2 py-1 bg-slate-100/50 rounded-lg group-hover:bg-blue-100/50 transition-colors">
                                                         {detailDialog.type === "load" || detailDialog.type === "fte_calc"
                                                             ? item.value.toFixed(2).replace('.', ',')
-                                                            : item.value
-                                                        }
+                                                            : item.value}
                                                     </span>
                                                 </TableCell>
                                             )}
                                         </TableRow>
                                     ))}
+                                    {modData.length > 0 && <TotalRow label="Sous-total MOD" totals={modTotals} />}
+
+                                    {/* MOI Section */}
+                                    <TableRow className="border-none h-4" aria-hidden="true"><TableCell colSpan={6} /></TableRow>
+                                    {moiData.map((item, idx) => (
+                                        <TableRow key={`moi-${idx}`} className="group hover:bg-fuchsia-50/30 transition-all duration-200 border-b border-slate-100/60 last:border-0">
+                                            <TableCell className="py-4 pl-6 text-xs text-slate-700">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-1.5 h-1.5 rounded-full bg-fuchsia-400 group-hover:scale-125 transition-transform shadow-[0_0_5px_rgba(232,121,249,0.5)]" />
+                                                    <span className="truncate max-w-[200px] font-bold tracking-tight text-slate-800" title={item.label}>{item.label}</span>
+                                                </div>
+                                            </TableCell>
+                                            {isComparison ? (
+                                                <>
+                                                    <TableCell className="py-4 text-right text-xs tabular-nums text-slate-500 font-medium">
+                                                        {(item.actual || 0) + (item.apsActual || 0)}
+                                                    </TableCell>
+                                                    <TableCell className="py-4 text-right font-black text-slate-900 text-xs tabular-nums">
+                                                        <span className="px-2 py-1 bg-slate-100/50 rounded-lg group-hover:bg-fuchsia-100/50 transition-colors">
+                                                            {detailDialog.type === "fte_calc"
+                                                                ? item.value.toFixed(2).replace('.', ',')
+                                                                : item.value}
+                                                        </span>
+                                                    </TableCell>
+                                                    <TableCell className="py-4 pr-6 text-right text-xs tabular-nums">
+                                                        <Badge className={`text-[10px] px-2 py-0.5 h-5 font-bold shadow-sm border-none group-hover:scale-105 transition-transform ${item.gap > 0
+                                                            ? 'bg-rose-50 text-rose-600'
+                                                            : item.gap < 0
+                                                                ? 'bg-emerald-50 text-emerald-600'
+                                                                : 'bg-slate-50 text-slate-400'
+                                                            }`}>
+                                                            {detailDialog.type === "fte_calc"
+                                                                ? item.gap.toFixed(2).replace('.', ',')
+                                                                : (item.gap > 0 ? `+${item.gap}` : item.gap)
+                                                            }
+                                                        </Badge>
+                                                    </TableCell>
+                                                </>
+                                            ) : isActualDetail ? (
+                                                <>
+                                                    <TableCell className="py-4 text-right text-xs tabular-nums text-slate-500">{item.actual}</TableCell>
+                                                    <TableCell className="py-4 text-right text-xs tabular-nums text-emerald-600 font-bold">{item.apsActual ?? 0}</TableCell>
+                                                    <TableCell className="py-4 pr-6 text-right text-xs tabular-nums font-black text-slate-900 border-l border-slate-50">
+                                                        {(item.actual || 0) + (item.apsActual || 0)}
+                                                    </TableCell>
+                                                </>
+                                            ) : (
+                                                <TableCell className="py-4 pr-6 text-right font-black text-slate-900 text-xs tabular-nums">
+                                                    <span className="px-2 py-1 bg-slate-100/50 rounded-lg group-hover:bg-fuchsia-100/50 transition-colors">
+                                                        {detailDialog.type === "load" || detailDialog.type === "fte_calc"
+                                                            ? item.value.toFixed(2).replace('.', ',')
+                                                            : item.value}
+                                                    </span>
+                                                </TableCell>
+                                            )}
+                                        </TableRow>
+                                    ))}
+                                    {moiData.length > 0 && <TotalRow label="Sous-total MOI" totals={moiTotals} />}
+
+                                    {/* Grand Total Section */}
+                                    <TableRow className="border-none h-6" aria-hidden="true"><TableCell colSpan={6} /></TableRow>
+                                    {detailDialog.data.length > 0 && <TotalRow label="TOTAL GÉNÉRAL" totals={grandTotals} isGrandTotal />}
+
                                     {detailDialog.data.length === 0 && (
                                         <TableRow>
-                                            <TableCell colSpan={isComparison ? 4 : 2} className="text-center py-12">
-                                                <div className="flex flex-col items-center gap-2 text-slate-400">
-                                                    <Eye className="w-8 h-8 opacity-30" />
-                                                    <p className="text-xs italic">Aucune donnée disponible pour ce critère.</p>
+                                            <TableCell colSpan={isComparison || isActualDetail ? 4 : 2} className="text-center py-20 bg-slate-50/50 rounded-3xl">
+                                                <div className="flex flex-col items-center gap-4 text-slate-400 animate-in zoom-in duration-500">
+                                                    <div className="p-5 bg-white rounded-full shadow-sm ring-1 ring-slate-100">
+                                                        <EyeOff className="w-12 h-12 opacity-20" />
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <p className="text-sm font-bold text-slate-500">Aucune donnée trouvée</p>
+                                                        <p className="text-[10px] text-slate-400 uppercase tracking-widest font-black">Réessayez avec d'autres paramètres</p>
+                                                    </div>
                                                 </div>
                                             </TableCell>
                                         </TableRow>
@@ -709,15 +1008,12 @@ export default function Step4Results({
                             </Table>
                         </div>
                     </div>
-                    <div className="px-5 py-4 bg-gradient-to-r from-slate-50 to-slate-100/50 border-t border-slate-200 flex justify-between items-center">
-                        <div className="text-xs text-slate-500 font-medium">
-                            {detailDialog.data.length} poste{detailDialog.data.length > 1 ? 's' : ''}
-                        </div>
+
+                    <div className="px-8 py-2 bg-slate-100/40 border-t border-slate-200/60 backdrop-blur-md flex justify-end items-center relative overflow-hidden">
                         <Button
-                            variant="outline"
-                            size="sm"
+                            variant="ghost"
                             onClick={() => setDetailDialog(prev => ({ ...prev, open: false }))}
-                            className="bg-white hover:bg-slate-50 border-slate-300 shadow-sm"
+                            className="bg-white hover:bg-slate-50 text-slate-600 font-black text-xs uppercase tracking-widest px-8 h-12 rounded-2xl shadow-sm border border-slate-200 transition-all hover:scale-105 hover:shadow-md active:scale-95"
                         >
                             Fermer
                         </Button>
@@ -730,27 +1026,32 @@ export default function Step4Results({
     return (
         <div className="wizard-step-content space-y-4 p-4 text-xs">
             <BreakdownDialog />
-            <div className="text-center mb-1">
-                <h2 className="text-lg font-bold text-slate-800 mb-0">
-                    {data.isVirtual
-                        ? `Simulation Virtuelle : ${data.virtualTypology}`
-                        : data.mode === "optimise"
-                            ? "Simulation Processus Optimisé"
-                            : data.mode === "recommande"
-                                ? "Simulation Processus Consolidé"
-                                : "Simulation Processus Actuel"
-                    }
-                </h2>
-                <p className="text-xs text-slate-500">
-                    {data.isVirtual
-                        ? "Test basé sur le référentiel standard"
-                        : data.mode === "optimise"
-                            ? "Analyse avec exclusions de tâches appliquées"
-                            : data.mode === "recommande"
-                                ? "Analyse avec organisation cible (Mapping)"
-                                : "Analyse de l'organisation existante"
-                    }
-                </p>
+            <div className="flex items-center justify-center gap-3 mb-1.5 px-4 py-2 bg-gradient-to-r from-blue-50/60 via-white to-blue-50/60 border border-blue-100 rounded-xl shadow-sm">
+                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#005EA8] to-[#48cae4] flex items-center justify-center shrink-0 shadow-sm">
+                    <BarChart3 className="w-3.5 h-3.5 text-white" />
+                </div>
+                <div>
+                    <h2 className="text-sm font-black text-[#0b3f6f] leading-none">
+                        {data.isVirtual
+                            ? `Simulation Test : ${data.virtualTypology}`
+                            : data.mode === "optimise"
+                                ? "Simulation Processus Optimisé"
+                                : data.mode === "recommande"
+                                    ? "Simulation Processus Consolidé"
+                                    : "Simulation Processus Actuel"
+                        }
+                    </h2>
+                    <p className="text-[10px] text-slate-400 mt-0.5 leading-none">
+                        {data.isVirtual
+                            ? "Test basé sur le référentiel standard"
+                            : data.mode === "optimise"
+                                ? "Analyse avec exclusions de tâches appliquées"
+                                : data.mode === "recommande"
+                                    ? "Analyse avec organisation Calculée (Mapping)"
+                                    : "Analyse de l'organisation existante"
+                        }
+                    </p>
+                </div>
             </div>
 
             <div className="max-w-6xl mx-auto space-y-3">
@@ -764,7 +1065,7 @@ export default function Step4Results({
                                 </div>
                                 <div>
                                     <h3 className="text-base font-bold text-slate-800 mb-2">
-                                        {data.isVirtual ? `Simulation Virtuelle : ${data.virtualTypology || 'Typologie'}` : "Aucune simulation disponible"}
+                                        {data.isVirtual ? `Simulation Test : ${data.virtualTypology || 'Typologie'}` : "Aucune simulation disponible"}
                                     </h3>
                                     <p className="text-xs text-slate-500 leading-relaxed">
                                         {data.isVirtual
@@ -824,6 +1125,122 @@ export default function Step4Results({
                             </CardContent>
                         </Card>
 
+                        {/* Filters */}
+                        {simulationResults && simulationResults.tasks && simulationResults.tasks.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-4 bg-slate-50/80 p-1.5 rounded-lg border border-slate-100 self-start mb-1">
+                                {/* Filtre Famille */}
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Famille:</span>
+                                    <select
+                                        className="bg-white border border-slate-200 text-[10px] text-slate-700 rounded px-2 py-0.5 focus:outline-none focus:border-blue-500 w-full max-w-[200px] h-6"
+                                        value={filterFamille}
+                                        onChange={e => setFilterFamille(e.target.value)}
+                                    >
+                                        <option value="">Toutes ({uniqueFamilles.length})</option>
+                                        {uniqueFamilles.map(f => (
+                                            <option key={f} value={f}>{f}</option>
+                                        ))}
+                                    </select>
+                                    {filterFamille && (
+                                        <button
+                                            onClick={() => setFilterFamille("")}
+                                            className="text-[10px] text-red-500 hover:text-red-700 font-medium px-1.5 py-0.5 bg-red-50 rounded border border-red-100 transition-colors"
+                                        >
+                                            ✕
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* Filtre Prestation */}
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Prestation:</span>
+                                    <select
+                                        className="bg-white border border-slate-200 text-[10px] text-slate-700 rounded px-2 py-0.5 focus:outline-none focus:border-blue-500 w-full max-w-[150px] h-6"
+                                        value={filterPrestation}
+                                        onChange={e => setFilterPrestation(e.target.value)}
+                                    >
+                                        <option value="">Tous ({uniquePrestations.length})</option>
+                                        {uniquePrestations.map(p => (
+                                            <option key={p} value={p}>{p}</option>
+                                        ))}
+                                    </select>
+                                    {filterPrestation && (
+                                        <button
+                                            onClick={() => setFilterPrestation("")}
+                                            className="text-[10px] text-red-500 hover:text-red-700 font-medium px-1.5 py-0.5 bg-red-50 rounded border border-red-100 transition-colors"
+                                        >
+                                            ✕
+                                        </button>
+                                    )}
+                                </div>
+
+                                <div className="ml-auto flex items-center gap-2">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setShowReferentielDialog(true)}
+                                        className="h-7 text-[10px] gap-2 font-bold px-3 bg-white text-[#005EA8] border-blue-200 hover:bg-blue-50 transition-all shadow-sm"
+                                    >
+                                        <Eye className="w-3.5 h-3.5" />
+                                        Référentiel
+                                        <Badge variant="secondary" className="h-4 px-1.5 text-[9px] bg-blue-100 text-blue-700 border-blue-200">
+                                            {filteredReferentielTasks.length}
+                                        </Badge>
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Résultats de Simulation */}
+                        {simulationResults && simulationResults.tasks && simulationResults.tasks.length > 0 && (
+                            <div className="grid grid-cols-1 gap-2 mt-1 animate-in slide-in-from-bottom-2 duration-300 relative">
+
+                                {/* Résultats de Simulation */}
+                                <div className="bg-white rounded-lg p-1 min-h-[410px]">
+                                    <EnterpriseTable
+                                        title="Résultats de Simulation"
+                                        subtitle={
+                                            <div className="flex items-center gap-3">
+                                                <span>Données calculées</span>
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); handleExportExcel(); }}
+                                                    className="h-5 px-1.5 text-[9px] font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/50 rounded flex items-center gap-1 transition-colors"
+                                                    title="Exporter en Excel"
+                                                >
+                                                    <Download className="w-2.5 h-2.5" /> Exporter Excel
+                                                </button>
+                                            </div>
+                                        }
+                                        tooltip="Volumes × temps → heures nécessaires"
+                                        icon={CheckCircle2}
+                                        columns={[
+                                            { key: 'produit', label: 'Prestation', align: 'left', width: '100px', ellipsis: true },
+                                            { key: 'task', label: 'Tâche', align: 'left', ellipsis: true },
+                                            { key: 'unite', label: 'Unité', align: 'left', width: '80px', ellipsis: true },
+                                            { key: 'resp1', label: 'Responsable 1', align: 'left', width: '120px', ellipsis: true },
+                                            { key: 'resp2', label: 'Responsable 2', align: 'left', width: '120px', ellipsis: true },
+                                            { key: 'nombre_Unite', label: 'Vol. (/jour)', align: 'right', width: '100px', render: (val) => Number(val || 0).toFixed(1) },
+                                            { key: 'heures', label: 'Heures', align: 'right', width: '80px', bold: true, render: (val) => Number(val || 0).toFixed(2) }
+                                        ]}
+                                        data={filteredTableData.filter(t => Number(t.heures_calculees.replace(',', '.')) > 0).map(task => ({
+                                            produit: getFirstWord(task.produit) || "-",
+                                            task: task.task_name,
+                                            unite: task.unite_mesure,
+                                            resp1: task.resp1,
+                                            resp2: task.resp2,
+                                            nombre_Unite: task.volume_journalier,
+                                            heures: task.heures_calculees
+                                        }))}
+                                        footer={null}
+                                        height={400}
+                                        currentView="table"
+                                        onViewChange={() => { }}
+                                        showViewToggle={true}
+                                    />
+                                </div>
+                            </div>
+                        )}
+
                         {/* KPI Cards */}
                         <div className="grid grid-cols-5 gap-2">
                             {/* Charge Totale */}
@@ -862,6 +1279,8 @@ export default function Step4Results({
                                             moiValue={Math.round(kpiData.actualMOI)}
                                             apsLabel="APS"
                                             apsValue={Math.round(kpiData.actualAPS)}
+                                            apsModValue={Math.round(kpiData.actualAPSMod)}
+                                            apsMoiValue={Math.round(kpiData.actualAPSMoi)}
                                         />
                                     )}
                                 </KPICardGlass>
@@ -931,7 +1350,7 @@ export default function Step4Results({
                                     <div className="text-[10px] text-slate-600 space-y-1 w-full flex flex-col items-center">
                                         <div className="opacity-0 pointer-events-none h-[22px]" aria-hidden="true">Placeholder Top</div>
                                         <div className="flex items-center justify-center gap-1.5 rounded-full px-3 py-1 bg-slate-50 border border-slate-100 shadow-sm h-[24px]">
-                                            <span className="text-slate-500 font-bold text-[9px] italic">Besoins bruts calculés</span>
+                                            <span className="text-slate-500 font-bold text-[9px] italic">Besoins nets calculés</span>
                                         </div>
                                         <div className="opacity-0 pointer-events-none h-[22px]" aria-hidden="true">Placeholder Bottom</div>
                                     </div>
@@ -939,124 +1358,8 @@ export default function Step4Results({
                             </KPICardGlass>
                         </div>
 
-                        {/* Filters */}
-                        {simulationResults && simulationResults.tasks && simulationResults.tasks.length > 0 && (
-                            <div className="flex flex-wrap items-center gap-4 bg-slate-50/80 p-1.5 rounded-lg border border-slate-100 self-start mb-1">
-                                {/* Filtre Famille */}
-                                <div className="flex items-center gap-2">
-                                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Famille:</span>
-                                    <select
-                                        className="bg-white border border-slate-200 text-[10px] text-slate-700 rounded px-2 py-0.5 focus:outline-none focus:border-blue-500 w-full max-w-[200px] h-6"
-                                        value={filterFamille}
-                                        onChange={e => setFilterFamille(e.target.value)}
-                                    >
-                                        <option value="">Toutes ({uniqueFamilles.length})</option>
-                                        {uniqueFamilles.map(f => (
-                                            <option key={f} value={f}>{f}</option>
-                                        ))}
-                                    </select>
-                                    {filterFamille && (
-                                        <button
-                                            onClick={() => setFilterFamille("")}
-                                            className="text-[10px] text-red-500 hover:text-red-700 font-medium px-1.5 py-0.5 bg-red-50 rounded border border-red-100 transition-colors"
-                                        >
-                                            ✕
-                                        </button>
-                                    )}
-                                </div>
-
-                                {/* Filtre Prestation */}
-                                <div className="flex items-center gap-2">
-                                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Prestation:</span>
-                                    <select
-                                        className="bg-white border border-slate-200 text-[10px] text-slate-700 rounded px-2 py-0.5 focus:outline-none focus:border-blue-500 w-full max-w-[150px] h-6"
-                                        value={filterPrestation}
-                                        onChange={e => setFilterPrestation(e.target.value)}
-                                    >
-                                        <option value="">Tous ({uniquePrestations.length})</option>
-                                        {uniquePrestations.map(p => (
-                                            <option key={p} value={p}>{p}</option>
-                                        ))}
-                                    </select>
-                                    {filterPrestation && (
-                                        <button
-                                            onClick={() => setFilterPrestation("")}
-                                            className="text-[10px] text-red-500 hover:text-red-700 font-medium px-1.5 py-0.5 bg-red-50 rounded border border-red-100 transition-colors"
-                                        >
-                                            ✕
-                                        </button>
-                                    )}
-                                </div>
-
-                                <div className="ml-auto">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setShowReferentielDialog(true)}
-                                        className="h-7 text-[10px] gap-2 font-bold px-3 bg-white text-[#005EA8] border-blue-200 hover:bg-blue-50 transition-all shadow-sm"
-                                    >
-                                        <Eye className="w-3.5 h-3.5" />
-                                        Référentiel
-                                        <Badge variant="secondary" className="h-4 px-1.5 text-[9px] bg-blue-100 text-blue-700 border-blue-200">
-                                            {referentielTasks.length}
-                                        </Badge>
-                                    </Button>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Résultats de Simulation */}
-                        {simulationResults && simulationResults.tasks && simulationResults.tasks.length > 0 && (
-                            <div className="grid grid-cols-1 gap-2 mt-1 animate-in slide-in-from-bottom-2 duration-300 relative">
-
-                                {/* Résultats de Simulation */}
-                                <div className="bg-white rounded-lg p-1 min-h-[410px]">
-                                    <EnterpriseTable
-                                        title="Résultats de Simulation"
-                                        subtitle={
-                                            <div className="flex items-center gap-3">
-                                                <span>Données calculées</span>
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); handleExportExcel(); }}
-                                                    className="h-5 px-1.5 text-[9px] font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/50 rounded flex items-center gap-1 transition-colors"
-                                                    title="Exporter en Excel"
-                                                >
-                                                    <Download className="w-2.5 h-2.5" /> Exporter Excel
-                                                </button>
-                                            </div>
-                                        }
-                                        tooltip="Volumes × temps → heures nécessaires"
-                                        icon={CheckCircle2}
-                                        columns={[
-                                            { key: 'produit', label: 'Prestation', align: 'left', width: '100px', ellipsis: true },
-                                            { key: 'task', label: 'Tâche', align: 'left', ellipsis: true },
-                                            { key: 'unite', label: 'Unité', align: 'left', width: '80px', ellipsis: true },
-                                            { key: 'resp1', label: 'Responsable 1', align: 'left', width: '120px', ellipsis: true },
-                                            { key: 'resp2', label: 'Responsable 2', align: 'left', width: '120px', ellipsis: true },
-                                            { key: 'nombre_Unite', label: 'Vol. (/jour)', align: 'right', width: '100px', render: (val) => Number(val || 0).toFixed(1) },
-                                            { key: 'heures', label: 'Heures', align: 'right', width: '80px', bold: true, render: (val) => Number(val || 0).toFixed(2) }
-                                        ]}
-                                        data={filteredTableData.filter(t => Number(t.heures_calculees.replace(',', '.')) > 0).map(task => ({
-                                            produit: getFirstWord(task.produit) || "-",
-                                            task: task.task_name,
-                                            unite: task.unite_mesure,
-                                            resp1: task.resp1,
-                                            resp2: task.resp2,
-                                            nombre_Unite: task.volume_journalier,
-                                            heures: task.heures_calculees
-                                        }))}
-                                        footer={null}
-                                        height={400}
-                                        currentView="table"
-                                        onViewChange={() => { }}
-                                        showViewToggle={true}
-                                    />
-                                </div>
-                            </div>
-                        )}
-
                         {/* Grille de Cartes pour Sections Additionnelles */}
-                        {simulationResults && !selectedIntervenant && (
+                        {simulationResults && !selectedIntervenant && !data.isVirtual && (
                             <div className="mt-8">
                                 <div className="flex items-center mb-6">
                                     <button

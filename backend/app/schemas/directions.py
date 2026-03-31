@@ -28,7 +28,7 @@ class DirectionsSimIn(BaseModel):
     volumes_par_direction: Optional[List[TableRow]] = None
     imported_volumes: Optional[List[dict]] = None
     productivite_pct: confloat(ge=0, le=200) = 100.0
-    heures_net_jour: confloat(gt=0, le=24) = 8.0
+    heures_net_jour: confloat(gt=0, le=24) = 8.5
     # aliases if needed for robustness
     heures_net: Optional[float] = None  # alias for heures_net_jour
 

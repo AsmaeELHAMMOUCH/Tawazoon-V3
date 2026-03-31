@@ -135,64 +135,81 @@ def generate_bandoeng_template():
     center_align = Alignment(horizontal="center", vertical="center")
     thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
     
+    # Column widths and global row heights
+    ws.column_dimensions['A'].width = 25
+    for col in range(2, 8):
+        ws.column_dimensions[get_column_letter(col)].width = 20 # Larger columns
+
     # --- AMANA ---
-    ws.merge_cells('B1:G1')
-    ws['B1'] = "AMANA DEPOT"
+    ws.merge_cells('B1:D1')
+    ws['B1'] = "AMANA DEPART"
     ws['B1'].fill = header_fill
     ws['B1'].font = header_font
     ws['B1'].alignment = center_align
 
-    ws.merge_cells('H1:M1')
-    ws['H1'] = "AMANA REÇU"
-    ws['H1'].fill = header_fill
-    ws['H1'].font = header_font
-    ws['H1'].alignment = center_align
+    ws.merge_cells('E1:G1')
+    ws['E1'] = "AMANA REÇU"
+    ws['E1'].fill = header_fill
+    ws['E1'].font = header_font
+    ws['E1'].alignment = center_align
 
-    ws.merge_cells('B2:D2'); ws['B2'] = "GC"; ws['B2'].fill = subheader_fill; ws['B2'].alignment = center_align
-    ws.merge_cells('E2:G2'); ws['E2'] = "Particuliers"; ws['E2'].fill = subheader_fill; ws['E2'].alignment = center_align
-    ws.merge_cells('H2:J2'); ws['H2'] = "GC"; ws['H2'].fill = subheader_fill; ws['H2'].alignment = center_align
-    ws.merge_cells('K2:M2'); ws['K2'] = "Particuliers"; ws['K2'].fill = subheader_fill; ws['K2'].alignment = center_align
+    # TOTAL DÉPART first
+    ws.merge_cells('B2:B3')
+    ws['B2'] = "TOTAL DEPART"
+    ws['B2'].fill = subheader_fill
+    ws['B2'].alignment = center_align
+    ws['B2'].border = thin_border
+    ws['B3'].border = thin_border
+    
+    ws.cell(row=2, column=3, value="GC").fill = subheader_fill; ws.cell(row=2, column=3).alignment = center_align
+    ws.cell(row=2, column=4, value="Particuliers").fill = subheader_fill; ws.cell(row=2, column=4).alignment = center_align
+    
+    # TOTAL REÇU first
+    ws.merge_cells('E2:E3')
+    ws['E2'] = "TOTAL REÇU"
+    ws['E2'].fill = subheader_fill
+    ws['E2'].alignment = center_align
+    ws['E2'].border = thin_border
+    ws['E3'].border = thin_border
 
-    sub_headers = ["Global", "Local", "Axes"]
-    for i, col in enumerate(range(2, 14)): # Columns B to M
-        cell = ws.cell(row=3, column=col, value=sub_headers[i % 3])
+    ws.cell(row=2, column=6, value="GC").fill = subheader_fill; ws.cell(row=2, column=6).alignment = center_align
+    ws.cell(row=2, column=7, value="Particuliers").fill = subheader_fill; ws.cell(row=2, column=7).alignment = center_align
+
+    for col in [3, 4, 6, 7]: # GC and Part columns for AMANA (C, D, F, G)
+        cell = ws.cell(row=3, column=col, value="Global")
         cell.alignment = center_align
         cell.border = thin_border
 
     ws.cell(row=4, column=1, value="Volumes Amana").font = Font(bold=True)
     # Placeholder row for user input
-    for col in range(2, 14):
+    for col in range(2, 8):
         cell = ws.cell(row=4, column=col)
         cell.border = thin_border
         cell.number_format = '#,##0'
+        cell.alignment = center_align
 
     # --- AUTRES FLUX (CR, CO) ---
     start_row = 7
-    ws.merge_cells(f'B{start_row}:D{start_row}')
-    ws[f'B{start_row}'] = "MED"
-    ws[f'B{start_row}'].fill = header_fill
-    ws[f'B{start_row}'].font = header_font
-    ws[f'B{start_row}'].alignment = center_align
+    ws.cell(row=start_row, column=2, value="MED").fill = header_fill
+    ws.cell(row=start_row, column=2).font = header_font
+    ws.cell(row=start_row, column=2).alignment = center_align
 
-    ws.merge_cells(f'E{start_row}:G{start_row}')
-    ws[f'E{start_row}'] = "ARRIVÉ"
-    ws[f'E{start_row}'].fill = header_fill
-    ws[f'E{start_row}'].font = header_font
-    ws[f'E{start_row}'].alignment = center_align
+    ws.cell(row=start_row, column=3, value="ARRIVÉ").fill = header_fill
+    ws.cell(row=start_row, column=3).font = header_font
+    ws.cell(row=start_row, column=3).alignment = center_align
 
-    for i, col in enumerate(range(2, 8)): # Columns B to G
-        cell = ws.cell(row=start_row+1, column=col, value=sub_headers[i % 3])
-        cell.alignment = center_align
-        cell.border = thin_border
+    ws.cell(row=start_row+1, column=2, value="Global").alignment = center_align; ws.cell(row=start_row+1, column=2).border = thin_border
+    ws.cell(row=start_row+1, column=3, value="Global").alignment = center_align; ws.cell(row=start_row+1, column=3).border = thin_border
 
     rows = ["CR", "CO"]
     for i, label in enumerate(rows):
         r = start_row + 2 + i
         ws.cell(row=r, column=1, value=label).font = Font(bold=True)
-        for col in range(2, 8):
+        for col in range(2, 4):
             cell = ws.cell(row=r, column=col)
             cell.border = thin_border
             cell.number_format = '#,##0'
+            cell.alignment = center_align
     
     # --- EL BARKIA ET LRH (structure simplifiée: MED et Arrivé uniquement) ---
     simple_start_row = start_row + 2 + len(rows) + 1  # After CR and CO
@@ -212,18 +229,35 @@ def generate_bandoeng_template():
             cell = ws.cell(row=r, column=col)
             cell.border = thin_border
             cell.number_format = '#,##0'
+            cell.alignment = center_align
+    
+    # --- EL BARKIA ET LRH (structure simplifiée: MED et Arrivé uniquement) ---
+    simple_start_row = start_row + 2 + len(rows) + 1  # After CR and CO
+    ws.cell(row=simple_start_row, column=2, value="MED").fill = subheader_fill
+    ws.cell(row=simple_start_row, column=2).alignment = center_align
+    ws.cell(row=simple_start_row, column=2).border = thin_border
+    
+    ws.cell(row=simple_start_row, column=3, value="ARRIVÉ").fill = subheader_fill
+    ws.cell(row=simple_start_row, column=3).alignment = center_align
+    ws.cell(row=simple_start_row, column=3).border = thin_border
+    
+    simple_rows = ["El Barkia", "LRH"]
+    for i, label in enumerate(simple_rows):
+        r = simple_start_row + 1 + i
+        ws.cell(row=r, column=1, value=label).font = Font(bold=True)
+        for col in range(2, 4):  # Only MED and Arrivé columns
+            cell = ws.cell(row=r, column=col)
+            cell.border = thin_border
+            cell.number_format = '#,##0'
+            cell.alignment = center_align
 
     # Instructions
-    ws['A15'] = "Instructions:"
-    ws['A15'].font = Font(bold=True)
-    ws['A16'] = "1. Remplissez les cases blanches avec les volumes."
-    ws['A17'] = "2. Ne modifiez pas la structure du fichier."
-    ws['A18'] = "3. Une fois rempli, importez ce fichier dans l'application."
-
-    # Column widths
-    ws.column_dimensions['A'].width = 20
-    for col in range(2, 14):
-        ws.column_dimensions[get_column_letter(col)].width = 10
+    ws['A17'] = "Instructions:"
+    ws['A17'].font = Font(bold=True)
+    ws['A18'] = "1. Remplissez les cases blanches avec les volumes."
+    ws['A19'] = "2. Ne modifiez pas la structure du fichier."
+    ws['A20'] = "3. Une fois rempli, importez ce fichier dans l'application."
+    ws['A21'] = "4. Attention : Le remplissage des champs Global GC et Particuliers est obligatoire."
 
     output = BytesIO()
     wb.save(output)

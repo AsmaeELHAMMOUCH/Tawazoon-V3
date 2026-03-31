@@ -53,6 +53,9 @@ class CentreParams(BaseModel):
     courriers_co_par_sac: Optional[float] = None
     courriers_cr_par_sac: Optional[float] = None
     cr_par_caisson: Optional[float] = None
+    amana_pct_guichet: Optional[float] = None
+    co_pct_guichet: Optional[float] = None
+    cr_pct_guichet: Optional[float] = None
 
 class CentreSimulationData(BaseModel):
     """
@@ -60,12 +63,13 @@ class CentreSimulationData(BaseModel):
     """
     centre_id: Optional[int] = None
     centre_label: str
-    volumes: List[VolumeMatriciel] 
+    volumes: Optional[List[VolumeMatriciel]] = [] 
+    grid_values: Optional[dict] = None
     params: Optional[CentreParams] = None
 
 class GlobalParams(BaseModel):
     productivite: float = Field(100.0, ge=1, le=200)
-    heures_par_jour: float = Field(8.0, ge=1, le=24)
+    heures_par_jour: float = Field(8.5, ge=1, le=24)
     idle_minutes: float = Field(0.0, ge=0)
     taux_complexite: float = Field(0.0, ge=0)
     nature_geo: float = Field(0.0, ge=0)
@@ -140,7 +144,7 @@ class DirectionSimResponse(BaseModel):
 class NationalSimRequest(BaseModel):
     # Similar to GlobalParams but we might want explicit fields if passed from UI
     productivite: float = 100.0
-    heures_par_jour: float = 8.0
+    heures_par_jour: float = 8.5
     year: Optional[int] = 2024
     scenario: Optional[str] = "Standard" # "Standard" or "Optimisé"
     

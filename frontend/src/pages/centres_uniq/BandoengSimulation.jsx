@@ -1459,7 +1459,7 @@ export default function BandoengSimulation() {
                             <div className="flex items-start gap-3 p-3 bg-amber-50/50 rounded-lg border border-amber-100">
                                 <span className="flex items-center justify-center w-6 h-6 rounded-full bg-amber-100 text-amber-700 text-xs font-bold shrink-0">0</span>
                                 <div className="space-y-2 w-full">
-                                    <h4 className="text-sm font-semibold text-slate-800">Sélectionner le centre cible</h4>
+                                    <h4 className="text-sm font-semibold text-slate-800">Sélectionner le centre</h4>
                                     <p className="text-[11px] text-slate-500">
                                         Choisissez le centre pour lequel vous souhaitez importer les tâches.
                                     </p>

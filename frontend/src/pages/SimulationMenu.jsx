@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo } from "react";
+import React, { useEffect, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -53,6 +53,7 @@ export default function MenuAnalyseEffectifs() {
         { icon: BarChart, title: "Ratios", key: "ratios" },
         { icon: PiggyBank, title: "Économies budgétaires Estimées", key: "economies" },
         { icon: Scale, title: "Comparatif Positions", key: "comparatif" },
+        { icon: BarChart, title: "Comparatif Actuel / Consolidé / Optimisé", key: "comparatif_processus" },
         { icon: History, title: "Historique Simulations", key: "history" },
       ],
     },
@@ -93,6 +94,7 @@ export default function MenuAnalyseEffectifs() {
         ratios: "/app/vue-globale/ratios",
         economies: "/app/vue-globale/economies-budgetaires",
         comparatif: "/app/vue-globale/comparatif",
+        comparatif_processus: "/app/simulation/comparatif-processus",
         history: "/app/simulations/history",
       };
       if (vueRoutes[item.key]) navigate(vueRoutes[item.key]);

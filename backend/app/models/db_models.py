@@ -73,6 +73,7 @@ class Centre(Base):
     categorie = relationship("Categorie", back_populates="centres")
     categorisation = relationship("Categorisation", back_populates="centres")
 
+    attached_sites = relationship("AttachedSite", back_populates="centre", cascade="all, delete-orphan")
     centre_postes = relationship("CentrePoste", back_populates="centre")
 
 
@@ -106,6 +107,7 @@ class CentrePoste(Base):
     centre_id = Column(Integer, ForeignKey("dbo.centres.id"), nullable=False)
     poste_id = Column(Integer, ForeignKey("dbo.postes.id"), nullable=False)
     effectif_actuel = Column(Integer, nullable=True, default=0)
+    aps = Column(Float, nullable=True, default=0.0)
     code_resp = Column(String(50), nullable=True)
 
     centre = relationship("Centre", back_populates="centre_postes")
@@ -277,3 +279,14 @@ class TacheExclueOptimisee(Base):
     tache = relationship("Tache")
     centre = relationship("Centre")
     categorie = relationship("Categorie")
+
+class AttachedSite(Base):
+    __tablename__ = "attached_sites"
+    __table_args__ = {"schema": "dbo"}
+
+    id = Column(Integer, primary_key=True, index=True)
+    label = Column(String, nullable=False)
+    code = Column(String(50), nullable=False, unique=True)
+    centre_id = Column(Integer, ForeignKey("dbo.centres.id"), nullable=False)
+
+    centre = relationship("Centre", back_populates="attached_sites")

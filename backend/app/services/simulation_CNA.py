@@ -89,7 +89,7 @@ def calculate_cna_simulation(
     param_collecte = float(params.get('param_collecte', 100.0))
     param_marche_ordinaire = float(params.get('param_marche_ordinaire', 100.0))
     productivite = float(params.get('productivite', 100.0))
-    heures_net = float(params.get('heures_net', 8.0))
+    heures_net = float(params.get('heures_net', 8.5))
     idle_minutes = float(params.get('idle_minutes', 0.0))
     taux_complexite = float(params.get('taux_complexite', 1.0))
     nature_geo = float(params.get('nature_geo', 1.0))

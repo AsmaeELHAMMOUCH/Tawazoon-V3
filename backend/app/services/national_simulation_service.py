@@ -3,9 +3,7 @@
 from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-
-# Moteur de calcul (DATA DRIVEN)
-from app.services.simulation_data_driven import calculer_simulation_centre_data_driven
+from app.services.bandoeng_engine import run_bandoeng_simulation, BandoengInputVolumes, BandoengParameters
 from app.schemas.volumes_ui import VolumesUIInput, VolumeItem, GuichetVolumesInput
 
 # Schemas
@@ -67,6 +65,7 @@ def process_national_simulation(
             if cid:
                 centres_payload[cid] = {
                     "volumes": c_data.volumes,
+                    "grid_values": c_data.grid_values,
                     "params": c_data.params
                 }
             else:
@@ -78,8 +77,9 @@ def process_national_simulation(
             cid = vol_mat.centre_id
             if cid:
                 if cid not in centres_payload:
-                    centres_payload[cid] = { "volumes": [], "params": None }
-                centres_payload[cid]["volumes"].append(vol_mat)
+                    centres_payload[cid] = { "volumes": [], "grid_values": None, "params": None }
+                if vol_mat:
+                    centres_payload[cid]["volumes"].append(vol_mat)
     
     else:
         print("🌍 [NATIONAL] Aucun volume fourni.")
@@ -115,7 +115,7 @@ def process_national_simulation(
     
     # Defaults globaux
     g_prod = float(global_params.get("productivite", 100))
-    g_h_jour = float(global_params.get("heures_par_jour", 8.0))
+    g_h_jour = float(global_params.get("heures_par_jour", 8.5))
     g_idle = float(global_params.get("idle_minutes", 0.0))
     g_complexite = float(global_params.get("taux_complexite", 1.0))
     g_nature = float(global_params.get("nature_geo", 1.0))
@@ -128,10 +128,11 @@ def process_national_simulation(
         if not centre_meta: continue
         
         payload = centres_payload[cid]
-        vol_list = payload["volumes"]
-        c_params = payload["params"] # Type CentreParams ou None
+        vol_list = payload.get("volumes", [])
+        c_params = payload.get("params") # Type CentreParams ou None
+        grid_values = payload.get("grid_values")
         
-        if not vol_list: continue
+        if not vol_list and not grid_values: continue
 
         # --- DETERMINATION DES PARAMETRES APPLIQUES ---
         # Priorité : Param Centre > Param Global > Defaut
@@ -143,7 +144,7 @@ def process_national_simulation(
 
         # Params Moteur
         s_prod = use_val(c_params.productivite if c_params else None, g_prod, 100.0)
-        s_h_jour = use_val(c_params.capacite_nette if c_params else None, g_h_jour, 8.0)
+        s_h_jour = use_val(c_params.capacite_nette if c_params else None, g_h_jour, 8.5)
         s_idle = use_val(c_params.temps_mort if c_params else None, g_idle, 0.0)
         s_complexite = use_val(c_params.coeff_circ if c_params else None, g_complexite, 1.0)
         s_geo = use_val(c_params.coeff_geo if c_params else None, g_nature, 1.0)
@@ -157,6 +158,10 @@ def process_national_simulation(
         p_pct_col = c_params.pct_collecte if c_params and c_params.pct_collecte is not None else 5.0
         p_pct_ret = c_params.pct_retour if c_params and c_params.pct_retour is not None else 5.0
         p_ed = c_params.ed_percent if c_params and c_params.ed_percent is not None else 0.0
+
+        p_amana_guichet = c_params.amana_pct_guichet if c_params and c_params.amana_pct_guichet is not None else None
+        p_co_guichet = c_params.co_pct_guichet if c_params and c_params.co_pct_guichet is not None else None
+        p_cr_guichet = c_params.cr_pct_guichet if c_params and c_params.cr_pct_guichet is not None else None
         
         # Percent Axes : Auto-calc ou Override
         # Calcul auto basé sur volumes
@@ -198,6 +203,7 @@ def process_national_simulation(
         volumes_ui = VolumesUIInput(
             volumes_flux=volumes_items,
             guichet=guichet_data,
+            grid_values=grid_values,
             nb_jours_ouvres_an=264,
             taux_complexite=s_complexite,
             nature_geo=s_geo,
@@ -206,6 +212,9 @@ def process_national_simulation(
             pct_collecte=p_pct_col,
             pct_retour=p_pct_ret,
             ed_percent=p_ed,
+            amana_pct_guichet=p_amana_guichet,
+            co_pct_guichet=p_co_guichet,
+            cr_pct_guichet=p_cr_guichet,
             # Ratios
             colis_amana_par_sac=p_colis_sac,
             courriers_co_par_sac=p_co_sac,
@@ -213,15 +222,41 @@ def process_national_simulation(
             cr_par_caisson=p_cr_cai
         )
 
+        from app.services.bandoeng_engine import run_bandoeng_simulation, BandoengInputVolumes, BandoengParameters
+        
+        # Build strict parameters for Bandoeng
+        engine_params = BandoengParameters(
+            productivite=s_prod,
+            temps_mort=0.0,
+            coeff_circ=1.0,
+            coeff_geo=1.0,
+            capacite_nette=s_h_jour,
+            colis_amana_par_sac=p_colis_sac,
+            ed_percent=p_ed,
+            pct_axes_arr=s_ax_arr * 100.0,
+            pct_axes_dep=s_ax_dep * 100.0,
+            pct_collecte=p_pct_col,
+            pct_retour=p_pct_ret,
+            courriers_co_par_sac=p_co_sac,
+            courriers_cr_par_sac=p_cr_sac,
+            cr_par_caisson=p_cr_cai,
+            amana_pct_guichet=p_amana_guichet or 0.0,
+            co_pct_guichet=p_co_guichet or 0.0,
+            cr_pct_guichet=p_cr_guichet or 0.0,
+            amana_pct_collecte=p_pct_col,
+            amana_pct_retour=p_pct_ret,
+            has_guichet=1,
+            idle_minutes=s_idle,
+            duree_trajet=0.0,
+            coeff_geo_factor=1.0
+        )
+
         try:
-            sim_res = calculer_simulation_centre_data_driven(
+            sim_res = run_bandoeng_simulation(
                 db=db,
                 centre_id=cid,
-                volumes_ui=volumes_ui,
-                productivite=s_prod,
-                heures_par_jour=s_h_jour,
-                idle_minutes=s_idle,
-                ed_percent=p_ed
+                volumes=BandoengInputVolumes(grid_values=grid_values) if grid_values else BandoengInputVolumes(grid_values={}),
+                params=engine_params
             )
             
             etp_mod = float(sim_res.fte_calcule or 0)

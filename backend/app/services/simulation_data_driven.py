@@ -1,4 +1,4 @@
-﻿import math
+import math
 from typing import List, Dict, Optional, Any
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
@@ -2310,7 +2310,7 @@ def calculer_simulation_data_driven(
     centre_poste_id: int,
     volumes_ui: VolumesUIInput,
     productivite: float = 100.0,
-    heures_par_jour: float = 8.0,
+    heures_par_jour: float = 8.5,
     idle_minutes: float = 0.0,
     ed_percent: float = 0.0,
     debug: bool = False
@@ -2522,7 +2522,7 @@ def calculer_simulation_centre_data_driven(
     centre_id: int,
     volumes_ui: VolumesUIInput,
     productivite: float = 100.0,
-    heures_par_jour: float = 8.0,
+    heures_par_jour: float = 8.5,
     idle_minutes: float = 0.0,
     ed_percent: float = 0.0,
     colis_amana_par_sac: float = 5.0,
@@ -2578,7 +2578,7 @@ def calculer_simulation_centre_data_driven(
     if not centre_postes:
          print(f"Aucun poste trouvé pour le centre {centre_id}")
          return SimulationResponse(
-            details_taches=[], total_heures=0, heures_net_jour=8, fte_calcule=0, fte_arrondi=0, heures_par_poste={}
+            details_taches=[], total_heures=0, heures_net_jour=8.5, fte_calcule=0, fte_arrondi=0, heures_par_poste={}
         )
 
     # 2. Init global accumulators
@@ -2660,13 +2660,13 @@ def calculer_simulation_multi_centres_data_driven(
     centre_ids: list[int],
     volumes_ui: VolumesUIInput,
     productivite: float = 100.0,
-    heures_par_jour: float = 8.0,
+    heures_par_jour: float = 8.5,
     idle_minutes: float = 0.0,
     debug: bool = False
 ) -> SimulationResponse:
     # Placeholder for multi-centre simulation
     print("Simulation MULTI-CENTRES non implémentée dans le moteur refondu pour l'instant.")
     return SimulationResponse(
-        details_taches=[], total_heures=0, heures_net_jour=8, fte_calcule=0, fte_arrondi=0, heures_par_poste={}
+        details_taches=[], total_heures=0, heures_net_jour=8.5, fte_calcule=0, fte_arrondi=0, heures_par_poste={}
     )
 
