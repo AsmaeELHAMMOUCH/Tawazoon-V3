@@ -1076,6 +1076,7 @@ async def simulate_batch(
                     CentrePoste.aps,
                     Poste.type_poste,
                     Poste.label,
+                    Poste.charge_salaire,
                 )
                 .join(Poste, CentrePoste.code_resp == Poste.Code)
                 .filter(CentrePoste.centre_id == centre_id)
@@ -1084,8 +1085,9 @@ async def simulate_batch(
             actual_moi = 0.0
             actual_mod = 0.0
             actual_aps = 0.0
+            actual_aps_mod = 0.0
             effectifs_par_poste: dict = {}
-            for eff, aps, type_poste, poste_label in rows_postes:
+            for eff, aps, type_poste, poste_label, _charge in rows_postes:
                 eff_val = float(eff or 0)
                 aps_val = float(aps or 0)
                 total_poste = eff_val + aps_val
@@ -1095,8 +1097,9 @@ async def simulate_batch(
                     actual_moi += eff_val
                 else:
                     actual_mod += eff_val
+                    actual_aps_mod += aps_val
                 actual_aps += aps_val
-                if total_poste > 0 and poste_label:
+                if not is_moi and total_poste > 0 and poste_label:
                     effectifs_par_poste[poste_label] = round(total_poste, 2)
 
             result = run_bandoeng_simulation(
@@ -1105,6 +1108,44 @@ async def simulate_batch(
                 excluded_task_ids=excluded_task_ids,
                 excluded_task_quadruplets=excluded_task_quadruplets,
             )
+
+            rpp = result.ressources_par_poste or {}
+
+            def _rpp_match_etp(lab: str) -> float:
+                if not lab:
+                    return 0.0
+                L = str(lab).strip()
+                if L in rpp:
+                    return float(rpp[L] or 0)
+                lu = L.upper()
+                for k, v in rpp.items():
+                    if str(k).strip().upper() == lu:
+                        return float(v or 0)
+                return 0.0
+
+            postes_chiffrage: list = []
+            for eff, aps, type_poste, poste_label, charge_salaire in rows_postes:
+                eff_val = float(eff or 0)
+                aps_val = float(aps or 0)
+                total_poste = eff_val + aps_val
+                t = (type_poste or "").upper()
+                is_moi = t in ["MOI", "INDIRECT", "STRUCTURE"]
+                if is_moi:
+                    continue
+                plab = (poste_label or "").strip()
+                if not plab:
+                    continue
+                sim_etp = int(round(_rpp_match_etp(plab)))
+                sal = float(charge_salaire or 0)
+                if total_poste <= 0 and sim_etp <= 0:
+                    continue
+                postes_chiffrage.append({
+                    "label": plab,
+                    "type_poste": type_poste or "",
+                    "charge_salaire": sal,
+                    "actuel_etp": round(total_poste, 2),
+                    "simule_etp": sim_etp,
+                })
 
             fte_calcule = round(result.fte_calcule, 2)
             # Cohérence visuelle: `arrondi` doit correspondre à `calculé`
@@ -1124,9 +1165,11 @@ async def simulate_batch(
                 "actual_moi": round(actual_moi, 2),
                 "actual_mod": round(actual_mod, 2),
                 "actual_aps": round(actual_aps, 2),
+                "actual_aps_mod": round(actual_aps_mod, 2),
                 "total_heures": round(result.total_heures, 2),
                 "ressources_par_poste": result.ressources_par_poste,
                 "effectifs_par_poste": effectifs_par_poste,
+                "postes_chiffrage": postes_chiffrage,
             })
 
         except Exception as e:

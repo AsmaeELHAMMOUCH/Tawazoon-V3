@@ -4,6 +4,7 @@ import "@/styles/dialog-animations.css";
 import { DialogTitle } from "@radix-ui/react-dialog";
 import { Calculator, Users, ArrowUpRight, ArrowDownLeft, ArrowUpDown, Package } from "lucide-react";
 import ReactECharts from "echarts-for-react";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import CapaciteNominaleDirectionCard from "./CapaciteNominaleDirectionCard";
 
 /* ─────────────────────────────────────────────────────────────────
@@ -12,9 +13,9 @@ import CapaciteNominaleDirectionCard from "./CapaciteNominaleDirectionCard";
 const JOURS = 264;
 
 const SCENARIOS = [
-  { key: "actuel",    label: "Calculé",   shortLabel: "Calc.",  color: "#0284c7", bg: "#e0f2fe", light: "#f0f9ff" },
-  { key: "consolide", label: "Consolidé", shortLabel: "Cons.",  color: "#eab308", bg: "#fef08a", light: "#fefce8" },
-  { key: "optimise",  label: "Optimisé",  shortLabel: "Opti.",  color: "#059669", bg: "#d1fae5", light: "#f0fdf4" },
+  { key: "actuel",    label: "Calculé",   shortLabel: "Calculé",  color: "#2563EB", bg: "#DBEAFE", light: "#EFF6FF", chipTint: "#93C5FD" },
+  { key: "consolide", label: "Consolidé", shortLabel: "Consolidé",  color: "#005EA8", bg: "#BFDBFE", light: "#DBEAFE", chipTint: "#60A5FA" },
+  { key: "optimise",  label: "Optimisé",  shortLabel: "Optimisé",  color: "#003d7a", bg: "#93C5FD", light: "#BFDBFE", chipTint: "#3B82F6" },
 ];
 
 const FLUX_CONFIG = {
@@ -78,6 +79,8 @@ export default function CapaciteNominaleComparatifDialog({
 }) {
   const [activeFlux, setActiveFlux] = useState("amana");
   const [activeDir,  setActiveDir]  = useState("Glob");
+  const CHART_ALL = "__all__";
+  const [chartIntervenantKey, setChartIntervenantKey] = useState(CHART_ALL);
   const gridValues = data?.gridValues || {};
   const capNette   = data?.heuresNet || 8.5;
   const flux       = FLUX_CONFIG[activeFlux];
@@ -111,16 +114,19 @@ export default function CapaciteNominaleComparatifDialog({
       consolide: responseConsolide?.ressources_par_poste || {},
       optimise:  responseOptimise?.ressources_par_poste  || {},
     };
-    return (postes || []).filter(isMod).map((p) => {
+    return (postes || []).filter(isMod).map((p, idx) => {
       const label = (p.label || p.nom || "").trim();
       const act   = getActuelModValue(p);
       const calc  = Math.round(rpps.actuel[label]    || 0);
       const cons  = Math.round(rpps.consolide[label] || 0);
       const opt   = Math.round(rpps.optimise[label]  || 0);
       const effsRow = { actuel: calc, consolide: cons, optimise: opt };
-      const row = { label, type: p.type_poste || "—", act, calc, cons, opt };
-
       const posteCode = String(p?.code ?? p?.Code ?? "").trim();
+      const rowKey =
+        p?.id != null && String(p.id).trim() !== ""
+          ? String(p.id)
+          : (posteCode ? `c:${posteCode}` : `i:${idx}:${label}`);
+      const row = { rowKey, label, type: p.type_poste || "—", act, calc, cons, opt };
       const usedAct = getUsedVolumesFromBackend(responseActuel, posteCode);
       const usedCon = getUsedVolumesFromBackend(responseConsolide, posteCode);
       const usedOpt = getUsedVolumesFromBackend(responseOptimise, posteCode);
@@ -159,14 +165,64 @@ export default function CapaciteNominaleComparatifDialog({
     activeFlux,
   ]);
 
+  const chartRow = useMemo(() => {
+    if (!chartIntervenantKey || chartIntervenantKey === CHART_ALL) return null;
+    return posteRows.find((r) => r.rowKey === chartIntervenantKey) ?? null;
+  }, [posteRows, chartIntervenantKey]);
+
+  const intervenantChartOptions = useMemo(
+    () => [
+      { value: CHART_ALL, label: "Tous les intervenants" },
+      ...posteRows.map((r) => ({ value: r.rowKey, label: r.label })),
+    ],
+    [posteRows]
+  );
+
+  useEffect(() => {
+    if (!chartIntervenantKey || chartIntervenantKey === CHART_ALL) return;
+    if (!posteRows.some((r) => r.rowKey === chartIntervenantKey)) setChartIntervenantKey(CHART_ALL);
+  }, [posteRows, chartIntervenantKey]);
+
+  useEffect(() => {
+    if (open) setChartIntervenantKey(CHART_ALL);
+  }, [open]);
+
   /* ── ECharts ── */
   const chartOption = useMemo(() => {
-    const labels  = ["Actuel (DB)", ...SCENARIOS.map(s => s.label)];
+    const labels  = ["Actuel", ...SCENARIOS.map(s => s.label)];
     const colors  = ["#94a3b8", ...SCENARIOS.map(s => s.color)];
     const effList = [effActuel, effCalcule, effConsolide, effOptimise];
-    const bDep   = effList.map(e => besoin(volDepart, e) ?? 0);
-    const bArr   = effList.map(e => besoin(volArrive, e) ?? 0);
-    const bGlob  = effList.map(e => besoin(volTotal,  e) ?? 0);
+    const barVal = (v) => {
+      if (v === null || v === undefined || isNaN(v)) return 0;
+      return parseFloat(Number(v).toFixed(1));
+    };
+    let bDep;
+    let bArr;
+    let bGlob;
+    if (chartRow) {
+      bDep = [
+        barVal(chartRow.bDep_act),
+        barVal(chartRow.bDep_actuel),
+        barVal(chartRow.bDep_consolide),
+        barVal(chartRow.bDep_optimise),
+      ];
+      bArr = [
+        barVal(chartRow.bArr_act),
+        barVal(chartRow.bArr_actuel),
+        barVal(chartRow.bArr_consolide),
+        barVal(chartRow.bArr_optimise),
+      ];
+      bGlob = [
+        barVal(chartRow.bGlob_act),
+        barVal(chartRow.bGlob_actuel),
+        barVal(chartRow.bGlob_consolide),
+        barVal(chartRow.bGlob_optimise),
+      ];
+    } else {
+      bDep   = effList.map(e => barVal(besoin(volDepart, e)));
+      bArr   = effList.map(e => barVal(besoin(volArrive, e)));
+      bGlob  = effList.map(e => barVal(besoin(volTotal,  e)));
+    }
     const mkSerie = (name, data, alpha) => ({
       name, type: "bar", barMaxWidth: 20,
       data: data.map((v, i) => ({
@@ -190,18 +246,21 @@ export default function CapaciteNominaleComparatifDialog({
         backgroundColor: "rgba(15,23,42,.93)", borderWidth: 0, padding: [10, 14],
         textStyle: { color: "#fff", fontSize: 11 },
         formatter: (params) => {
+          const sub = chartRow
+            ? `<div style="font-size:10px;color:#94a3b8;margin-bottom:4px">${chartRow.label}</div>`
+            : "";
           const lines = params.map(p =>
             `<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${p.color};margin-right:5px;vertical-align:middle"></span><b>${p.seriesName}</b>: ${Number(p.value).toFixed(1)}`
           ).join("<br/>");
-          return `<div style="font-weight:800;margin-bottom:6px;color:#e2e8f0">${params[0]?.axisValue}</div>${lines}`;
+          return `<div style="font-weight:800;margin-bottom:6px;color:#e2e8f0">${params[0]?.axisValue}</div>${sub}${lines}`;
         },
       },
       legend: {
         data: ["Départ /j", "Arrivé /j", "Global /j"],
         bottom: 0, textStyle: { fontSize: 10, color: "#475569" },
-        itemWidth: 10, itemHeight: 10, icon: "roundRect",
+        itemWidth: 10, itemHeight: 10, icon: "roundRect", show: false,
       },
-      grid: { top: 16, left: 10, right: 10, bottom: 40, containLabel: true },
+      grid: { top: 16, left: 10, right: 10, bottom: 10, containLabel: true },
       xAxis: {
         type: "category", data: labels,
         axisLabel: { fontSize: 9, color: "#64748b", fontWeight: 600 },
@@ -218,7 +277,7 @@ export default function CapaciteNominaleComparatifDialog({
         mkSerie("Global /j",  bGlob, ["bb", "99"]),
       ],
     };
-  }, [volDepart, volArrive, volTotal, effActuel, effCalcule, effConsolide, effOptimise]);
+  }, [volDepart, volArrive, volTotal, effActuel, effCalcule, effConsolide, effOptimise, chartRow]);
 
   const [animKey, setAnimKey] = useState(0);
   useEffect(() => { if (open) setAnimKey((k) => k + 1); }, [open]);
@@ -244,7 +303,7 @@ export default function CapaciteNominaleComparatifDialog({
             <div className="pointer-events-none absolute inset-0">
               <div className="absolute -right-12 -top-12 w-56 h-56 rounded-full bg-white/10 blur-2xl dlg-blob-a" />
               <div className="absolute left-1/3 -bottom-8 w-36 h-36 rounded-full bg-white/8 blur-xl dlg-blob-b" />
-              <div className="absolute right-1/4 top-1/2 w-20 h-20 rounded-full bg-cyan-300/10 blur-lg dlg-blob-c" />
+              <div className="absolute right-1/4 top-1/2 w-20 h-20 rounded-full bg-blue-300/10 blur-lg dlg-blob-c" />
             </div>
 
             <div className="relative px-6 py-2 flex items-center justify-between mr-8 gap-4">
@@ -271,14 +330,14 @@ export default function CapaciteNominaleComparatifDialog({
               <div className="flex items-center gap-2 flex-wrap">
                 {/* Actuel DB */}
                 <div className="bg-white/10 border border-white/15 rounded-xl px-3 py-2 text-center min-w-[68px]">
-                  <p className="text-[7px] font-black uppercase tracking-widest text-blue-200/70">Actuel DB</p>
+                  <p className="text-[7px] font-black uppercase tracking-widest text-blue-200/70">Actuel</p>
                   <p className="text-lg font-black text-white leading-none">{fmt(effActuel)}</p>
                   <p className="text-[7px] text-blue-200/50 font-bold">ETP MOD</p>
                 </div>
                 {SCENARIOS.map(sc => (
                   <div key={sc.key} className="border rounded-xl px-3 py-2 text-center min-w-[68px]"
                     style={{ backgroundColor: "rgba(255,255,255,.12)", borderColor: "rgba(255,255,255,.20)" }}>
-                    <p className="text-[7px] font-black uppercase tracking-widest" style={{ color: sc.color === "#0284c7" ? "#7dd3fc" : sc.color === "#eab308" ? "#fde047" : "#6ee7b7" }}>{sc.label}</p>
+                    <p className="text-[7px] font-black uppercase tracking-widest" style={{ color: sc.chipTint }}>{sc.label}</p>
                     <p className="text-lg font-black text-white leading-none">{fmt(effs[sc.key])}</p>
                     <p className="text-[7px] font-bold text-white/50">ETP MOD</p>
                   </div>
@@ -306,11 +365,11 @@ export default function CapaciteNominaleComparatifDialog({
                   <button key={key} onClick={() => setActiveFlux(key)}
                     disabled={!total && !isActive}
                     className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[11px] font-bold tracking-wide transition-all border ${
-                      isActive ? "text-white shadow-md" : "bg-white border-slate-200 text-slate-500 hover:border-[#0284c7] hover:text-[#0284c7]"
+                      isActive ? "text-white shadow-md" : "bg-white border-slate-200 text-slate-500 hover:border-[#005EA8] hover:text-[#005EA8]"
                     } ${!total && !isActive ? "opacity-30 cursor-not-allowed" : ""}`}
-                    style={isActive ? { backgroundColor: "#0284c7", borderColor: "#0284c7" } : {}}>
+                    style={isActive ? { backgroundColor: "#005EA8", borderColor: "#005EA8" } : {}}>
                     <div className="w-2 h-2 rounded-full"
-                      style={{ backgroundColor: isActive ? "white" : (total ? "#0284c7" : "#cbd5e1") }} />
+                      style={{ backgroundColor: isActive ? "white" : (total ? "#005EA8" : "#cbd5e1") }} />
                     {cfg.label}
                   </button>
                 );
@@ -333,12 +392,30 @@ export default function CapaciteNominaleComparatifDialog({
             {/* ── Chart ── */}
             <div className="dlg-table-enter rounded-2xl bg-white border border-slate-100 shadow-sm p-4"
               style={{ animationDelay: "0.38s" }}>
-              <div className="flex items-center gap-2 mb-1">
-                <div className="w-1 h-5 rounded-full"
-                  style={{ background: "linear-gradient(to bottom, #0284c7, #0077cc)" }} />
-                <div>
-                  <p className="text-[11px] font-black uppercase tracking-widest text-slate-600">Comparaison visuelle — Besoins /jour</p>
-                  <p className="text-[9px] text-slate-400 font-medium mt-0.5">Départ · Arrivé · Global — tous scénarios</p>
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-1 h-5 rounded-full shrink-0"
+                    style={{ background: "linear-gradient(to bottom, #005EA8, #0077cc)" }} />
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-black uppercase tracking-widest text-slate-600">Comparaison visuelle — Besoins /jour</p>
+                    <p className="text-[9px] text-slate-400 font-medium mt-0.5">
+                      {chartRow
+                        ? <>Intervenant : <span className="text-slate-600 font-semibold">{chartRow.label}</span> — volumes affectés à ce poste ({FLUX_CONFIG[activeFlux].label})</>
+                        : "Départ · Arrivé · Global — agrégat tous intervenants MOD"}
+                    </p>
+                  </div>
+                </div>
+                <div className="w-full sm:w-[min(100%,240px)] shrink-0">
+                  <SearchableSelect
+                    options={intervenantChartOptions}
+                    value={chartIntervenantKey === "" ? CHART_ALL : chartIntervenantKey}
+                    onChange={(v) => {
+                      const s = v == null || v === "" ? CHART_ALL : String(v);
+                      setChartIntervenantKey(s);
+                    }}
+                    placeholder="Filtrer le graphique…"
+                    className="h-9 text-xs font-semibold"
+                  />
                 </div>
               </div>
               <ReactECharts option={chartOption} style={{ height: 190 }} opts={{ renderer: "svg" }} />
@@ -379,7 +456,7 @@ export default function CapaciteNominaleComparatifDialog({
                         <button key={d.key} onClick={() => setActiveDir(d.key)}
                           className="px-3 py-1 rounded-lg text-[9px] font-black transition-all"
                           style={activeDir === d.key
-                            ? { background: "#0284c7", color: "#fff", boxShadow: "0 2px 8px #0284c740" }
+                            ? { background: "#005EA8", color: "#fff", boxShadow: "0 2px 8px #005EA840" }
                             : { color: "#64748b" }}>
                           {d.label}
                         </button>
@@ -411,13 +488,13 @@ export default function CapaciteNominaleComparatifDialog({
                           {/* Volume utilisé */}
                           <th className="text-center px-2 py-2 border-l border-slate-200 bg-slate-50"
                             style={{ borderTop: "3px solid #0f172a" }}>
-                            <p className="text-[8px] font-black uppercase text-slate-600">Volume utilisé</p>
+                            <p className="text-[8px] font-black uppercase text-slate-600">Volume</p>
                             <p className="text-[7px] font-bold text-slate-400 mt-0.5">dir. active</p>
                           </th>
                           {/* Besoin group header */}
                           <th className="text-center px-2 py-2 border-l border-slate-200 bg-slate-50"
                             style={{ borderTop: "3px solid #64748b" }}>
-                            <p className="text-[8px] font-black uppercase text-slate-500">Besoin Act.</p>
+                            <p className="text-[8px] font-black uppercase text-slate-500">Actuel</p>
                             <p className="text-[7px] font-bold text-slate-400 mt-0.5">/jour · /heure</p>
                           </th>
                           {SCENARIOS.map(sc => (

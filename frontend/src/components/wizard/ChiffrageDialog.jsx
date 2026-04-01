@@ -25,7 +25,7 @@ const isMod = (p) => {
 const getActuelModValue = (p) => Number(p?.effectif_actuel_mod) || 0;
 
 /* ─── Budget Card ──────────────────────────────────────────── */
-function BudgetCard({ icon: Icon, label, sublabel, monthly, annual, color }) {
+export function BudgetCard({ icon: Icon, label, sublabel, monthly, annual, color }) {
     return (
         <div className="flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow">
             <div className="flex items-center gap-2 px-3 pt-2.5 pb-2">
@@ -127,7 +127,7 @@ export default function ChiffrageDialog({
                                         </span>
                                     </h2>
                                     <p className="text-[10px] text-blue-100 font-medium opacity-80 uppercase tracking-wide">
-                                        Économie Estimée : {chiffrageData.totalImpact > 0 ? "+" : ""}{fmt(chiffrageData.totalImpact)} MAD
+                                        Économie estimée (annuelle) : {chiffrageData.totalImpact * 12 > 0 ? "+" : ""}{fmt(chiffrageData.totalImpact * 12)} MAD / an
                                     </p>
                                 </div>
                             </div>
@@ -145,9 +145,9 @@ export default function ChiffrageDialog({
                                     </div>
                                     <div className="w-px bg-white/10" />
                                     <div className="text-center">
-                                        <p className="text-[8px] text-blue-100/70 font-bold uppercase tracking-widest">Économie</p>
+                                        <p className="text-[8px] text-blue-100/70 font-bold uppercase tracking-widest">Économie / an</p>
                                         <p className={`text-base font-black leading-tight ${chiffrageData.totalImpact >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
-                                            {chiffrageData.totalImpact > 0 ? "+" : ""}{fmt(chiffrageData.totalImpact)}
+                                            {chiffrageData.totalImpact * 12 > 0 ? "+" : ""}{fmt(chiffrageData.totalImpact * 12)}
                                         </p>
                                     </div>
                                 </div>
@@ -224,19 +224,19 @@ export default function ChiffrageDialog({
                                 </div>
 
                                 <div className="relative px-3 pt-1.5 pb-2">
-                                    <p className="text-[7px] font-bold text-white/50 uppercase tracking-wider">/an</p>
+                                    <p className="text-[7px] font-bold text-white/70 uppercase tracking-wider">Écart budgétaire / an</p>
                                     <div className="flex items-baseline gap-1">
-                                        <span className="text-base font-black text-white tabular-nums tracking-tight leading-none">
-                                            {chiffrageData.totalImpact > 0 ? "+" : ""}{fmt(chiffrageData.totalImpact * 12)}
+                                        <span className="text-lg font-black text-white tabular-nums tracking-tight leading-none">
+                                            {chiffrageData.totalImpact * 12 > 0 ? "+" : ""}{fmt(chiffrageData.totalImpact * 12)}
                                         </span>
                                         <span className="text-[8px] font-bold text-white/50 uppercase">MAD</span>
                                     </div>
                                 </div>
 
                                 <div className="relative mt-auto flex items-center justify-between bg-black/15 border-t border-white/10 px-3 py-1.5">
-                                    <span className="text-[7px] font-bold text-white/50 uppercase tracking-wider">/mois</span>
+                                    <span className="text-[7px] font-bold text-white/50 uppercase tracking-wider">Réf. / mois</span>
                                     <div className="flex items-baseline gap-1">
-                                        <span className="text-[11px] font-black text-white tabular-nums">
+                                        <span className="text-[11px] font-black text-white/90 tabular-nums">
                                             {chiffrageData.totalImpact > 0 ? "+" : ""}{fmt(chiffrageData.totalImpact)}
                                         </span>
                                         <span className="text-[7px] font-bold text-white/40 uppercase">MAD</span>
@@ -266,7 +266,7 @@ export default function ChiffrageDialog({
                                             <th className="text-center px-4 py-2 text-[9px] font-black uppercase text-slate-400 border-l border-slate-50">Salaire Unit.</th>
                                             <th className="text-right px-4 py-2 text-[9px] font-black uppercase text-slate-500 border-l border-slate-50 bg-slate-50/20">Budget Act.</th>
                                             <th className="text-right px-4 py-2 text-[9px] font-black uppercase text-[#005EA8] border-l border-slate-50 bg-blue-50/10">Budget {mode === "optimise" ? "Opt." : mode === "recommande" ? "Cons." : "Cal."}</th>
-                                            <th className="text-right px-6 py-2 text-[9px] font-black uppercase text-slate-700 border-l border-slate-100 bg-slate-50/30">Économie</th>
+                                            <th className="text-right px-6 py-2 text-[9px] font-black uppercase text-slate-700 border-l border-slate-100 bg-slate-50/30">Économie (an)</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100">
@@ -295,9 +295,9 @@ export default function ChiffrageDialog({
                                                 <td className="px-6 py-1.5 text-right border-l border-slate-100 bg-slate-50/40">
                                                     <div className="flex flex-col items-end">
                                                         <span className={`font-black text-[11px] tracking-tight ${r.impact >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                                                            {r.impact > 0 ? "+" : ""}{fmt(r.impact)}
+                                                            {r.impact * 12 > 0 ? "+" : ""}{fmt(r.impact * 12)}
                                                         </span>
-                                                        <span className="text-[8px] font-bold text-slate-300 uppercase shrink-0">MAD</span>
+                                                        <span className="text-[8px] font-bold text-slate-300 uppercase shrink-0">MAD / an</span>
                                                     </div>
                                                 </td>
                                             </tr>

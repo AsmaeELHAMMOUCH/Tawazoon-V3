@@ -22,15 +22,13 @@ import {
   Zap,
   TrendingUp,
   Calculator,
+  RotateCcw,
 } from "lucide-react";
 
 import AdequationComparatifDialog from "@/components/wizard/AdequationComparatifDialog";
 import CapaciteNominaleComparatifDialog from "@/components/wizard/CapaciteNominaleComparatifDialog";
 import ChiffrageComparatifDialog from "@/components/wizard/ChiffrageComparatifDialog";
 // Modular Components
-import DeltaBadge from "@/components/wizard/DeltaBadge";
-import KPICardGlass from "@/components/wizard/KPICardGlass";
-import EffectifFooter from "@/components/wizard/EffectifFooter";
 import ComparisonTable from "@/components/wizard/comparison/ComparisonTable";
 import ScenarioSummaryCards from "@/components/wizard/comparison/ScenarioSummaryCards";
 
@@ -402,21 +400,21 @@ export default function Step5ComparatifProcessResults({
 
   return (
     <div className="wizard-step-content space-y-4 p-4 text-xs bg-slate-50">
-      <div className="text-center mb-1.5 bg-white rounded-xl border border-blue-100 px-3 py-2 shadow-sm">
+      <div className="text-center mb-1.5 rounded-2xl border border-slate-200/50 bg-gradient-to-br from-white via-slate-50/40 to-blue-50/20 px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_10px_32px_-12px_rgba(15,23,42,0.07)]">
         <h2 className="text-xl md:text-2xl font-black text-[#0b3f6f] mb-0.5 tracking-tight">
-          Comparatif des processus
+          Comparatif des scénarios
         </h2>
-        <p className="text-xs text-slate-600 max-w-2xl mx-auto">
+        <p className="text-xs text-slate-600 max-w-2xl mx-auto leading-relaxed">
           Sans détail par tâche : uniquement l&apos;ETP final par scénario + sections additionnelles.
         </p>
       </div>
 
       {!comparatif && (
-        <Card className="wizard-card border-blue-200 bg-gradient-to-br from-blue-50/40 to-white">
+        <Card className="wizard-card border-slate-200/50 bg-gradient-to-br from-white via-blue-50/15 to-slate-50/30 shadow-[0_12px_40px_-16px_rgba(15,23,42,0.08)]">
           <CardContent className="p-8 text-center">
             <div className="max-w-md mx-auto space-y-4">
-              <div className="w-16 h-16 mx-auto bg-gradient-to-br from-blue-100 to-blue-200 rounded-2xl flex items-center justify-center shadow-sm">
-                <Play className="w-8 h-8 text-blue-600" />
+              <div className="w-16 h-16 mx-auto rounded-2xl flex items-center justify-center border border-blue-100/80 bg-gradient-to-br from-blue-50/90 to-white shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
+                <Play className="w-8 h-8 text-[#005EA8]/80" />
               </div>
               <div>
                 <h3 className="text-base font-bold text-slate-800 mb-2">
@@ -429,7 +427,7 @@ export default function Step5ComparatifProcessResults({
               <Button
                 onClick={() => launchComparatif()}
                 disabled={loading || !wizardData.centre}
-                className="bg-gradient-to-r from-[#005EA8] to-[#0A6BBC] hover:from-[#004e8a] hover:to-[#085a9c] text-white px-8 py-2.5 text-sm font-bold shadow-lg hover:shadow-xl transition-all duration-200"
+                className="bg-gradient-to-r from-[#005EA8] via-[#0A6BBC] to-[#005EA8] hover:brightness-[0.97] text-white px-8 py-2.5 text-sm font-bold shadow-[0_8px_24px_-6px_rgba(0,94,168,0.45)] hover:shadow-[0_12px_28px_-6px_rgba(0,94,168,0.4)] transition-all duration-300 rounded-xl"
               >
                 {loading ? (
                   <>
@@ -451,14 +449,14 @@ export default function Step5ComparatifProcessResults({
       {comparatif && (
         <div className="max-w-6xl mx-auto space-y-3">
           {postes && postes.length > 0 && (
-            <Card className="wizard-card compact-card">
+            <Card className="wizard-card compact-card border-slate-200/50 bg-white/90 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
               <CardContent className="p-2.5">
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                     Filtrer par intervenant
                   </Label>
                   <Select value={selectedIntervenant} onValueChange={setSelectedIntervenant}>
-                    <SelectTrigger className="h-7 text-xs bg-white border-slate-200 max-w-xs">
+                    <SelectTrigger className="h-7 text-xs bg-slate-50/50 border-slate-200/70 max-w-xs rounded-lg">
                       <SelectValue placeholder="-- Tous --" />
                     </SelectTrigger>
                     <SelectContent>
@@ -470,6 +468,17 @@ export default function Step5ComparatifProcessResults({
                       ))}
                     </SelectContent>
                   </Select>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={selectedIntervenant === "all"}
+                    onClick={() => setSelectedIntervenant("all")}
+                    className="h-7 text-[10px] font-bold gap-1.5 border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-[#005EA8] disabled:opacity-40"
+                  >
+                    <RotateCcw className="w-3 h-3 shrink-0" />
+                    Réinitialiser le filtre
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -479,57 +488,58 @@ export default function Step5ComparatifProcessResults({
           {(() => {
             const dbPct = maxEtp > 0 ? Math.min(100, ((dbEtp ?? 0) / maxEtp) * 100) : 0;
 
+            /* Scénarios : dégradés d’en-tête très doux ; halos légers ; barres lisibles mais pas agressives */
             const scenarios = [
               {
                 key: "actuel",
                 label: "",
                 badge: "CALCULÉ",
-                badgeColor: "bg-sky-300 text-sky-800",
-                headerGrad: "from-sky-100 to-sky-200",
-                glowColor: deltaActuel === 0 ? "from-sky-400/10" : "from-sky-400/20",
-                accentText: "text-blue-600",
+                badgeColor: "bg-blue-50/95 text-blue-900/90 border border-blue-100/80",
+                headerGrad: "from-white via-blue-50/45 to-slate-50/25",
+                glowColor: deltaActuel === 0 ? "from-blue-400/5" : "from-blue-500/10",
+                accentText: "text-blue-700",
                 accentBg: "bg-blue-100",
                 accentBorder: "border-blue-200",
                 kpi: kpiActuel,
                 etp: actuelEtp,
                 delta: deltaActuel,
-                themeColor: "text-blue-900",
-                barTrack: "bg-sky-200/40",
-                barFill: "bg-blue-500",
+                themeColor: "text-blue-950",
+                barTrack: "bg-blue-100/80",
+                barFill: "bg-gradient-to-r from-blue-400 to-blue-500",
               },
               {
                 key: "consolide",
                 label: "Effectif Consolidé",
                 badge: "CONSOLIDÉ",
-                badgeColor: "bg-amber-200 text-amber-800",
-                headerGrad: "from-amber-50 to-amber-100",
-                glowColor: "from-amber-400/15",
-                accentText: "text-amber-700",
-                accentBg: "bg-amber-50",
-                accentBorder: "border-amber-100",
+                badgeColor: "bg-[#005EA8]/10 text-[#005EA8] border border-[#005EA8]/15",
+                headerGrad: "from-white via-blue-50/55 to-sky-50/20",
+                glowColor: "from-[#005EA8]/10",
+                accentText: "text-[#005EA8]",
+                accentBg: "bg-blue-100",
+                accentBorder: "border-blue-300",
                 kpi: kpiConsolide,
                 etp: consolideEtp,
                 delta: deltaConsolide,
-                themeColor: "text-amber-900",
-                barTrack: "bg-amber-200/30",
-                barFill: "bg-amber-500",
+                themeColor: "text-blue-950",
+                barTrack: "bg-[#005EA8]/15",
+                barFill: "bg-gradient-to-r from-[#0A6BBC] to-[#005EA8]",
               },
               {
                 key: "optimise",
                 label: "Effectif Optimisé",
                 badge: "OPTIMISÉ",
-                badgeColor: "bg-emerald-200 text-emerald-800",
-                headerGrad: "from-emerald-50 to-emerald-100",
-                glowColor: "from-emerald-400/15",
-                accentText: "text-emerald-700",
-                accentBg: "bg-emerald-50",
-                accentBorder: "border-emerald-100",
+                badgeColor: "bg-slate-800/90 text-white border border-slate-700/25 shadow-sm",
+                headerGrad: "from-slate-50/60 via-blue-50/35 to-white",
+                glowColor: "from-blue-900/8",
+                accentText: "text-[#0A2A4A]",
+                accentBg: "bg-blue-200/50",
+                accentBorder: "border-blue-400",
                 kpi: kpiOptimise,
                 etp: optimiseEtp,
                 delta: deltaOptimise,
-                themeColor: "text-emerald-900",
-                barTrack: "bg-emerald-200/30",
-                barFill: "bg-emerald-500",
+                themeColor: "text-[#061a2e]",
+                barTrack: "bg-slate-200/70",
+                barFill: "bg-gradient-to-r from-slate-600 to-blue-950",
               },
             ];
 
@@ -587,11 +597,11 @@ export default function Step5ComparatifProcessResults({
                   <button
                     type="button"
                     onClick={() => setShowCapaciteNominaleDialog(true)}
-                    className="group relative overflow-hidden rounded-xl border border-cyan-200/60 bg-gradient-to-br from-white via-cyan-50/30 to-cyan-100/20 p-6 text-left transition-all duration-300 hover:shadow-xl hover:-translate-y-1 hover:border-cyan-300"
+                    className="group relative overflow-hidden rounded-2xl border border-slate-200/50 bg-gradient-to-br from-white via-blue-50/20 to-slate-50/40 p-6 text-left transition-all duration-300 hover:shadow-[0_16px_48px_-12px_rgba(15,23,42,0.12)] hover:-translate-y-0.5 hover:border-blue-200/50"
                   >
-                    <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-gradient-to-br from-cyan-400/20 to-transparent blur-2xl transition-opacity group-hover:opacity-100 opacity-60" />
+                    <div className="absolute -right-10 -top-10 h-28 w-28 rounded-full bg-gradient-to-br from-[#005EA8]/10 to-transparent blur-2xl opacity-70 group-hover:opacity-100 transition-opacity" />
                     <div className="relative flex items-center gap-4">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-500 to-cyan-600 shadow-lg group-hover:scale-110 transition-transform">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-[#005EA8] to-[#0A6BBC] shadow-[0_8px_20px_-6px_rgba(0,94,168,0.35)] group-hover:scale-[1.04] transition-transform duration-300">
                         <Zap className="h-6 w-6 text-white" />
                       </div>
                       <div>
@@ -605,11 +615,11 @@ export default function Step5ComparatifProcessResults({
                   <button
                     type="button"
                     onClick={() => setShowAdequationDialog(true)}
-                    className="group relative overflow-hidden rounded-xl border border-emerald-200/60 bg-gradient-to-br from-white via-emerald-50/30 to-emerald-100/20 p-6 text-left transition-all duration-300 hover:shadow-xl hover:-translate-y-1 hover:border-emerald-300"
+                    className="group relative overflow-hidden rounded-2xl border border-slate-200/50 bg-gradient-to-br from-white via-sky-50/25 to-blue-50/15 p-6 text-left transition-all duration-300 hover:shadow-[0_16px_48px_-12px_rgba(15,23,42,0.12)] hover:-translate-y-0.5 hover:border-sky-200/45"
                   >
-                    <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-gradient-to-br from-emerald-400/20 to-transparent blur-2xl transition-opacity group-hover:opacity-100 opacity-60" />
+                    <div className="absolute -right-10 -top-10 h-28 w-28 rounded-full bg-gradient-to-br from-sky-400/10 to-transparent blur-2xl opacity-70 group-hover:opacity-100 transition-opacity" />
                     <div className="relative flex items-center gap-4">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-lg group-hover:scale-110 transition-transform">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-[#0A6BBC] to-blue-900 shadow-[0_8px_20px_-6px_rgba(10,107,188,0.3)] group-hover:scale-[1.04] transition-transform duration-300">
                         <TrendingUp className="h-6 w-6 text-white" />
                       </div>
                       <div>
@@ -623,11 +633,11 @@ export default function Step5ComparatifProcessResults({
                   <button
                     type="button"
                     onClick={() => setShowChiffrageDialog(true)}
-                    className="group relative overflow-hidden rounded-xl border border-amber-200/60 bg-gradient-to-br from-white via-amber-50/30 to-amber-100/20 p-6 text-left transition-all duration-300 hover:shadow-xl hover:-translate-y-1 hover:border-amber-300"
+                    className="group relative overflow-hidden rounded-2xl border border-slate-200/50 bg-gradient-to-br from-white via-slate-50/80 to-blue-50/20 p-6 text-left transition-all duration-300 hover:shadow-[0_16px_48px_-12px_rgba(15,23,42,0.12)] hover:-translate-y-0.5 hover:border-slate-300/60"
                   >
-                    <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-gradient-to-br from-amber-400/20 to-transparent blur-2xl transition-opacity group-hover:opacity-100 opacity-60" />
+                    <div className="absolute -right-10 -top-10 h-28 w-28 rounded-full bg-gradient-to-br from-slate-600/10 to-transparent blur-2xl opacity-70 group-hover:opacity-100 transition-opacity" />
                     <div className="relative flex items-center gap-4">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 shadow-lg group-hover:scale-110 transition-transform">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-slate-700 to-[#003d7a] shadow-[0_8px_20px_-6px_rgba(15,23,42,0.25)] group-hover:scale-[1.04] transition-transform duration-300">
                         <DollarSign className="h-6 w-6 text-white" />
                       </div>
                       <div>

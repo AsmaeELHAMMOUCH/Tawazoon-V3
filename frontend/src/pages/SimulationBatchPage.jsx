@@ -14,13 +14,118 @@ import {
     MapPin, Globe, Download, Upload, Play, CheckCircle2,
     ChevronRight, AlertTriangle, Users, TrendingUp, TrendingDown, Building2,
     Loader2, FileSpreadsheet, BarChart3, X, RefreshCcw,
-    Sparkles, ArrowUpRight, ArrowDownRight, Minus, Target, Layers,
-    ChevronLeft, Zap, RotateCcw, BookText, Calculator
+    Sparkles, Target, Layers,
+    ChevronLeft, Zap, RotateCcw, BookText, Calculator, DollarSign,
 } from "lucide-react";
+import ChiffrageBatchHierarchyDialog from "@/components/wizard/ChiffrageBatchHierarchyDialog";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 const fmt = (n) =>
     n == null ? "—" : Number(n).toLocaleString("fr-MA", { maximumFractionDigits: 1 });
+
+/** ETP actuel (référence DB) : effectif MOD + APS postes MOD uniquement (sans MOI), aligné comparatif batch. */
+function etpActuelDbFromCentre(c) {
+    return Number(c?.actual_mod || 0) + Number(c?.actual_aps_mod ?? 0);
+}
+
+/**
+ * ETP final (centre) = Σ arrondi par poste sur `ressources_par_poste`.
+ * Sans ventilation poste, repli sur `fte_arrondi` puis `round(fte_calcule)`.
+ */
+function etpFinalFromPostes(centre) {
+    const rpp = centre?.ressources_par_poste || {};
+    const vals = Object.values(rpp);
+    if (!vals.length) {
+        return Number(
+            centre?.fte_arrondi ?? Math.round(Number(centre?.fte_calcule || 0))
+        );
+    }
+    return vals.reduce((s, v) => s + Math.round(Number(v) || 0), 0);
+}
+
+/** ETP final (région) = Σ ETP final des centres de la région. */
+function etpFinalRegionFromCentres(regionCentres) {
+    return (regionCentres || []).reduce((s, c) => s + etpFinalFromPostes(c), 0);
+}
+
+const normPosteKeyBatch = (k) => String(k || "").trim().toUpperCase();
+
+function sumPosteBucketBatch(obj, keyNorm) {
+    let s = 0;
+    for (const [k, v] of Object.entries(obj || {})) {
+        if (normPosteKeyBatch(k) === keyNorm) s += Number(v) || 0;
+    }
+    return s;
+}
+
+/** Lignes poste : union ressources calculées + effectifs DB (même logique que ComparatifBatchPage). */
+function buildPostesRowsForCentre(selectedCentre) {
+    if (!selectedCentre) return [];
+    const ress = selectedCentre.ressources_par_poste || {};
+    const eff = selectedCentre.effectifs_par_poste || {};
+    const labelByNorm = {};
+    const addKeys = (obj) => {
+        Object.keys(obj || {}).forEach((k) => {
+            const n = normPosteKeyBatch(k);
+            if (!n) return;
+            if (!labelByNorm[n]) labelByNorm[n] = String(k).trim();
+        });
+    };
+    addKeys(ress);
+    addKeys(eff);
+    const keysNorm = Object.keys(labelByNorm).sort((a, b) => a.localeCompare(b, "fr"));
+    return keysNorm
+        .map((n) => {
+            const poste = labelByNorm[n] || n;
+            const etpCalc = sumPosteBucketBatch(ress, n);
+            const actuel = sumPosteBucketBatch(eff, n);
+            const etpFinalPoste = Math.round(Number(etpCalc) || 0);
+            const ecart = etpFinalPoste - actuel;
+            return { keyNorm: n, poste, etpCalc, etpFinalPoste, actuel, ecart };
+        })
+        .filter((row) => row.actuel !== 0 || row.etpCalc !== 0);
+}
+
+/** Cumul par poste sur une liste de centres (région filtrée ou réseau complet). */
+function buildPostesRowsAggregated(centresList) {
+    const list = centresList || [];
+    if (!list.length) return [];
+    const labelByNorm = {};
+    const addKeys = (obj) => {
+        Object.keys(obj || {}).forEach((k) => {
+            const n = normPosteKeyBatch(k);
+            if (!n) return;
+            if (!labelByNorm[n]) labelByNorm[n] = String(k).trim();
+        });
+    };
+    list.forEach((c) => {
+        addKeys(c.ressources_par_poste);
+        addKeys(c.effectifs_par_poste);
+    });
+    const keysNorm = Object.keys(labelByNorm).sort((a, b) => a.localeCompare(b, "fr"));
+    return keysNorm
+        .map((n) => {
+            const poste = labelByNorm[n] || n;
+            let etpCalc = 0;
+            let etpFinalPoste = 0;
+            let actuel = 0;
+            list.forEach((c) => {
+                const v = sumPosteBucketBatch(c.ressources_par_poste, n);
+                etpCalc += v;
+                etpFinalPoste += Math.round(Number(v) || 0);
+                actuel += sumPosteBucketBatch(c.effectifs_par_poste, n);
+            });
+            const ecart = etpFinalPoste - actuel;
+            return { keyNorm: n, poste, etpCalc, etpFinalPoste, actuel, ecart };
+        })
+        .filter((row) => row.actuel !== 0 || row.etpCalc !== 0);
+}
+
+function centreHasPostesDetail(c) {
+    const r = Object.keys(c?.ressources_par_poste || {}).length;
+    const e = Object.keys(c?.effectifs_par_poste || {}).length;
+    return r > 0 || e > 0;
+}
 
 // Mode label & style helpers
 const PROCESS_MODES = {
@@ -118,13 +223,26 @@ function AdequacyBar({ value }) {
     );
 }
 
-// ─── Écart badge ──────────────────────────────────────────────────────────────
+// ─── Écart badge (ETP final − actuel) : Besoin si &gt; 0, Surplus si &lt; 0, sans flèches ──
 function EcartBadge({ value }) {
-    const pos = value >= 0;
+    const rounded = Math.round(Number(value) || 0);
+    if (rounded === 0) {
+        return (
+            <span className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[10px] font-bold bg-slate-50 text-slate-600 border border-slate-200 whitespace-nowrap">
+                <span className="tabular-nums">0</span>
+                <span className="text-[8px] font-black uppercase tracking-wide text-slate-500">Équilibre</span>
+            </span>
+        );
+    }
+    const besoin = rounded > 0;
+    const shell = besoin
+        ? "bg-red-50 text-red-800 border-red-200"
+        : "bg-emerald-50 text-emerald-800 border-emerald-200";
+    const label = besoin ? "Besoin" : "Surplus";
     return (
-        <span className={`inline-flex items-center gap-0.5 rounded-md px-2 py-0.5 text-[10px] font-bold ${pos ? "bg-emerald-50 text-emerald-700 border border-emerald-100" : "bg-rose-50 text-rose-700 border border-rose-100"}`}>
-            {value > 0 ? <ArrowUpRight className="w-3 h-3" /> : value < 0 ? <ArrowDownRight className="w-3 h-3" /> : <Minus className="w-3 h-3" />}
-            {value > 0 ? "+" : ""}{fmt(value)}
+        <span className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[10px] font-bold border whitespace-nowrap ${shell}`}>
+            <span className="tabular-nums">{besoin ? "+" : "−"}{fmt(Math.abs(rounded))}</span>
+            <span className="text-[8px] font-black uppercase tracking-wide opacity-90">{label}</span>
         </span>
     );
 }
@@ -151,7 +269,7 @@ function TabButton({ active, onClick, icon: Icon, label, count, color = "blue" }
 }
 
 // ─── Results Tabs (Step 4) ─────────────────────────────────────────────────────
-function ResultsTabs({ results, processMode }) {
+function ResultsTabs({ results, processMode, isNational = false }) {
     const [activeTab, setActiveTab] = useState("regions");
     const [selectedRegion, setSelectedRegion] = useState(null);
     const [selectedCentre, setSelectedCentre] = useState(null);
@@ -170,22 +288,17 @@ function ResultsTabs({ results, processMode }) {
         return results.par_centre.filter((c) => c.region_id === selectedRegion.region_id);
     }, [selectedRegion, results.par_centre]);
 
-    const postesForCentre = useMemo(() => {
-        if (!selectedCentre) return [];
-        const postesCalc = Object.entries(selectedCentre.ressources_par_poste || {});
-        const postesActuels = selectedCentre.effectifs_par_poste || {};
-        return postesCalc.map(([poste, etpCalc]) => {
-            const actuel = Number(postesActuels[poste] || 0);
-            const ecart = Number(etpCalc || 0) - actuel;
-            return { poste, etpCalc: Number(etpCalc || 0), actuel, ecart };
-        });
-    }, [selectedCentre]);
+    /** Détail centre si sélectionné, sinon cumul des postes sur le périmètre (région ou national). */
+    const postesForScope = useMemo(() => {
+        if (selectedCentre) return buildPostesRowsForCentre(selectedCentre);
+        return buildPostesRowsAggregated(centresForRegion);
+    }, [selectedCentre, centresForRegion]);
 
     const RegionsTabTable = () => (
         <table className="w-full">
             <thead>
                 <tr className="bg-gradient-to-r from-slate-50 to-white border-b border-slate-100">
-                    {["Région", "Centres", "ETP Actuel", "ETP Calculé", "ETP Arrondi", "Écart", "Adéquation", ""].map((h) => (
+                    {["Région", "Centres", "ETP Actuel", "ETP Calculé", "ETP Final", "Écart", "Adéquation", ""].map((h) => (
                         <th key={h} className={`px-4 py-3 text-[9px] font-black uppercase tracking-[0.14em] text-slate-400 ${h === "Région" || h === "" ? "text-left" : "text-center"}`}>{h}</th>
                     ))}
                 </tr>
@@ -193,9 +306,10 @@ function ResultsTabs({ results, processMode }) {
             <tbody>
                 {results.par_region.map((r, i) => {
                     const regionCentres = results.par_centre.filter((c) => c.region_id === r.region_id);
-                    const actuelRegion = regionCentres.reduce((s, c) => s + Number(c.actual_mod || 0) + Number(c.actual_moi || 0) + Number(c.actual_aps || 0), 0);
-                    const ecartRegion = Number(r.total_fte_calcule || 0) - actuelRegion;
-                    const adequation = actuelRegion > 0 ? (Number(r.total_fte_calcule || 0) / actuelRegion) * 100 : 0;
+                    const actuelRegion = regionCentres.reduce((s, c) => s + etpActuelDbFromCentre(c), 0);
+                    const etpFinalRegion = etpFinalRegionFromCentres(regionCentres);
+                    const ecartRegion = etpFinalRegion - actuelRegion;
+                    const adequation = actuelRegion > 0 ? (etpFinalRegion / actuelRegion) * 100 : 0;
                     return (
                         <tr key={r.region_id} className={`border-b border-slate-50 cursor-pointer transition-all group ${i % 2 === 0 ? "bg-white" : "bg-slate-50/30"} hover:bg-blue-50/50`}
                             onClick={() => { setSelectedRegion(r); setSelectedCentre(null); setActiveTab("centres"); }}>
@@ -210,7 +324,7 @@ function ResultsTabs({ results, processMode }) {
                             <td className="px-4 py-3 text-center"><span className="bg-slate-100 text-slate-600 rounded-lg px-2.5 py-1 text-[10px] font-bold">{r.nb_centres}</span></td>
                             <td className="px-4 py-3 text-center text-[11px] font-semibold text-slate-600">{fmt(actuelRegion)}</td>
                             <td className="px-4 py-3 text-center"><span className="bg-blue-50 border border-blue-100 text-blue-700 rounded-lg px-2.5 py-1 text-[11px] font-black">{fmt(r.total_fte_calcule)}</span></td>
-                            <td className="px-4 py-3 text-center text-[11px] font-bold text-slate-600">{r.total_fte_arrondi}</td>
+                            <td className="px-4 py-3 text-center text-[11px] font-bold text-slate-600">{etpFinalRegion}</td>
                             <td className="px-4 py-3 text-center"><EcartBadge value={ecartRegion} /></td>
                             <td className="px-4 py-3 min-w-[120px]"><AdequacyBar value={adequation} /></td>
                             <td className="px-3 py-3 text-right"><ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-blue-400 transition-colors ml-auto" /></td>
@@ -224,11 +338,12 @@ function ResultsTabs({ results, processMode }) {
     const RegionsTabChart = () => {
         const data = results.par_region.map((r) => {
             const regionCentres = results.par_centre.filter((c) => c.region_id === r.region_id);
-            const actuelRegion = regionCentres.reduce((s, c) => s + Number(c.actual_mod || 0) + Number(c.actual_moi || 0) + Number(c.actual_aps || 0), 0);
+            const actuelRegion = regionCentres.reduce((s, c) => s + etpActuelDbFromCentre(c), 0);
+            const etpFinalRegion = etpFinalRegionFromCentres(regionCentres);
             return {
                 label: r.region_label,
                 actuel: actuelRegion,
-                calcule: Number(r.total_fte_calcule || 0),
+                etpFinal: etpFinalRegion,
             };
         });
 
@@ -239,7 +354,7 @@ function ResultsTabs({ results, processMode }) {
                 valueFormatter: (v) => fmt(v),
             },
             legend: {
-                data: ["Actuel", "Calculé"],
+                data: ["Actuel", "ETP Final"],
                 bottom: 0,
                 icon: "circle",
                 itemWidth: 8,
@@ -285,7 +400,7 @@ function ResultsTabs({ results, processMode }) {
                     data: data.map((d) => d.actuel),
                 },
                 {
-                    name: "Calculé",
+                    name: "ETP Final",
                     type: "bar",
                     barMaxWidth: 26,
                     itemStyle: {
@@ -305,7 +420,7 @@ function ResultsTabs({ results, processMode }) {
                         shadowColor: "rgba(15,23,42,0.15)",
                         shadowOffsetY: 2,
                     },
-                    data: data.map((d) => d.calcule),
+                    data: data.map((d) => d.etpFinal),
                 },
             ],
             dataZoom: [],
@@ -346,17 +461,18 @@ function ResultsTabs({ results, processMode }) {
             <table className="w-full">
                 <thead>
                     <tr className="bg-gradient-to-r from-slate-50 to-white border-b border-slate-100">
-                        {["Centre", "Région", "ETP Actuel", "ETP Calculé", "ETP Arrondi", "Écart", "Adéquation", ""].map((h) => (
+                        {["Centre", "Région", "ETP Actuel", "ETP Calculé", "ETP Final", "Écart", "Adéquation", ""].map((h) => (
                             <th key={h} className={`px-4 py-3 text-[9px] font-black uppercase tracking-[0.14em] text-slate-400 ${h === "Centre" || h === "Région" || h === "" ? "text-left" : "text-center"}`}>{h}</th>
                         ))}
                     </tr>
                 </thead>
                 <tbody>
                     {centresForRegion.map((c, i) => {
-                        const actuel = Number(c.actual_mod || 0) + Number(c.actual_moi || 0) + Number(c.actual_aps || 0);
-                        const ecart = Number(c.fte_calcule || 0) - actuel;
-                        const adequation = actuel > 0 ? (Number(c.fte_calcule || 0) / actuel) * 100 : 0;
-                        const hasPostes = Object.keys(c.ressources_par_poste || {}).length > 0;
+                        const actuel = etpActuelDbFromCentre(c);
+                        const etpFinal = etpFinalFromPostes(c);
+                        const ecart = etpFinal - actuel;
+                        const adequation = actuel > 0 ? (etpFinal / actuel) * 100 : 0;
+                        const hasPostes = centreHasPostesDetail(c);
                         return (
                             <tr key={c.centre_id}
                                 className={`border-b border-slate-50 transition-all group ${i % 2 === 0 ? "bg-white" : "bg-slate-50/30"} ${hasPostes ? "cursor-pointer hover:bg-indigo-50/50" : ""}`}
@@ -376,7 +492,7 @@ function ResultsTabs({ results, processMode }) {
                                 </td>
                                 <td className="px-4 py-3 text-center text-[11px] font-semibold text-slate-600">{fmt(actuel)}</td>
                                 <td className="px-4 py-3 text-center"><span className="bg-blue-50 border border-blue-100 text-blue-700 rounded-lg px-2.5 py-1 text-[11px] font-black">{fmt(c.fte_calcule)}</span></td>
-                                <td className="px-4 py-3 text-center text-[11px] font-bold text-slate-600">{c.fte_arrondi}</td>
+                                <td className="px-4 py-3 text-center text-[11px] font-bold text-slate-600">{etpFinal}</td>
                                 <td className="px-4 py-3 text-center"><EcartBadge value={ecart} /></td>
                                 <td className="px-4 py-3 min-w-[120px]"><AdequacyBar value={adequation} /></td>
                                 <td className="px-3 py-3 text-right">
@@ -395,11 +511,11 @@ function ResultsTabs({ results, processMode }) {
 
     const CentresTabChart = () => {
         const data = centresForRegion.map((c) => {
-            const actuel = Number(c.actual_mod || 0) + Number(c.actual_moi || 0) + Number(c.actual_aps || 0);
+            const actuel = etpActuelDbFromCentre(c);
             return {
                 label: c.centre_label,
                 actuel,
-                calcule: Number(c.fte_calcule || 0),
+                etpFinal: etpFinalFromPostes(c),
             };
         });
 
@@ -410,7 +526,7 @@ function ResultsTabs({ results, processMode }) {
                 valueFormatter: (v) => fmt(v),
             },
             legend: {
-                data: ["Actuel", "Calculé"],
+                data: ["Actuel", "ETP Final"],
                 bottom: 0,
                 icon: "circle",
                 itemWidth: 8,
@@ -456,7 +572,7 @@ function ResultsTabs({ results, processMode }) {
                     data: data.map((d) => d.actuel),
                 },
                 {
-                    name: "Calculé",
+                    name: "ETP Final",
                     type: "bar",
                     barMaxWidth: 22,
                     itemStyle: {
@@ -476,7 +592,7 @@ function ResultsTabs({ results, processMode }) {
                         shadowColor: "rgba(15,23,42,0.15)",
                         shadowOffsetY: 2,
                     },
-                    data: data.map((d) => d.calcule),
+                    data: data.map((d) => d.etpFinal),
                 },
             ],
             dataZoom: [],
@@ -485,8 +601,7 @@ function ResultsTabs({ results, processMode }) {
         const handleClick = (params) => {
             const centre = centresForRegion.find((c) => c.centre_label === params.name);
             if (!centre) return;
-            const hasPostes = Object.keys(centre.ressources_par_poste || {}).length > 0;
-            if (!hasPostes) return;
+            if (!centreHasPostesDetail(centre)) return;
             setSelectedCentre(centre);
             setActiveTab("postes");
         };
@@ -503,26 +618,110 @@ function ResultsTabs({ results, processMode }) {
     };
 
     const PostesTabTable = () => {
-        if (!(selectedCentre && postesForCentre.length > 0)) {
+        if (postesForScope.length === 0) {
             return (
                 <div className="py-12 text-center">
                     <Layers className="w-8 h-8 text-slate-200 mx-auto mb-2" />
-                    <p className="text-[11px] text-slate-400">Sélectionnez un centre dans l'onglet Centres pour voir le détail par poste.</p>
+                    <p className="text-[11px] text-slate-400">
+                        Aucune donnée par poste sur ce périmètre. Importez un fichier valide ou sélectionnez un centre dans l&apos;onglet Centres.
+                    </p>
                 </div>
             );
         }
         return (
+            <div>
+                {!selectedCentre ? (
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-4 py-2.5 border-b border-slate-50 bg-slate-50/40 text-[10px] text-slate-600">
+                        <Layers className="w-3.5 h-3.5 text-violet-600 shrink-0" />
+                        {selectedRegion && (
+                            <>
+                                <span className="inline-flex items-center gap-1 font-bold text-violet-800">
+                                    <MapPin className="w-3 h-3" />
+                                    {selectedRegion.region_label}
+                                </span>
+                                <span className="text-slate-300 hidden sm:inline">·</span>
+                            </>
+                        )}
+                        <span>
+                            Cumul par poste sur{" "}
+                            <strong className="text-slate-800 tabular-nums">{centresForRegion.length}</strong>{" "}
+                            centre{centresForRegion.length !== 1 ? "s" : ""}
+                            {isNational && !selectedRegion ? " (réseau national)" : ""}
+                        </span>
+                        <span className="text-slate-300 hidden sm:inline">·</span>
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab("centres")}
+                            className="font-bold text-violet-700 hover:underline"
+                        >
+                            Choisir un centre pour le détail
+                        </button>
+                        {isNational && selectedRegion && (
+                            <>
+                                <span className="text-slate-300 hidden sm:inline">·</span>
+                                <button
+                                    type="button"
+                                    onClick={() => setSelectedRegion(null)}
+                                    className="inline-flex items-center gap-1 font-bold text-slate-500 hover:text-violet-700 transition-colors"
+                                >
+                                    <RotateCcw className="w-3 h-3" />
+                                    Réinitialiser le filtre
+                                </button>
+                            </>
+                        )}
+                    </div>
+                ) : (
+                    <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 border-b border-slate-50 bg-slate-50/40">
+                        <button
+                            type="button"
+                            onClick={() => setSelectedCentre(null)}
+                            className="text-[10px] text-slate-400 hover:text-slate-600 font-medium flex items-center gap-1 transition-colors"
+                        >
+                            <X className="w-3 h-3" />
+                            {selectedRegion ? "Cumul région" : isNational ? "Cumul national" : "Cumul centres"}
+                        </button>
+                        <span className="text-slate-300">›</span>
+                        <span className="inline-flex items-center gap-1.5 bg-violet-50 border border-violet-200 text-violet-800 rounded-full px-3 py-1 text-[10px] font-bold">
+                            <Building2 className="w-3 h-3" />
+                            {selectedCentre.centre_label}
+                        </span>
+                        <span className="text-slate-300 hidden sm:inline">·</span>
+                        <button
+                            type="button"
+                            onClick={() => setSelectedCentre(null)}
+                            className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-500 hover:text-violet-700 transition-colors sm:ml-auto"
+                            title="Revenir au cumul par poste (périmètre actuel)"
+                        >
+                            <RotateCcw className="w-3 h-3 shrink-0" />
+                            Réinitialiser le filtre
+                        </button>
+                        {isNational && selectedRegion && (
+                            <>
+                                <span className="text-slate-300 hidden sm:inline">·</span>
+                                <button
+                                    type="button"
+                                    onClick={() => { setSelectedCentre(null); setSelectedRegion(null); }}
+                                    className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-400 hover:text-slate-700 transition-colors"
+                                    title="Cumul national : enlever région et centre"
+                                >
+                                    <RotateCcw className="w-3 h-3 shrink-0" />
+                                    Tout réinitialiser
+                                </button>
+                            </>
+                        )}
+                    </div>
+                )}
             <table className="w-full">
                 <thead>
                     <tr className="bg-gradient-to-r from-slate-50 to-white border-b border-slate-100">
-                        {["Poste", "ETP Actuel", "ETP Calculé", "Écart"].map((h) => (
+                        {["Poste", "ETP Actuel", "ETP Final", "Écart"].map((h) => (
                             <th key={h} className={`px-4 py-3 text-[9px] font-black uppercase tracking-[0.14em] text-slate-400 ${h === "Poste" ? "text-left" : "text-center"}`}>{h}</th>
                         ))}
                     </tr>
                 </thead>
                 <tbody>
-                    {postesForCentre.map(({ poste, etpCalc, actuel, ecart }, i) => (
-                        <tr key={poste} className={`border-b border-slate-50 ${i % 2 === 0 ? "bg-white" : "bg-slate-50/30"}`}>
+                    {postesForScope.map(({ keyNorm, poste, etpFinalPoste, actuel, ecart }, i) => (
+                        <tr key={keyNorm} className={`border-b border-slate-50 ${i % 2 === 0 ? "bg-white" : "bg-slate-50/30"}`}>
                             <td className="px-4 py-3">
                                 <div className="flex items-center gap-2">
                                     <div className="w-6 h-6 rounded-md bg-violet-50 flex items-center justify-center flex-shrink-0"><Layers className="w-3 h-3 text-violet-500" /></div>
@@ -530,21 +729,24 @@ function ResultsTabs({ results, processMode }) {
                                 </div>
                             </td>
                             <td className="px-4 py-3 text-center text-[11px] font-semibold text-slate-600">{fmt(actuel)}</td>
-                            <td className="px-4 py-3 text-center"><span className="bg-blue-50 border border-blue-100 text-blue-700 rounded-lg px-2.5 py-1 text-[11px] font-black">{fmt(etpCalc)}</span></td>
+                            <td className="px-4 py-3 text-center"><span className="bg-blue-50 border border-blue-100 text-blue-700 rounded-lg px-2.5 py-1 text-[11px] font-black">{fmt(etpFinalPoste)}</span></td>
                             <td className="px-4 py-3 text-center"><EcartBadge value={ecart} /></td>
                         </tr>
                     ))}
                 </tbody>
             </table>
+            </div>
         );
     };
 
     const PostesTabChart = () => {
-        if (!(selectedCentre && postesForCentre.length > 0)) {
+        if (postesForScope.length === 0) {
             return (
                 <div className="py-12 text-center">
                     <Layers className="w-8 h-8 text-slate-200 mx-auto mb-2" />
-                    <p className="text-[11px] text-slate-400">Sélectionnez un centre dans l'onglet Centres pour voir le détail par poste.</p>
+                    <p className="text-[11px] text-slate-400">
+                        Aucune donnée par poste sur ce périmètre. Importez un fichier valide ou sélectionnez un centre dans l&apos;onglet Centres.
+                    </p>
                 </div>
             );
         }
@@ -556,7 +758,7 @@ function ResultsTabs({ results, processMode }) {
                 valueFormatter: (v) => fmt(v),
             },
             legend: {
-                data: ["Actuel", "Calculé"],
+                data: ["Actuel", "ETP Final"],
                 bottom: 0,
                 icon: "circle",
                 itemWidth: 8,
@@ -566,7 +768,7 @@ function ResultsTabs({ results, processMode }) {
             grid: { left: "3%", right: "3%", top: 20, bottom: 60, containLabel: true },
             xAxis: {
                 type: "category",
-                data: postesForCentre.map((p) => p.poste),
+                data: postesForScope.map((p) => p.poste),
                 axisLabel: { color: "#64748B", interval: 0, rotate: 35, fontSize: 10 },
                 axisTick: { show: false },
                 axisLine: { lineStyle: { color: "#E2E8F0" } },
@@ -596,10 +798,10 @@ function ResultsTabs({ results, processMode }) {
                         shadowColor: "rgba(15,23,42,0.15)",
                         shadowOffsetY: 2,
                     },
-                    data: postesForCentre.map((p) => p.actuel),
+                    data: postesForScope.map((p) => p.actuel),
                 },
                 {
-                    name: "Calculé",
+                    name: "ETP Final",
                     type: "bar",
                     barMaxWidth: 22,
                     itemStyle: {
@@ -616,15 +818,79 @@ function ResultsTabs({ results, processMode }) {
                         shadowColor: "rgba(15,23,42,0.15)",
                         shadowOffsetY: 2,
                     },
-                    data: postesForCentre.map((p) => p.etpCalc),
+                    data: postesForScope.map((p) => p.etpFinalPoste),
                 },
             ],
             dataZoom: [],
         };
 
         return (
-            <div className="p-3">
-                <ReactECharts option={option} style={{ height: 320 }} />
+            <div className="p-3 space-y-2">
+                {!selectedCentre ? (
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-1 text-[10px] text-slate-600">
+                        <Layers className="w-3.5 h-3.5 text-violet-600 shrink-0" />
+                        {selectedRegion && (
+                            <span className="inline-flex items-center gap-1 font-bold text-violet-800">
+                                <MapPin className="w-3 h-3" />
+                                {selectedRegion.region_label}
+                            </span>
+                        )}
+                        <span>
+                            Cumul · <strong className="tabular-nums">{centresForRegion.length}</strong> centre{centresForRegion.length !== 1 ? "s" : ""}
+                            {isNational && !selectedRegion ? " (national)" : ""}
+                        </span>
+                        {isNational && selectedRegion && (
+                            <>
+                                <span className="text-slate-300">·</span>
+                                <button
+                                    type="button"
+                                    onClick={() => setSelectedRegion(null)}
+                                    className="inline-flex items-center gap-1 font-bold text-slate-500 hover:text-violet-700 transition-colors"
+                                >
+                                    <RotateCcw className="w-3 h-3" />
+                                    Réinitialiser le filtre
+                                </button>
+                            </>
+                        )}
+                    </div>
+                ) : (
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-1 text-[10px] text-slate-600">
+                        <button
+                            type="button"
+                            onClick={() => setSelectedCentre(null)}
+                            className="font-bold text-violet-700 hover:underline"
+                        >
+                            ← Cumul périmètre
+                        </button>
+                        <span className="text-slate-300">·</span>
+                        <span className="font-semibold text-slate-800 truncate max-w-[40vw]">{selectedCentre.centre_label}</span>
+                        <span className="text-slate-300 hidden sm:inline">·</span>
+                        <button
+                            type="button"
+                            onClick={() => setSelectedCentre(null)}
+                            className="inline-flex items-center gap-1 font-bold text-slate-500 hover:text-violet-700 transition-colors sm:ml-auto"
+                            title="Revenir au cumul par poste (périmètre actuel)"
+                        >
+                            <RotateCcw className="w-3 h-3 shrink-0" />
+                            Réinitialiser le filtre
+                        </button>
+                        {isNational && selectedRegion && (
+                            <>
+                                <span className="text-slate-300 hidden sm:inline">·</span>
+                                <button
+                                    type="button"
+                                    onClick={() => { setSelectedCentre(null); setSelectedRegion(null); }}
+                                    className="inline-flex items-center gap-1 font-bold text-slate-400 hover:text-slate-700 transition-colors"
+                                    title="Cumul national : enlever région et centre"
+                                >
+                                    <RotateCcw className="w-3 h-3 shrink-0" />
+                                    Tout réinitialiser
+                                </button>
+                            </>
+                        )}
+                    </div>
+                )}
+                <ReactECharts option={option} style={{ height: 300 }} />
             </div>
         );
     };
@@ -635,7 +901,7 @@ function ResultsTabs({ results, processMode }) {
                 <div className="flex items-center gap-1 overflow-x-auto">
                     <TabButton active={activeTab === "regions"} onClick={() => setActiveTab("regions")} icon={MapPin} label="Régions" count={results.par_region.length} color="blue" />
                     <TabButton active={activeTab === "centres"} onClick={() => setActiveTab("centres")} icon={Building2} label="Centres" count={centresForRegion.length} color="indigo" />
-                    <TabButton active={activeTab === "postes"} onClick={() => setActiveTab("postes")} icon={Layers} label="Postes" count={selectedCentre ? postesForCentre.length : null} color="violet" />
+                    <TabButton active={activeTab === "postes"} onClick={() => setActiveTab("postes")} icon={Layers} label="Postes" count={postesForScope.length || null} color="violet" />
                 </div>
                 <div className="flex items-center gap-1 pr-2">
                     <button
@@ -674,6 +940,8 @@ export default function SimulationBatchPage({ mode = "regional" }) {
     // Process mode from URL: actuel / recommande / optimise
     const processMode = searchParams.get("mode") || "actuel";
     const prevProcessModeRef = useRef(processMode);
+    const chiffrageSingleLabel =
+        processMode === "optimise" ? "Optimisé" : processMode === "recommande" ? "Consolidé" : "Calculé";
 
     const [step, setStep] = useState(1);
     const [regions, setRegions] = useState([]);
@@ -685,6 +953,7 @@ export default function SimulationBatchPage({ mode = "regional" }) {
     const [downloading, setDownloading] = useState(false);
     // Show relaunch banner when processMode changes and we already have a file
     const [showRelauncher, setShowRelauncher] = useState(false);
+    const [showChiffrageBatch, setShowChiffrageBatch] = useState(false);
 
     useEffect(() => {
         if (!isNational) {
@@ -752,12 +1021,16 @@ export default function SimulationBatchPage({ mode = "regional" }) {
             return { etpActuelTotal: 0, etpCalculeTotal: 0, etpArrondiTotal: 0, ecartGlobal: 0, tauxAdequation: 0 };
         }
         const etpActuelTotal = results.par_centre.reduce(
-            (s, c) => s + Number(c.actual_mod || 0) + Number(c.actual_moi || 0) + Number(c.actual_aps || 0), 0
+            (s, c) => s + etpActuelDbFromCentre(c),
+            0
         );
         const etpCalculeTotal = Number(results.national?.total_fte_calcule || 0);
-        const etpArrondiTotal = Math.round(etpCalculeTotal);
-        const ecartGlobal = etpCalculeTotal - etpActuelTotal;
-        const tauxAdequation = etpActuelTotal > 0 ? (etpCalculeTotal / etpActuelTotal) * 100 : 0;
+        const etpArrondiTotal = results.par_centre.reduce(
+            (s, c) => s + etpFinalFromPostes(c),
+            0
+        );
+        const ecartGlobal = etpArrondiTotal - etpActuelTotal;
+        const tauxAdequation = etpActuelTotal > 0 ? (etpArrondiTotal / etpActuelTotal) * 100 : 0;
         return { etpActuelTotal, etpCalculeTotal, etpArrondiTotal, ecartGlobal, tauxAdequation };
     }, [results]);
 
@@ -1006,20 +1279,36 @@ export default function SimulationBatchPage({ mode = "regional" }) {
                                         {results.errors?.length ? ` · ${results.errors.length} rejet(s)` : ""}
                                     </p>
                                 </div>
-                                <button
-                                    onClick={() => { setStep(isNational ? 2 : 1); setResults(null); setFile(null); setError(null); setShowRelauncher(false); }}
-                                    className="self-start sm:self-auto inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-[10px] font-bold text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm">
-                                    <RefreshCcw className="w-3.5 h-3.5" /> Nouvelle simulation
-                                </button>
+                                <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowChiffrageBatch(true)}
+                                        className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-[10px] font-bold text-slate-700 hover:bg-slate-50 hover:border-[#005EA8]/30 transition-all shadow-sm"
+                                    >
+                                        <DollarSign className="w-3.5 h-3.5 text-emerald-600" /> Chiffrage
+                                    </button>
+                                    <button
+                                        onClick={() => { setStep(isNational ? 2 : 1); setResults(null); setFile(null); setError(null); setShowRelauncher(false); }}
+                                        className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-[10px] font-bold text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm">
+                                        <RefreshCcw className="w-3.5 h-3.5" /> Nouvelle simulation
+                                    </button>
+                                </div>
                             </div>
 
+                            <ChiffrageBatchHierarchyDialog
+                                open={showChiffrageBatch}
+                                onOpenChange={setShowChiffrageBatch}
+                                variant="single"
+                                par_centre={results?.par_centre || []}
+                                singleModeLabel={chiffrageSingleLabel}
+                            />
+
                             {/* KPI grid (Synchronized with VueNationale blocks) */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-                                <KpiCard icon={Users} label="Effectif Actuel" value={fmt(dashboard.etpActuelTotal)} sub="Total ETP" color="blue" />
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                                <KpiCard icon={Users} label="Effectif Actuel" value={fmt(dashboard.etpActuelTotal)} sub="MOD + APS (postes MOD)" color="blue" />
                                 <KpiCard icon={Calculator} label="Effectif Calculé" value={fmt(results.national.total_fte_calcule)} sub="Besoin théorique" color="blue" />
-                                <KpiCard icon={AlertTriangle} label="Écart Global" value={`${dashboard.ecartGlobal > 0 ? "+" : ""}${fmt(dashboard.ecartGlobal)}`} sub="Écart ETP" color={dashboard.ecartGlobal >= 0 ? "orange" : "red"} />
-                                <KpiCard icon={Target} label="Adéquation" value={`${fmt(dashboard.tauxAdequation)}%`} sub="Taux d'occupation" color="green" />
-                                <KpiCard icon={Building2} label={isNational ? "Centres" : "Centres / Direction"} value={results.national.nb_centres} sub="Nombre simulé" color="purple" />
+                                <KpiCard icon={AlertTriangle} label="Écart Global" value={`${dashboard.ecartGlobal > 0 ? "+" : ""}${fmt(dashboard.ecartGlobal)}`} sub="ETP final − actuel" color={dashboard.ecartGlobal >= 0 ? "orange" : "red"} />
+                                <KpiCard icon={Target} label="Adéquation" value={`${fmt(dashboard.tauxAdequation)}%`} sub="ETP final / actuel" color="green" />
                             </div>
 
                             {/* Bloc erreurs volontairement masqué pour simplifier la vue résultats */}

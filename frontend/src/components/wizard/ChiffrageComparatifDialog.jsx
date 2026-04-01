@@ -7,10 +7,10 @@ import "@/styles/dialog-animations.css";
 /* ─────────────────────────────────────────────────────────────────
    CONSTANTS & CONFIG
 ───────────────────────────────────────────────────────────────── */
-const SCENARIOS = [
-  { key: "actuel",    label: "Calculé",   color: "#0284c7", bg: "#e0f2fe", light: "#f0f9ff" },
-  { key: "consolide", label: "Consolidé", color: "#eab308", bg: "#fef08a", light: "#fefce8" },
-  { key: "optimise",  label: "Optimisé",  color: "#059669", bg: "#d1fae5", light: "#f0fdf4" },
+export const SCENARIOS = [
+  { key: "actuel",    label: "Calculé",   color: "#2563EB", bg: "#DBEAFE", light: "#EFF6FF" },
+  { key: "consolide", label: "Consolidé", color: "#005EA8", bg: "#BFDBFE", light: "#DBEAFE" },
+  { key: "optimise",  label: "Optimisé",  color: "#003d7a", bg: "#93C5FD", light: "#BFDBFE" },
 ];
 
 /* ─────────────────────────────────────────────────────────────────
@@ -51,7 +51,7 @@ function computeRows(postes, rAct, rCons, rOpt) {
 }
 
 /* ─── Impact badge ─────────────────────────────────────────── */
-function ImpactBadge({ value }) {
+export function ImpactBadge({ value }) {
   if (!value && value !== 0) return <span className="text-slate-300">—</span>;
   if (value === 0) return <span className="text-slate-400 text-[9px]">—</span>;
   const positive = value > 0;
@@ -63,14 +63,23 @@ function ImpactBadge({ value }) {
         color: positive ? "#059669" : "#ef4444",
       }}
     >
-      {positive ? <TrendingDown className="w-2.5 h-2.5" /> : <TrendingUp className="w-2.5 h-2.5" />}
       {positive ? "+" : ""}{fmt(value)}
     </span>
   );
 }
 
 /* ─── Direction-style card (same design as CapaciteNominaleDirectionCard) ── */
-function ChiffrageDirectionCard({ icon: Icon, label, sublabel, color, actuelValue, scenarios, animDelay = "0s" }) {
+export function ChiffrageDirectionCard({
+  icon: Icon,
+  label,
+  sublabel,
+  color,
+  actuelValue,
+  scenarios,
+  animDelay = "0s",
+  /** Si true, l’écart sous chaque scénario est affiché en MAD / an (×12). Si false, les montants sont déjà annuels. */
+  deltaBudgetAnnual = false,
+}) {
   return (
     <div
       className="dlg-card-hover rounded-2xl overflow-hidden bg-white flex flex-col"
@@ -101,7 +110,7 @@ function ChiffrageDirectionCard({ icon: Icon, label, sublabel, color, actuelValu
       <div className="px-4 py-2 flex items-center justify-between border-b border-slate-50" style={{ background: "#f8fafc" }}>
         <div className="flex items-center gap-1.5">
           <div className="w-1.5 h-1.5 rounded-full bg-slate-400" />
-          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Actuel (DB)</span>
+          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Actuel</span>
         </div>
         <div className="text-right">
           <p className="text-[13px] font-black text-slate-600 tabular-nums">{fmt(actuelValue)}</p>
@@ -220,7 +229,7 @@ export default function ChiffrageComparatifDialog({
             <div className="pointer-events-none absolute inset-0">
               <div className="absolute -right-12 -top-12 w-56 h-56 rounded-full bg-white/10 blur-2xl dlg-blob-a" />
               <div className="absolute left-1/3 -bottom-8 w-36 h-36 rounded-full bg-white/8 blur-xl dlg-blob-b" />
-              <div className="absolute right-1/4 top-1/2 w-20 h-20 rounded-full bg-cyan-300/10 blur-lg dlg-blob-c" />
+              <div className="absolute right-1/4 top-1/2 w-20 h-20 rounded-full bg-blue-300/10 blur-lg dlg-blob-c" />
             </div>
 
             <div className="relative px-6 py-3 flex items-center justify-between gap-4">
@@ -235,7 +244,7 @@ export default function ChiffrageComparatifDialog({
                 <div className="dlg-header-enter" style={{ animationDelay: "0.15s" }}>
                   <h2 className="text-lg font-black text-white tracking-tight leading-none">Chiffrage comparatif</h2>
                   <p className="text-[10px] text-blue-200/80 font-medium mt-1 uppercase tracking-widest">
-                    Masse salariale MOD · Actuel DB vs 3 scénarios
+                    Masse salariale MOD · Actuel vs 3 scénarios
                   </p>
                 </div>
               </div>
@@ -255,6 +264,7 @@ export default function ChiffrageComparatifDialog({
                 color="#005EA8"
                 actuelValue={totals.coutAct}
                 animDelay="0.18s"
+                deltaBudgetAnnual
                 scenarios={SCENARIOS.map((sc) => ({
                   key: sc.key,
                   label: sc.label,
@@ -286,12 +296,12 @@ export default function ChiffrageComparatifDialog({
               style={{ animationDelay: "0.35s" }}
             >
               <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
-                <div className="w-1 h-5 rounded-full bg-gradient-to-b from-indigo-400 to-indigo-600" />
+                <div className="w-1 h-5 rounded-full bg-gradient-to-b from-[#0A6BBC] to-[#005EA8]" />
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Détail financier par poste</p>
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full text-[11px] border-collapse" style={{ minWidth: 900 }}>
+                <table className="w-full text-[11px] border-collapse" style={{ minWidth: 1120 }}>
                   <thead>
                     {/* Row 1 — groups */}
                     <tr>
@@ -300,24 +310,24 @@ export default function ChiffrageComparatifDialog({
                         style={{ background: "#fff", borderTop: "3px solid #cbd5e1" }}>
                         Poste
                       </th>
-                      <th colSpan={3}
+                      <th colSpan={4}
                         className="text-center px-3 py-2 text-[9px] font-black uppercase tracking-widest text-slate-500 border-b border-slate-200"
                         style={{ background: "#fff", borderTop: "3px solid #94a3b8" }}>
-                        Actuel DB
+                        Actuel
                       </th>
-                      <th colSpan={3}
-                        className="text-center px-3 py-2 text-[9px] font-black uppercase tracking-widest text-sky-600 border-b border-sky-200"
-                        style={{ background: "#fff", borderTop: "3px solid #0284c7" }}>
+                      <th colSpan={4}
+                        className="text-center px-3 py-2 text-[9px] font-black uppercase tracking-widest text-blue-700 border-b border-blue-200"
+                        style={{ background: "#fff", borderTop: "3px solid #2563EB" }}>
                         Calculé
                       </th>
-                      <th colSpan={3}
-                        className="text-center px-3 py-2 text-[9px] font-black uppercase tracking-widest text-yellow-600 border-b border-yellow-200"
-                        style={{ background: "#fff", borderTop: "3px solid #eab308" }}>
+                      <th colSpan={4}
+                        className="text-center px-3 py-2 text-[9px] font-black uppercase tracking-widest text-[#005EA8] border-b border-blue-300"
+                        style={{ background: "#fff", borderTop: "3px solid #005EA8" }}>
                         Consolidé
                       </th>
-                      <th colSpan={3}
-                        className="text-center px-3 py-2 text-[9px] font-black uppercase tracking-widest text-emerald-600 border-b border-emerald-200"
-                        style={{ background: "#fff", borderTop: "3px solid #059669" }}>
+                      <th colSpan={4}
+                        className="text-center px-3 py-2 text-[9px] font-black uppercase tracking-widest text-blue-950 border-b border-blue-400"
+                        style={{ background: "#fff", borderTop: "3px solid #003d7a" }}>
                         Optimisé
                       </th>
                     </tr>
@@ -325,25 +335,29 @@ export default function ChiffrageComparatifDialog({
                     <tr>
                       <th className="text-center px-2 py-1.5 text-[8px] font-bold text-slate-400 border-b-2 border-slate-200" style={{ background: "#fff" }}>ETP</th>
                       <th className="text-center px-2 py-1.5 text-[8px] font-bold text-slate-400 border-b-2 border-slate-200" style={{ background: "#fff" }}>Salaire</th>
-                      <th className="text-center px-2 py-1.5 text-[8px] font-bold text-slate-400 border-b-2 border-slate-200 border-r border-slate-100" style={{ background: "#fff" }}>Budget</th>
+                      <th className="text-center px-2 py-1.5 text-[8px] font-bold text-slate-400 border-b-2 border-slate-200" style={{ background: "#fff" }}>Budg. mois</th>
+                      <th className="text-center px-2 py-1.5 text-[8px] font-bold text-slate-500 border-b-2 border-slate-200 border-r border-slate-100" style={{ background: "#fff" }}>Budg. an</th>
 
-                      <th className="text-center px-2 py-1.5 text-[8px] font-bold text-sky-500 border-b-2 border-sky-200" style={{ background: "#fff" }}>ETP</th>
-                      <th className="text-center px-2 py-1.5 text-[8px] font-bold text-sky-500 border-b-2 border-sky-200" style={{ background: "#fff" }}>Budget</th>
-                      <th className="text-center px-2 py-1.5 text-[8px] font-bold text-sky-500 border-b-2 border-sky-200 border-r border-sky-100" style={{ background: "#fff" }}>Écart</th>
+                      <th className="text-center px-2 py-1.5 text-[8px] font-bold text-blue-600 border-b-2 border-blue-200" style={{ background: "#fff" }}>ETP</th>
+                      <th className="text-center px-2 py-1.5 text-[8px] font-bold text-blue-600 border-b-2 border-blue-200" style={{ background: "#fff" }}>Budg. mois</th>
+                      <th className="text-center px-2 py-1.5 text-[8px] font-bold text-blue-600 border-b-2 border-blue-200" style={{ background: "#fff" }}>Budg. an</th>
+                      <th className="text-center px-2 py-1.5 text-[8px] font-bold text-blue-600 border-b-2 border-blue-200 border-r border-blue-100" style={{ background: "#fff" }}>Écart (an)</th>
 
-                      <th className="text-center px-2 py-1.5 text-[8px] font-bold text-yellow-600 border-b-2 border-yellow-200" style={{ background: "#fff" }}>ETP</th>
-                      <th className="text-center px-2 py-1.5 text-[8px] font-bold text-yellow-600 border-b-2 border-yellow-200" style={{ background: "#fff" }}>Budget</th>
-                      <th className="text-center px-2 py-1.5 text-[8px] font-bold text-yellow-600 border-b-2 border-yellow-200 border-r border-yellow-100" style={{ background: "#fff" }}>Écart</th>
+                      <th className="text-center px-2 py-1.5 text-[8px] font-bold text-[#005EA8] border-b-2 border-blue-300" style={{ background: "#fff" }}>ETP</th>
+                      <th className="text-center px-2 py-1.5 text-[8px] font-bold text-[#005EA8] border-b-2 border-blue-300" style={{ background: "#fff" }}>Budg. mois</th>
+                      <th className="text-center px-2 py-1.5 text-[8px] font-bold text-[#005EA8] border-b-2 border-blue-300" style={{ background: "#fff" }}>Budg. an</th>
+                      <th className="text-center px-2 py-1.5 text-[8px] font-bold text-[#005EA8] border-b-2 border-blue-300 border-r border-blue-200" style={{ background: "#fff" }}>Écart (an)</th>
 
-                      <th className="text-center px-2 py-1.5 text-[8px] font-bold text-emerald-500 border-b-2 border-emerald-200" style={{ background: "#fff" }}>ETP</th>
-                      <th className="text-center px-2 py-1.5 text-[8px] font-bold text-emerald-500 border-b-2 border-emerald-200" style={{ background: "#fff" }}>Budget</th>
-                      <th className="text-center px-2 py-1.5 text-[8px] font-bold text-emerald-500 border-b-2 border-emerald-200" style={{ background: "#fff" }}>Écart</th>
+                      <th className="text-center px-2 py-1.5 text-[8px] font-bold text-blue-900 border-b-2 border-blue-400" style={{ background: "#fff" }}>ETP</th>
+                      <th className="text-center px-2 py-1.5 text-[8px] font-bold text-blue-900 border-b-2 border-blue-400" style={{ background: "#fff" }}>Budg. mois</th>
+                      <th className="text-center px-2 py-1.5 text-[8px] font-bold text-blue-900 border-b-2 border-blue-400" style={{ background: "#fff" }}>Budg. an</th>
+                      <th className="text-center px-2 py-1.5 text-[8px] font-bold text-blue-900 border-b-2 border-blue-400" style={{ background: "#fff" }}>Écart (an)</th>
                     </tr>
                   </thead>
 
                   <tbody className="divide-y divide-slate-100">
                     {rows.length === 0 ? (
-                      <tr><td colSpan={13} className="text-center py-12 text-slate-400 text-[11px]">Aucune donnée disponible</td></tr>
+                      <tr><td colSpan={17} className="text-center py-12 text-slate-400 text-[11px]">Aucune donnée disponible</td></tr>
                     ) : rows.map((r, idx) => {
                       const ecartCalc = r.coutAct - r.coutCalc;
                       const ecartCons = r.coutAct - r.coutCons;
@@ -364,22 +378,26 @@ export default function ChiffrageComparatifDialog({
                           {/* Actuel DB */}
                           <td className="px-2 py-2.5 text-center font-bold text-slate-600 tabular-nums">{r.actuel}</td>
                           <td className="px-2 py-2.5 text-center text-slate-500 tabular-nums">{fmt(r.salaire)}</td>
-                          <td className="px-2 py-2.5 text-center font-bold text-slate-600 tabular-nums border-r border-slate-100">{fmt(r.coutAct)}</td>
+                          <td className="px-2 py-2.5 text-center font-bold text-slate-600 tabular-nums">{fmt(r.coutAct)}</td>
+                          <td className="px-2 py-2.5 text-center font-bold text-slate-700 tabular-nums border-r border-slate-100">{fmt(r.coutAct * 12)}</td>
 
                           {/* Calculé */}
                           <td className="px-2 py-2.5 text-center font-bold text-slate-600 tabular-nums">{r.calc}</td>
                           <td className="px-2 py-2.5 text-center font-bold text-slate-600 tabular-nums">{fmt(r.coutCalc)}</td>
-                          <td className="px-2 py-2.5 text-center border-r border-sky-100"><ImpactBadge value={ecartCalc} /></td>
+                          <td className="px-2 py-2.5 text-center font-bold text-slate-700 tabular-nums">{fmt(r.coutCalc * 12)}</td>
+                          <td className="px-2 py-2.5 text-center border-r border-blue-100"><ImpactBadge value={ecartCalc * 12} /></td>
 
                           {/* Consolidé */}
                           <td className="px-2 py-2.5 text-center font-bold text-slate-600 tabular-nums">{r.cons}</td>
                           <td className="px-2 py-2.5 text-center font-bold text-slate-600 tabular-nums">{fmt(r.coutCons)}</td>
-                          <td className="px-2 py-2.5 text-center border-r border-yellow-100"><ImpactBadge value={ecartCons} /></td>
+                          <td className="px-2 py-2.5 text-center font-bold text-slate-700 tabular-nums">{fmt(r.coutCons * 12)}</td>
+                          <td className="px-2 py-2.5 text-center border-r border-blue-200"><ImpactBadge value={ecartCons * 12} /></td>
 
                           {/* Optimisé */}
                           <td className="px-2 py-2.5 text-center font-bold text-slate-600 tabular-nums">{r.opt}</td>
                           <td className="px-2 py-2.5 text-center font-bold text-slate-600 tabular-nums">{fmt(r.coutOpt)}</td>
-                          <td className="px-2 py-2.5 text-center"><ImpactBadge value={ecartOpt} /></td>
+                          <td className="px-2 py-2.5 text-center font-bold text-slate-700 tabular-nums">{fmt(r.coutOpt * 12)}</td>
+                          <td className="px-2 py-2.5 text-center"><ImpactBadge value={ecartOpt * 12} /></td>
                         </tr>
                       );
                     })}
@@ -397,19 +415,23 @@ export default function ChiffrageComparatifDialog({
 
                         <td className="px-2 py-3 text-center font-black text-slate-700 tabular-nums">{totals.actuel}</td>
                         <td className="px-2 py-3 text-center text-slate-400">—</td>
-                        <td className="px-2 py-3 text-center font-black text-slate-700 tabular-nums border-r border-slate-100">{fmt(totals.coutAct)}</td>
+                        <td className="px-2 py-3 text-center font-black text-slate-700 tabular-nums">{fmt(totals.coutAct)}</td>
+                        <td className="px-2 py-3 text-center font-black text-slate-800 tabular-nums border-r border-slate-100">{fmt(totals.coutAct * 12)}</td>
 
-                        <td className="px-2 py-3 text-center font-black text-sky-700 tabular-nums bg-sky-50/40">{totals.calc}</td>
-                        <td className="px-2 py-3 text-center font-black text-sky-700 tabular-nums bg-sky-50/40">{fmt(totals.coutCalc)}</td>
-                        <td className="px-2 py-3 text-center bg-sky-50/40 border-r border-sky-100"><ImpactBadge value={impacts.calc} /></td>
+                        <td className="px-2 py-3 text-center font-black text-blue-800 tabular-nums bg-blue-50/50">{totals.calc}</td>
+                        <td className="px-2 py-3 text-center font-black text-blue-800 tabular-nums bg-blue-50/50">{fmt(totals.coutCalc)}</td>
+                        <td className="px-2 py-3 text-center font-black text-blue-900 tabular-nums bg-blue-50/50">{fmt(totals.coutCalc * 12)}</td>
+                        <td className="px-2 py-3 text-center bg-blue-50/50 border-r border-blue-100"><ImpactBadge value={impacts.calc * 12} /></td>
 
-                        <td className="px-2 py-3 text-center font-black text-slate-700 tabular-nums bg-yellow-50/40">{totals.cons}</td>
-                        <td className="px-2 py-3 text-center font-black text-slate-700 tabular-nums bg-yellow-50/40">{fmt(totals.coutCons)}</td>
-                        <td className="px-2 py-3 text-center bg-yellow-50/40 border-r border-yellow-100"><ImpactBadge value={impacts.cons} /></td>
+                        <td className="px-2 py-3 text-center font-black text-[#005EA8] tabular-nums bg-blue-100/45">{totals.cons}</td>
+                        <td className="px-2 py-3 text-center font-black text-[#005EA8] tabular-nums bg-blue-100/45">{fmt(totals.coutCons)}</td>
+                        <td className="px-2 py-3 text-center font-black text-[#004080] tabular-nums bg-blue-100/45">{fmt(totals.coutCons * 12)}</td>
+                        <td className="px-2 py-3 text-center bg-blue-100/45 border-r border-blue-200"><ImpactBadge value={impacts.cons * 12} /></td>
 
-                        <td className="px-2 py-3 text-center font-black text-slate-700 tabular-nums bg-emerald-50/40">{totals.opt}</td>
-                        <td className="px-2 py-3 text-center font-black text-slate-700 tabular-nums bg-emerald-50/40">{fmt(totals.coutOpt)}</td>
-                        <td className="px-2 py-3 text-center bg-emerald-50/40"><ImpactBadge value={impacts.opt} /></td>
+                        <td className="px-2 py-3 text-center font-black text-[#0A2A4A] tabular-nums bg-blue-200/35">{totals.opt}</td>
+                        <td className="px-2 py-3 text-center font-black text-[#0A2A4A] tabular-nums bg-blue-200/35">{fmt(totals.coutOpt)}</td>
+                        <td className="px-2 py-3 text-center font-black text-[#061a2e] tabular-nums bg-blue-200/35">{fmt(totals.coutOpt * 12)}</td>
+                        <td className="px-2 py-3 text-center bg-blue-200/35"><ImpactBadge value={impacts.opt * 12} /></td>
                       </tr>
                     </tfoot>
                   )}

@@ -400,7 +400,7 @@ export default function AdequationDialog({ open, onOpenChange, simulationResults
                           className="text-center px-3 py-3 text-[9px] font-black uppercase tracking-widest text-slate-500 border-b-2 border-slate-200"
                           style={{ background: "#fff", borderTop: "3px solid #94a3b8" }}
                         >
-                          Actuel DB
+                          Actuel
                         </th>
                         <th
                           className="text-center px-3 py-3 text-[9px] font-black uppercase tracking-widest text-sky-600 border-b-2 border-sky-200"

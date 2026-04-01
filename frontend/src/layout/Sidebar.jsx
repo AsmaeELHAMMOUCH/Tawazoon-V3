@@ -374,7 +374,7 @@ export default function Sidebar({
           )}
         </div>
 
-        ⚖️ Comparatif (3 niveaux)
+        {/* ⚖️ Comparatif (3 niveaux) */}
         <div>
           <SectionHeader
             variant="globale"

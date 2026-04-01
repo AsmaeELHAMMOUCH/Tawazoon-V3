@@ -234,7 +234,7 @@ export default function AdequationComparatifDialog({
       },
     },
     legend: {
-      data: ["Actuel (DB)", "Calculé", "Consolidé", "Optimisé"],
+      data: ["Actuel", "Calculé", "Consolidé", "Optimisé"],
       bottom: 0,
       textStyle: { fontSize: 10, color: "#475569" },
       itemWidth: 12,
@@ -256,7 +256,7 @@ export default function AdequationComparatifDialog({
     },
     series: [
       {
-        name: "Actuel (DB)",
+        name: "Actuel",
         type: "bar",
         barMaxWidth: 18,
         data: rows.map((r) => r.actuel),
@@ -276,8 +276,8 @@ export default function AdequationComparatifDialog({
         itemStyle: {
           borderRadius: [4, 4, 0, 0],
           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: "#7dd3fc" },
-            { offset: 1, color: "#0284c7" },
+            { offset: 0, color: "#93C5FD" },
+            { offset: 1, color: "#2563EB" },
           ]),
         },
       },
@@ -289,8 +289,8 @@ export default function AdequationComparatifDialog({
         itemStyle: {
           borderRadius: [4, 4, 0, 0],
           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: "#fcd34d" },
-            { offset: 1, color: "#d97706" },
+            { offset: 0, color: "#60A5FA" },
+            { offset: 1, color: "#005EA8" },
           ]),
         },
       },
@@ -302,8 +302,8 @@ export default function AdequationComparatifDialog({
         itemStyle: {
           borderRadius: [4, 4, 0, 0],
           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: "#6ee7b7" },
-            { offset: 1, color: "#059669" },
+            { offset: 0, color: "#3B82F6" },
+            { offset: 1, color: "#003d7a" },
           ]),
         },
       },
@@ -343,9 +343,9 @@ export default function AdequationComparatifDialog({
       },
       legend: {
         data: [
-          { name: "Calculé",   icon: "roundRect", textStyle: { color: "#0284c7" } },
-          { name: "Consolidé", icon: "roundRect", textStyle: { color: "#ca8a04" } },
-          { name: "Optimisé",  icon: "roundRect", textStyle: { color: "#059669" } },
+          { name: "Calculé",   icon: "roundRect", textStyle: { color: "#2563EB" } },
+          { name: "Consolidé", icon: "roundRect", textStyle: { color: "#005EA8" } },
+          { name: "Optimisé",  icon: "roundRect", textStyle: { color: "#003d7a" } },
         ],
         bottom: 4,
         textStyle: { fontSize: 10 },
@@ -456,7 +456,7 @@ export default function AdequationComparatifDialog({
             <div className="pointer-events-none absolute inset-0">
               <div className="absolute -right-12 -top-12 w-52 h-52 rounded-full bg-white/10 blur-2xl dlg-blob-a" />
               <div className="absolute left-1/3 -bottom-8 w-32 h-32 rounded-full bg-white/8 blur-xl dlg-blob-b" />
-              <div className="absolute right-1/4 top-1/2 w-20 h-20 rounded-full bg-cyan-300/10 blur-lg dlg-blob-c" />
+              <div className="absolute right-1/4 top-1/2 w-20 h-20 rounded-full bg-blue-300/10 blur-lg dlg-blob-c" />
             </div>
 
             <div className="relative flex items-center justify-between mr-8 gap-6">
@@ -473,7 +473,7 @@ export default function AdequationComparatifDialog({
                     )}
                   </h2>
                   <p className="text-[11px] text-blue-200/80 font-medium mt-0.5">
-                    Comparatif des 3 scénarios · ETP Calculé / Actuel (DB) × 100
+                    Comparatif des 3 scénarios · ETP Calculé / Actuel × 100
                   </p>
                 </div>
               </div>
@@ -509,8 +509,8 @@ export default function AdequationComparatifDialog({
                   title="Calculé"
                   idx={totals.idxActuel}
                   value={totals.totalCalcActuel}
-                  accentColor="#0284c7"
-                  accentBg="#e0f2fe"
+                  accentColor="#2563EB"
+                  accentBg="#DBEAFE"
                   IconComp={Activity}
                 />
               </div>
@@ -519,8 +519,8 @@ export default function AdequationComparatifDialog({
                   title="Consolidé"
                   idx={totals.idxConsolide}
                   value={totals.totalCalcConsolide}
-                  accentColor="#ca8a04"
-                  accentBg="#fef9c3"
+                  accentColor="#005EA8"
+                  accentBg="#BFDBFE"
                   IconComp={TrendingUp}
                 />
               </div>
@@ -529,8 +529,8 @@ export default function AdequationComparatifDialog({
                   title="Optimisé"
                   idx={totals.idxOptimise}
                   value={totals.totalCalcOptimise}
-                  accentColor="#059669"
-                  accentBg="#d1fae5"
+                  accentColor="#003d7a"
+                  accentBg="#93C5FD"
                   IconComp={CheckCircle2}
                 />
               </div>
@@ -541,7 +541,7 @@ export default function AdequationComparatifDialog({
               style={{ animationDelay: "0.38s" }}>
               <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-1 h-5 rounded-full bg-gradient-to-b from-indigo-400 to-indigo-600" />
+                  <div className="w-1 h-5 rounded-full bg-gradient-to-b from-[#0A6BBC] to-[#005EA8]" />
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
                     Détail par poste
                   </p>
@@ -550,8 +550,8 @@ export default function AdequationComparatifDialog({
                   onClick={() => setShowChart((v) => !v)}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-bold transition-all border ${
                     showChart
-                      ? "bg-indigo-50 border-indigo-200 text-indigo-700 shadow-sm"
-                      : "bg-slate-50 border-slate-200 text-slate-500 hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-700"
+                      ? "bg-blue-50 border-blue-200 text-[#005EA8] shadow-sm"
+                      : "bg-slate-50 border-slate-200 text-slate-500 hover:bg-blue-50 hover:border-blue-200 hover:text-[#005EA8]"
                   }`}
                 >
                   <BarChart2 className="w-3.5 h-3.5" />
@@ -600,29 +600,29 @@ export default function AdequationComparatifDialog({
                         </th>
                         <th rowSpan={2} className="text-center px-3 py-3 text-[9px] font-black uppercase tracking-widest text-slate-500 border-b-2 border-slate-200"
                           style={{ background: "#fff", borderTop: "3px solid #94a3b8" }}>
-                          Actuel DB
+                          Actuel
                         </th>
-                        <th colSpan={2} className="text-center px-3 py-2 text-[9px] font-black uppercase tracking-widest text-sky-600 border-b border-sky-200"
-                          style={{ background: "#fff", borderTop: "3px solid #0284c7" }}>
+                        <th colSpan={2} className="text-center px-3 py-2 text-[9px] font-black uppercase tracking-widest text-blue-700 border-b border-blue-200"
+                          style={{ background: "#fff", borderTop: "3px solid #2563EB" }}>
                           Calculé
                         </th>
-                        <th colSpan={2} className="text-center px-3 py-2 text-[9px] font-black uppercase tracking-widest text-yellow-600 border-b border-yellow-200"
-                          style={{ background: "#fff", borderTop: "3px solid #eab308" }}>
+                        <th colSpan={2} className="text-center px-3 py-2 text-[9px] font-black uppercase tracking-widest text-[#005EA8] border-b border-blue-300"
+                          style={{ background: "#fff", borderTop: "3px solid #005EA8" }}>
                           Consolidé
                         </th>
-                        <th colSpan={2} className="text-center px-3 py-2 text-[9px] font-black uppercase tracking-widest text-emerald-600 border-b border-emerald-200"
-                          style={{ background: "#fff", borderTop: "3px solid #059669" }}>
+                        <th colSpan={2} className="text-center px-3 py-2 text-[9px] font-black uppercase tracking-widest text-blue-950 border-b border-blue-400"
+                          style={{ background: "#fff", borderTop: "3px solid #003d7a" }}>
                           Optimisé
                         </th>
                       </tr>
                       {/* Ligne 2 — sous-colonnes */}
                       <tr>
-                        <th className="text-center px-3 py-1.5 text-[8px] font-bold text-sky-500 border-b-2 border-sky-200" style={{ background: "#fff" }}>ETP</th>
-                        <th className="text-center px-3 py-1.5 text-[8px] font-bold text-sky-500 border-b-2 border-sky-200 border-r border-sky-100" style={{ background: "#fff" }}>Idx</th>
-                        <th className="text-center px-3 py-1.5 text-[8px] font-bold text-yellow-600 border-b-2 border-yellow-200" style={{ background: "#fff" }}>ETP</th>
-                        <th className="text-center px-3 py-1.5 text-[8px] font-bold text-yellow-600 border-b-2 border-yellow-200 border-r border-yellow-100" style={{ background: "#fff" }}>Idx</th>
-                        <th className="text-center px-3 py-1.5 text-[8px] font-bold text-emerald-500 border-b-2 border-emerald-200" style={{ background: "#fff" }}>ETP</th>
-                        <th className="text-center px-3 py-1.5 text-[8px] font-bold text-emerald-500 border-b-2 border-emerald-200" style={{ background: "#fff" }}>Idx</th>
+                        <th className="text-center px-3 py-1.5 text-[8px] font-bold text-blue-600 border-b-2 border-blue-200" style={{ background: "#fff" }}>ETP</th>
+                        <th className="text-center px-3 py-1.5 text-[8px] font-bold text-blue-600 border-b-2 border-blue-200 border-r border-blue-100" style={{ background: "#fff" }}>Idx</th>
+                        <th className="text-center px-3 py-1.5 text-[8px] font-bold text-[#005EA8] border-b-2 border-blue-300" style={{ background: "#fff" }}>ETP</th>
+                        <th className="text-center px-3 py-1.5 text-[8px] font-bold text-[#005EA8] border-b-2 border-blue-300 border-r border-blue-200" style={{ background: "#fff" }}>Idx</th>
+                        <th className="text-center px-3 py-1.5 text-[8px] font-bold text-blue-900 border-b-2 border-blue-400" style={{ background: "#fff" }}>ETP</th>
+                        <th className="text-center px-3 py-1.5 text-[8px] font-bold text-blue-900 border-b-2 border-blue-400" style={{ background: "#fff" }}>Idx</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -645,13 +645,13 @@ export default function AdequationComparatifDialog({
                           <td className="px-3 py-2.5 text-center font-bold text-slate-600 text-[11px]">
                             {r.calcActuel}
                           </td>
-                          <td className="px-3 py-2.5 text-center border-r border-sky-100">
+                          <td className="px-3 py-2.5 text-center border-r border-blue-100">
                             <IdxBadge value={r.idxActuel} />
                           </td>
                           <td className="px-3 py-2.5 text-center font-bold text-slate-600 text-[11px]">
                             {r.calcConsolide}
                           </td>
-                          <td className="px-3 py-2.5 text-center border-r border-yellow-100">
+                          <td className="px-3 py-2.5 text-center border-r border-blue-200">
                             <IdxBadge value={r.idxConsolide} />
                           </td>
                           <td className="px-3 py-2.5 text-center font-bold text-slate-600 text-[11px]">
@@ -669,12 +669,12 @@ export default function AdequationComparatifDialog({
                           style={{ animationDelay: `${0.4 + rows.length * 0.04 + 0.06}s` }}>
                           <td className="px-4 py-3 font-black text-slate-700 text-[10px] uppercase tracking-wider">Total</td>
                           <td className="px-3 py-3 text-center font-black text-slate-700 text-[11px]">{totals.totalActuel}</td>
-                          <td className="px-3 py-3 text-center font-black text-sky-700 text-[11px] bg-sky-50/40">{totals.totalCalcActuel}</td>
-                          <td className="px-3 py-3 text-center bg-sky-50/40 border-r border-sky-100"><IdxBadge value={totals.idxActuel} /></td>
-                          <td className="px-3 py-3 text-center font-black text-slate-700 text-[11px] bg-yellow-50/40">{totals.totalCalcConsolide}</td>
-                          <td className="px-3 py-3 text-center bg-yellow-50/40 border-r border-yellow-100"><IdxBadge value={totals.idxConsolide} /></td>
-                          <td className="px-3 py-3 text-center font-black text-slate-700 text-[11px] bg-emerald-50/40">{totals.totalCalcOptimise}</td>
-                          <td className="px-3 py-3 text-center bg-emerald-50/40"><IdxBadge value={totals.idxOptimise} /></td>
+                          <td className="px-3 py-3 text-center font-black text-blue-800 text-[11px] bg-blue-50/50">{totals.totalCalcActuel}</td>
+                          <td className="px-3 py-3 text-center bg-blue-50/50 border-r border-blue-100"><IdxBadge value={totals.idxActuel} /></td>
+                          <td className="px-3 py-3 text-center font-black text-[#005EA8] text-[11px] bg-blue-100/45">{totals.totalCalcConsolide}</td>
+                          <td className="px-3 py-3 text-center bg-blue-100/45 border-r border-blue-200"><IdxBadge value={totals.idxConsolide} /></td>
+                          <td className="px-3 py-3 text-center font-black text-[#0A2A4A] text-[11px] bg-blue-200/35">{totals.totalCalcOptimise}</td>
+                          <td className="px-3 py-3 text-center bg-blue-200/35"><IdxBadge value={totals.idxOptimise} /></td>
                         </tr>
                       </tfoot>
                     )}
