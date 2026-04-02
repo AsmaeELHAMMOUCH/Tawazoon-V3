@@ -358,12 +358,33 @@ export default function Step4Results({
         const targetCalculatedMOI = isGlobalView ? actualMOI : (isMoiPoste(selectedPosteObj) ? individualCalculated || actualMOI : 0);
         const totalCalculated = targetCalculatedMOD + targetCalculatedMOI;
 
-        const targetFinalMOD = isGlobalView ? Math.round(fteCalculated) : (isMOD ? Math.round(individualCalculated) : 0);
+        // En global view, on remplace l'arrondi de `totalCalculated` par la somme des arrondis calculés par poste (MOD uniquement),
+        // afin que le total affiché (haut de carte) et la valeur MOD (footer) correspondent à l'addition poste-à-poste.
+        const activeResponsiblesByFilters = new Set(
+            filteredTasks.map(t => (t.responsable || "").toUpperCase().trim())
+        );
+
+        const roundedCalculatedMODByPoste = isGlobalView
+            ? filteredPostes
+                .filter(p => {
+                    const label = (p.label || p.nom || "").trim().toUpperCase();
+                    return label && activeResponsiblesByFilters.has(label) && !isMoiPoste(p);
+                })
+                .reduce((acc, p) => {
+                    const label = (p.label || p.nom || "").trim();
+                    const fteCalc = lookupMap(simulationResults.ressources_par_poste, label) || 0;
+                    return acc + Math.round(fteCalc);
+                }, 0)
+            : 0;
+
+        const targetFinalMOD = isGlobalView ? roundedCalculatedMODByPoste : (isMOD ? Math.round(individualCalculated) : 0);
         const targetFinalMOI = isGlobalView ? Math.round(actualMOI) : (isMoiPoste(selectedPosteObj) ? Math.round(individualCalculated || actualMOI) : 0);
-        const totalFinal = Math.round(totalCalculated);
+
+        const totalFinalStatutaire = targetFinalMOD + targetFinalMOI;
+        const totalFinal = isGlobalView ? Math.round(totalFinalStatutaire) : Math.round(totalCalculated);
 
         // Nouvelle logique APS pour ETP Final
-        const ecartGlobal = totalCalculated - actualStatutaire;
+        const ecartGlobal = totalFinalStatutaire - actualStatutaire;
         let finalAPS = 0;
         if (ecartGlobal > 0) {
             finalAPS = Math.round(ecartGlobal);
@@ -375,7 +396,7 @@ export default function Step4Results({
         // Logique spécifique pour la carte Besoin (dernière carte)
         // Écart Statutaire réel : diff entre final et actuel
         // On ne change le statutaire (MOD) que si le surplus dépasse l'APS
-        const diffStatutaireReel = Math.round(Math.min(0, totalCalculated - actualStatutaire + actualAPS));
+        const diffStatutaireReel = Math.round(Math.min(0, totalFinalStatutaire - actualStatutaire + actualAPS));
 
         // Variation APS : Écart entre APS Final et Actuel
         const apsDiff = Math.round(finalAPS - actualAPS);
@@ -409,7 +430,7 @@ export default function Step4Results({
             moiDiff,
             totalLoad,
         };
-    }, [simulationResults, isGlobalView, selectedPosteObj, centreDetails, data.heuresNet, filterFamille, filterPrestation]);
+    }, [simulationResults, isGlobalView, selectedPosteObj, centreDetails, data.heuresNet, filterFamille, filterPrestation, filteredPostes]);
 
     // Table columns
     const columns = [
