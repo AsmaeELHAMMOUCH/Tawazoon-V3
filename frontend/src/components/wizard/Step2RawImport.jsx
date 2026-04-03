@@ -213,7 +213,7 @@ export default function Step2RawImport({
                                 <TableHeader>
                                     <TableRow className="bg-white border-b border-slate-100 hover:bg-white">
                                         <TableHead className="px-2 py-2 text-left text-slate-500 font-bold">Prestation</TableHead>
-                                        <TableHead className="px-2 py-2 text-center text-slate-500 font-bold w-32">Méd</TableHead>
+                                        <TableHead className="px-2 py-2 text-center text-slate-500 font-bold w-32">Départ</TableHead>
                                         <TableHead className="px-2 py-2 text-center text-slate-500 font-bold w-32">Arrivé</TableHead>
                                         <TableHead className="px-2 py-2 text-center text-slate-500 font-bold w-28">Total</TableHead>
                                     </TableRow>

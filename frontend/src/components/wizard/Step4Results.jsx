@@ -1264,7 +1264,13 @@ export default function Step4Results({
                         )}
 
                         {/* KPI Cards */}
-                        <div className="grid grid-cols-5 gap-2">
+                        <div
+                            className={
+                                data.isVirtual
+                                    ? "grid grid-cols-1 sm:grid-cols-3 gap-2 max-w-4xl mx-auto w-full"
+                                    : "grid grid-cols-5 gap-2"
+                            }
+                        >
                             {/* Charge Totale */}
                             <KPICardGlass
                                 label="Charge Totale"
@@ -1275,13 +1281,15 @@ export default function Step4Results({
                                 onDetailClick={isGlobalView ? () => handleShowDetail("load", "Charge Totale", "blue") : null}
                                 subLabel="H/J"
                             >
-                                <div className="text-[10px] text-slate-600 space-y-1 w-full flex flex-col items-center">
-                                    <div className="opacity-0 pointer-events-none h-[22px]" aria-hidden="true">Placeholder Top</div>
-                                    <div className="flex items-center justify-center gap-1.5 rounded-full px-3 py-1 bg-slate-50 border border-slate-100 shadow-sm h-[24px]">
-                                        <span className="text-[#005EA8] font-bold text-[9px] uppercase tracking-tighter">heures / jour</span>
+                                {!data.isVirtual && (
+                                    <div className="text-[10px] text-slate-600 space-y-1 w-full flex flex-col items-center">
+                                        <div className="opacity-0 pointer-events-none h-[22px]" aria-hidden="true">Placeholder Top</div>
+                                        <div className="flex items-center justify-center gap-1.5 rounded-full px-3 py-1 bg-slate-50 border border-slate-100 shadow-sm h-[24px]">
+                                            <span className="text-[#005EA8] font-bold text-[9px] uppercase tracking-tighter">heures / jour</span>
+                                        </div>
+                                        <div className="opacity-0 pointer-events-none h-[22px]" aria-hidden="true">Placeholder Bottom</div>
                                     </div>
-                                    <div className="opacity-0 pointer-events-none h-[22px]" aria-hidden="true">Placeholder Bottom</div>
-                                </div>
+                                )}
                             </KPICardGlass>
 
                             {!data.isVirtual && (
@@ -1317,7 +1325,7 @@ export default function Step4Results({
                                 total={formatSmallNumber(kpiData.totalCalculated)}
                                 onDetailClick={isGlobalView ? () => handleShowDetail("fte_calc", data.mode === "optimise" ? "ETP Optimisé" : data.mode === "recommande" ? "ETP Consolidé" : "ETP Calculé", "blue") : null}
                             >
-                                {isGlobalView && (
+                                {isGlobalView && !data.isVirtual && (
                                     <EffectifFooter
                                         modValue={formatSmallNumber(kpiData.targetCalculatedMOD)}
                                         moiValue={formatSmallNumber(kpiData.targetCalculatedMOI)}
@@ -1334,7 +1342,7 @@ export default function Step4Results({
                                 total={Math.round(kpiData.totalFinal)}
                                 onDetailClick={isGlobalView ? () => handleShowDetail("fte_final", data.mode === "optimise" ? "Calculé Optimisé" : data.mode === "recommande" ? "Calculé Consolidé" : "ETP Final", "amber") : null}
                             >
-                                {isGlobalView && (
+                                {isGlobalView && !data.isVirtual && (
                                     <EffectifFooter
                                         totalLabel="Statutaire"
                                         totalValue={Math.round(kpiData.actualStatutaire)}
@@ -1346,38 +1354,28 @@ export default function Step4Results({
                                 )}
                             </KPICardGlass>
 
-                            {/* Ecart (anciennement Besoin) */}
-                            <KPICardGlass
-                                label={data.isVirtual ? "Ressources Nécessaires" : "Écart"}
-                                icon={kpiData.totalGap > 0 || data.isVirtual ? TrendingUp : CheckCircle2}
-                                tone={kpiData.totalGap > 0 || data.isVirtual ? "rose" : "emerald"}
-                                emphasize
-                                total={data.isVirtual
-                                    ? Math.round(kpiData.totalFinal)
-                                    : formatSigned(kpiData.totalGap)
-                                }
-                                subLabel={!data.isVirtual ? (kpiData.totalGap > 0 ? "Besoin" : kpiData.totalGap < 0 ? "Surplus" : "") : ""}
-                            >
-                                {isGlobalView && !data.isVirtual && (
-                                    <EffectifFooter
-                                        totalLabel="Ecart Statutaire"
-                                        totalValue={formatSigned(kpiData.diffStatutaireReel)}
-                                        modValue={formatSigned(kpiData.modDiff)}
-                                        moiValue={formatSigned(kpiData.moiDiff)}
-                                        apsLabel="Var. APS"
-                                        apsValue={formatSigned(kpiData.apsDiff)}
-                                    />
-                                )}
-                                {isGlobalView && data.isVirtual && (
-                                    <div className="text-[10px] text-slate-600 space-y-1 w-full flex flex-col items-center">
-                                        <div className="opacity-0 pointer-events-none h-[22px]" aria-hidden="true">Placeholder Top</div>
-                                        <div className="flex items-center justify-center gap-1.5 rounded-full px-3 py-1 bg-slate-50 border border-slate-100 shadow-sm h-[24px]">
-                                            <span className="text-slate-500 font-bold text-[9px] italic">Besoins nets calculés</span>
-                                        </div>
-                                        <div className="opacity-0 pointer-events-none h-[22px]" aria-hidden="true">Placeholder Bottom</div>
-                                    </div>
-                                )}
-                            </KPICardGlass>
+                            {/* Écart (masqué en mode test : 3 cartes centrées) */}
+                            {!data.isVirtual && (
+                                <KPICardGlass
+                                    label="Écart"
+                                    icon={kpiData.totalGap > 0 ? TrendingUp : CheckCircle2}
+                                    tone={kpiData.totalGap > 0 ? "rose" : "emerald"}
+                                    emphasize
+                                    total={formatSigned(kpiData.totalGap)}
+                                    subLabel={kpiData.totalGap > 0 ? "Besoin" : kpiData.totalGap < 0 ? "Surplus" : ""}
+                                >
+                                    {isGlobalView && (
+                                        <EffectifFooter
+                                            totalLabel="Ecart Statutaire"
+                                            totalValue={formatSigned(kpiData.diffStatutaireReel)}
+                                            modValue={formatSigned(kpiData.modDiff)}
+                                            moiValue={formatSigned(kpiData.moiDiff)}
+                                            apsLabel="Var. APS"
+                                            apsValue={formatSigned(kpiData.apsDiff)}
+                                        />
+                                    )}
+                                </KPICardGlass>
+                            )}
                         </div>
 
                         {/* Grille de Cartes pour Sections Additionnelles */}
