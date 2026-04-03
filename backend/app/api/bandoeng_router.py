@@ -117,7 +117,6 @@ class BandoengParamsIn(BaseModel):
     cr_pct_international: Optional[float] = Field(None, alias="cr_pctInternational")
     cr_pct_marche_ordinaire: Optional[float] = Field(None, alias="cr_pctMarcheOrdinaire")
     cr_pct_vague_master: Optional[float] = Field(None, alias="cr_pctVagueMaster")
-    cr_pct_boite_postale: Optional[float] = Field(None, alias="cr_pctBoitePostale")
     cr_pct_crbt: Optional[float] = Field(None, alias="cr_pctCrbt")
     cr_pct_hors_crbt: Optional[float] = Field(None, alias="cr_pctHorsCrbt")
 
@@ -439,7 +438,6 @@ def simulate_bandoeng(request: BandoengSimulateRequest, db: Session = Depends(ge
             cr_pct_international=request.params.cr_pct_international,
             cr_pct_marche_ordinaire=request.params.cr_pct_marche_ordinaire,
             cr_pct_vague_master=request.params.cr_pct_vague_master,
-            cr_pct_boite_postale=request.params.cr_pct_boite_postale,
             cr_pct_crbt=request.params.cr_pct_crbt,
             cr_pct_hors_crbt=request.params.cr_pct_hors_crbt
         )
@@ -605,7 +603,6 @@ def simulate_bandoeng_direct(request: SimplifiedBandoengRequest, db: Session = D
             cr_pct_international=p.get('cr_pct_international', p.get('cr_pctInternational')),
             cr_pct_marche_ordinaire=p.get('cr_pct_marche_ordinaire', p.get('cr_pctMarcheOrdinaire')),
             cr_pct_vague_master=p.get('cr_pct_vague_master', p.get('cr_pctVagueMaster')),
-            cr_pct_boite_postale=p.get('cr_pct_boite_postale', p.get('cr_pctBoitePostale')),
             cr_pct_crbt=p.get('cr_pct_crbt', p.get('cr_pctCrbt')),
             cr_pct_hors_crbt=p.get('cr_pct_hors_crbt', p.get('cr_pctHorsCrbt'))
         )
@@ -1812,7 +1809,6 @@ def get_categories(db: Session = Depends(get_db)):
 @router.get("/pm/standard-tasks/{categorie_id}")
 def get_standard_tasks(categorie_id: int, db: Session = Depends(get_db)):
     """Lit les tâches standards depuis les fichiers Excel de typologie."""
-    import os
     import openpyxl
     from pathlib import Path
 
@@ -1822,17 +1818,23 @@ def get_standard_tasks(categorie_id: int, db: Session = Depends(get_db)):
 
     typology_label = str(cat.label).upper()
     filename = "Standard.xlsx"
-    
+
     # Mapping logic
-    if "AGENCE MESSAGERIE" in typology_label or typology_label.startswith("AM"): filename = "AM.xlsx"
-    elif "CENTRE MESSAGERIE" in typology_label or typology_label.startswith("CM"): filename = "CM.xlsx"
-    elif "CENTRE DE DISTRIBUTION" in typology_label or typology_label.startswith("CD"): filename = "CD.xlsx"
-    elif "CENTRE COURRIER COLIS" in typology_label or typology_label.startswith("CCC"): filename = "CCC.xlsx"
-    elif "CELLULE DE DISTRIBUTION" in typology_label or typology_label.startswith("CLD"): filename = "CLD.xlsx"
-    elif "CENTRE DE TRAITEMENT ET DISTRIBUTION" in typology_label or typology_label.startswith("CTD"): filename = "CTD.xlsx"
+    if "AGENCE MESSAGERIE" in typology_label or typology_label.startswith("AM"):
+        filename = "AM.xlsx"
+    elif "CENTRE MESSAGERIE" in typology_label or typology_label.startswith("CM"):
+        filename = "CM.xlsx"
+    elif "CENTRE DE DISTRIBUTION" in typology_label or typology_label.startswith("CD"):
+        filename = "CD.xlsx"
+    elif "CENTRE COURRIER COLIS" in typology_label or typology_label.startswith("CCC"):
+        filename = "CCC.xlsx"
+    elif "CELLULE DE DISTRIBUTION" in typology_label or typology_label.startswith("CLD"):
+        filename = "CLD.xlsx"
+    elif "CENTRE DE TRAITEMENT ET DISTRIBUTION" in typology_label or typology_label.startswith("CTD"):
+        filename = "CTD.xlsx"
 
     # Absolute path resolution
-    base_dir = Path(__file__).resolve().parent.parent # app/
+    base_dir = Path(__file__).resolve().parent.parent  # app/
     resources_dir = base_dir / "resources" / "typologies"
     file_path = resources_dir / filename
 
@@ -1851,18 +1853,20 @@ def get_standard_tasks(categorie_id: int, db: Session = Depends(get_db)):
         wb = openpyxl.load_workbook(str(file_path), data_only=True)
         # Utiliser la première feuille au lieu de 'active' pour plus de robustesse
         ws = wb.worksheets[0]
-        
+
         # Parcourir les lignes à partir de la 2ème (ignorer l'entête)
         # On utilise une boucle manuelle au cas où max_row est imprécis
-        for row_idx in range(2, 1000): # Limite raisonnable pour éviter les boucles infinies sur fichiers corrompus
-            if row_idx > ws.max_row and ws.max_row > 1: break # Respecter max_row s'il est cohérent
-            
+        for row_idx in range(2, 1000):  # Limite raisonnable pour éviter les boucles infinies sur fichiers corrompus
+            if row_idx > ws.max_row and ws.max_row > 1:
+                break  # Respecter max_row s'il est cohérent
+
             # Lecture des 5 colonnes : Nom, Produit, Famille, Phase, Unité
             cells = [ws.cell(row=row_idx, column=col_idx).value for col_idx in range(1, 6)]
-            
+
             # Si le nom de la tâche est vide, on arrête (fin des données)
-            if not cells[0]: break
-            
+            if not cells[0]:
+                break
+
             tasks.append({
                 "nom": str(cells[0] or "").strip(),
                 "produit": str(cells[1] or "").strip(),
@@ -1875,8 +1879,10 @@ def get_standard_tasks(categorie_id: int, db: Session = Depends(get_db)):
         print(f"Error reading {file_path}: {e}")
         import traceback
         traceback.print_exc()
-        
+
     return tasks
+
+
 @router.get("/exclusions/template")
 def download_exclusion_template():
     import openpyxl
@@ -1886,18 +1892,18 @@ def download_exclusion_template():
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Template Exclusions"
-    
+
     # Headers
     headers = ["Nom Tâche", "Produit", "Famille / UO", "Unité Mesure"]
     ws.append(headers)
-    
+
     # Sample Row
     ws.append(["EXEMPLE TACHE", "EXEMPLE PRODUIT", "EXEMPLE FAMILLE", "H"])
 
     output = BytesIO()
     wb.save(output)
     output.seek(0)
-    
+
     return StreamingResponse(
         output,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -1934,13 +1940,14 @@ async def import_exclusions(
         )
         standard_set.add(key)
 
-    created_count = 0
+    # 1) Lire le fichier : lignes valides (dédoublonnées par quadruplet) vs rejets
+    valid_by_key = {}
     failed_rows = []
 
-    # Iterate rows (skip header)
     for row_idx in range(2, ws.max_row + 1):
         cells = [ws.cell(row=row_idx, column=c).value for c in range(1, 5)]
-        if not cells[0]: continue
+        if not cells[0]:
+            continue
 
         nom, produit, famille, unite = [str(c or '').strip() for c in cells]
         key = (nom.upper(), produit.upper(), famille.upper(), unite.upper())
@@ -1953,26 +1960,28 @@ async def import_exclusions(
             })
             continue
 
-        # Check if already excluded
-        existing = db.query(TacheExclueOptimisee).filter(
-            TacheExclueOptimisee.categorie_id == categorie_id,
-            TacheExclueOptimisee.nom_tache == nom,
-            TacheExclueOptimisee.produit == produit,
-            TacheExclueOptimisee.famille_uo == famille,
-            TacheExclueOptimisee.unite_mesure == unite
-        ).first()
+        valid_by_key[key] = (nom, produit, famille, unite)
 
-        if not existing:
-            new_excl = TacheExclueOptimisee(
+    # 2) Remplacement complet pour cette typologie : exclusions « quadruplet » uniquement
+    #    (pas les exclusions par centre qui utilisent tache_id)
+    db.query(TacheExclueOptimisee).filter(
+        TacheExclueOptimisee.categorie_id == categorie_id,
+        TacheExclueOptimisee.tache_id.is_(None),
+    ).delete(synchronize_session=False)
+
+    # 3) Insérer exactement les lignes valides du fichier
+    for nom, produit, famille, unite in valid_by_key.values():
+        db.add(
+            TacheExclueOptimisee(
                 categorie_id=categorie_id,
                 nom_tache=nom,
                 produit=produit,
                 famille_uo=famille,
-                unite_mesure=unite
+                unite_mesure=unite,
             )
-            db.add(new_excl)
-            created_count += 1
+        )
 
+    created_count = len(valid_by_key)
     db.commit()
 
     if failed_rows:

@@ -178,10 +178,10 @@ export default function ExclusionTaches() {
         setImporting(true);
         try {
             const res = await api.importExclusions(file, selectedCategory);
-            let msg = `${res.created} exclusions ajoutées`;
+            let msg = `${res.created} exclusion(s) enregistrée(s) (remplacement complet pour cette typologie)`;
 
             if (res.hasErrors) {
-                msg += `. ${res.errorsCount} rejets téléchargés sous forme d'Excel.`;
+                msg += `. ${res.errorsCount} ligne(s) rejetée(s) — fichier Excel des rejets téléchargé.`;
                 toast.success(msg, { duration: 6000 });
             } else {
                 toast.success(msg);

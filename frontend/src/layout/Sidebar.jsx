@@ -463,6 +463,18 @@ export default function Sidebar({
               </button>
 
               <button
+                onClick={() => handleNav('/app/simulation/exclusion-taches')}
+                className={
+                  "relative w-full text-left rounded-md hover:bg-slate-100 text-gray-700 " +
+                  "pl-6 pr-2 py-[clamp(2px,0.25vw,4px)] " +
+                  "text-[clamp(9px,0.75vw,11px)] transition"
+                }
+              >
+                <span className="pointer-events-none absolute left-2 top-1.5 w-3 h-3 border-l border-t border-slate-200/80 rounded-tl" />
+                Exclusions tâches (optimisé)
+              </button>
+
+              <button
                 onClick={() => handleNav('/app/builder')}
                 className={
                   "relative w-full text-left rounded-md hover:bg-slate-100 text-gray-700 " +

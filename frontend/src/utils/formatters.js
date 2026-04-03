@@ -45,6 +45,19 @@ export const numOrNull = (val) => {
 };
 
 /**
+ * French locale: group thousands + fixed decimal places (e.g. table cells).
+ * Invalid values display as 0 with the requested precision.
+ */
+export function formatNumberFrThousands(val, fractionDigits) {
+  const n = numOrNull(val);
+  const x = n === null ? 0 : n;
+  return new Intl.NumberFormat("fr-FR", {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  }).format(x);
+}
+
+/**
  * Returns a new object with all keys lowercase.
  */
 export const lower = (o) =>

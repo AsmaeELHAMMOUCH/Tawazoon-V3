@@ -16,7 +16,7 @@ from sqlalchemy import text
 from pydantic import BaseModel
 
 from app.core.db import get_db
-from app.models.db_models import CentrePoste, Poste, Centre
+from app.models.db_models import CentrePoste, Poste, Centre, Tache
 
 router = APIRouter(prefix="/pm", tags=["Postes Management"])
 
@@ -496,6 +496,13 @@ async def import_effectifs(file: UploadFile = File(...), db: Session = Depends(g
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
+def _delete_taches_for_centre_poste_ids(db: Session, cp_ids: List[int]) -> None:
+    """Supprime les tâches liées avant centre_postes (contraintes FK)."""
+    if not cp_ids:
+        return
+    db.query(Tache).filter(Tache.centre_poste_id.in_(cp_ids)).delete(synchronize_session=False)
+
+
 @router.delete("/effectifs/clear")
 def clear_effectifs(
     region_id: Optional[int] = Query(None),
@@ -505,26 +512,32 @@ def clear_effectifs(
 ):
     """
     Supprime massivement les effectifs (entrées centre_postes) selon les filtres.
-    ATTENTION: Cette opération est destructive et supprimera aussi les tâches associées.
+    Les lignes `taches` référençant ces `centre_postes` sont supprimées en premier.
+    ATTENTION: opération destructive.
     """
     try:
         if centre_id:
-            # Cas d'un centre unique
+            cp_ids = [r[0] for r in db.query(CentrePoste.id).filter(CentrePoste.centre_id == centre_id).all()]
+            _delete_taches_for_centre_poste_ids(db, cp_ids)
             db.query(CentrePoste).filter(CentrePoste.centre_id == centre_id).delete(synchronize_session=False)
-        else:
-            # Cas filtré par région ou typologie
-            # On récupère les IDs des centres concernés
+        elif region_id is not None or typologie_id is not None:
             centres_query = db.query(Centre.id)
             if region_id:
                 centres_query = centres_query.filter(Centre.region_id == region_id)
             if typologie_id:
                 centres_query = centres_query.filter(Centre.categorie_id == typologie_id)
-            
             centre_ids = [c[0] for c in centres_query.all()]
-            
             if centre_ids:
+                cp_ids = [r[0] for r in db.query(CentrePoste.id).filter(CentrePoste.centre_id.in_(centre_ids)).all()]
+                _delete_taches_for_centre_poste_ids(db, cp_ids)
                 db.query(CentrePoste).filter(CentrePoste.centre_id.in_(centre_ids)).delete(synchronize_session=False)
-        
+        else:
+            # Aucun filtre : vider toute la table centre_postes (ne pas se fier seulement à la liste `centres`,
+            # sinon des lignes orphelines ou des écarts de périmètre laissaient des résidus).
+            cp_ids = [r[0] for r in db.query(CentrePoste.id).all()]
+            _delete_taches_for_centre_poste_ids(db, cp_ids)
+            db.query(CentrePoste).delete(synchronize_session=False)
+
         db.commit()
         return {"status": "success", "message": "Les effectifs pour le périmètre sélectionné ont été réinitialisés."}
     except Exception as e:

@@ -222,7 +222,6 @@ export default function ComparatifProcessusWizard() {
       cr_pctMarcheOrdinaire: 0,
       cr_pctGuichet: 95,
       cr_pctVagueMaster: 0,
-      cr_pctBoitePostale: 0,
       cr_pctCrbt: 50,
       cr_pctHorsCrbt: 50,
 

@@ -199,7 +199,6 @@ CR_PARAMS = [
     ("cr_pct_crbt",             "% Accusé de Réc.",               0.0,   "%"),
     ("cr_pct_hors_crbt",        "% Hors Accusé de Réc.",          0.0,   "%"),
     ("cr_pct_vague_master",     "% Vaguemestre CR",       0.0,   "%"),
-    ("cr_pct_boite_postale",    "% Boîte Postale CR",      0.0,   "%"),
     # Paramètres non affichés
     ("cr_pct_retour",           "% Retour CR",             0.0,   "%"),
     ("cr_par_caisson",          "CR par Caisson",        500.0,   ""),
@@ -878,7 +877,6 @@ def _params_to_engine(p: dict) -> BandoengParameters:
         cr_pct_international=g("cr_pct_international", 0.0),
         cr_pct_marche_ordinaire=g("cr_pct_marche_ordinaire", 0.0),
         cr_pct_vague_master=g("cr_pct_vague_master", 0.0),
-        cr_pct_boite_postale=g("cr_pct_boite_postale", 0.0),
         cr_pct_crbt=g("cr_pct_crbt", 0.0),
         cr_pct_hors_crbt=g("cr_pct_hors_crbt", 0.0),
         # Consolidation : on utilise cr_par_caisson pour les deux champs du moteur

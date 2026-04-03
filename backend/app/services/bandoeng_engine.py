@@ -139,7 +139,6 @@ class BandoengParameters:
     cr_pct_international: Optional[float] = None
     cr_pct_marche_ordinaire: Optional[float] = None
     cr_pct_vague_master: Optional[float] = None
-    cr_pct_boite_postale: Optional[float] = None
     cr_pct_crbt: Optional[float] = None
     cr_pct_hors_crbt: Optional[float] = None
 

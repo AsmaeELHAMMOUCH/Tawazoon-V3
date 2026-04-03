@@ -34,6 +34,7 @@ import CapaciteNominaleDialog from "@/components/wizard/CapaciteNominaleDialog";
 import ChiffrageDialog from "@/components/wizard/ChiffrageDialog";
 import CategorisationDialog from "@/components/wizard/CategorisationDialog";
 import SchemaDialog from "@/components/wizard/SchemaDialog";
+import { formatNumberFrThousands } from "@/utils/formatters";
 import * as XLSX from 'xlsx';
 
 // KPI Card Component (copied from VueIntervenant)
@@ -1240,8 +1241,8 @@ export default function Step4Results({
                                             { key: 'unite', label: 'Unité', align: 'left', width: '80px', ellipsis: true },
                                             { key: 'resp1', label: 'Responsable 1', align: 'left', width: '120px', ellipsis: true },
                                             { key: 'resp2', label: 'Responsable 2', align: 'left', width: '120px', ellipsis: true },
-                                            { key: 'nombre_Unite', label: 'Vol. (/jour)', align: 'right', width: '100px', render: (val) => Number(val || 0).toFixed(1) },
-                                            { key: 'heures', label: 'Heures', align: 'right', width: '80px', bold: true, render: (val) => Number(val || 0).toFixed(2) }
+                                            { key: 'nombre_Unite', label: 'Vol. (/jour)', align: 'right', width: '100px', render: (val) => formatNumberFrThousands(val, 1) },
+                                            { key: 'heures', label: 'Heures', align: 'right', width: '80px', bold: true, render: (val) => formatNumberFrThousands(val, 2) }
                                         ]}
                                         data={filteredTableData.filter(t => Number(t.heures_calculees.replace(',', '.')) > 0).map(task => ({
                                             produit: getFirstWord(task.produit) || "-",
@@ -1567,8 +1568,9 @@ export default function Step4Results({
                 initialPosteId={selectedIntervenant || "all"}
                 postes={postes}
                 tasks={simulationResults?.tasks || []}
+                simulationResults={simulationResults}
+                centreDetails={centreDetails}
                 wizardData={data}
-                mode={data.mode}
             />
 
             <OrganigrammeDialog
@@ -1621,6 +1623,8 @@ export default function Step4Results({
                 simulationResults={simulationResults}
                 centreDetails={centreDetails}
                 mode={data.mode}
+                effectifGlobalValue={Math.round(kpiData.targetFinalMOD) + Math.round(kpiData.actualMOI)}
+                sitesCountFromRecap={Number(data?.recapSitesCount || 0)}
             />
 
             <SchemaDialog

@@ -26,6 +26,7 @@ import ReactECharts from "echarts-for-react";
 import useEchartAutoResize from "@/components/hooks/useEchartAutoResize";
 import { api } from "@/lib/api";
 import { toast } from "react-hot-toast";
+import { computeForecastDisplayKpi } from "@/lib/wizardForecastEtp";
 
 // ─── helpers ───────────────────────────────────────────────────────────────────
 const fmt = (n) => Math.round(n).toLocaleString("fr-FR");
@@ -45,6 +46,78 @@ function flattenGridValues(gridValues) {
     return entries.sort((a, b) => b.value - a.value);
 }
 
+/**
+ * Même jeu de paramètres que handleLaunchSimulation (StepWizardSimulation.jsx) +
+ * champs d’annualisation utilisés par la prévision.
+ */
+function buildForecastSimParameters(parameters, yearIdx, parsedRates, globalRate) {
+    const p = parameters || {};
+    return {
+        productivite: p.productivite,
+        idle_minutes: p.idleMinutes ?? p.idle_minutes,
+        shift: p.shift,
+        coeff_geo: p.natureGeo ?? p.nature_geo ?? p.coeff_geo,
+        coeff_circ: p.tauxComplexite ?? p.taux_complexite ?? p.coeff_circ,
+        duree_trajet: p.dureeTrajet ?? p.duree_trajet,
+        pct_axes: p.pctAxesArrivee ?? p.pct_axes,
+        pct_local: p.pctAxesDepart ?? p.pct_local,
+        pct_national: p.pctNational ?? p.pct_national,
+        pct_international: p.pctInternational ?? p.pct_international,
+        pct_collecte: p.pctCollecte ?? p.pct_collecte,
+        pct_guichet: p.pctGuichet ?? p.pct_guichet,
+        pct_retour: p.pctRetour ?? p.pct_retour,
+        pct_marche_ordinaire: p.pctMarcheOrdinaire ?? p.pct_marche_ordinaire,
+        pct_vague_master: p.pctVagueMaster ?? p.pct_vague_master,
+        pct_boite_postale: p.pctBoitePostale ?? p.pct_boite_postale,
+        pct_crbt: p.pctCrbt ?? p.pct_crbt,
+        pct_hors_crbt: p.pctHorsCrbt ?? p.pct_hors_crbt,
+        colis_amana_par_canva_sac: p.colisAmanaParCanvaSac ?? p.colis_amana_par_canva_sac,
+        nbr_co_sac: p.nbrCoSac ?? p.nbr_co_sac,
+        nbr_cr_sac: p.nbrCrSac ?? p.nbr_cr_sac,
+        cr_par_caisson: p.crParCaisson ?? p.cr_par_caisson,
+        ed_percent: p.edPercent ?? p.ed_percent ?? p.pct_sac,
+        has_guichet: p.hasGuichet !== undefined ? p.hasGuichet : p.has_guichet,
+        amana_pct_collecte: p.amana_pctCollecte,
+        amana_pct_guichet: p.amana_pctGuichet,
+        amana_pct_retour: p.amana_pctRetour,
+        amana_pct_axes_arrivee: p.amana_pctAxesArrivee,
+        amana_pct_axes_depart: p.amana_pctAxesDepart,
+        amana_pct_national: p.amana_pctNational,
+        amana_pct_international: p.amana_pctInternational,
+        amana_pct_marche_ordinaire: p.amana_pctMarcheOrdinaire,
+        amana_pct_crbt: p.amana_pctCrbt,
+        amana_pct_hors_crbt: p.amana_pctHorsCrbt,
+        co_pct_collecte: p.co_pctCollecte,
+        co_pct_guichet: p.co_pctGuichet,
+        co_pct_retour: p.co_pctRetour,
+        co_pct_axes_arrivee: p.co_pctAxesArrivee,
+        co_pct_axes_depart: p.co_pctAxesDepart,
+        co_pct_national: p.co_pctNational,
+        co_pct_international: p.co_pctInternational,
+        co_pct_marche_ordinaire: p.co_pctMarcheOrdinaire,
+        co_pct_vague_master: p.co_pctVagueMaster,
+        co_pct_boite_postale: p.co_pctBoitePostale,
+        cr_pct_collecte: p.cr_pctCollecte,
+        cr_pct_guichet: p.cr_pctGuichet,
+        cr_pct_retour: p.cr_pctRetour,
+        cr_pct_axes_arrivee: p.cr_pctAxesArrivee,
+        cr_pct_axes_depart: p.cr_pctAxesDepart,
+        cr_pct_national: p.cr_pctNational,
+        cr_pct_international: p.cr_pctInternational,
+        cr_pct_vague_master: p.cr_pctVagueMaster,
+        cr_pct_crbt: p.cr_pctCrbt,
+        cr_pct_hors_crbt: p.cr_pctHorsCrbt,
+        cr_pct_marche_ordinaire: p.cr_pctMarcheOrdinaire,
+        pct_mois: null,
+        pct_annee: globalRate,
+        amana_pct_annee: parsedRates.amana[yearIdx],
+        co_pct_annee: parsedRates.co[yearIdx],
+        cr_pct_annee: parsedRates.cr[yearIdx],
+        lrh_pct_annee: parsedRates.lrh[yearIdx],
+        ebarkia_pct_annee: parsedRates.ebarkia[yearIdx],
+    };
+}
+
 // ─── component ─────────────────────────────────────────────────────────────────
 export default function ForecastingModule({
     initialFte = 0,
@@ -55,6 +128,8 @@ export default function ForecastingModule({
     initialPosteId = "all", // Ajouté pour synchroniser avec le wizard
     postes = [],
     tasks = [],
+    simulationResults = null,
+    centreDetails = null,
     className = "",
 }) {
     const currentYear = 2025; // Fixé par l'utilisateur comme base
@@ -72,26 +147,26 @@ export default function ForecastingModule({
     const [selectedPoste, setSelectedPoste] = useState(initialPosteId || "all");
     const refChart = useEchartAutoResize();
 
+    useEffect(() => {
+        setSelectedPoste(initialPosteId || "all");
+    }, [initialPosteId]);
+
     const baseVolumes = useMemo(() => flattenGridValues(gridValues), [gridValues]);
     const hasVolumes = baseVolumes.length > 0;
 
-    // Compute base ETP/Load for selected intervenant
     const { baseEtp, baseLoad } = useMemo(() => {
-        if (selectedPoste === "all" || !selectedPoste) {
-            return { baseEtp: initialFte, baseLoad: initialLoad };
+        if (simulationResults && Array.isArray(simulationResults.tasks)) {
+            const k = computeForecastDisplayKpi({
+                simulationResults,
+                centreDetails,
+                wizardData: parameters,
+                postes,
+                selectedPosteId: selectedPoste,
+            });
+            return { baseEtp: k.totalFinal, baseLoad: k.totalLoad };
         }
-        const poste = postes.find((p) => String(p.id) === selectedPoste);
-        if (!poste) return { baseEtp: initialFte, baseLoad: initialLoad };
-
-        const label = (poste.label || poste.nom || "").trim().toUpperCase();
-        const filtered = tasks.filter(
-            (t) => (t.responsable || "").trim().toUpperCase() === label
-        );
-        const load = filtered.reduce((s, t) => s + (t.heures_calculees || 0), 0);
-        // ETP from ressources_par_poste is not available here; derive from load / heuresNet (7.33h)
-        const etp = load > 0 ? load / 8 : 0;
-        return { baseEtp: etp, baseLoad: load };
-    }, [selectedPoste, postes, tasks, initialFte, initialLoad]);
+        return { baseEtp: initialFte, baseLoad: initialLoad };
+    }, [simulationResults, centreDetails, parameters, postes, selectedPoste, initialFte, initialLoad]);
 
     // Reset results when selection changes
     useEffect(() => {
@@ -154,75 +229,30 @@ export default function ForecastingModule({
 
                 const payload = {
                     centre_id: centreId,
+                    mode: parameters.mode || "actuel",
                     poste_code: selectedPoste === "all" ? null : (postes.find(p => String(p.id) === selectedPoste)?.code || null),
                     grid_values: currentGrid,
-                    parameters: {
-                        productivite: parameters.productivite,
-                        idle_minutes: parameters.idleMinutes || parameters.idle_minutes,
-                        shift: parameters.shift,
-                        coeff_geo: parameters.natureGeo || parameters.nature_geo || parameters.coeff_geo,
-                        coeff_circ: parameters.tauxComplexite || parameters.taux_complexite || parameters.coeff_circ,
-                        duree_trajet: parameters.dureeTrajet || parameters.duree_trajet,
-                        pct_axes: parameters.pctAxesArrivee || parameters.pct_axes,
-                        pct_local: parameters.pctAxesDepart || parameters.pct_local,
-                        pct_national: parameters.pctNational || parameters.pct_national,
-                        pct_international: parameters.pctInternational || parameters.pct_international,
-                        pct_collecte: parameters.pctCollecte || parameters.pct_collecte,
-                        pct_retour: parameters.pctRetour || parameters.pct_retour,
-                        pct_marche_ordinaire: parameters.pctMarcheOrdinaire || parameters.pct_marche_ordinaire,
-                        colis_amana_par_canva_sac: parameters.colisAmanaParCanvaSac || parameters.colis_amana_par_canva_sac,
-                        nbr_co_sac: parameters.nbrCoSac || parameters.nbr_co_sac,
-                        nbr_cr_sac: parameters.nbrCrSac || parameters.nbr_cr_sac,
-                        cr_par_caisson: parameters.crParCaisson || parameters.cr_par_caisson,
-                        ed_percent: parameters.edPercent || parameters.ed_percent || parameters.pct_sac,
-                        has_guichet: (parameters.hasGuichet !== undefined ? parameters.hasGuichet : parameters.has_guichet),
-
-                        // Flux specific (CamelCase to SnakeCase)
-                        amana_pct_collecte: parameters.amana_pctCollecte,
-                        amana_pct_retour: parameters.amana_pctRetour,
-                        amana_pct_axes_arrivee: parameters.amana_pctAxesArrivee,
-                        amana_pct_axes_depart: parameters.amana_pctAxesDepart,
-                        amana_pct_national: parameters.amana_pctNational,
-                        amana_pct_international: parameters.amana_pctInternational,
-                        amana_pct_marche_ordinaire: parameters.amana_pctMarcheOrdinaire,
-                        amana_pct_crbt: parameters.amana_pctCrbt,
-                        amana_pct_hors_crbt: parameters.amana_pctHorsCrbt,
-
-                        co_pct_collecte: parameters.co_pctCollecte,
-                        co_pct_retour: parameters.co_pctRetour,
-                        co_pct_axes_arrivee: parameters.co_pctAxesArrivee,
-                        co_pct_axes_depart: parameters.co_pctAxesDepart,
-                        co_pct_national: parameters.co_pctNational,
-                        co_pct_international: parameters.co_pctInternational,
-
-                        cr_pct_collecte: parameters.cr_pctCollecte,
-                        cr_pct_retour: parameters.cr_pctRetour,
-                        cr_pct_axes_arrivee: parameters.cr_pctAxesArrivee,
-                        cr_pct_axes_depart: parameters.cr_pctAxesDepart,
-                        cr_pct_national: parameters.cr_pctNational,
-                        cr_pct_international: parameters.cr_pctInternational,
-
-                        pct_mois: null,
-                        pct_annee: rate,
-                        amana_pct_annee: parsedRates.amana[i],
-                        co_pct_annee: parsedRates.co[i],
-                        cr_pct_annee: parsedRates.cr[i],
-                        lrh_pct_annee: parsedRates.lrh[i],
-                        ebarkia_pct_annee: parsedRates.ebarkia[i],
-                    }
+                    parameters: buildForecastSimParameters(parameters, i, parsedRates, rate),
                 };
 
                 console.log(`Forecasting Year ${year} (Rate ${rate}%):`, {
                     centre_id: payload.centre_id,
+                    mode: payload.mode,
                     volumes_count: payload.grid_values ? Object.keys(payload.grid_values).length : 'NULL',
                     params: payload.parameters
                 });
 
                 const response = await api.bandoengSimulate(payload);
 
-                // On extrait les ETP/Charge du résultat
-                const fte = response.total_ressources_humaines;
-                const load = response.total_heures;
+                const kProj = computeForecastDisplayKpi({
+                    simulationResults: response,
+                    centreDetails,
+                    wizardData: parameters,
+                    postes,
+                    selectedPosteId: selectedPoste,
+                });
+                const fte = kProj.totalFinal;
+                const load = kProj.totalLoad;
 
                 // On met à jour la grille pour l'itération suivante (croissance composée gérée par le backend)
                 // SECURITE : Ne pas mettre à jour si response.grid_values est absent/null/vide

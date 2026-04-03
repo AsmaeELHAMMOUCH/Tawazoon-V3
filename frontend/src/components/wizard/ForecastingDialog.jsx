@@ -16,6 +16,8 @@ export default function ForecastingDialog({
     initialPosteId = "all",
     postes = [],
     tasks = [],
+    simulationResults = null,
+    centreDetails = null,
     wizardData = null,
 }) {
     return (
@@ -37,6 +39,8 @@ export default function ForecastingDialog({
                     initialPosteId={initialPosteId}
                     postes={postes}
                     tasks={tasks}
+                    simulationResults={simulationResults}
+                    centreDetails={centreDetails}
                     className="border-none shadow-none"
                 />
             </DialogContent>

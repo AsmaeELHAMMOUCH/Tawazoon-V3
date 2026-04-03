@@ -92,6 +92,7 @@ export default function Step1CentreSelection({
     useEffect(() => {
         if (!data.centre) {
             setCentreDetails(null);
+            onDataChange({ ...data, recapSitesCount: 0 });
             onValidationChange(false);
             return;
         }
@@ -102,6 +103,7 @@ export default function Step1CentreSelection({
                 if (res.ok) {
                     const details = await res.json();
                     setCentreDetails(details);
+                    onDataChange({ ...data, recapSitesCount: Number(details?.sites_count || 0) });
                     onValidationChange(true);
                 }
             } catch (err) {

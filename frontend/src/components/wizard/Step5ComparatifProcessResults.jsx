@@ -125,7 +125,6 @@ export default function Step5ComparatifProcessResults({
         cr_pct_international: wizardData.cr_pctInternational,
         cr_pct_marche_ordinaire: wizardData.cr_pctMarcheOrdinaire,
         cr_pct_vague_master: wizardData.cr_pctVagueMaster,
-        cr_pct_boite_postale: wizardData.cr_pctBoitePostale,
         cr_pct_crbt: wizardData.cr_pctCrbt,
         cr_pct_hors_crbt: wizardData.cr_pctHorsCrbt,
       },

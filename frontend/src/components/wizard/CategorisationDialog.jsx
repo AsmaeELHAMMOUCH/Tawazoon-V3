@@ -7,7 +7,8 @@ import {
 } from "@/components/ui/dialog";
 import "@/styles/dialog-animations.css";
 import { Button } from "@/components/ui/button";
-import { Tag, CheckCircle2, XCircle, Layers, BarChart2, Globe, Users } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tag, CheckCircle2, XCircle, Layers, BarChart2, Globe, Users, HelpCircle } from "lucide-react";
 
 // ─────────────────────────────────────────────
 // HELPERS
@@ -23,7 +24,6 @@ function getGlobalSum(obj) {
     if (!obj) return 0;
     if (typeof obj === "string" || typeof obj === "number") return parseFloat(String(obj).replace(",", ".")) || 0;
     if (obj.global !== undefined) return parseFloat(String(obj.global).replace(",", ".")) || 0;
-    // Sum nested objects
     let sum = 0;
     Object.values(obj).forEach((v) => { sum += getGlobalSum(v); });
     return sum;
@@ -32,6 +32,18 @@ function getGlobalSum(obj) {
 function getTierScore(value, tiers) {
     for (const t of tiers) {
         if (value >= t.min && (t.max === null || value <= t.max)) return t.score;
+    }
+    return 0;
+}
+
+function formatTierRange(t) {
+    if (t.max === null) return `≥ ${t.min}`;
+    return `${t.min} – ${t.max}`;
+}
+
+function getActiveTierIndex(value, tiers) {
+    for (let i = tiers.length - 1; i >= 0; i--) {
+        if (value >= tiers[i].min) return i;
     }
     return 0;
 }
@@ -96,23 +108,8 @@ const SITES_OPTIONS = [
     { label: "> 8", score: 100 },
 ];
 
-const TIER_COLORS = [
-    "bg-slate-100 text-slate-500 border-slate-200",
-    "bg-yellow-50 text-yellow-700 border-yellow-200",
-    "bg-orange-50 text-orange-700 border-orange-200",
-    "bg-red-50 text-red-700 border-red-200",
-    "bg-rose-100 text-rose-800 border-rose-300",
-];
-const TIER_COLORS_ACTIVE = [
-    "bg-slate-400 text-white border-slate-500",
-    "bg-yellow-400 text-white border-yellow-500",
-    "bg-orange-500 text-white border-orange-600",
-    "bg-red-500 text-white border-red-600",
-    "bg-rose-700 text-white border-rose-800",
-];
-
 // ─────────────────────────────────────────────
-// CLASS resolver : D is highest (best)
+// CLASS resolver
 // ─────────────────────────────────────────────
 function resolveClass(score) {
     if (score > 75) return { key: "D", label: "Classe D", color: "emerald", description: "Grand Centre / HUB" };
@@ -122,121 +119,157 @@ function resolveClass(score) {
 }
 
 // ─────────────────────────────────────────────
-// Sub-components
+// TRANCHE — badge tranche active + popover (toutes tranches / seuils / scores)
 // ─────────────────────────────────────────────
-
 function TierBar({ tiers, value }) {
-    const n = tiers.length;
-    let activeIdx = 0;
-    for (let i = n - 1; i >= 0; i--) {
-        if (value >= tiers[i].min) { activeIdx = i; break; }
-    }
+    const activeIdx = getActiveTierIndex(Number(value) || 0, tiers);
+    const current = tiers[activeIdx];
+    const numVal = Number(value) || 0;
+    const valueLabel = Number.isInteger(numVal) ? String(numVal) : numVal.toFixed(2);
+
     return (
-        <div className="flex flex-wrap items-center gap-1">
-            {tiers.map((t, i) => {
-                const active = i === activeIdx;
-                return (
-                    <span
-                        key={i}
-                        title={`${t.label} → Score: ${t.score}`}
-                        className={`text-[8px] font-bold px-1.5 py-0.5 rounded border whitespace-nowrap transition-all duration-200 ${active ? TIER_COLORS_ACTIVE[i] : TIER_COLORS[i]}`}
+        <div className="inline-flex max-w-full min-w-0 items-center gap-1">
+            <span
+                className="inline-flex min-w-0 max-w-[12rem] items-center gap-1.5 rounded-lg border border-slate-200/90 bg-white px-2 py-1 text-[10px] font-semibold text-slate-800 shadow-sm sm:max-w-[15rem]"
+                title={`${current?.label} — ${current?.score ?? 0} pts`}
+            >
+                <span className="truncate">{current?.label ?? "—"}</span>
+                <span className="shrink-0 font-mono text-[9px] font-bold tabular-nums text-[#1d6ab8]">
+                    {current?.score ?? 0} pts
+                </span>
+            </span>
+            <Popover>
+                <PopoverTrigger asChild>
+                    <button
+                        type="button"
+                        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 transition-colors hover:border-[#1d6ab8]/40 hover:bg-[#e8f2fb] hover:text-[#1d6ab8] focus:outline-none focus:ring-2 focus:ring-[#1d6ab8]/25"
+                        aria-label="Voir toutes les tranches et leurs scores"
                     >
-                        {t.label}
-                    </span>
-                );
-            })}
+                        <HelpCircle className="h-3 w-3" strokeWidth={2} aria-hidden />
+                    </button>
+                </PopoverTrigger>
+                <PopoverContent
+                    className="z-[200] w-[min(20rem,calc(100vw-2rem))] border-slate-200 p-0 shadow-lg"
+                    align="end"
+                    sideOffset={6}
+                    onOpenAutoFocus={(e) => e.preventDefault()}
+                >
+                    <div className="border-b border-slate-100 bg-slate-50/90 px-3 py-2">
+                        <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">Échelle des tranches</p>
+                        <p className="mt-1 text-[9px] leading-snug text-slate-500">
+                            Valeur calculée : <span className="font-mono font-semibold text-slate-700">{valueLabel}</span>
+                            {" · "}
+                            tranche « <span className="font-semibold text-[#0a2540]">{current?.label}</span> »
+                        </p>
+                    </div>
+                    <ul className="max-h-52 overflow-y-auto overscroll-contain py-1" role="list">
+                        {tiers.map((t, i) => {
+                            const active = i === activeIdx;
+                            return (
+                                <li
+                                    key={i}
+                                    role="listitem"
+                                    className={`flex items-center gap-2 px-3 py-1.5 text-[10px] ${active ? "bg-[#e8f2fb] font-semibold text-[#0a2540]" : "text-slate-600"}`}
+                                >
+                                    <span className="min-w-0 flex-1 leading-tight">{t.label}</span>
+                                    <span className="shrink-0 font-mono text-[9px] tabular-nums text-slate-400">
+                                        {formatTierRange(t)}
+                                    </span>
+                                    <span className="w-12 shrink-0 text-right font-mono text-[9px] font-bold tabular-nums text-[#1d6ab8]">
+                                        {t.score} pts
+                                    </span>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                </PopoverContent>
+            </Popover>
         </div>
     );
 }
 
-function QuestionRow({ label, weight, children, score, maxScore = 100 }) {
+// ─────────────────────────────────────────────
+// VOLUME BADGE
+// ─────────────────────────────────────────────
+function VolumePerDayBadge({ value }) {
+    const n = Number(value) || 0;
     return (
-        <div className="group flex flex-col sm:flex-row sm:items-center gap-3 py-3 px-4 hover:bg-slate-50/80 transition-all duration-300 border-b border-slate-50 last:border-0">
-            <div className="flex-1 min-w-0 pr-2">
-                <span className="text-[11px] font-bold text-slate-700 block leading-tight">{label}</span>
-            </div>
-            <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
-                <div className="flex items-center gap-2">
-                    {children}
+        <span className="inline-flex shrink-0 items-center text-[10px] font-mono font-bold text-[#004a87] tabular-nums px-2 py-0.5 rounded-md bg-[#e8f2fb] border border-[#b8d5f0]">
+            {n.toFixed(0)}<span className="opacity-60 ml-0.5 font-normal">/j</span>
+        </span>
+    );
+}
+
+// ─────────────────────────────────────────────
+// QUESTION ROW
+// ─────────────────────────────────────────────
+function QuestionRow({ label, weight, children, score, metaLeft }) {
+    const pts = ((score * weight) / 100);
+
+    return (
+        <div className="group relative flex flex-col sm:flex-row sm:items-center gap-2 py-3 px-4 border-b border-slate-100 last:border-0 hover:bg-slate-50/70 transition-colors duration-150">
+            {/* Left label */}
+            <div className="flex-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="text-[11px] font-semibold text-slate-900 leading-tight">{label}</span>
+                    {metaLeft}
                 </div>
-                <div className="hidden sm:block w-[1px] h-8 bg-slate-100 mx-1" />
-                <div className="text-right flex flex-col items-end min-w-[60px]">
-                    <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">
-                        Coef: {weight}%
-                    </div>
-                    <div className={`text-[12px] font-black tabular-nums leading-none ${score > 0 ? "text-indigo-600" : "text-slate-400"}`}>
-                        {((score * weight) / 100).toFixed(1)} <span className="text-[8px] uppercase tracking-tighter opacity-70">pts</span>
-                    </div>
+            </div>
+            {/* Content (TierBar / chips) */}
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+                {children}
+            </div>
+            <div className="flex items-center gap-3 shrink-0 ml-1">
+                <div className="text-right min-w-[44px]">
+                    <div className="text-[8px] font-semibold text-slate-400 uppercase tracking-wider">Pts</div>
+                    <div className="text-[11px] font-black text-slate-600 tabular-nums">{pts.toFixed(1)}</div>
+                </div>
+                <div className="text-right min-w-[40px]">
+                    <div className="text-[8px] font-semibold text-slate-400 uppercase tracking-wider">Coef</div>
+                    <div className="text-[11px] font-black text-slate-600 tabular-nums">{weight}<span className="text-[8px] text-slate-400">%</span></div>
                 </div>
             </div>
         </div>
     );
 }
 
+// ─────────────────────────────────────────────
+// BLOCK CARD — top-accent colored border
+// ─────────────────────────────────────────────
 function BlockCard({ title, icon: Icon, color, children, blockScore }) {
-    const colorThemes = {
-        purple: {
-            border: "border-purple-200",
-            iconBg: "bg-purple-100",
-            iconText: "text-purple-600",
-            scoreBg: "bg-purple-500",
-            headerBg: "bg-gradient-to-r from-purple-50 to-white"
-        },
-        blue: {
-            border: "border-blue-200",
-            iconBg: "bg-blue-100",
-            iconText: "text-blue-600",
-            scoreBg: "bg-blue-500",
-            headerBg: "bg-gradient-to-r from-blue-50 to-white"
-        },
-        teal: {
-            border: "border-teal-200",
-            iconBg: "bg-teal-100",
-            iconText: "text-teal-600",
-            scoreBg: "bg-teal-500",
-            headerBg: "bg-gradient-to-r from-teal-50 to-white"
-        },
-        amber: {
-            border: "border-amber-200",
-            iconBg: "bg-amber-100",
-            iconText: "text-amber-600",
-            scoreBg: "bg-amber-500",
-            headerBg: "bg-gradient-to-r from-amber-50 to-white"
-        },
+    const themes = {
+        purple: { accent: "#7c3aed", accentLight: "#ede9fe", iconBg: "bg-violet-100", iconText: "text-violet-600", bar: "bg-violet-500", label: "text-violet-700" },
+        blue:   { accent: "#1d6ab8", accentLight: "#dbeafe", iconBg: "bg-blue-100",   iconText: "text-blue-600",   bar: "bg-blue-500",   label: "text-blue-700" },
+        teal:   { accent: "#0d9488", accentLight: "#ccfbf1", iconBg: "bg-teal-100",   iconText: "text-teal-600",   bar: "bg-teal-500",   label: "text-teal-700" },
+        amber:  { accent: "#d97706", accentLight: "#fef3c7", iconBg: "bg-amber-100",  iconText: "text-amber-600",  bar: "bg-amber-500",  label: "text-amber-700" },
     };
-
-    const theme = colorThemes[color] || colorThemes.blue;
+    const t = themes[color] || themes.blue;
 
     return (
-        <div className={`bg-white rounded-2xl border ${theme.border} shadow-sm overflow-hidden transition-all duration-300 hover:shadow-md hover:border-slate-300 h-full flex flex-col`}>
+        <div className="group/card relative bg-white rounded-2xl border border-slate-200/80 shadow-[0_4px_20px_-8px_rgba(15,23,42,0.10)] overflow-hidden h-full flex flex-col transition-all duration-300 hover:shadow-[0_8px_30px_-8px_rgba(15,23,42,0.14)] hover:-translate-y-0.5">
+            {/* Top accent bar */}
+            <div className="h-[3px] w-full" style={{ background: `linear-gradient(90deg, ${t.accent}dd, ${t.accent}66)` }} />
+
             {/* Header */}
-            <div className={`flex items-center justify-between px-5 py-4 ${theme.headerBg} border-b border-slate-100 shrink-0`}>
-                <div className="flex items-center gap-3">
-                    <div className={`w-9 h-9 rounded-xl ${theme.iconBg} flex items-center justify-center shadow-inner`}>
-                        <Icon className={`w-5 h-5 ${theme.iconText}`} />
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 shrink-0">
+                <div className="flex items-center gap-2.5">
+                    <div className={`w-8 h-8 rounded-xl ${t.iconBg} flex items-center justify-center ring-1 ring-white/60 shadow-sm transition-transform duration-300 group-hover/card:scale-110`}>
+                        <Icon className={`w-4 h-4 ${t.iconText}`} />
                     </div>
-                    <h3 className="text-[10px] font-black uppercase tracking-wider text-slate-800 leading-tight flex-1">{title}</h3>
+                    <h3 className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-700">{title}</h3>
                 </div>
-                <div className="flex flex-col items-end shrink-0 ml-2">
-                    <div className={`text-[13px] font-black ${theme.iconText} leading-none`}>
+                <div className="text-right shrink-0 min-w-[52px]">
+                    <div className="text-[8px] font-semibold text-slate-400 uppercase tracking-wider">Score</div>
+                    <div className={`text-[13px] font-black tabular-nums ${t.label} leading-none mt-0.5`}>
                         {blockScore.toFixed(1)}
-                        <span className="text-[9px] font-bold text-slate-400 ml-1">/ 100</span>
-                    </div>
-                    <div className="w-16 h-1.5 bg-slate-100 rounded-full mt-1.5 overflow-hidden">
-                        <div
-                            className={`h-full ${theme.scoreBg} transition-all duration-500`}
-                            style={{ width: `${Math.min(blockScore, 100)}%` }}
-                        />
+                        <span className="text-[9px] font-bold text-slate-400 ml-0.5">/ 100</span>
                     </div>
                 </div>
             </div>
+
             {/* Content */}
-            <div className="flex-1 divide-y divide-slate-50 flex flex-col">
-                <div className="flex-1">
-                    {children}
-                </div>
-                {/* Reference list to prevent Tailwind purging dynamic classes */}
-                <div className="hidden text-blue-500 text-teal-500 text-amber-500 text-purple-500 text-blue-600 text-teal-600 text-amber-600 text-purple-600 border-blue-200 border-teal-200 border-amber-200 border-purple-200 bg-blue-50 bg-teal-50 bg-amber-50 bg-purple-50" />
+            <div className="flex-1 flex flex-col divide-y divide-slate-100/80">
+                {children}
             </div>
         </div>
     );
@@ -246,103 +279,63 @@ function BlockCard({ title, icon: Icon, color, children, blockScore }) {
 // MAIN COMPONENT
 // ─────────────────────────────────────────────
 
-export default function CategorisationDialog({ open, onOpenChange, wizardData, simulationResults, centreDetails, mode }) {
+export default function CategorisationDialog({ open, onOpenChange, wizardData, simulationResults, centreDetails, mode, effectifGlobalValue, sitesCountFromRecap }) {
     const [chefLieuIdx, setChefLieuIdx] = useState(0);
     const [sitesIdx, setSitesIdx] = useState(0);
     const [animKey, setAnimKey] = useState(0);
     useEffect(() => { if (open) setAnimKey((k) => k + 1); }, [open]);
 
-    // Automate sitesIdx based on real sites_count
     useEffect(() => {
-        if (centreDetails?.sites_count !== undefined) {
-            const count = centreDetails.sites_count;
+        const count = Number(
+            sitesCountFromRecap !== undefined && sitesCountFromRecap !== null
+                ? sitesCountFromRecap
+                : (centreDetails?.sites_count ?? 0)
+        );
+        if (!Number.isNaN(count)) {
             if (count <= 2) setSitesIdx(0);
             else if (count <= 4) setSitesIdx(1);
             else if (count <= 6) setSitesIdx(2);
             else if (count <= 8) setSitesIdx(3);
             else setSitesIdx(4);
         }
-    }, [centreDetails?.sites_count]);
+    }, [sitesCountFromRecap, centreDetails?.sites_count]);
 
     const scoring = useMemo(() => {
         if (!wizardData) return null;
-
         const grid = wizardData.gridValues || {};
         const tasks = simulationResults?.tasks || [];
 
-        // ── BLOC 1: Complexité opérationnelle ──
-        // Distribution finale : taches dont le poste (responsable) contient "facteur"
-        const hasDistrib = tasks.some(t =>
-            (t.responsable || "").toLowerCase().includes("facteur") &&
-            (t.heures_calculees || 0) > 0
-        );
+        const hasDistrib = tasks.some(t => (t.responsable || "").toLowerCase().includes("facteur") && (t.heures_calculees || 0) > 0);
         const scoreDistrib = hasDistrib ? 100 : 0;
-
-        // Acheminement : %Axes > 0 (Global ou par Flux)
-        const hasAcheminement =
-            safeNum(wizardData.pctAxesArrivee) > 0 ||
-            safeNum(wizardData.amana_pctAxesArrivee) > 0 ||
-            safeNum(wizardData.co_pctAxesArrivee) > 0 ||
-            safeNum(wizardData.cr_pctAxesArrivee) > 0;
+        const hasAcheminement = safeNum(wizardData.pctAxesArrivee) > 0 || safeNum(wizardData.amana_pctAxesArrivee) > 0 || safeNum(wizardData.co_pctAxesArrivee) > 0 || safeNum(wizardData.cr_pctAxesArrivee) > 0;
         const scoreAcheminement = hasAcheminement ? 100 : 0;
-
-        // Guichet actif
         const hasGuichet = safeNum(wizardData.hasGuichet) > 0;
         const scoreGuichet = hasGuichet ? 100 : 0;
-
-        // Barid Pro : famille = "Barid Pro" avec heures > 0
-        const hasBaridPro = tasks.some(t =>
-            (t.famille || "").toLowerCase().includes("barid pro") &&
-            (t.heures_calculees || 0) > 0
-        );
+        const hasBaridPro = tasks.some(t => (t.famille || "").toLowerCase().includes("barid pro") && (t.heures_calculees || 0) > 0);
         const scoreBaridPro = hasBaridPro ? 100 : 0;
-
         const bloc1 = (scoreDistrib * 12 + scoreAcheminement * 6 + scoreGuichet * 6 + scoreBaridPro * 2) / 100;
 
-        // ── BLOC 2: Charge opérationnelle ──
-        // Volume Amana : global départ + global arrivée / 264
         const amanaGlobal = getGlobalSum(grid.amana) / 264;
         const scoreAmana = getTierScore(amanaGlobal, TIERS_AMANA);
-
-        // Volume CR
         const crGlobal = getGlobalSum(grid.cr) / 264;
         const scoreCR = getTierScore(crGlobal, TIERS_CR);
-
-        // Volume CO
         const coGlobal = getGlobalSum(grid.co) / 264;
         const scoreCO = getTierScore(coGlobal, TIERS_CO);
-
-        // Courrier électronique : LRH + eBarkia / 264
-        const lrhGlobal = getGlobalSum(grid.lrh);
-        const ebarkiaGlobal = getGlobalSum(grid.ebarkia);
-        const elecGlobal = (lrhGlobal + ebarkiaGlobal) / 264;
+        const elecGlobal = (getGlobalSum(grid.lrh) + getGlobalSum(grid.ebarkia)) / 264;
         const scoreElec = getTierScore(elecGlobal, TIERS_ELEC);
-
         const bloc2 = (scoreAmana * 12 + scoreCR * 8 + scoreCO * 8 + scoreElec * 4) / 100;
 
-        // ── BLOC 3: Rôle territorial ──
         const chefLieuScore = CHEF_LIEU_OPTIONS[chefLieuIdx].score;
         const sitesScore = SITES_OPTIONS[sitesIdx].score;
-
-        // Tournées = somme des postes qui contiennent "facteur"
         const resParPoste = simulationResults?.ressources_par_poste || {};
-        const sumTournees = Object.entries(resParPoste).reduce((sum, [label, fte]) => {
-            if (label.toLowerCase().includes("facteur")) {
-                return sum + (Number(fte) || 0);
-            }
-            return sum;
-        }, 0);
-        const nbTournees = Math.round(sumTournees);
+        const nbTournees = Math.round(Object.entries(resParPoste).reduce((sum, [label, fte]) => label.toLowerCase().includes("facteur") ? sum + (Number(fte) || 0) : sum, 0));
         const scoreTournees = getTierScore(nbTournees, TIERS_TOURNEES);
-
         const bloc3 = (chefLieuScore * 10 + sitesScore * 8 + scoreTournees * 8) / 100;
 
-        // ── BLOC 4: Ressources ──
-        const effectif = simulationResults?.fte_arrondi ?? simulationResults?.fte_final ?? 0;
+        const effectif = Number(effectifGlobalValue ?? 0);
         const scoreEffectif = getTierScore(effectif, TIERS_EFFECTIF);
         const shift = safeNum(wizardData.shift || 1);
         const scoreShift = shift >= 3 ? 100 : shift === 2 ? 50 : 0;
-
         const bloc4 = (scoreEffectif * 11 + scoreShift * 5) / 100;
 
         const totalScore = bloc1 + bloc2 + bloc3 + bloc4;
@@ -354,114 +347,148 @@ export default function CategorisationDialog({ open, onOpenChange, wizardData, s
             bloc2: { score: bloc2, amanaGlobal, scoreAmana, crGlobal, scoreCR, coGlobal, scoreCO, elecGlobal, scoreElec },
             bloc3: { score: bloc3, chefLieuScore, sitesScore, nbTournees, scoreTournees },
             bloc4: { score: bloc4, effectif, scoreEffectif, shift, scoreShift },
-            totalScore,
-            classInfo,
-            currentClass
+            totalScore, classInfo, currentClass
         };
-    }, [wizardData, simulationResults, chefLieuIdx, sitesIdx, centreDetails]);
+    }, [wizardData, simulationResults, chefLieuIdx, sitesIdx, centreDetails, effectifGlobalValue]);
 
     if (!scoring) return null;
-
     const { bloc1, bloc2, bloc3, bloc4, totalScore, classInfo, currentClass } = scoring;
 
-    const classColorMap = {
-        emerald: "bg-emerald-500", blue: "bg-blue-500", amber: "bg-amber-500", rose: "bg-rose-500"
+    const classConfig = {
+        emerald: { ring: "ring-emerald-400", bg: "bg-emerald-500", badge: "bg-emerald-50 text-emerald-700 border-emerald-200", text: "text-emerald-600" },
+        blue:    { ring: "ring-blue-400",    bg: "bg-blue-500",    badge: "bg-blue-50 text-blue-700 border-blue-200",       text: "text-blue-600" },
+        amber:   { ring: "ring-amber-400",   bg: "bg-amber-500",   badge: "bg-amber-50 text-amber-700 border-amber-200",    text: "text-amber-600" },
+        rose:    { ring: "ring-rose-400",    bg: "bg-rose-500",    badge: "bg-rose-50 text-rose-700 border-rose-200",       text: "text-rose-600" },
     };
-    const classBadgeMap = {
-        emerald: "bg-emerald-50 text-emerald-700 border-emerald-200",
-        blue: "bg-blue-50 text-blue-700 border-blue-200",
-        amber: "bg-amber-50 text-amber-700 border-amber-200",
-        rose: "bg-rose-50 text-rose-700 border-rose-200",
-    };
+    const cc = classConfig[classInfo.color];
+
+    // Breakdown bar widths for summary
+    const blocs = [
+        { label: "Complexité", score: bloc1.score, color: "#7c3aed", weight: 26 },
+        { label: "Charge", score: bloc2.score, color: "#1d6ab8", weight: 32 },
+        { label: "Territoire", score: bloc3.score, color: "#0d9488", weight: 26 },
+        { label: "Ressources", score: bloc4.score, color: "#d97706", weight: 16 },
+    ];
 
     const YesNoChip = ({ value }) => value ? (
-        <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full">
-            <CheckCircle2 className="w-3 h-3" /> OUI
+        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full shadow-sm">
+            <CheckCircle2 className="w-3 h-3 shrink-0" /> OUI
         </span>
     ) : (
-        <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 bg-slate-100 text-slate-500 border border-slate-200 rounded-full">
-            <XCircle className="w-3 h-3" /> NON
+        <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 bg-slate-100 text-slate-400 border border-slate-200 rounded-full">
+            <XCircle className="w-3 h-3 shrink-0 opacity-60" /> NON
         </span>
     );
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
-              key={animKey}
-              className="dlg-enter max-w-none sm:max-w-5xl max-h-[92vh] overflow-y-auto p-0 border border-slate-200 bg-slate-50 shadow-2xl rounded-2xl"
+                key={animKey}
+                className="dlg-enter flex flex-col max-w-none sm:max-w-5xl max-h-[92vh] p-0 border-0 bg-[#f8fafc] shadow-[0_32px_80px_-20px_rgba(15,23,42,0.40)] rounded-2xl overflow-hidden gap-0"
             >
-                {/* HEADER */}
-                <DialogHeader className="dlg-header-enter px-6 py-4 bg-white border-b border-slate-200 rounded-t-2xl sticky top-0 z-10">
-                    <DialogTitle className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <div className="dlg-icon-hover dlg-icon-enter p-2 bg-indigo-50 rounded-xl"
-                              style={{ animationDelay: "0.1s" }}>
-                                <Tag className="w-5 h-5 text-indigo-600" />
-                            </div>
-                            <div>
-                                <span className="text-sm font-extrabold text-slate-800">Analyse de Catégorisation</span>
-                                <p className="text-[10px] font-normal text-slate-400 uppercase tracking-widest mt-0.5">
-                                    Scoring basé sur le processus {mode === "optimise" ? "Optimisé" : mode === "recommande" ? "Consolidé" : "Actuel"}
-                                </p>
-                            </div>
-                        </div>
-                        {/* Result badge in header */}
-                        <div className="flex items-center gap-3">
-                            <div className="text-right flex flex-col items-end">
-                                <div className="text-[9px] text-slate-400 uppercase tracking-wider">Catégorisation Actuelle</div>
-                                <div className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                                    {String(currentClass).replace("Classe ", "")}
+                {/* ── HEADER ── */}
+                <DialogHeader className="relative p-0 shrink-0 z-10">
+                    {/* Deep blue gradient header */}
+                    <div className="relative bg-[#0a2540] px-6 py-5 overflow-hidden">
+                        {/* Subtle grid texture */}
+                        <div className="absolute inset-0 opacity-[0.04]" style={{
+                            backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(255,255,255,1) 39px, rgba(255,255,255,1) 40px), repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(255,255,255,1) 39px, rgba(255,255,255,1) 40px)"
+                        }} />
+                        {/* Glow orbs */}
+                        <div className="absolute -top-8 -right-8 w-48 h-48 rounded-full bg-[#1d6ab8]/20 blur-3xl pointer-events-none" />
+                        <div className="absolute -bottom-4 left-20 w-32 h-32 rounded-full bg-violet-500/10 blur-2xl pointer-events-none" />
+
+                        <DialogTitle className="relative z-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                            {/* Left: title */}
+                            <div className="flex items-center gap-3">
+                                <div className="p-2.5 rounded-xl bg-white/10 ring-1 ring-white/20 backdrop-blur-sm">
+                                    <Tag className="w-5 h-5 text-white" />
+                                </div>
+                                <div>
+                                    <div className="text-[15px] font-black text-white tracking-tight leading-none">Analyse de Catégorisation</div>
+                                    <div className="text-[10px] font-semibold text-white/50 uppercase tracking-[0.2em] mt-1">
+                                        Processus {mode === "optimise" ? "Optimisé" : mode === "recommande" ? "Consolidé" : "Actuel"}
+                                    </div>
                                 </div>
                             </div>
-                            <div className="h-8 w-px bg-slate-200 mx-1" />
-                            <div className="text-right">
-                                <div className="text-[9px] text-slate-400 uppercase tracking-wider">Score {mode === "optimise" ? "Optimisé" : mode === "recommande" ? "Consolidé" : "Simulé"}</div>
-                                <div className="text-lg font-black text-slate-800 leading-none">{totalScore.toFixed(1)}<span className="text-[10px] font-medium text-slate-400 ml-0.5">/100</span></div>
+
+                            {/* Right: metrics cluster */}
+                            <div className="flex items-center gap-3">
+                                {/* Current class */}
+                                <div className="text-center px-4 py-2 rounded-xl bg-white/8 ring-1 ring-white/15">
+                                    <div className="text-[8px] font-bold text-white/50 uppercase tracking-widest mb-1">Classe actuelle</div>
+                                    <div className="text-[15px] font-black text-white/80 leading-none tabular-nums">
+                                        {String(currentClass).replace("Classe ", "")}
+                                    </div>
+                                </div>
+
+                                {/* Separator */}
+                                <div className="h-10 w-px bg-white/15" />
+
+                                {/* Score */}
+                                <div className="text-center px-4 py-2 rounded-xl bg-white/8 ring-1 ring-white/15">
+                                    <div className="text-[8px] font-bold text-white/50 uppercase tracking-widest mb-1">Score calculé</div>
+                                    <div className="text-[22px] font-black text-white leading-none tabular-nums">
+                                        {totalScore.toFixed(1)}
+                                        <span className="text-[11px] font-bold text-white/40 ml-0.5">/100</span>
+                                    </div>
+                                </div>
+
+                                {/* Separator */}
+                                <div className="h-10 w-px bg-white/15" />
+
+                                {/* Class badge */}
+                                <div className="flex flex-col items-center gap-1">
+                                    <div className="text-[8px] font-bold text-white/50 uppercase tracking-widest">Classe finale</div>
+                                    <div className={`w-12 h-12 rounded-2xl ${cc.bg} flex flex-col items-center justify-center shadow-lg ring-2 ring-white/20 transition-transform duration-300 hover:scale-105`}>
+                                        <span className="text-[22px] font-black text-white leading-none drop-shadow-sm">{classInfo.key}</span>
+                                    </div>
+                                </div>
                             </div>
-                            <div className={`flex flex-col items-center justify-center w-12 h-12 rounded-xl ${classColorMap[classInfo.color]} text-white shadow-md`}>
-                                <span className="text-xl font-black leading-none">{classInfo.key}</span>
-                                <span className="text-[8px] uppercase font-bold opacity-80">Calculée</span>
-                            </div>
-                        </div>
-                    </DialogTitle>
+                        </DialogTitle>
+                    </div>
+
+                    {/* Bloc score strip — thin colored bars under header */}
+                    <div className="flex h-1">
+                        {blocs.map((b, i) => (
+                            <div key={i} className="h-full transition-all duration-700" style={{ flex: b.weight, background: b.color, opacity: 0.7 + (b.score / 100) * 0.3 }} />
+                        ))}
+                    </div>
                 </DialogHeader>
 
-                {/* BODY */}
-                <div className="p-5 grid grid-cols-1 lg:grid-cols-2 gap-5">
+                {/* Corps défilant (header + footer restent visibles) */}
+                <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain scroll-smooth">
+                {/* ── BODY ── */}
+                <div className="p-5 sm:p-6 grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
 
                     {/* BLOC 1 */}
                     <BlockCard title="Complexité Opérationnelle" icon={Layers} color="purple" blockScore={bloc1.score}>
                         <QuestionRow label="Distribution Finale" weight={12} score={bloc1.distribScore}>
                             <YesNoChip value={bloc1.hasDistrib} />
                         </QuestionRow>
-                        <QuestionRow label="Acheminement (% Axes > 0)" weight={6} score={bloc1.achScore}>
-                            <span className="text-xs text-slate-500">{wizardData.pctAxesArrivee || 0}%</span>
+                        <QuestionRow label="Acheminement" weight={6} score={bloc1.achScore}>
                             <YesNoChip value={bloc1.hasAcheminement} />
                         </QuestionRow>
                         <QuestionRow label="Guichet Actif" weight={6} score={bloc1.guichetScore}>
                             <YesNoChip value={bloc1.hasGuichet} />
                         </QuestionRow>
-                        <QuestionRow label="Barid Pro (tâches > 0)" weight={2} score={bloc1.baridScore}>
+                        <QuestionRow label="Barid Pro" weight={2} score={bloc1.baridScore}>
                             <YesNoChip value={bloc1.hasBaridPro} />
                         </QuestionRow>
                     </BlockCard>
 
                     {/* BLOC 2 */}
                     <BlockCard title="Charge Opérationnelle" icon={BarChart2} color="blue" blockScore={bloc2.score}>
-                        <QuestionRow label="Volume Amana" weight={12} score={bloc2.scoreAmana}>
-                            <span className="text-[10px] text-slate-500 font-mono">{bloc2.amanaGlobal.toFixed(0)}/jour</span>
+                        <QuestionRow label="Volume Amana" metaLeft={<VolumePerDayBadge value={bloc2.amanaGlobal} />} weight={12} score={bloc2.scoreAmana}>
                             <TierBar tiers={TIERS_AMANA} value={bloc2.amanaGlobal} />
                         </QuestionRow>
-                        <QuestionRow label="Volume CR" weight={8} score={bloc2.scoreCR}>
-                            <span className="text-[10px] text-slate-500 font-mono">{bloc2.crGlobal.toFixed(0)}/jour</span>
+                        <QuestionRow label="Volume CR" metaLeft={<VolumePerDayBadge value={bloc2.crGlobal} />} weight={8} score={bloc2.scoreCR}>
                             <TierBar tiers={TIERS_CR} value={bloc2.crGlobal} />
                         </QuestionRow>
-                        <QuestionRow label="Volume CO" weight={8} score={bloc2.scoreCO}>
-                            <span className="text-[10px] text-slate-500 font-mono">{bloc2.coGlobal.toFixed(0)}/jour</span>
+                        <QuestionRow label="Volume CO" metaLeft={<VolumePerDayBadge value={bloc2.coGlobal} />} weight={8} score={bloc2.scoreCO}>
                             <TierBar tiers={TIERS_CO} value={bloc2.coGlobal} />
                         </QuestionRow>
-                        <QuestionRow label="Courrier Électronique (LRH + eBarkia)" weight={4} score={bloc2.scoreElec}>
-                            <span className="text-[10px] text-slate-500 font-mono">{bloc2.elecGlobal.toFixed(0)}/jour</span>
+                        <QuestionRow label="Courrier Électronique" metaLeft={<VolumePerDayBadge value={bloc2.elecGlobal} />} weight={4} score={bloc2.scoreElec}>
                             <TierBar tiers={TIERS_ELEC} value={bloc2.elecGlobal} />
                         </QuestionRow>
                     </BlockCard>
@@ -472,7 +499,7 @@ export default function CategorisationDialog({ open, onOpenChange, wizardData, s
                             <select
                                 value={chefLieuIdx}
                                 onChange={e => setChefLieuIdx(Number(e.target.value))}
-                                className="text-[11px] border border-slate-200 rounded-lg px-2 py-1 bg-white text-slate-700 focus:outline-none focus:border-indigo-400 shadow-sm"
+                                className="text-[11px] font-semibold border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 shadow-sm transition-all duration-150 hover:border-teal-400/60 focus:outline-none focus:ring-2 focus:ring-teal-400/30 focus:border-teal-400/60 cursor-pointer"
                             >
                                 {CHEF_LIEU_OPTIONS.map((o, i) => (
                                     <option key={i} value={i}>{o.label}</option>
@@ -480,94 +507,104 @@ export default function CategorisationDialog({ open, onOpenChange, wizardData, s
                             </select>
                         </QuestionRow>
                         <QuestionRow label="Nombre de sites rattachés" weight={8} score={bloc3.sitesScore}>
-                            <select
-                                value={sitesIdx}
-                                onChange={e => setSitesIdx(Number(e.target.value))}
-                                className="text-[11px] border border-slate-200 rounded-lg px-2 py-1 bg-white text-slate-700 focus:outline-none focus:border-indigo-400 shadow-sm"
-                            >
-                                {SITES_OPTIONS.map((o, i) => (
-                                    <option key={i} value={i}>{o.label}</option>
-                                ))}
-                            </select>
+                            <div className="flex items-center gap-2">
+                                <span className="inline-flex items-center gap-1.5 text-[11px] font-black text-teal-800 tabular-nums px-2.5 py-1 rounded-lg bg-teal-50 border border-teal-200/70">
+                                    <Globe className="w-3 h-3 text-teal-500" />
+                                    {Number(sitesCountFromRecap !== undefined && sitesCountFromRecap !== null ? sitesCountFromRecap : (centreDetails?.sites_count ?? 0))}
+                                    <span className="text-[9px] font-bold text-teal-600/70">site(s)</span>
+                                </span>
+                                <span className="text-[9px] font-mono font-semibold text-slate-400 px-1.5 py-0.5 rounded bg-slate-100/80 border border-slate-200/60">
+                                    {SITES_OPTIONS[sitesIdx]?.label || "1 – 2"}
+                                </span>
+                            </div>
                         </QuestionRow>
-                        <QuestionRow label="Nombre de tournées (facteurs calculés)" weight={8} score={bloc3.scoreTournees}>
-                            <span className="text-xs font-bold text-slate-600 px-2 py-0.5 bg-slate-100 rounded">{bloc3.nbTournees} facteurs</span>
+                        <QuestionRow label="Nombre de tournées" weight={8} score={bloc3.scoreTournees}>
+                            <span className="text-[11px] font-black text-teal-800 tabular-nums px-2.5 py-1 rounded-lg bg-teal-50 border border-teal-200/70">{bloc3.nbTournees}</span>
                             <TierBar tiers={TIERS_TOURNEES} value={bloc3.nbTournees} />
                         </QuestionRow>
                     </BlockCard>
 
                     {/* BLOC 4 */}
                     <BlockCard title="Ressources" icon={Users} color="amber" blockScore={bloc4.score}>
-                        <QuestionRow label={`Effectif Global (ETP ${mode === "optimise" ? "optimisé" : mode === "recommande" ? "consolidé" : "calculé"})`} weight={11} score={bloc4.scoreEffectif}>
-                            <span className="text-xs font-bold text-slate-600 px-2 py-0.5 bg-slate-100 rounded">{bloc4.effectif} ETP</span>
+                        <QuestionRow label={`Effectif Global (${mode === "optimise" ? "optimisé" : mode === "recommande" ? "consolidé" : "calculé"})`} weight={11} score={bloc4.scoreEffectif}>
+                            <span className="text-[9px] font-black text-amber-800 tabular-nums px-1.5 py-0.5 rounded-lg bg-amber-50 border border-amber-200/80">{bloc4.effectif} ETP</span>
                             <TierBar tiers={TIERS_EFFECTIF} value={bloc4.effectif} />
                         </QuestionRow>
                         <QuestionRow label="Amplitude horaire (Shift)" weight={5} score={bloc4.scoreShift}>
-                            <span className="text-xs font-bold text-slate-600 px-2 py-0.5 bg-slate-100 rounded">{bloc4.shift} shift</span>
+                            <span className="text-[10px] font-black text-slate-700 tabular-nums px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200">{bloc4.shift} shift</span>
                         </QuestionRow>
                     </BlockCard>
 
-                    {/* SCORE SUMMARY - Spans 2 columns */}
-                    <div className="lg:col-span-2 bg-gradient-to-br from-white to-slate-50/50 p-6 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50/50 rounded-full -mr-16 -mt-16 blur-3xl pointer-events-none" />
-
-                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-8 relative z-10">
-                            {[
-                                { label: "Complexité", score: bloc1.score, color: "purple" },
-                                { label: "Charge", score: bloc2.score, color: "blue" },
-                                { label: "Territorial", score: bloc3.score, color: "teal" },
-                                { label: "Ressources", score: bloc4.score, color: "amber" },
-                            ].map((b, i) => (
-                                <div key={i} className="flex flex-col items-center p-3 rounded-2xl bg-white/50 border border-slate-100/50 shadow-sm">
-                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">{b.label}</span>
-                                    <div className="relative flex items-center justify-center w-14 h-14">
-                                        <svg className="w-14 h-14 transform -rotate-90">
-                                            <circle className="text-slate-100" strokeWidth="4" stroke="currentColor" fill="transparent" r="24" cx="28" cy="28" />
-                                            <circle className={`text-${b.color}-500`} strokeWidth="4" strokeDasharray={150.8} strokeDashoffset={150.8 - (150.8 * Math.min(b.score, 100)) / 100} strokeLinecap="round" stroke="currentColor" fill="transparent" r="24" cx="28" cy="28" />
-                                        </svg>
-                                        <span className="absolute text-xs font-black text-slate-700">{b.score.toFixed(0)}</span>
-                                    </div>
-                                </div>
-                            ))}
+                    {/* ── SCORE SUMMARY ── */}
+                    <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200/80 shadow-[0_4px_20px_-8px_rgba(15,23,42,0.08)] overflow-hidden">
+                        {/* Top label */}
+                        <div className="px-6 pt-5 pb-3 border-b border-slate-100 flex items-center gap-2">
+                            <div className="w-1 h-4 rounded-full bg-[#0a2540]" />
+                            <h4 className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-600">Synthèse des scores</h4>
                         </div>
-                        <div className="flex items-center justify-between pt-6 border-t border-slate-100 relative z-10">
-                            <div className="flex items-center gap-6">
-                                <div className="p-4 bg-white rounded-2xl shadow-sm border border-slate-100">
-                                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Score Cumulé</div>
-                                    <div className="flex items-baseline gap-1">
-                                        <span className="text-4xl font-black text-slate-800 tracking-tight">{totalScore.toFixed(1)}</span>
-                                        <span className="text-sm font-bold text-slate-400">/ 100</span>
-                                    </div>
-                                </div>
-                                <div className="hidden md:block">
-                                    <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Seuils de Classe</div>
-                                    <div className="flex gap-1.5">
-                                        {['A (0-25)', 'B (26-50)', 'C (51-75)', 'D (75+)'].map((s, i) => (
-                                            <span key={i} className="text-[9px] font-bold px-2 py-0.5 bg-slate-100 text-slate-500 rounded-full border border-slate-200/50">{s}</span>
-                                        ))}
-                                    </div>
+
+                        <div className="px-6 py-5 flex flex-col sm:flex-row items-center gap-6">
+                            {/* Bloc breakdown */}
+                            <div className="flex-1 w-full space-y-3">
+                                {blocs.map((b, i) => {
+                                    const pct = Math.min(b.score, 100);
+                                    return (
+                                        <div key={i} className="flex items-center gap-3">
+                                            <div className="text-[10px] font-semibold text-slate-500 w-20 shrink-0 text-right">{b.label}</div>
+                                            <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                                                <div
+                                                    className="h-full rounded-full transition-all duration-700 ease-out"
+                                                    style={{ width: `${pct}%`, background: b.color }}
+                                                />
+                                            </div>
+                                            <div className="text-[10px] font-black tabular-nums w-10 text-right" style={{ color: b.color }}>
+                                                {b.score.toFixed(1)}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                                {/* Threshold chips */}
+                                <div className="flex gap-1.5 pt-1 flex-wrap">
+                                    {[
+                                        { label: "A — 0 à 25", color: "bg-rose-50 text-rose-500 border-rose-200" },
+                                        { label: "B — 26 à 50", color: "bg-amber-50 text-amber-600 border-amber-200" },
+                                        { label: "C — 51 à 75", color: "bg-blue-50 text-blue-600 border-blue-200" },
+                                        { label: "D — 75+", color: "bg-emerald-50 text-emerald-600 border-emerald-200" },
+                                    ].map((s, i) => (
+                                        <span key={i} className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${s.color}`}>{s.label}</span>
+                                    ))}
                                 </div>
                             </div>
-                            <div className={`flex items-center gap-4 pl-8 pr-6 py-4 rounded-3xl border-2 ${classBadgeMap[classInfo.color]} shadow-xl transition-all duration-500 hover:scale-105 group`}>
+
+                            {/* Divider */}
+                            <div className="hidden sm:block w-px h-24 bg-slate-100" />
+
+                            {/* Final class display */}
+                            <div className={`flex items-center gap-4 px-6 py-4 rounded-2xl border-2 ${cc.badge} transition-all duration-300 hover:scale-[1.02] group shrink-0`}>
                                 <div className="text-right">
-                                    <div className="text-[10px] font-black uppercase tracking-[0.2em] opacity-70">Classe Finale</div>
-                                    <div className="text-xs font-bold whitespace-nowrap">{classInfo.description}</div>
+                                    <div className="text-[9px] font-black uppercase tracking-[0.2em] opacity-60 mb-1">Classe Finale</div>
+                                    <div className="text-[13px] font-black leading-tight">{classInfo.description}</div>
+                                    <div className="text-[22px] font-black tabular-nums leading-none mt-1 opacity-80">{totalScore.toFixed(1)}<span className="text-[11px] font-bold opacity-50 ml-0.5">/100</span></div>
                                 </div>
-                                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-3xl font-black shadow-lg bg-white ring-4 ring-white/50`}>
+                                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-3xl font-black ${cc.bg} text-white shadow-md ring-4 ring-white/60 transition-transform duration-300 group-hover:scale-105`}>
                                     {classInfo.key}
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
+                </div>
 
-                {/* FOOTER */}
-                <div className="px-5 py-4 bg-white border-t border-slate-200 flex justify-end rounded-b-2xl">
-                    <Button onClick={() => onOpenChange(false)} variant="outline" className="border-slate-300 text-slate-600 hover:bg-slate-100 px-8 font-bold text-xs">
-                        Fermer l'Analyse
+                {/* ── FOOTER ── */}
+                <div className="px-5 py-3.5 bg-white border-t border-slate-200/80 flex justify-end rounded-b-2xl shrink-0 z-10">
+                    <Button
+                        onClick={() => onOpenChange(false)}
+                        className="bg-[#0a2540] hover:bg-[#0d3060] text-white shadow-md hover:shadow-lg px-7 font-bold text-[11px] rounded-xl transition-all duration-200 border-0 h-9"
+                    >
+                        Fermer l'analyse
                     </Button>
                 </div>
-            </DialogContent >
-        </Dialog >
+            </DialogContent>
+        </Dialog>
     );
 }

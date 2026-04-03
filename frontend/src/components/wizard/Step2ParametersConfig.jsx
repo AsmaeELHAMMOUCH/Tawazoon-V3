@@ -157,7 +157,7 @@ const PARAM_SECTIONS = [
 
             // Row 5: VagueMaster / BP
             { id: "pctVagueMaster", label: "% Vaguemestre", suffix: "%", icon: Layout, iconColor: "text-purple-600", iconBg: "bg-purple-50", flux: ["cr", "co"] },
-            { id: "pctBoitePostale", label: "% Boite postale", suffix: "%", icon: Mail, iconColor: "text-blue-600", iconBg: "bg-blue-50", flux: ["cr", "co"] },
+            { id: "pctBoitePostale", label: "% Boite postale", suffix: "%", icon: Mail, iconColor: "text-blue-600", iconBg: "bg-blue-50", flux: ["co"] },
 
             // Row 6: Retour / % ED
             { id: "pctRetour", label: "Retour", suffix: "%", icon: Undo2, iconColor: "text-amber-600", iconBg: "bg-amber-50", flux: ["amana", "cr", "co"] },
@@ -522,7 +522,7 @@ export default function Step2ParametersConfig({
         const defaults = {
             amana: { amana_pctCollecte: 5, amana_pctMarcheOrdinaire: 0, amana_pctGuichet: 95, amana_pctAxesArrivee: 0, amana_pctAxesDepart: 100, amana_pctNational: 100, amana_pctInternational: 0, amana_pctRetour: 0, amana_pctCrbt: 50, amana_pctHorsCrbt: 50 },
             co: { co_pctCollecte: 5, co_pctMarcheOrdinaire: 0, co_pctGuichet: 95, co_pctAxesArrivee: 0, co_pctAxesDepart: 100, co_pctRetour: 0, co_pctVagueMaster: 0, co_pctBoitePostale: 0, nbrCoSac: 350 },
-            cr: { cr_pctCollecte: 5, cr_pctMarcheOrdinaire: 0, cr_pctGuichet: 95, cr_pctAxesArrivee: 0, cr_pctAxesDepart: 100, cr_pctNational: 100, cr_pctInternational: 0, cr_pctRetour: 0, cr_pctCrbt: 50, cr_pctHorsCrbt: 50, cr_pctVagueMaster: 0, cr_pctBoitePostale: 0, crParCaisson: 40 },
+            cr: { cr_pctCollecte: 5, cr_pctMarcheOrdinaire: 0, cr_pctGuichet: 95, cr_pctAxesArrivee: 0, cr_pctAxesDepart: 100, cr_pctNational: 100, cr_pctInternational: 0, cr_pctRetour: 0, cr_pctCrbt: 50, cr_pctHorsCrbt: 50, cr_pctVagueMaster: 0, crParCaisson: 40 },
         };
         updateData(defaults[activeTab] || {});
     }, [activeTab, updateData]);
@@ -572,9 +572,12 @@ export default function Step2ParametersConfig({
         if (["co", "cr"].includes(source)) {
             Object.assign(common, {
                 co_pctVagueMaster: pick("pctVagueMaster"),
-                co_pctBoitePostale: pick("pctBoitePostale"),
                 cr_pctVagueMaster: pick("pctVagueMaster"),
-                cr_pctBoitePostale: pick("pctBoitePostale"),
+            });
+        }
+        if (source === "co") {
+            Object.assign(common, {
+                co_pctBoitePostale: pick("pctBoitePostale"),
             });
         }
 

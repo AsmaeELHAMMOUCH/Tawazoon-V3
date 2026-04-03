@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import * as XLSX from 'xlsx';
 import {
     Card, CardContent, CardHeader, CardTitle
@@ -108,7 +108,6 @@ const DEFAULT_PARAMS = {
     cr_pct_national: null,
     cr_pct_international: null,
     cr_pct_vague_master: null,
-    cr_pct_boite_postale: null,
     cr_pct_crbt: null,
     cr_pct_hors_crbt: null
 };
