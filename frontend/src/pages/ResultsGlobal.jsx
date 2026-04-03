@@ -50,6 +50,11 @@ export default function ResultsGlobal() {
     sacsJour: 50, dossiersMois: 6500, productivite: 100, dossiersJour: 295.45, heuresNetJour: 8.0,
   });
 
+  const roundValue = (value) => {
+    if (typeof value !== "number" || Number.isNaN(value)) return value;
+    return Math.round(value);
+  };
+
   // Données/état
   const [rows, setRows] = useState(defaultStaffing); // détail par poste
   const [aggRows, setAggRows] = useState([]);        // agrégats centre/région
@@ -257,14 +262,17 @@ export default function ResultsGlobal() {
   function toChartData(aggregates, detailRows, gb) {
     if (gb === "poste") {
       const items = (detailRows || []).map((r) => ({
-        label: r.role, Actuel: r.actuel, Calcule: r.calcule, Recommande: r.recommande,
+        label: r.role,
+        Actuel: roundValue(r.actuel),
+        Calcule: roundValue(r.calcule),
+        Recommande: roundValue(r.recommande),
       }));
       if (detailRows?.length) {
         const t = detailRows.reduce(
           (a, r) => ({
-            Actuel: a.Actuel + r.actuel,
-            Calcule: a.Calcule + r.calcule,
-            Recommande: a.Recommande + r.recommande,
+            Actuel: a.Actuel + roundValue(r.actuel),
+            Calcule: a.Calcule + roundValue(r.calcule),
+            Recommande: a.Recommande + roundValue(r.recommande),
           }), { Actuel: 0, Calcule: 0, Recommande: 0 }
         );
         items.push({ label: "TOTAL", ...t });
@@ -272,26 +280,39 @@ export default function ResultsGlobal() {
       return items;
     }
     return (aggregates || []).map((x) => ({
-      label: x.label, Actuel: x.actuel, Calcule: x.calcule, Recommande: x.recommande,
+      label: x.label,
+      Actuel: roundValue(x.actuel),
+      Calcule: roundValue(x.calcule),
+      Recommande: roundValue(x.recommande),
     }));
   }
 
   /* ——— KPI & Totaux ——— */
   const totals = useMemo(() => {
-    const t = rows.reduce((acc, r) => ({
-      actuel: acc.actuel + Number(r.actuel || 0),
-      calcule: acc.calcule + Number(r.calcule || 0),
-      recommande: acc.recommande + Number(r.recommande || 0),
-    }), { actuel: 0, calcule: 0, recommande: 0 });
+    const t = rows.reduce((acc, r) => {
+      const vActuel = roundValue(Number(r.actuel || 0));
+      const vCalcule = roundValue(Number(r.calcule || 0));
+      const vRecommande = roundValue(Number(r.recommande || 0));
+      return {
+        actuel: acc.actuel + vActuel,
+        calcule: acc.calcule + vCalcule,
+        recommande: acc.recommande + vRecommande,
+      };
+    }, { actuel: 0, calcule: 0, recommande: 0 });
     return { ...t, ecartCA: t.calcule - t.actuel, ecartRA: t.recommande - t.actuel, ecartRC: t.recommande - t.calcule };
   }, [rows]);
 
   const aggTotals = useMemo(() => {
-    const t = (aggRows || []).reduce((a, r) => ({
-      actuel: a.actuel + Number(r.actuel || 0),
-      calcule: a.calcule + Number(r.calcule || 0),
-      recommande: a.recommande + Number(r.recommande || 0),
-    }), { actuel: 0, calcule: 0, recommande: 0 });
+    const t = (aggRows || []).reduce((a, r) => {
+      const vActuel = roundValue(Number(r.actuel || 0));
+      const vCalcule = roundValue(Number(r.calcule || 0));
+      const vRecommande = roundValue(Number(r.recommande || 0));
+      return {
+        actuel: a.actuel + vActuel,
+        calcule: a.calcule + vCalcule,
+        recommande: a.recommande + vRecommande,
+      };
+    }, { actuel: 0, calcule: 0, recommande: 0 });
     return { ...t, ecartCA: t.calcule - t.actuel, ecartRA: t.recommande - t.actuel, ecartRC: t.recommande - t.calcule };
   }, [aggRows]);
 
@@ -435,15 +456,18 @@ function TableBlock({ rows, totals }) {
           </thead>
           <tbody>
             {rows.map((row, i) => {
-              const ca = row.calcule - row.actuel
-              const ra = row.recommande - row.actuel
-              const rc = row.recommande - row.calcule
+              const vActuel = roundValue(row.actuel);
+              const vCalcule = roundValue(row.calcule);
+              const vRecommande = roundValue(row.recommande);
+              const ca = vCalcule - vActuel;
+              const ra = vRecommande - vActuel;
+              const rc = vRecommande - vCalcule;
               return (
                 <tr key={i} className="odd:bg-white even:bg-slate-50 hover:bg-blue-50 transition-colors">
                   <Td>{row.role}</Td>
-                  <Td center>{row.actuel}</Td>
-                  <Td center>{row.calcule}</Td>
-                  <Td center>{row.recommande}</Td>
+                  <Td center>{vActuel}</Td>
+                  <Td center>{vCalcule}</Td>
+                  <Td center>{vRecommande}</Td>
                   <Td center className={cls(ca)}>{ca}</Td>
                   <Td center className={cls(ra)}>{ra}</Td>
                   <Td center className={cls(rc)}>{rc}</Td>
@@ -468,16 +492,19 @@ function TableBlock({ rows, totals }) {
       {/* Mobile */}
       <div className="md:hidden divide-y divide-slate-200">
         {rows.map((row, i) => {
-          const ca = row.calcule - row.actuel
-          const ra = row.recommande - row.actuel
-          const rc = row.recommande - row.calcule
+          const vActuel = roundValue(row.actuel);
+          const vCalcule = roundValue(row.calcule);
+          const vRecommande = roundValue(row.recommande);
+          const ca = vCalcule - vActuel;
+          const ra = vRecommande - vActuel;
+          const rc = vRecommande - vCalcule;
           return (
             <div key={i} className="p-4">
               <div className="font-semibold text-slate-900">{row.role}</div>
               <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
-                <div className="text-slate-600">Actuel</div><div className="text-right">{row.actuel}</div>
-                <div className="text-slate-600">Calculé</div><div className="text-right">{row.calcule}</div>
-                <div className="text-slate-600">Recommandé</div><div className="text-right">{row.recommande}</div>
+                <div className="text-slate-600">Actuel</div><div className="text-right">{vActuel}</div>
+                <div className="text-slate-600">Calculé</div><div className="text-right">{vCalcule}</div>
+                <div className="text-slate-600">Recommandé</div><div className="text-right">{vRecommande}</div>
                 <div className="text-slate-600">Écart C/A</div><div className={["text-right", cls(ca)].join(" ")}>{ca}</div>
                 <div className="text-slate-600">Écart R/A</div><div className={["text-right", cls(ra)].join(" ")}>{ra}</div>
                 <div className="text-slate-600">Écart R/C</div><div className={["text-right", cls(rc)].join(" ")}>{rc}</div>
@@ -504,14 +531,17 @@ function AggregateTableBlock({ rows, totals, labelTitle, onRowClick }) {
           </thead>
           <tbody>
             {(rows || []).map((r, i) => {
-              const ca = r.calcule - r.actuel, ra = r.recommande - r.actuel, rc = r.recommande - r.calcule;
+              const vActuel = roundValue(r.actuel);
+              const vCalcule = roundValue(r.calcule);
+              const vRecommande = roundValue(r.recommande);
+              const ca = vCalcule - vActuel, ra = vRecommande - vActuel, rc = vRecommande - vCalcule;
               return (
                 <tr key={i}
                   onClick={() => onRowClick && onRowClick(r)}
                   className="odd:bg-white even:bg-slate-50 hover:bg-blue-50 transition-colors cursor-pointer"
                   title="Cliquer pour détailler">
                   <Td>{r.label}</Td>
-                  <Td center>{r.actuel}</Td><Td center>{r.calcule}</Td><Td center>{r.recommande}</Td>
+                  <Td center>{vActuel}</Td><Td center>{vCalcule}</Td><Td center>{vRecommande}</Td>
                   <Td center className={cls(ca)}>{ca}</Td><Td center className={cls(ra)}>{ra}</Td><Td center className={cls(rc)}>{rc}</Td>
                 </tr>
               );
@@ -532,14 +562,19 @@ function AggregateTableBlock({ rows, totals, labelTitle, onRowClick }) {
       {/* Mobile */}
       <div className="md:hidden divide-y divide-slate-200">
         {(rows || []).map((r, i) => {
-          const ca = r.calcule - r.actuel, ra = r.recommande - r.actuel, rc = r.recommande - r.calcule;
+          const vActuel = roundValue(r.actuel);
+          const vCalcule = roundValue(r.calcule);
+          const vRecommande = roundValue(r.recommande);
+          const ca = vCalcule - vActuel;
+          const ra = vRecommande - vActuel;
+          const rc = vRecommande - vCalcule;
           return (
             <div key={i} className="p-4" onClick={() => onRowClick && onRowClick(r)}>
               <div className="font-semibold text-slate-900">{r.label}</div>
               <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
-                <div className="text-slate-600">Actuel</div><div className="text-right">{r.actuel}</div>
-                <div className="text-slate-600">Calculé</div><div className="text-right">{r.calcule}</div>
-                <div className="text-slate-600">Recommandé</div><div className="text-right">{r.recommande}</div>
+                <div className="text-slate-600">Actuel</div><div className="text-right">{vActuel}</div>
+                <div className="text-slate-600">Calculé</div><div className="text-right">{vCalcule}</div>
+                <div className="text-slate-600">Recommandé</div><div className="text-right">{vRecommande}</div>
                 <div className="text-slate-600">Écart C/A</div><div className={["text-right", cls(ca)].join(" ")}>{ca}</div>
                 <div className="text-slate-600">Écart R/A</div><div className={["text-right", cls(ra)].join(" ")}>{ra}</div>
                 <div className="text-slate-600">Écart R/C</div><div className={["text-right", cls(rc)].join(" ")}>{rc}</div>

@@ -1,7 +1,10 @@
+from app.api.effectifs_par_position3 import router as effectifs_par_position3_router
 from fastapi import FastAPI, Request, Depends
-from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
+import logging
 import traceback
 
 from app.api.refs import router as refs_router
@@ -19,15 +22,37 @@ from app.api.simulation_data_driven import router as simulation_data_driven_rout
 from app.api.national import router as national_router
 from app.api.categorisation import router as categorisation_router
 from app.api.builder import router as builder_router
-from app.api.cndp_router import router as cndp_router # 🆕 CNDP Isolation
-from app.api.bandoeng_router import router as bandoeng_router # 🆕 Bandoeng Isolation
-from app.api.ccp import router as ccp_router # 🆕 CCP Standalone Module
-from app.api.cna import router as cna_router # 🆕 CNA Standalone Module
-from app.api.cci import router as cci_router # 🆕 CCI Standalone Module
+from app.api.cndp_router import router as cndp_router #  CNDP Isolation
+from app.api.bandoeng_router import router as bandoeng_router #  Bandoeng Isolation
+from app.api.ccp import router as ccp_router #  CCP Standalone Module
+from app.api.cna import router as cna_router #  CNA Standalone Module
+from app.api.cci import router as cci_router #  CCI Standalone Module
+from app.api.comparaison_effectif import router as comparaison_effectif_router
+from app.api.effectif_global import router as effectif_global_router
+from app.api.normes import router as normes_router
+from app.api.capacite_nominale import router as capacite_nominale_router
+from app.api.chronogramme import router as chronogramme_router
+from app.api.schema_process import (
+    schema_router as schema_process_router,
+    assets_router as schema_assets_router,
+)
+from app.api.referentiel import router as referentiel_router
+from app.api.recommande import router as recommande_router
+from app.api.comparaison_actuel_reco import router as comparaison_actuel_reco_router
+from app.api.recommande_capacite import router as recommande_capacite_router
+from app.api.recommande_schema import router as recommande_schema_router
+from app.api.recommande_chronogramme import router as recommande_chronogramme_router
+from app.api.routes.ratios_productivite import router as ratios_productivite_router
+from app.api.economies_budgetaires import router as economies_budgetaires_router
+from app.api.simulation_globale import router as simulation_globale_router
+from app.api.comparatif_positions import router as comparatif_positions_router
 
+from app.core.config import settings
 from app.core.db import engine, Base, get_db
 from app.models import db_models, scoring_models, categorisation_models
 # ...
+
+logger = logging.getLogger("uvicorn.error")
 
 
 # Create tables if they don't exist
@@ -41,6 +66,23 @@ app = FastAPI(
     version="1.0.0",
     debug=True
 )
+
+
+@app.on_event("startup")
+def dump_routes():
+    for r in app.router.routes:
+        try:
+            logger.warning(
+                "ROUTE %s %s name=%s endpoint=%s",
+                getattr(r, "methods", None),
+                getattr(r, "path", None),
+                getattr(r, "name", None),
+                getattr(r, "endpoint", None),
+            )
+        except Exception:
+            pass
+
+app.mount("/assets", StaticFiles(directory=settings.assets_dir), name="assets")
 
 @app.get("/debug/routes")
 def get_routes():
@@ -58,7 +100,7 @@ async def debug_exception_handler(request: Request, exc: Exception):
         f.write("-" * 80 + "\n")
         f.write(f"Exception: {str(exc)}\n")
         traceback.print_exc(file=f)
-    traceback.print_exc()  # ✅ affiche le traceback complet dans le terminal
+    traceback.print_exc()  #  affiche le traceback complet dans le terminal
     return JSONResponse(
         status_code=500,
         content={"error": str(exc), "where": "unhandled_exception"}
@@ -75,7 +117,7 @@ async def log_requests(request: Request, call_next):
 # Configuration CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],# à restreindre plus tard si besoin
+    allow_origins=["*"],#  restreindre plus tard si besoin
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -87,36 +129,55 @@ app.include_router(activite_router, prefix="/api")
 app.include_router(directions_router, prefix="/api")
 
 app.include_router(refs_router, prefix="/api")
-# 👇 Router "simulation" : /simulate, /vue-centre-optimisee, /vue-centre-sans-regroupement, etc.
+#  Router "simulation" : /simulate, /vue-centre-optimisee, /vue-centre-sans-regroupement, etc.
 app.include_router(simulation_router, prefix="/api")    
 app.include_router(scoring_router, prefix="/api")
-app.include_router(export_router, prefix="/api") # ✅ Ajoût correct ici
-app.include_router(volumes_router) # ✅ Nouvelle architecture Flux/Sens/Segment
-app.include_router(simulation_direct_router) # ✅ Simulation directe sans VolumeSimulation
-app.include_router(simulation_data_driven_router) # ✅ Architecture 100% data-driven
-# ✅ Builder (Mounted explicitly) - Moved UP to ensure priority/loading check
-# ✅ Builder (Mounted explicitly) - Moved UP to ensure priority/loading check
+app.include_router(export_router, prefix="/api") #  Ajot correct ici
+app.include_router(volumes_router) #  Nouvelle architecture Flux/Sens/Segment
+app.include_router(simulation_direct_router) #  Simulation directe sans VolumeSimulation
+app.include_router(simulation_data_driven_router) #  Architecture 100% data-driven
+#  Builder (Mounted explicitly) - Moved UP to ensure priority/loading check
+#  Builder (Mounted explicitly) - Moved UP to ensure priority/loading check
 print(f">>>> REGISTERING BUILDER ROUTER AT /api/builder. Routes count: {len(builder_router.routes)}")
 app.include_router(builder_router, prefix="/api/builder") 
 
 
 
 
-app.include_router(national_router, prefix="/api") # ✅ Simulation nationale
-print(f"✅ [MAIN] National Router included. Routes starting with /api/simulation/template:")
+app.include_router(national_router, prefix="/api") #  Simulation nationale
+print(f" [MAIN] National Router included. Routes starting with /api/simulation/template:")
 for route in app.routes:
     if hasattr(route, "path") and "/simulation/template" in route.path:
         print(f"   -> {route.path} [{route.methods}]")
 
-app.include_router(categorisation_router, prefix="/api") # ✅ Catégorisation
-app.include_router(cndp_router, prefix="/api") # ✅ CNDP Isolation
-app.include_router(bandoeng_router, prefix="/api") # ✅ Bandoeng Isolation
-app.include_router(ccp_router, prefix="/api") # ✅ CCP Standalone Module
-app.include_router(cna_router, prefix="/api") # ✅ CNA Standalone Module
-app.include_router(cci_router, prefix="/api") # ✅ CCI Standalone Module
+app.include_router(categorisation_router, prefix="/api") #  Catgorisation
+app.include_router(cndp_router, prefix="/api") #  CNDP Isolation
+app.include_router(bandoeng_router, prefix="/api") #  Bandoeng Isolation
+app.include_router(ccp_router, prefix="/api") #  CCP Standalone Module
+app.include_router(cna_router, prefix="/api") #  CNA Standalone Module
+app.include_router(cci_router, prefix="/api") #  CCI Standalone Module
+app.include_router(effectif_global_router, prefix="/api")
+app.include_router(comparaison_effectif_router, prefix="/api")
+app.include_router(effectifs_par_position3_router, prefix="/api")
+app.include_router(normes_router, prefix="/api")
+app.include_router(capacite_nominale_router, prefix="/api")
+app.include_router(chronogramme_router, prefix="/api")
+app.include_router(schema_process_router, prefix="/api")
+app.include_router(schema_assets_router, prefix="/api")
+app.include_router(referentiel_router, prefix="/api")
+app.include_router(recommande_router, prefix="/api")
+app.include_router(comparaison_actuel_reco_router, prefix="/api")
+app.include_router(recommande_capacite_router, prefix="/api")
+app.include_router(recommande_schema_router, prefix="/api")
+app.include_router(recommande_chronogramme_router, prefix="/api")
+app.include_router(simulation_globale_router, prefix="/api")
+app.include_router(ratios_productivite_router, prefix="/api")
+app.include_router(economies_budgetaires_router)
+app.include_router(comparatif_positions_router)
+
 #app.include_router(views_router, prefix="/api")
-from app.api.taches_mgmt import router as taches_mgmt_router # 🆕 Taches Management
-from app.api.postes_mgmt import router as postes_mgmt_router # 🆕 Postes Management
+from app.api.taches_mgmt import router as taches_mgmt_router #  Taches Management
+from app.api.postes_mgmt import router as postes_mgmt_router #  Postes Management
 
 # ... (imports)
 
@@ -146,14 +207,15 @@ async def startup_event():
     print("REGISTERED ROUTES:")
     for route in app.routes:
         if hasattr(route, "path"):
-            print(f" - {route.path} [{route.methods}]")
+            methods = getattr(route, "methods", ["ANY"])
+            print(f" - {route.path} [{methods}]")
     print("="*50 + "\n")
 
 
 @app.get("/")
 def root():
 
-    """Point d'entrée principal de l'API"""
+    """Point d'entre principal de l'API"""
     return {
         "message": "API Simulation Effectifs",
         "version": "1.0.0",
@@ -174,17 +236,7 @@ def root():
 def ping():
     return {"message": "pong"}
 
-VERSION = "Version B"
+VERSION = "Version D"
 # Force reload
 # Force reload 01/05/2026 17:18:00
-
-@app.get("/debug/routes")
-def get_routes():
-    import json
-    routes = []
-    for route in app.routes:
-        if hasattr(route, "path"):
-            routes.append(route.path)
-    return routes
-
-# Force Reload 2026-02-03 Force Refresh
+# FORCE API RESTART

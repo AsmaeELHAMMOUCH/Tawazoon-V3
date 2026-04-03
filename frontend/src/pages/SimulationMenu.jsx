@@ -46,7 +46,7 @@ export default function MenuAnalyseEffectifs() {
       title: "Menu de simulation",
       chipClass: CHIP_BLUE,
       items: [
-        { icon: Layers, title: "Tableau De Bord Global", key: "tableau" },
+        { icon: Layers, title: "Tableau de Bord Global", key: "tableau" },
         { icon: BarChart, title: "Ratios", key: "ratios" },
         { icon: PiggyBank, title: "Économies budgétaires Estimées", key: "economies" },
         { icon: Scale, title: "Comparatif Positions", key: "comparatif" },
@@ -65,6 +65,7 @@ export default function MenuAnalyseEffectifs() {
         { icon: Users, title: "Simulation par Région", key: "simulation", flux: "regional" },
         { icon: Building, title: "Simulation Nationale", key: "simulation", flux: "national" },
         { icon: FileText, title: "Capacité Nominale", key: "capacite-nominale" },
+        { icon: TimerReset, title: "Chronogramme", key: "chronogramme" },
         { icon: BookText, title: "Référentiel", key: "referentiel" },
         { icon: Workflow, title: "Schéma", key: "schema" },
       ],
@@ -81,6 +82,7 @@ export default function MenuAnalyseEffectifs() {
         { icon: Users, title: "Simulation par Région", key: "simulation", flux: "regional" },
         { icon: Building, title: "Simulation Nationale", key: "simulation", flux: "national" },
         { icon: FileText, title: "Capacité Nominale", key: "capacite-nominale" },
+        { icon: TimerReset, title: "Chronogramme", key: "chronogramme" },
         { icon: BookText, title: "Référentiel", key: "referentiel" },
         { icon: Workflow, title: "Schéma", key: "schema" },
       ],
@@ -101,7 +103,7 @@ export default function MenuAnalyseEffectifs() {
   const handleCardClick = (item) => {
     if (sectionKey === "vue-globale") {
       const vueRoutes = {
-        tableau: "/app/vue-globale/tableau",
+        tableau: "/app/vue-globale/v3",
         ratios: "/app/vue-globale/ratios",
         economies: "/app/vue-globale/economies-budgetaires",
         comparatif: "/app/vue-globale/comparatif",
@@ -135,6 +137,20 @@ export default function MenuAnalyseEffectifs() {
       return navigate("/app/simulation/intervenant-avancee", { state: { flux: "intervenant-avancee" } });
     }
 
+
+    if (item.key === "chronogramme") {
+      if (sectionKey === "actuel") return navigate("/app/actuel/chronogramme/taches");
+      if (sectionKey === "recommande") return navigate("/dimensionnement-recommande/chronogramme/taches");
+    }
+
+    if (item.key === "schema") {
+      if (sectionKey === "actuel") return navigate("/schema-process");
+      if (sectionKey === "recommande") return navigate("/dimensionnement-recommande/schema-process");
+    }
+
+    if (item.key === "referentiel") {
+      return navigate("/referentiel");
+    }
 
     navigate(`/app/${sectionKey}/${item.key}`);
   };

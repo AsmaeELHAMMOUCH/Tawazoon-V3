@@ -2216,6 +2216,11 @@ export default function SimulationEffectifs() {
 
     const overrideVolumes = overrides.volumes || {};
 
+    // Si la page Intervenant envoie la grille de volumes, on la stocke pour VueCentre
+    if (overrideVolumes.grid_values || overrideVolumes.volumes_flux_grid) {
+      setVolumesFluxGrid(overrideVolumes.grid_values || overrideVolumes.volumes_flux_grid);
+    }
+
     const heures_net_calculees =
       heuresNet && !Number.isNaN(Number(heuresNet))
         ? Number(heuresNet)
@@ -2973,7 +2978,7 @@ export default function SimulationEffectifs() {
             EmptyStateDirty={EmptyStateDirty}
             GraphReferentiel={GraphReferentiel}
             GraphResultats={GraphResultats}
-            volumesFluxGrid={volumesFluxGrid}
+            volumesFluxGrid={volumesFluxGrid || bandoengGridValues}
             setVolumesFluxGrid={setVolumesFluxGrid}
             edPercent={edPercent}
             setEdPercent={setEdPercent}

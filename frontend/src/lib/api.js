@@ -3,6 +3,7 @@ const envBase = import.meta.env.VITE_API_BASE || "";
 // Hack: Ignore unreachable IP in dev to use Vite proxy
 const cleanBase = envBase.includes("10.10.1.151") ? "" : envBase;
 const API_BASE = cleanBase ? `${cleanBase}/api` : "/api";
+export const API_BASE_URL = API_BASE;
 
 function getToken() {
   const t = localStorage.getItem("auth_token") || sessionStorage.getItem("auth_token");

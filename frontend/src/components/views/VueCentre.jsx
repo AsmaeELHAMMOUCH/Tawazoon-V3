@@ -15,15 +15,12 @@ import {
   EyeOff,
   Sliders,
   X,
-  Calendar,
-  Layers,
-  Users,
-  BarChart,
-  FileText,
-  DollarSign,
 } from "lucide-react";
 
 import { api } from "../../lib/api";
+import CapaciteNominaleTable from "../tables/CapaciteNominaleTable";
+import { computeCapaciteNominalePositions } from "../../utils/capaciteNominale";
+import BandoengGrid from "../centres_uniq/BandoengGrid";
 
 /* ===================== Helpers ===================== */
 const sanitize = (val) =>
@@ -64,6 +61,17 @@ const formatSmallNumber = (value, decimals = 2) => {
   const num = typeof value === "number" ? value : parseFloat(value);
   if (!Number.isFinite(num)) return "0,00";
   return num.toFixed(decimals).replace(".", ",");
+};
+
+// Mapping produit aligné avec la page Intervenant
+const mapProduit = (produitRaw) => {
+  const p = String(produitRaw || "").toUpperCase();
+  if (p.includes("AMANA") || p.includes("COLIS")) return "AMANA";
+  if (p.includes("CO") || p.includes("ORDINAIRE")) return "CO";
+  if (p.includes("CR") || p.includes("RECOMMANDE") || p.includes("RECOMMANDÉ")) return "CR";
+  if (p.includes("BARKIA")) return "E-BARKIA";
+  if (p.includes("LRH") || p.includes("HYBRIDE")) return "LRH";
+  return "AUTRE";
 };
 
 /** Mode d’activation des flux selon catégorie */
@@ -548,6 +556,9 @@ export default function VueCentre({
   const navigate = useNavigate();
   const replayData = location.state?.replayData;
 
+  // 🆕 État local pour les détails officiels (Alignement VueIntervenant)
+  const [internalCentreDetails, setInternalCentreDetails] = useState(null);
+
   const [error, setError] = useState("");
 
   const [annualInputs, setAnnualInputs] = useState({
@@ -648,13 +659,11 @@ export default function VueCentre({
   /* const [showDetailsModal, setShowDetailsModal] = useState(false); */
   const [activeModal, setActiveModal] = useState(null); // 'ACTUEL', 'CALC'
   const showDetailsModal = activeModal !== null;
-  const setShowDetailsModal = (val) => setActiveModal(val ? 'CALC' : null); // Compatibilité ancienne API
-
+  const setShowDetailsModal = (val) => !val && setActiveModal(null); // Compatibilité ancienne API
 
   const [showDetails, setShowDetails] = useState(false);
   const [showMODDetails, setShowMODDetails] = useState(false);
   const [showMOIDetails, setShowMOIDetails] = useState(false);
-  const [showRecapParams, setShowRecapParams] = useState(true); // 👁️ Affichage du contenu de la carte Rappel des paramètres
 
 
 
@@ -677,6 +686,30 @@ export default function VueCentre({
     return Number(centre) || null;
   }, [centre]);
 
+  // 🆕 Effet pour charger les détails officiels quand le centre change
+  useEffect(() => {
+    if (!centreId) {
+      setInternalCentreDetails(null);
+      return;
+    }
+
+    let cancelled = false;
+    const fetchDetails = async () => {
+      try {
+        const res = await fetch(`/api/bandoeng/centre-details/${centreId}`);
+        if (res.ok && !cancelled) {
+          const data = await res.json();
+          setInternalCentreDetails(data);
+        }
+      } catch (e) {
+        console.warn("Erreur chargement détails centre (VueCentre):", e);
+      }
+    };
+
+    fetchDetails();
+    return () => { cancelled = true; };
+  }, [centreId]);
+
   // --- TEST MODE LOGIC ---
   // --- Corrected Logic ---
 
@@ -698,37 +731,140 @@ export default function VueCentre({
     return c?.nom || c?.label || c?.name || "";
   }, [centreObj, centres, centre]);
 
+  const centreRegionLabel = useMemo(() => {
+    if (centreObj?.region_label) return centreObj.region_label;
+    if (centreObj?.region?.label) return centreObj.region.label;
+    const c = centres.find(ct => String(ct.id) === String(centre));
+    if (c?.region_label || c?.region?.label) return c.region_label || c.region.label;
+    if (region && regions && regions.length) {
+      const r = regions.find(rg => String(rg.id) === String(region));
+      if (r) return r.label || r.name || r.nom;
+    }
+    return "—";
+  }, [centreObj, centres, centre, region, regions]);
+
+  const centreTypologieLabel = useMemo(() => {
+    if (selectedTypology) return selectedTypology;
+    if (centreObj?.typologie) return centreObj.typologie;
+    if (centreObj?.categorie_label) return centreObj.categorie_label;
+    const c = centres.find(ct => String(ct.id) === String(centre));
+    return c?.typologie || c?.categorie_label || "—";
+  }, [centreObj, centres, centre, selectedTypology]);
+
+  // Calcul des volumes annuels à partir de la grille (ou des valeurs saisies)
+  const calculateVolFromGrid = useCallback(() => {
+    const baseVols = {
+      cOrd: annualParsed.cOrd ?? Number(cOrd || 0),
+      cReco: annualParsed.cReco ?? Number(cReco || 0),
+      amana: annualParsed.amana ?? Number(amana || 0),
+      eBarkia: annualParsed.eBarkia ?? Number(eBarkia || 0),
+      lrh: annualParsed.lrh ?? Number(lrh || 0),
+      sacs: Number(sacs || 0),
+      colis: Number(colis || 0),
+    };
+
+    // Support de la grille structurée (bandoengGridValues) envoyée par l'intervenant
+    if (volumesFluxGrid && !Array.isArray(volumesFluxGrid) && typeof volumesFluxGrid === "object") {
+      const g = volumesFluxGrid || {};
+      const safeNum = (v) => {
+        if (typeof v === "number") return v;
+        if (typeof v === "string") {
+          const n = Number(v.replace(/\s+/g, "").replace(",", "."));
+          return Number.isFinite(n) ? n : 0;
+        }
+        return 0;
+      };
+      const sumBranch = (node, useGlobal) => {
+        if (!node || typeof node !== "object") return 0;
+        const sumLocalAxes = (obj) =>
+          Object.entries(obj || {}).reduce((s, [k, val]) => {
+            const kl = k.toLowerCase();
+            if (typeof val === "object") return s + sumLocalAxes(val);
+            if (kl === "local" || kl === "axes") return s + safeNum(val);
+            return s;
+          }, 0);
+        const sumGlobal = (obj) =>
+          Object.entries(obj || {}).reduce((s, [k, val]) => {
+            const kl = k.toLowerCase();
+            if (typeof val === "object") return s + sumGlobal(val);
+            if (kl === "global" || k === "") return s + safeNum(val);
+            return s;
+          }, 0);
+        return useGlobal ? sumGlobal(node) : sumLocalAxes(node);
+      };
+      const computeProd = (prodKey) => {
+        const obj = g[prodKey] || {};
+        const useGlobal = ["ebarkia", "lrh"].includes(prodKey.toLowerCase());
+        const dep = sumBranch(obj.depot || obj.med, useGlobal);
+        const arr = sumBranch(obj.recu || obj.arrive, useGlobal);
+        return Math.max(dep, arr);
+      };
+      return {
+        cOrd: computeProd("co") || baseVols.cOrd,
+        cReco: computeProd("cr") || baseVols.cReco,
+        amana: computeProd("amana") || baseVols.amana,
+        eBarkia: computeProd("ebarkia") || baseVols.eBarkia,
+        lrh: computeProd("lrh") || baseVols.lrh,
+        sacs: baseVols.sacs,
+        colis: baseVols.colis,
+      };
+    }
+
+    if (volumesFluxGrid && volumesFluxGrid.length > 0) {
+      const getSum = (tag) => {
+        const sum = volumesFluxGrid
+          .filter((row) => {
+            const f = (row.flux || "").toLowerCase();
+            return f === tag || (tag === "ebarkia" && f === "eb");
+          })
+          .reduce((acc, cur) => acc + (Number(cur.volume) || 0), 0);
+
+        return sum > 0 ? sum : null;
+      };
+
+      return {
+        cOrd: getSum("co") ?? baseVols.cOrd,
+        cReco: getSum("cr") ?? baseVols.cReco,
+        amana: getSum("amana") ?? baseVols.amana,
+        eBarkia: getSum("ebarkia") ?? baseVols.eBarkia,
+        lrh: getSum("lrh") ?? baseVols.lrh,
+        sacs: baseVols.sacs,
+        colis: baseVols.colis,
+      };
+    }
+    return baseVols;
+  }, [volumesFluxGrid, annualParsed, cOrd, cReco, amana, eBarkia, lrh, sacs, colis]);
+
   const recapItems = useMemo(() => {
     const pct = (v) => `${formatUnit(v, 0)}%`;
     const num0 = (v) => formatUnit(v, 0);
     const num2 = (v) => formatUnit(v, 2);
+    const vols = calculateVolFromGrid();
     return [
-      { label: "Centre", value: centreLabel || "—" },
-      { label: "Productivite", value: pct(productivite) },
-      { label: "Temps mort", value: `${num0(idleMinutes)} min` },
-      { label: "Shift", value: num0(shift) },
-      { label: "Taux complexite", value: num2(tauxComplexite) },
-      { label: "Nature geo", value: num2(natureGeo) },
-      { label: "Axes arrivee", value: pct(pctAxesArrivee) },
-      { label: "Axes depart", value: pct(pctAxesDepart) },
-      { label: "Collecte", value: pct(pctCollecte) },
-      { label: "Retour", value: pct(pctRetour) },
-      { label: "International", value: pct(pctInternational) },
-      { label: "Marche ordinaire", value: pct(pctMarcheOrdinaire) },
-      { label: "ED %", value: pct(edPercent) },
-      { label: "Colis amana/sac", value: num0(colisAmanaParSac) },
-      { label: "Courriers/sac", value: num0(courriersParSac) },
-      { label: "Colis/collecte", value: num0(colisParCollecte) },
-      { label: "Nbr CO sac", value: num0(nbrCoSac) },
-      { label: "Nbr CR sac", value: num0(nbrCrSac) },
-      { label: "CR par caisson", value: num0(crParCaisson) },
-      { label: "Sacs", value: num0(sacs) },
-      { label: "Colis", value: num0(colis) },
-      { label: "CO", value: num0(cOrd) },
-      { label: "CR", value: num0(cReco) },
-      { label: "E-barkia", value: num0(eBarkia) },
-      { label: "LRH", value: num0(lrh) },
-      { label: "Amana", value: num0(amana) },
+      { label: "Centre", value: centreLabel || "—", cat: "Centre" },
+      { label: "Région", value: centreRegionLabel || "—", cat: "Centre" },
+      { label: "Typologie", value: centreTypologieLabel || "—", cat: "Centre" },
+
+      { label: "Productivité", value: pct(productivite), cat: "Productivité & Temps" },
+      { label: "Temps mort", value: `${num0(idleMinutes)} min`, cat: "Productivité & Temps" },
+      { label: "Shift", value: num0(shift), cat: "Productivité & Temps" },
+      { label: "Taux complexité", value: num2(tauxComplexite), cat: "Productivité & Temps" },
+      { label: "Nature géo", value: num2(natureGeo), cat: "Productivité & Temps" },
+
+      { label: "Axes arrivée", value: pct(pctAxesArrivee), cat: "Flux %" },
+      { label: "Axes départ", value: pct(pctAxesDepart), cat: "Flux %" },
+      { label: "Collecte", value: pct(pctCollecte), cat: "Flux %" },
+      { label: "Retour", value: pct(pctRetour), cat: "Flux %" },
+      { label: "International", value: pct(pctInternational), cat: "Flux %" },
+      { label: "Marché ordinaire", value: pct(pctMarcheOrdinaire), cat: "Flux %" },
+      { label: "ED %", value: pct(edPercent), cat: "Flux %" },
+
+      { label: "Colis amana / sac", value: num0(colisAmanaParSac), cat: "Unités logistiques" },
+      { label: "Courriers / sac", value: num0(courriersParSac), cat: "Unités logistiques" },
+      { label: "Colis / collecte", value: num0(colisParCollecte), cat: "Unités logistiques" },
+      { label: "Nbr CO sac", value: num0(nbrCoSac), cat: "Unités logistiques" },
+      { label: "Nbr CR sac", value: num0(nbrCrSac), cat: "Unités logistiques" },
+      { label: "CR par caisson", value: num0(crParCaisson), cat: "Unités logistiques" },
     ];
   }, [
     centreLabel,
@@ -786,42 +922,56 @@ export default function VueCentre({
     );
   }, [effectiveCentreCategorie, centreObj]);
 
-  const calculateVolFromGrid = useCallback(() => {
-    const baseVols = {
-      cOrd: annualParsed.cOrd ?? Number(cOrd || 0),
-      cReco: annualParsed.cReco ?? Number(cReco || 0),
-      amana: annualParsed.amana ?? Number(amana || 0),
-      eBarkia: annualParsed.eBarkia ?? Number(eBarkia || 0),
-      lrh: annualParsed.lrh ?? Number(lrh || 0),
-      sacs: Number(sacs || 0),
-      colis: Number(colis || 0),
-    };
+  // Capacité Nominale (même logique que page dédiée)
+  const capaciteNominalePositions = useMemo(() => {
+    if (!resultats?.postes || resultats.postes.length === 0) return [];
 
-    if (volumesFluxGrid && volumesFluxGrid.length > 0) {
-      const getSum = (tag) => {
-        const sum = volumesFluxGrid
-          .filter((row) => {
-            const f = (row.flux || "").toLowerCase();
-            return f === tag || (tag === "ebarkia" && f === "eb");
-          })
-          .reduce((acc, cur) => acc + (Number(cur.volume) || 0), 0);
+    // Utiliser exactement la même source que l'intervenant : la grille brute
+    const gridValues =
+      volumesFluxGrid &&
+      !Array.isArray(volumesFluxGrid) &&
+      typeof volumesFluxGrid === "object"
+        ? volumesFluxGrid
+        : {};
 
-        // Si la somme est 0 dans la grille, on garde la valeur de base (prop/state)
-        return sum > 0 ? sum : null;
-      };
+    const tasks = Array.isArray(resultats?.taches) ? resultats.taches
+      : Array.isArray(resultats?.tasks) ? resultats.tasks
+      : [];
 
-      return {
-        cOrd: getSum("co") ?? baseVols.cOrd,
-        cReco: getSum("cr") ?? baseVols.cReco,
-        amana: getSum("amana") ?? baseVols.amana,
-        eBarkia: getSum("ebarkia") ?? baseVols.eBarkia,
-        lrh: getSum("lrh") ?? baseVols.lrh,
-        sacs: baseVols.sacs,
-        colis: baseVols.colis,
-      };
-    }
-    return baseVols;
-  }, [volumesFluxGrid, annualParsed, cOrd, cReco, amana, eBarkia, lrh, sacs, colis]);
+    const getEff = (p) => Number(
+      p?.effectif_actuel ??
+      p?.effectif_Actuel ??
+      p?.effectifActuel ??
+      p?.effectif_statutaire ??
+      p?.effectifStatutaire ??
+      p?.effectif_total ??
+      p?.effectif ??
+      p?.etp_actuel ??
+      p?.etpActuel ??
+      p?.fte_actuel ??
+      p?.fteActuel ??
+      p?.etp ??
+      p?.fte ??
+      p?.actuel ??
+      p?.eff_actuel ??
+      p?.eff ??
+      0
+    );
+
+    return computeCapaciteNominalePositions({
+      hasSimulated: true,
+      postesOptions: resultats.postes,
+      poste: null,
+      idleMinutes,
+      productivite,
+      mergedResults: tasks,
+      backendResults: tasks,
+      gridValues,
+      getGroupeProduit: mapProduit,
+      getEff,
+      heuresNet,
+    });
+  }, [resultats, volumesFluxGrid, calculateVolFromGrid, idleMinutes, productivite, heuresNet]);
 
   const handleNavigateToCategorisation = useCallback(async () => {
     if (!centreId) return;
@@ -850,8 +1000,7 @@ export default function VueCentre({
       state: {
         simulationResults,
         centreInfo: enrichedCentreInfo,
-        volumes: currentVolumes,
-        gridValues: volumesFluxGrid || []
+        volumes: currentVolumes
       }
     });
   }, [centreId, calculateVolFromGrid, resultats, pctAxesArrivee, pctAxesDepart, centreObj, navigate]);
@@ -872,97 +1021,45 @@ export default function VueCentre({
     if (!centreId) return;
     const centreLabel =
       centreObj?.label || centreObj?.name || resultats?.centre_label || "Centre";
-
-    // Préparer les résultats de simulation pour la page Index Adéquation
-    const simulationResults = resultats ? {
-      postes: Array.isArray(resultats) ? resultats : (resultats.postes || []),
-      total_heures: totaux?.total_heures || 0,
-      total_etp_calcule: totaux?.total_etp_calcule || 0,
-      total_etp_arrondi: totaux?.total_etp_arrondi || 0,
-    } : null;
-
     navigate("/app/simulation/index_Adequation", {
-      state: {
-        centreId,
-        centreLabel,
-        simulationResults,
-        centreInfo: {
-          label: centreLabel,
-          categorie: centreCategorie,
-        }
+      state: { centreId, centreLabel },
+    });
+  }, [centreId, centreObj, resultats, navigate]);
+
+  const handleOpenCapNominalePage = useCallback(() => {
+    const state = {
+      centreLabel: centreLabel || "Centre",
+      centreId: centreId || centre,
+      // Données nécessaires à la page Capacité Nominale pour reconstruire exactement les résultats
+      postesOptions: resultats?.postes || [],
+      resultatsTasks: Array.isArray(resultats?.taches) ? resultats.taches
+        : Array.isArray(resultats?.tasks) ? resultats.tasks
+        : [],
+      gridValues: volumesFluxGrid && !Array.isArray(volumesFluxGrid) && typeof volumesFluxGrid === "object"
+        ? volumesFluxGrid
+        : {},
+      positions: capaciteNominalePositions || [],
+      simulationParams: {
+        idleMinutes,
+        productivite,
+        heuresNet,
       },
-    });
-  }, [centreId, centreObj, resultats, totaux, centreCategorie, navigate]);
-
-  // 🆕 Handlers pour les cartes de menu
-  const handleNavigateToSaisonnalite = useCallback(() => {
-    if (!centreId) return;
-    navigate("/app/simulation/saisonnalite", {
-      state: { centreId, centreLabel: centreObj?.label || centreObj?.name || "Centre" },
-    });
-  }, [centreId, centreObj, navigate]);
-
-  const handleNavigateToOrganogramme = useCallback(() => {
-    if (!centreId) return;
-    navigate("/app/simulation/organigramme", {
-      state: { centreId, centreLabel: centreObj?.label || centreObj?.name || "Centre" },
-    });
-  }, [centreId, centreObj, navigate]);
-
-  const handleNavigateToCapaciteNominale = useCallback(() => {
-    if (!centreId) return;
-    const centreLabelNav = centreObj?.label || centreObj?.name || resultats?.centre_label || "Centre";
-    const simulationResults = resultats ? {
-      postes: Array.isArray(resultats) ? resultats : (resultats.postes || []),
-      total_heures: totaux?.total_heures || resultats.total_heures || 0,
-      total_etp_calcule: totaux?.total_etp_calcule || resultats.total_etp_calcule || 0,
-      total_etp_arrondi: totaux?.total_etp_arrondi || resultats.total_etp_arrondi || 0,
-    } : null;
-    const currentVolumes = volumesFluxGrid || calculateVolFromGrid();
-    const simulationParams = {
-      joursOuvres: 264,
-      heuresNet: Number(heuresNet || 0),
-      productivite: Number(productivite || 100),
-      idleMinutes: Number(idleMinutes || 0),
+      simulationResults: resultats || null,
     };
-    const resultatsTasks = Array.isArray(resultats?.taches) ? resultats.taches : (Array.isArray(resultats?.tasks) ? resultats.tasks : []);
-    const postesOptions = Array.isArray(resultats?.postes) ? resultats.postes : [];
+    navigate("/app/simulation/capacite_nominale", { state });
+  }, [navigate, centreLabel, centreId, centre, resultats, volumesFluxGrid, capaciteNominalePositions, idleMinutes, productivite, heuresNet]);
 
-    navigate("/app/simulation/capacite_nominale", {
-      state: {
-        centreId,
-        centreLabel: centreLabelNav,
-        simulationResults,
-        volumes: currentVolumes,
-        simulationParams,
-        resultatsTasks,
-        postesOptions,
-        gridValues: volumesFluxGrid || currentVolumes,
-      },
-    });
-  }, [centreId, centreObj, resultats, totaux, calculateVolFromGrid, volumesFluxGrid, heuresNet, productivite, idleMinutes, navigate]);
+  const handleNavigateToRatios = useCallback(() => {
+    navigate("/app/vue-globale/ratios");
+  }, [navigate]);
 
-  const handleNavigateToComparatifs = useCallback(() => {
-    if (!centreId) return;
-    navigate("/app/simulation/comparatifs", {
-      state: { centreId, centreLabel: centreObj?.label || centreObj?.name || "Centre" },
-    });
-  }, [centreId, centreObj, navigate]);
+  const handleNavigateToOrganigramme = useCallback(() => {
+    navigate("/app/actuel/organigramme");
+  }, [navigate]);
 
-  const handleNavigateToNbre = useCallback(() => {
-    if (!centreId) return;
-    navigate("/app/simulation/nbre", {
-      state: { centreId, centreLabel: centreObj?.label || centreObj?.name || "Centre" },
-    });
-  }, [centreId, centreObj, navigate]);
-
-  const handleNavigateToEconomies = useCallback(() => {
-    if (!centreId) return;
-    navigate("/app/simulation/economies", {
-      state: { centreId, centreLabel: centreObj?.label || centreObj?.name || "Centre" },
-    });
-  }, [centreId, centreObj, navigate]);
-
+  const handleNavigateToSeasonalite = useCallback(() => {
+    navigate("/app/actuel/saisonalite");
+  }, [navigate]);
 
 
   /* ✅ Export CSV */
@@ -1066,24 +1163,13 @@ export default function VueCentre({
       const typePoste = (poste.type_poste || "").toUpperCase();
       const labelPoste = (poste.poste_label || "").toUpperCase();
 
-      // 🚨 DÉTECTION MOI AGRESSIVE (Keywords prioritisés - Aligné avec VueIntervenant) 🚨
+      // 🚨 DÉTECTION MOI AGRESSIVE (Keywords prioritisés) 🚨
       const isMOIKeyword = labelPoste.includes("RECEVEUR") ||
-        labelPoste.includes("CHEF") ||
+        labelPoste.includes("CHEF DE CENTRE") ||
+        labelPoste.includes("CHEF ETABLISSEMENT") ||
         labelPoste.includes("DIRECTEUR") ||
         labelPoste.includes("GERANT") ||
-        labelPoste.includes("RESPONSABLE") ||
-        labelPoste.includes("ADJOINT") ||
-        labelPoste.includes("ASSISTANT") ||
-        labelPoste.includes("ADMIN") ||
-        labelPoste.includes("RH") ||
-        labelPoste.includes("RESSOURCES") ||
-        labelPoste.includes("SECRETAIRE") ||
-        labelPoste.includes("SUPPORT") ||
-        labelPoste.includes("QUALITE") ||
-        labelPoste.includes("PILOTE") ||
-        labelPoste.includes("COORDINATEUR") ||
-        labelPoste.includes("ENCADR") ||
-        labelPoste.includes("SUPERVISEUR");
+        labelPoste.includes("RESPONSABLE");
 
       const isMOI = typePoste === "MOI" ||
         typePoste === "INDIRECT" ||
@@ -1123,8 +1209,20 @@ export default function VueCentre({
       }
     });
 
-    // 🚨 Logique supprimée : On ne force plus MOI fictif à 1 si non trouvé, pour alignement strict avec les données réelles et VueIntervenant.
-    // if (MOI.length === 0) { ... }
+    // 🚨 FORCE VISUEL : Si aucun poste MOI n'est trouvé, on en ajoute un fictif pour justifier le KPI = 1
+    if (MOI.length === 0) {
+      MOI.push({
+        centre_poste_id: 'moi_forced',
+        poste_id: 9999,
+        poste_label: "Encadrement / Structure (Simulé)",
+        type_poste: "MOI",
+        effectif_actuel: 1,
+        etp_calcule: 1,
+        etp_arrondi: 1,
+        ecart: 0,
+        total_heures: 0
+      });
+    }
 
     return {
       rowsMOD: MOD,
@@ -1155,14 +1253,11 @@ export default function VueCentre({
 
   /* ===================== KPI ===================== */
   const kpi = useMemo(() => {
-    const effMOD = totalsMOD.effectif ?? 0;
-    const effMOI = totalsMOI.effectif ?? 0;
-    const effTotal = effMOD + effMOI;
+    let effMOD = totalsMOD.effectif ?? 0;
+    let effMOI = totalsMOI.effectif ?? 0;
+    let effTotal = effMOD + effMOI;
 
-    // 🚨 ALIGNEMENT VUE INTERVENANT : Utiliser `totaux.fte_calcule` si disponible (Backend) pour garantir la cohérence
-    const etpCalcMOD = (totaux && typeof totaux.fte_calcule === 'number')
-      ? totaux.fte_calcule
-      : (totalsMOD.etpCalcule ?? 0);
+    const etpCalcMOD = totalsMOD.etpCalcule ?? 0;
     const etpCalcMOI = totalsMOI.etpCalcule ?? 0;
     const etpCalc = etpCalcMOD + etpCalcMOI;
 
@@ -1171,11 +1266,34 @@ export default function VueCentre({
     // ✅ APS : Priorité à la valeur globale T_APS du centre (Database)
     const valAPS = (centreObj && (centreObj.t_aps_global ?? centreObj.aps_legacy ?? centreObj.T_APS ?? centreObj.t_aps));
 
-    // Suppression du mapping temporaire pour utiliser la valeur réelle de la base de données
-    const finalAPS = valAPS;
+    // 🆕 WORKAROUND TEMPORAIRE: Mapping hardcodé pour centres spécifiques
+    const T_APS_MAPPING = {
+      1913: 2,  // AGENCE MESSAGERIE FES
+      2102: 7,  // KENITRA CENTRE MESSAGERIE
+      2075: 12, // CM MARRAKECH
+      2064: 0,  // OUARZAZAT
+      2108: 0,  // RABAT CD AL IRFAN
+      1942: 7,  // Bandong
+      1952: 25, // CCI
+    };
+
+    const centreId = centreObj?.id;
+    const apsFromMapping = centreId ? T_APS_MAPPING[centreId] : null;
+    const finalAPS = apsFromMapping ?? valAPS;
 
     let apsGlobal = (finalAPS !== undefined && finalAPS !== null) ? Number(finalAPS) : null;
-    const effAPSMOD = apsGlobal !== null ? apsGlobal : (totalsMOD.effectifAPS ?? 0);
+    let effAPSMOD = apsGlobal !== null ? apsGlobal : (totalsMOD.effectifAPS ?? 0);
+
+    // 🆕 OVERRIDE OFFICIEL (Alignement Bandoeng/VueIntervenant)
+    if (internalCentreDetails) {
+      effMOD = Number(internalCentreDetails.mod_global || 0);
+      effMOI = Number(internalCentreDetails.moi_global || 0);
+      effTotal = effMOD + effMOI; // Statutaire
+
+      effAPSMOD = Number(internalCentreDetails.aps || 0);
+      // apsGlobal sert aussi pour apsBrut
+      apsGlobal = effAPSMOD;
+    }
 
     // ✅ NOUVELLE LOGIQUE D'ARRONDI (Demande User)
     // MOD_arrondi = round(MOD_calculé)
@@ -1230,7 +1348,7 @@ export default function VueCentre({
       ecartAPS,
       apsBrut: apsGlobal ?? 0,
     };
-  }, [totalsMOD, totalsMOI, centreObj]);
+  }, [totalsMOD, totalsMOI, centreObj, internalCentreDetails]);
   const formatSigned = (n) => {
     const v = Number(n || 0);
     if (!Number.isFinite(v) || v === 0) return "0";
@@ -1720,142 +1838,122 @@ export default function VueCentre({
   // Ecart APS: Actuel APS - Arrondi APS (Step 70 implicit)
   const dispEcartAPS_Centre = (kpi.effAPSMOD || 0) - dispArrAPSTotal_Centre;
 
+  // Grille des volumes (structure identique à la page Intervenant)
+  const gridValuesDisplay = useMemo(() => {
+    if (volumesFluxGrid && !Array.isArray(volumesFluxGrid) && typeof volumesFluxGrid === "object") {
+      return volumesFluxGrid;
+    }
+    return null;
+  }, [volumesFluxGrid]);
+
+  const createEmptyGrid = () => ({
+    amana: {
+      depot: { gc: { global: "", local: "", axes: "" }, part: { global: "", local: "", axes: "" } },
+      recu: { gc: { global: "", local: "", axes: "" }, part: { global: "", local: "", axes: "" } },
+    },
+    cr: { med: { global: "", local: "", axes: "" }, arrive: { global: "", local: "", axes: "" } },
+    co: { med: { global: "", local: "", axes: "" }, arrive: { global: "", local: "", axes: "" } },
+    ebarkia: { med: "", arrive: "" },
+    lrh: { med: "", arrive: "" },
+  });
+
+  const handleGridChangeLocal = useCallback((path, value) => {
+    setVolumesFluxGrid((prev) => {
+      const clone = JSON.parse(JSON.stringify(prev && !Array.isArray(prev) && typeof prev === "object" ? prev : createEmptyGrid()));
+      let node = clone;
+      for (let i = 0; i < path.length - 1; i += 1) {
+        const key = path[i];
+        if (!node[key] || typeof node[key] !== "object") node[key] = {};
+        node = node[key];
+      }
+      node[path[path.length - 1]] = value;
+      return clone;
+    });
+  }, [setVolumesFluxGrid]);
+
   /* ===================== Rendu ===================== */
   return (
     <div className="space-y-1" style={{ zoom: "90%" }}>
-      {/* 1️⃣ Bandeau selection centre */}
-      <div className="sticky top-[57px] z-20">
-
-        {/* Barre de sélection */}
-        <div className="bg-white/80 backdrop-blur-md border border-slate-200/60 shadow-sm rounded-lg px-3 py-2 flex flex-wrap items-center gap-3 transition-all duration-300">
-
-          {/* Région */}
-          <div className="flex items-center gap-1.5 min-w-[140px] flex-1">
-            <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
-              <MapPin className="w-3 h-3" />
-            </div>
-            <div className="flex flex-col w-full">
-              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                Région
-              </label>
-              <select
-                value={region || ""}
-                onChange={(e) => setRegion(e.target.value || "")}
-                className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer w-full truncate text-left"
-              >
-                <option value="">Sélectionner...</option>
-                {(regions || []).map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.label || r.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+      {/* Volumes annuels - grille identique à la page Intervenant */}
+      {gridValuesDisplay ? (
+        <Card
+          title={<span className="text-xs font-bold text-slate-700 uppercase tracking-wide">Volumes annuels</span>}
+          subtitle="Grille départ / arrivé"
+          className="bg-white border-slate-200 shadow-sm"
+        >
+          <div className="p-1">
+            <BandoengGrid
+              gridValues={gridValuesDisplay}
+              handleGridChange={handleGridChangeLocal}
+            />
           </div>
-
-          <div className="w-px h-6 bg-slate-200 hidden md:block" />
-
-
-          {/* 🆕 Sélecteur Typologie */}
-          <div className="flex items-center gap-1.5 min-w-[140px] flex-1">
-            <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
-              <Tag className="w-3 h-3" />
-            </div>
-            <div className="flex flex-col w-full">
-              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                Typologie
-              </label>
-              <select
-                className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer w-full truncate text-left disabled:opacity-50"
-                value={selectedTypology ?? ""}
-                onChange={(e) => setSelectedTypology(e.target.value)}
-                disabled={!region}
-              >
-                <option value="">Toutes</option>
-                {(categories || []).map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="w-px h-6 bg-slate-200 hidden md:block" />
-
-          {/* Centre */}
-          <div className="flex items-center gap-1.5 min-w-[140px] flex-1">
-            <div className="w-6 h-6 rounded-full bg-blue-50 text-[#005EA8] flex items-center justify-center shrink-0">
-              <Building className="w-3 h-3" />
-            </div>
-            <div className="flex flex-col w-full">
-              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                Centre
-              </label>
-              <select
-                value={centre || ""}
-                onChange={(e) => setCentre(e.target.value || "")}
-                disabled={!region || loading.centres}
-                className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer w-full truncate text-left disabled:opacity-50"
-              >
-                <option value="">Sélectionner...</option>
-                {(centres || []).map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.label || c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-
-
+        </Card>
+      ) : (
+        <div className="text-[11px] text-slate-500 bg-white/70 border border-slate-200 rounded-lg p-3">
+          Aucun volume chargé. Lance une simulation depuis l'intervenant pour récupérer la grille.
         </div>
+      )}
 
-      </div>
       {hasSimulated && (
         <Card
           title={<span className="text-[11px] font-semibold">Rappel des parametres utilises</span>}
           headerRight={
             <button
               type="button"
-              onClick={() => setShowRecapParams(prev => !prev)}
+              onClick={handleToggleDetails}
               className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white/80 px-2 py-1 text-[10px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
             >
-              {showRecapParams ? (
+              {showDetails ? (
                 <EyeOff className="w-3 h-3 text-slate-500" />
               ) : (
                 <Eye className="w-3 h-3 text-slate-500" />
               )}
-              <span>{showRecapParams ? "Masquer" : "Afficher"}</span>
+              <span>{showDetails ? "Masquer details" : "Afficher details"}</span>
             </button>
           }
           bodyClassName="!p-2"
         >
-          {showRecapParams && (
-            <>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                {recapItems.map((item) => (
-                  <div
-                    key={item.label}
-                    className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-white/70 px-2 py-1"
-                  >
-                    <span className="text-[10px] text-slate-500">{item.label}</span>
-                    <span className="text-[11px] font-semibold text-slate-700">{item.value}</span>
+          {(() => {
+            const groups = recapItems.reduce((acc, it) => {
+              const cat = it.cat || "Autres";
+              if (!acc[cat]) acc[cat] = [];
+              acc[cat].push(it);
+              return acc;
+            }, {});
+
+            return (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {Object.entries(groups).map(([cat, items]) => (
+                  <div key={cat} className="bg-white/60 border border-slate-100 rounded-lg p-2 shadow-sm">
+                    <div className="text-[11px] font-bold text-slate-600 mb-1 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                      {cat}
+                    </div>
+                    <div className="grid grid-cols-2 gap-1">
+                      {items.map((item) => (
+                        <div
+                          key={item.label}
+                          className="flex items-center justify-between gap-2 rounded-md border border-slate-100 bg-slate-50/60 px-2 py-1"
+                        >
+                          <span className="text-[10px] text-slate-500">{item.label}</span>
+                          <span className="text-[11px] font-semibold text-slate-700">{item.value}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ))}
               </div>
-              {simDirty && (
-                <div className="mt-2 text-[10px] text-amber-600">
-                  Parametres modifies depuis la derniere simulation.
-                </div>
-              )}
-            </>
+            );
+          })()}
+          {simDirty && (
+            <div className="mt-2 text-[10px] text-amber-600">
+              Parametres modifies depuis la derniere simulation.
+            </div>
           )}
         </Card>
       )}
 
-
+ 
 
       {/* Résultats */}
       {
@@ -1959,7 +2057,10 @@ export default function VueCentre({
                     emphasize
                     total={totalGlobal}
                     toggleable
-                    onToggle={() => setActiveModal('ACTUEL')}
+                    onToggle={() => {
+                      setShowDetails(true);
+                      setActiveModal('ACTUEL');
+                    }}
                     isOpen={activeModal === 'ACTUEL'}
                     customFooter={
                       <EffectifFooter
@@ -1987,7 +2088,10 @@ export default function VueCentre({
                 // Main Total: Calculé Réel sans override (Step 54)
                 total={formatSmallNumber(dispMainTotalCalcul_Centre, 2)}
                 toggleable
-                onToggle={() => setActiveModal('CALC')}
+                onToggle={() => {
+                  setShowDetails(true);
+                  setActiveModal('CALC');
+                }}
                 isOpen={activeModal === 'CALC'}
                 customFooter={
                   <EffectifFooter
@@ -2045,9 +2149,6 @@ export default function VueCentre({
                         </span>
                       </>
                     }
-                    toggleable
-                    onToggle={() => setActiveModal('CALC')}
-                    isOpen={activeModal === 'CALC'}
                     customFooter={
                       <EffectifFooter
                         totalLabel="Écart Statutaire"
@@ -2102,6 +2203,125 @@ export default function VueCentre({
           />
         </div>
       )} */}
+
+      {/* Cartes de navigation principales */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 mt-3">
+        <Card
+          title={<span className="text-[11px] font-semibold">Ratios</span>}
+          subtitle="Indicateurs clés"
+          className="cursor-pointer"
+          headerRight={
+            <button
+              onClick={handleNavigateToRatios}
+              className="inline-flex items-center gap-1 rounded-lg bg-blue-50 px-2 py-1 text-[10px] font-semibold text-blue-700 hover:bg-blue-100"
+            >
+              <Eye className="w-3 h-3" />
+              Ouvrir
+            </button>
+          }
+        >
+          <button
+            onClick={handleNavigateToRatios}
+            className="w-full text-left text-[11px] text-slate-600 hover:text-blue-700"
+          >
+            Visualiser les ratios et KPI.
+          </button>
+        </Card>
+
+        <Card
+          title={<span className="text-[11px] font-semibold">Capacité nominale</span>}
+          subtitle="Tableau complet"
+          className="cursor-pointer"
+          headerRight={
+            <button
+              onClick={handleOpenCapNominalePage}
+              className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700 hover:bg-emerald-100"
+            >
+              <Eye className="w-3 h-3" />
+              Ouvrir
+            </button>
+          }
+        >
+          <button
+            onClick={handleOpenCapNominalePage}
+            className="w-full text-left text-[11px] text-slate-600 hover:text-emerald-700"
+          >
+            {capaciteNominalePositions?.length
+              ? `${capaciteNominalePositions.length} lignes calculées.`
+              : "Aucune donnée disponible."}
+          </button>
+        </Card>
+
+        <Card
+          title={<span className="text-[11px] font-semibold">Catégorisation</span>}
+          subtitle="Complexité & scoring"
+          className="cursor-pointer"
+          headerRight={
+            <button
+              onClick={handleNavigateToCategorisation}
+              disabled={!centre}
+              className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-semibold ${centre
+                ? "bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+                : "bg-slate-100 text-slate-300 cursor-not-allowed"}`}
+            >
+              <Eye className="w-3 h-3" />
+              Ouvrir
+            </button>
+          }
+        >
+          <button
+            onClick={handleNavigateToCategorisation}
+            disabled={!centre}
+            className={`w-full text-left text-[11px] ${centre ? "text-slate-600 hover:text-indigo-700" : "text-slate-400 cursor-not-allowed"}`}
+          >
+            Ajuster la catégorisation du centre.
+          </button>
+        </Card>
+
+        <Card
+          title={<span className="text-[11px] font-semibold">Organigramme</span>}
+          subtitle="Structure du centre"
+          className="cursor-pointer"
+          headerRight={
+            <button
+              onClick={handleNavigateToOrganigramme}
+              className="inline-flex items-center gap-1 rounded-lg bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-700 hover:bg-amber-100"
+            >
+              <Eye className="w-3 h-3" />
+              Ouvrir
+            </button>
+          }
+        >
+          <button
+            onClick={handleNavigateToOrganigramme}
+            className="w-full text-left text-[11px] text-slate-600 hover:text-amber-700"
+          >
+            Consulter l’organigramme.
+          </button>
+        </Card>
+
+        <Card
+          title={<span className="text-[11px] font-semibold">Saisonnalité</span>}
+          subtitle="Variations des volumes"
+          className="cursor-pointer"
+          headerRight={
+            <button
+              onClick={handleNavigateToSeasonalite}
+              className="inline-flex items-center gap-1 rounded-lg bg-pink-50 px-2 py-1 text-[10px] font-semibold text-pink-700 hover:bg-pink-100"
+            >
+              <Eye className="w-3 h-3" />
+              Ouvrir
+            </button>
+          }
+        >
+          <button
+            onClick={handleNavigateToSeasonalite}
+            className="w-full text-left text-[11px] text-slate-600 hover:text-pink-700"
+          >
+            Analyser les pics d’activité.
+          </button>
+        </Card>
+      </div>
 
       {/* Tables MOD / MOI */}
       {
@@ -2203,156 +2423,6 @@ export default function VueCentre({
           </div>
         )
       }
-
-      {/* 🆕 Grille de cartes de menu - Placée à la fin */}
-      {centre && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
-          {/* Simulation Saisonnalité */}
-          <button
-            onClick={handleNavigateToSaisonnalite}
-            className="group relative overflow-hidden rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-cyan-50 p-4 text-left transition-all hover:shadow-lg hover:scale-105 hover:border-blue-300"
-          >
-            <div className="absolute top-2 right-2 opacity-10 group-hover:opacity-20 transition-opacity">
-              <Calendar className="w-12 h-12 text-blue-600" />
-            </div>
-            <div className="relative z-10">
-              <div className="flex items-center gap-2 mb-1">
-                <div className="p-1.5 rounded-lg bg-blue-100">
-                  <Calendar className="w-4 h-4 text-blue-600" />
-                </div>
-              </div>
-              <h3 className="text-sm font-bold text-blue-900">Simulation Saisonnalité</h3>
-            </div>
-          </button>
-
-          {/* Organogramme */}
-          <button
-            onClick={handleNavigateToOrganogramme}
-            className="group relative overflow-hidden rounded-xl border border-rose-200 bg-gradient-to-br from-rose-50 to-pink-50 p-4 text-left transition-all hover:shadow-lg hover:scale-105 hover:border-rose-300"
-          >
-            <div className="absolute top-2 right-2 opacity-10 group-hover:opacity-20 transition-opacity">
-              <Layers className="w-12 h-12 text-rose-600" />
-            </div>
-            <div className="relative z-10">
-              <div className="flex items-center gap-2 mb-1">
-                <div className="p-1.5 rounded-lg bg-rose-100">
-                  <Layers className="w-4 h-4 text-rose-600" />
-                </div>
-              </div>
-              <h3 className="text-sm font-bold text-rose-900">Organigramme</h3>
-            </div>
-          </button>
-
-          {/* Catégorisation */}
-          <button
-            onClick={handleNavigateToCategorisation}
-            className="group relative overflow-hidden rounded-xl border border-red-200 bg-gradient-to-br from-red-50 to-orange-50 p-4 text-left transition-all hover:shadow-lg hover:scale-105 hover:border-red-300"
-          >
-            <div className="absolute top-2 right-2 opacity-10 group-hover:opacity-20 transition-opacity">
-              <Sliders className="w-12 h-12 text-red-600" />
-            </div>
-            <div className="relative z-10">
-              <div className="flex items-center gap-2 mb-1">
-                <div className="p-1.5 rounded-lg bg-red-100">
-                  <Sliders className="w-4 h-4 text-red-600" />
-                </div>
-              </div>
-              <h3 className="text-sm font-bold text-red-900">Catégorisation</h3>
-            </div>
-          </button>
-
-          {/* Index Adéquation */}
-          <button
-            onClick={handleNavigateToAdequation}
-            className="group relative overflow-hidden rounded-xl border border-sky-200 bg-gradient-to-br from-sky-50 to-blue-50 p-4 text-left transition-all hover:shadow-lg hover:scale-105 hover:border-sky-300"
-          >
-            <div className="absolute top-2 right-2 opacity-10 group-hover:opacity-20 transition-opacity">
-              <CheckCircle2 className="w-12 h-12 text-sky-600" />
-            </div>
-            <div className="relative z-10">
-              <div className="flex items-center gap-2 mb-1">
-                <div className="p-1.5 rounded-lg bg-sky-100">
-                  <CheckCircle2 className="w-4 h-4 text-sky-600" />
-                </div>
-              </div>
-              <h3 className="text-sm font-bold text-sky-900">Index Adéquation</h3>
-            </div>
-          </button>
-
-          {/* Capacité Nominale */}
-          <button
-            onClick={handleNavigateToCapaciteNominale}
-            className="group relative overflow-hidden rounded-xl border border-cyan-200 bg-gradient-to-br from-cyan-50 to-teal-50 p-4 text-left transition-all hover:shadow-lg hover:scale-105 hover:border-cyan-300"
-          >
-            <div className="absolute top-2 right-2 opacity-10 group-hover:opacity-20 transition-opacity">
-              <Users className="w-12 h-12 text-cyan-600" />
-            </div>
-            <div className="relative z-10">
-              <div className="flex items-center gap-2 mb-1">
-                <div className="p-1.5 rounded-lg bg-cyan-100">
-                  <Users className="w-4 h-4 text-cyan-600" />
-                </div>
-              </div>
-              <h3 className="text-sm font-bold text-cyan-900">Capacité Nominale</h3>
-            </div>
-          </button>
-
-          {/* Comparatifs */}
-          <button
-            onClick={handleNavigateToComparatifs}
-            className="group relative overflow-hidden rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-yellow-50 p-4 text-left transition-all hover:shadow-lg hover:scale-105 hover:border-amber-300"
-          >
-            <div className="absolute top-2 right-2 opacity-10 group-hover:opacity-20 transition-opacity">
-              <BarChart className="w-12 h-12 text-amber-600" />
-            </div>
-            <div className="relative z-10">
-              <div className="flex items-center gap-2 mb-1">
-                <div className="p-1.5 rounded-lg bg-amber-100">
-                  <BarChart className="w-4 h-4 text-amber-600" />
-                </div>
-              </div>
-              <h3 className="text-sm font-bold text-amber-900">Comparatifs</h3>
-            </div>
-          </button>
-
-          {/* Nbre */}
-          <button
-            onClick={handleNavigateToNbre}
-            className="group relative overflow-hidden rounded-xl border border-indigo-200 bg-gradient-to-br from-indigo-50 to-purple-50 p-4 text-left transition-all hover:shadow-lg hover:scale-105 hover:border-indigo-300"
-          >
-            <div className="absolute top-2 right-2 opacity-10 group-hover:opacity-20 transition-opacity">
-              <FileText className="w-12 h-12 text-indigo-600" />
-            </div>
-            <div className="relative z-10">
-              <div className="flex items-center gap-2 mb-1">
-                <div className="p-1.5 rounded-lg bg-indigo-100">
-                  <FileText className="w-4 h-4 text-indigo-600" />
-                </div>
-              </div>
-              <h3 className="text-sm font-bold text-indigo-900">Nbre</h3>
-            </div>
-          </button>
-
-          {/* Economies */}
-          <button
-            onClick={handleNavigateToEconomies}
-            className="group relative overflow-hidden rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-green-50 p-4 text-left transition-all hover:shadow-lg hover:scale-105 hover:border-emerald-300"
-          >
-            <div className="absolute top-2 right-2 opacity-10 group-hover:opacity-20 transition-opacity">
-              <DollarSign className="w-12 h-12 text-emerald-600" />
-            </div>
-            <div className="relative z-10">
-              <div className="flex items-center gap-2 mb-1">
-                <div className="p-1.5 rounded-lg bg-emerald-100">
-                  <DollarSign className="w-4 h-4 text-emerald-600" />
-                </div>
-              </div>
-              <h3 className="text-sm font-bold text-emerald-900">Economies</h3>
-            </div>
-          </button>
-        </div>
-      )}
     </div >
   );
 }
-

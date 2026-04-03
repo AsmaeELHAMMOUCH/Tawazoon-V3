@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Network, Building2, Sparkles } from 'lucide-react';
+import { Network, Building2, Sparkles, FileSignature } from 'lucide-react';
 
 export default function MainMenu() {
     const navigate = useNavigate();
@@ -31,6 +31,15 @@ export default function MainMenu() {
             color: 'from-sky-500 to-sky-600',
             hoverColor: 'hover:from-sky-600 hover:to-sky-700',
             path: '/app/creer-centre'
+        },
+        {
+            id: 'esign',
+            title: 'ESIGN',
+            description: 'Signature électronique',
+            icon: FileSignature,
+            color: 'from-blue-600 to-indigo-600',
+            hoverColor: 'hover:from-blue-700 hover:to-indigo-700',
+            path: '/esign'
         }
     ];
 
@@ -45,7 +54,7 @@ export default function MainMenu() {
                 </div>
 
                 {/* Cards Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     {menuCards.map((card) => {
                         const Icon = card.icon;
                         return (

@@ -17,6 +17,8 @@ import SimulationDirectionV2 from "./pages/SimulationDirectionV2";
 import VueCCP from "./pages/VueCCP";
 import VueCNA from "./pages/VueCNA";
 import VueCCI from "./pages/VueCCI";
+import SchemaProcessPage from "./pages/SchemaProcessPage";
+import ReferentielPage from "./pages/ReferentielPage";
 
 // Simple error boundary to catch rendering errors in routes
 import React from "react";
@@ -39,7 +41,7 @@ class RouteErrorBoundary extends React.Component {
         <div style={{ padding: 16 }}>
           <h2>Une erreur est survenue</h2>
           <pre style={{ whiteSpace: "pre-wrap" }}>{String(this.state.error)}</pre>
-          <button onClick={() => this.setState({ hasError: false, error: null })} className="btn">RÃ©essayer</button>
+          <button onClick={() => this.setState({ hasError: false, error: null })} className="btn">Réessayer</button>
         </div>
       );
     }
@@ -55,33 +57,53 @@ import Login from "./Login";
 import SimulationMenu from "./pages/SimulationMenu";
 import VueCategorie from "./pages/VueCategorie";
 import SimulationHistoryPage from "./pages/SimulationHistoryPage";
+import EsignMenu from "./pages/EsignMenu";
+import EffectifsParPosition3 from "./pages/EffectifsParPosition3";
+import EffectifGlobalPage from "./pages/EffectifGlobalPage";
+import ComparaisonEffectifPage from "./pages/ComparaisonEffectifPage.jsx";
 
-// ðŸ”¹ IMPORTE TA PAGE MENU PARAMÃ‰TRÃ‰E
+// ?? IMPORTE TA PAGE MENU PARAMÉTRÉE
 import MenuAnalyseEffectifs from "./pages/SimulationMenu";
 import AlertsTestButton from "./components/alerts/AlertsTestButton";
 
 import CategorisationCentre from "./components/views/CategorisationCentre";
-import CentreBuilder from "./pages/CentreBuilder"; // ðŸ†• Page Builder (CrÃ©er Centre)
-import AjoutTache from "./pages/admin/AjoutTache"; // ðŸ†• Page Ajout TÃ¢che
-import CentersTasksManager from "./pages/admin/CentersTasksManager"; // ðŸ†• Page gestion TÃ¢ches
-import PostesManager from "./pages/admin/PostesManager"; // ðŸ†• Page gestion Postes
-import CentresTypologieManager from "./pages/admin/CentresTypologieManager"; // ðŸ†• Page gestion Typologies
-import Glossary from "./pages/help/Glossary"; // ðŸ†• Page Glossaire
-import MainMenu from "./pages/MainMenu"; // ðŸ†• Page Menu Principal
-import CentresUniques from "./pages/CentresUniques"; // ðŸ†• Page Centres Uniques
-import CNDPSimulation from "./pages/centres_uniq/CNDPSimulation"; // ðŸ†• CNDP Isolated Page
-import SimulationCentresUniques from "./pages/SimulationCentresUniques"; // ðŸ†• Parent Page CNDP/Bandoeng
-import GlobalImportPage from "./pages/GlobalImportPage"; // ðŸ†• Global Import
-import SimulationIntervenantAvancee from "./pages/SimulationIntervenantAvancee"; // ðŸ†• Simulation Intervenant AvancÃ©e
+import CentreBuilder from "./pages/CentreBuilder"; // ?? Page Builder (Créer Centre)
+import AjoutTache from "./pages/admin/AjoutTache"; // ?? Page Ajout Tâche
+import CentersTasksManager from "./pages/admin/CentersTasksManager"; // ?? Page gestion Tâches
+import PostesManager from "./pages/admin/PostesManager"; // ?? Page gestion Postes
+import CentresTypologieManager from "./pages/admin/CentresTypologieManager"; // ?? Page gestion Typologies
+import Glossary from "./pages/help/Glossary"; // ?? Page Glossaire
+import MainMenu from "./pages/MainMenu"; // ?? Page Menu Principal
+import CentresUniques from "./pages/CentresUniques"; // ?? Page Centres Uniques
+import CNDPSimulation from "./pages/centres_uniq/CNDPSimulation"; // ?? CNDP Isolated Page
+import SimulationCentresUniques from "./pages/SimulationCentresUniques"; // ?? Parent Page CNDP/Bandoeng
+import GlobalImportPage from "./pages/GlobalImportPage"; // ?? Global Import
+import SimulationIntervenantAvancee from "./pages/SimulationIntervenantAvancee"; // ?? Simulation Intervenant Avancée
 import CapaciteNominale from "./pages/CapaciteNominale";
+import ChronogrammeTachesPage from "./pages/ChronogrammeTachesPage";
+import ChronogrammePositionsPage from "./pages/ChronogrammePositionsPage";
+import ChronogrammeGraphPage from "./pages/ChronogrammeGraphPage";
 import IndexAdequation from "./pages/IndexAdequation";
+import NormesDimensionnementPage from "./pages/NormesDimensionnementPage";
+import SimulationRecommandeePage from "./pages/SimulationRecommandeePage";
+import SimulationRecommandeeGlobalPage from "./pages/SimulationRecommandeeGlobalPage";
+import NormesDimensionnementRecommandeesPage from "./pages/NormesDimensionnementRecommandeesPage";
+import ComparaisonActuelRecoPage from "./pages/ComparaisonActuelRecoPage";
+import CapaciteNominaleRecPage from "./pages/CapaciteNominaleRecPage";
+import SchemaProcessRecommandePage from "./pages/SchemaProcessRecommandePage";
+import ChronogrammeRecommandePage from "./pages/ChronogrammeRecommandePage";
+import ChronogrammePositionRecommandeePage from "./pages/ChronogrammePositionRecommandeePage";
+import SimulationGlobaleV3Page from "./pages/SimulationGlobaleV3Page";
+import RatiosProductivitePage from "./pages/RatiosProductivitePage.jsx";
+import EconomiesBudgetairesPage from "./pages/EconomiesBudgetairesPage";
+import ComparatifPositionsPage from "./pages/ComparatifPositionsPage";
 
 // ...
 
 
 
 
-// ðŸ”¹ NOUVELLE ARCHITECTURE DATA-DRIVEN - IntÃ©grÃ©e directement dans SimulationEffectifs
+// ?? NOUVELLE ARCHITECTURE DATA-DRIVEN - Intégrée directement dans SimulationEffectifs
 
 function NotFound() {
   return <div className="p-6">404 age introuvable</div>;
@@ -111,7 +133,7 @@ function SidebarWithNav(props) {
     // Simulation
     simulation: "/app/simulation/menu",
     comparatif: "/app/simulation?mode=comparatif",
-    // RÃ©sultats
+    // Résultats
     dashboard: "/app",
     "vue-globale": "/app/global",
     "ratios-analyse": "/app/global?view=chart&group=centre",
@@ -143,7 +165,7 @@ function Layout() {
       <AppShell sidebar={SidebarWithNav}>
         <Outlet />
       </AppShell>
-      {/* Bouton de test des alertes - Ã€ retirer en production */}
+      {/* Bouton de test des alertes - À retirer en production */}
       {/* <AlertsTestButton /> */}
     </>
   );
@@ -174,7 +196,13 @@ export default function App() {
         <Route path="/" element={<Accueil />} />
         {/* Page de connexion */}
         <Route path="/login" element={<Login />} />
-        {/* Page de choix d'activitÃ© */}
+        <Route path="/schema-process" element={<SchemaProcessPage />} />
+        <Route path="/referentiel" element={<ReferentielPage />} />
+        {/* Menu ESIGN */}
+        <Route path="/esign" element={<EsignMenu />} />
+        {/* Effectifs par position (version web) */}
+        <Route path="/app/effectifs-par-position3" element={<EffectifsParPosition3 />} />
+        {/* Page de choix d'activité */}
         <Route
           path="/choix-activite"
           element={
@@ -183,6 +211,28 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        <Route path="/app/effectif-global" element={<EffectifGlobalPage />} />
+        <Route path="/comparatif-effectifs" element={<ComparaisonEffectifPage />} />
+        <Route path="/app/actuel/normes" element={<NormesDimensionnementPage />} />
+        <Route path="/app/actuel/capacite-nominale" element={<CapaciteNominale />} />
+        <Route path="/app/actuel/chronogramme/taches" element={<ChronogrammeTachesPage />} />
+        <Route path="/app/actuel/chronogramme/positions" element={<ChronogrammePositionsPage />} />
+        <Route path="/dimensionnement-recommande/position" element={<SimulationRecommandeePage />} />
+        <Route path="/dimensionnement-recommande/global" element={<SimulationRecommandeeGlobalPage />} />
+        <Route path="/dimensionnement-recommande/normes" element={<NormesDimensionnementRecommandeesPage />} />
+        <Route path="/dimensionnement-recommande/comparatif" element={<ComparaisonActuelRecoPage />} />
+        <Route path="/dimensionnement-recommande/capacite-nominale" element={<CapaciteNominaleRecPage />} />
+        <Route path="/dimensionnement-recommande/schema-process" element={<SchemaProcessRecommandePage />} />
+        <Route path="/dimensionnement-recommande/chronogramme/taches" element={<ChronogrammeRecommandePage />} />
+        <Route path="/dimensionnement-recommande/chronogramme/positions" element={<ChronogrammePositionRecommandeePage />} />
+        <Route path="/app/vue-globale/tableau" element={<SimulationGlobaleV3Page />} />
+        <Route path="/app/vue-globale/v3" element={<SimulationGlobaleV3Page />} />
+        <Route path="/app/vue-globale/ratios" element={<RouteErrorBoundary><RatiosProductivitePage /></RouteErrorBoundary>} />
+        <Route path="/app/vue-globale/ratios-productivite" element={<RouteErrorBoundary><RatiosProductivitePage /></RouteErrorBoundary>} />
+        <Route path="/app/vue-globale/economies-budgetaires" element={<ProtectedRoute><EconomiesBudgetairesPage /></ProtectedRoute>} />
+        <Route path="/app/vue-globale/comparatif-positions" element={<ProtectedRoute><ComparatifPositionsPage /></ProtectedRoute>} />
+        <Route path="/app/recommande/schema" element={<SchemaProcessRecommandePage />} />
+        <Route path="/app/actuel/chronogramme/positions/graphe" element={<ChronogrammeGraphPage />} />
         <Route
           path="/en-cours"
           element={
@@ -204,7 +254,7 @@ export default function App() {
           }
         />
 
-        {/* Espace application PROTÃ‰GÃ‰ avec Sidebar */}
+        {/* Espace application PROTÉGÉ avec Sidebar */}
         <Route
           path="/app"
           element={
@@ -216,25 +266,19 @@ export default function App() {
           {/* Redirection vers le menu principal */}
           <Route index element={<Navigate to="/menu-principal" replace />} />
 
-          {/* ====== MENU PARAMÃ‰TRÃ‰ PAR SECTION ====== */}
+          {/* ====== MENU PARAMÉTRÉ PAR SECTION ====== */}
           {/* /app/vue-globale/menu | /app/actuel/menu | /app/recommande/menu */}
           <Route path=":section/menu" element={<MenuAnalyseEffectifs />} />
           <Route path=":section/categorisation" element={<VueCategorie />} />
 
-          {/* ====== VUE GLOBALE â€“ CIBLES ====== */}
-          <Route path="vue-globale/tableau" element={<Dashboard />} />
-          <Route path="vue-globale/ratios" element={<GraphPage />} />
-          <Route
-            path="vue-globale/economies-budgetaires"
-            element={<ResultsGlobal />}
-          />
           <Route path="vue-globale/comparatif" element={<ComparativeView />} />
+          {/* Les routes Ratios sont maintenant en dehors du Layout (pas de double sidebar) */}
           <Route path="simulations/history" element={<SimulationHistoryPage />} />
 
-          {/* ====== SIMULATION â€“ MENUS ET VARIANTS ====== */}
-          {/* Ton ancien menu spÃ©cifique si tu veux le garder */}
+          {/* ====== SIMULATION – MENUS ET VARIANTS ====== */}
+          {/* Ton ancien menu spécifique si tu veux le garder */}
           <Route path="simulation/menu" element={<SimulationMenu />} />
-          {/* Vue Simulation par dÃ©faut (poste) */}
+          {/* Vue Simulation par défaut (poste) */}
           <Route path="simulation" element={<RouteErrorBoundary><SimulationEffectifs /></RouteErrorBoundary>} />
           {/* Vue Simulation CCP (standalone route) */}
           <Route path="simulation/ccp" element={<RouteErrorBoundary><VueCCP /></RouteErrorBoundary>} />
@@ -242,7 +286,7 @@ export default function App() {
           <Route path="simulation/cna" element={<RouteErrorBoundary><VueCNA /></RouteErrorBoundary>} />
           {/* Vue Simulation CCI (standalone route) */}
           <Route path="simulation/cci" element={<RouteErrorBoundary><VueCCI /></RouteErrorBoundary>} />
-          {/* Variantes par flux (centre/direction/rÃ©gion/national) */}
+          {/* Variantes par flux (centre/direction/région/national) */}
           <Route path="simulation/centre" element={<RouteErrorBoundary><SimulationEffectifs /></RouteErrorBoundary>} />
           <Route path="simulation/direction" element={<RouteErrorBoundary><SimulationEffectifs /></RouteErrorBoundary>} />
           <Route path="simulation/direction-v2" element={<RouteErrorBoundary><SimulationDirectionV2 /></RouteErrorBoundary>} />
@@ -254,8 +298,8 @@ export default function App() {
           <Route path="simulation/intervenant-avancee" element={<RouteErrorBoundary><SimulationIntervenantAvancee /></RouteErrorBoundary>} />
           <Route path="simulation/index_Adequation" element={<RouteErrorBoundary><IndexAdequation /></RouteErrorBoundary>} />
 
-          {/* Capacité Nominale */}
-          <Route path="actuel/capacite-nominale" element={<RouteErrorBoundary><CapaciteNominale /></RouteErrorBoundary>} />
+
+
           <Route path="simulation/capacite-nominale" element={<RouteErrorBoundary><CapaciteNominale /></RouteErrorBoundary>} />
           <Route path="simulation/capacite_nominale" element={<RouteErrorBoundary><CapaciteNominale /></RouteErrorBoundary>} />
 
@@ -274,7 +318,7 @@ export default function App() {
           {/* 404 dans /app */}
           <Route
             path="*"
-            element={<div className="p-6">404 â€” Page introuvable</div>}
+            element={<div className="p-6">404 — Page introuvable</div>}
           />
         </Route>
 
@@ -284,6 +328,10 @@ export default function App() {
     </BrowserRouter>
   );
 }
+
+
+
+
 
 
 

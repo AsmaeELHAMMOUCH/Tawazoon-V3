@@ -14,7 +14,8 @@ export default function CapaciteNominaleTable({ positions = [], centreLabel = "C
     }, [positions]);
 
     const filteredPositions = useMemo(() => {
-        return positions.filter(pos => !filterProduit || (pos.produit && pos.produit.includes(filterProduit)));
+        if (!filterProduit) return [];
+        return positions.filter(pos => pos.produit && pos.produit.includes(filterProduit));
     }, [positions, filterProduit]);
 
     const fmt = (n, digits = 0) => {
@@ -134,7 +135,7 @@ export default function CapaciteNominaleTable({ positions = [], centreLabel = "C
             onChange={(e) => setFilterProduit(e.target.value)}
             className="text-sm border-slate-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
           >
-            <option value="">Tous les produits</option>
+            <option value="">-- Choisir un produit --</option>
             {uniqueProduits.map(p => (
               <option key={p} value={p}>{p}</option>
             ))}
@@ -174,43 +175,53 @@ export default function CapaciteNominaleTable({ positions = [], centreLabel = "C
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-            {totalLines.map((line) => (
-                <tr key={line.produit} className="bg-blue-50 font-bold text-slate-800">
-                    <td className="px-2 py-1.5 text-left uppercase">MAX {line.produit}</td>
-                    <td className="px-2 py-1.5 text-center font-mono text-slate-700 border-r border-slate-200">{line.produit}</td>
-                    <td className="px-2 py-1.5 text-right font-mono text-red-700 border-r border-slate-200">{fmt(line.dossiers_mois)}</td>
+            {filteredPositions.length === 0 ? (
+                <tr>
+                    <td colSpan="9" className="px-3 py-6 text-center text-slate-500 text-sm">
+                        {filterProduit ? "Aucune donnée pour ce produit." : "Veuillez choisir un produit dans le filtre pour afficher les résultats."}
+                    </td>
+                </tr>
+            ) : (
+                <>
+                    {totalLines.map((line) => (
+                        <tr key={line.produit} className="bg-blue-50 font-bold text-slate-800">
+                            <td className="px-2 py-1.5 text-left uppercase">{line.produit}</td>
+                            <td className="px-2 py-1.5 text-center font-mono text-slate-700 border-r border-slate-200">{line.produit}</td>
+                            <td className="px-2 py-1.5 text-right font-mono text-red-700 border-r border-slate-200">{fmt(line.dossiers_mois)}</td>
 
-                                    <td className="px-2 py-1.5 text-right font-mono border-r border-slate-200">{fmtBlankZero(line.vm_act_jour, 2)}</td>
-                                    <td className="px-2 py-1.5 text-right font-mono border-r border-slate-200">{fmtBlankZero(line.vm_calc_jour, 2)}</td>
-                                    <td className="px-2 py-1.5 text-right font-mono border-r border-slate-200">{fmtBlankZero(line.vm_reco_jour, 2)}</td>
+                            <td className="px-2 py-1.5 text-right font-mono border-r border-slate-200">{fmtBlankZero(line.vm_act_jour, 2)}</td>
+                            <td className="px-2 py-1.5 text-right font-mono border-r border-slate-200">{fmtBlankZero(line.vm_calc_jour, 2)}</td>
+                            <td className="px-2 py-1.5 text-right font-mono border-r border-slate-200">{fmtBlankZero(line.vm_reco_jour, 2)}</td>
 
-                                    <td className="px-2 py-1.5 text-right font-mono border-r border-slate-200">{fmtBlankZero(line.vm_act_heure, 2)}</td>
-                                    <td className="px-2 py-1.5 text-right font-mono border-r border-slate-200">{fmtBlankZero(line.vm_calc_heure, 2)}</td>
-                                    <td className="px-2 py-1.5 text-right font-mono">{fmtBlankZero(line.vm_reco_heure, 2)}</td>
-                                </tr>
-                            ))}
+                            <td className="px-2 py-1.5 text-right font-mono border-r border-slate-200">{fmtBlankZero(line.vm_act_heure, 2)}</td>
+                            <td className="px-2 py-1.5 text-right font-mono border-r border-slate-200">{fmtBlankZero(line.vm_calc_heure, 2)}</td>
+                            <td className="px-2 py-1.5 text-right font-mono">{fmtBlankZero(line.vm_reco_heure, 2)}</td>
+                        </tr>
+                    ))}
 
-                            {filteredPositions.map((pos, idx) => (
-                                <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                                    <td className="px-2 py-1.5 font-medium text-slate-700 border-r border-slate-100">{pos.poste}</td>
-                                    <td className="px-2 py-1.5 text-center text-slate-600 border-r border-slate-100">
-                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-                                            {pos.produit || "-"}
-                                        </span>
-                                    </td>
+                    {filteredPositions.map((pos, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                            <td className="px-2 py-1.5 font-medium text-slate-700 border-r border-slate-100">{pos.poste}</td>
+                            <td className="px-2 py-1.5 text-center text-slate-600 border-r border-slate-100">
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                                    {pos.produit || "-"}
+                                </span>
+                            </td>
 
-                                    <td className="px-2 py-1.5 text-right font-mono font-bold text-red-700 bg-red-50/10 border-r border-slate-100">
-                                        {fmt(pos.dossiers_mois)}
-                                    </td>
+                            <td className="px-2 py-1.5 text-right font-mono font-bold text-red-700 bg-red-50/10 border-r border-slate-100">
+                                {fmt(pos.dossiers_mois)}
+                            </td>
 
-                                    <td className="px-2 py-1.5 text-right font-mono text-slate-600 border-r border-slate-100">{fmtBlankZero(pos.vm_act_jour, 2)}</td>
-                                    <td className="px-2 py-1.5 text-right font-mono text-slate-600 border-r border-slate-100">{fmtBlankZero(pos.vm_calc_jour, 2)}</td>
-                                    <td className="px-2 py-1.5 text-right font-mono text-slate-600 border-r border-slate-100">{fmtBlankZero(pos.vm_reco_jour, 2)}</td>
-                                    <td className="px-2 py-1.5 text-right font-mono text-slate-600 border-r border-slate-100">{fmtBlankZero(pos.vm_act_heure, 2)}</td>
-                                    <td className="px-2 py-1.5 text-right font-mono text-slate-600 border-r border-slate-100">{fmtBlankZero(pos.vm_calc_heure, 2)}</td>
-                                    <td className="px-2 py-1.5 text-right font-mono text-slate-600">{fmtBlankZero(pos.vm_reco_heure, 2)}</td>
-                                </tr>
-                            ))}
+                            <td className="px-2 py-1.5 text-right font-mono text-slate-600 border-r border-slate-100">{fmtBlankZero(pos.vm_act_jour, 2)}</td>
+                            <td className="px-2 py-1.5 text-right font-mono text-slate-600 border-r border-slate-100">{fmtBlankZero(pos.vm_calc_jour, 2)}</td>
+                            <td className="px-2 py-1.5 text-right font-mono text-slate-600 border-r border-slate-100">{fmtBlankZero(pos.vm_reco_jour, 2)}</td>
+                            <td className="px-2 py-1.5 text-right font-mono text-slate-600 border-r border-slate-100">{fmtBlankZero(pos.vm_act_heure, 2)}</td>
+                            <td className="px-2 py-1.5 text-right font-mono text-slate-600 border-r border-slate-100">{fmtBlankZero(pos.vm_calc_heure, 2)}</td>
+                            <td className="px-2 py-1.5 text-right font-mono text-slate-600">{fmtBlankZero(pos.vm_reco_heure, 2)}</td>
+                        </tr>
+                    ))}
+                </>
+            )}
                         </tbody>
                     </table>
                 </div>

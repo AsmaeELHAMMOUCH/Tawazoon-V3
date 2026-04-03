@@ -60,6 +60,7 @@ export default function Sidebar({
 
   const commonElements = [
     { label: "Capacité Nominale", icon: FileText, key: "capacite-nominale" },
+    { label: "Chronogramme", icon: TimerReset, key: "chronogramme" },
     { label: "Référentiel", icon: BookText, key: "referentiel" },
     { label: "Schéma", icon: Workflow, key: "schema" },
   ];
@@ -77,9 +78,9 @@ export default function Sidebar({
     {
       label: "Tableau de Bord Global",
       icon: LayoutDashboard,
-      path: "/app/vue-globale/tableau",
+      path: "/app/vue-globale/v3",
     },
-    { label: "Ratios", icon: BarChart3, path: "/app/vue-globale/ratios" },
+    { label: "Ratios de Productivité", icon: BarChart3, path: "/app/vue-globale/ratios-productivite" },
     {
       label: "Économies budgétaires",
       icon: PiggyBank,
@@ -293,11 +294,17 @@ export default function Sidebar({
               {commonElements.map(({ label, key }) => (
                 <ItemButton
                   key={`actuel-${key}`}
-                  onClick={() => handleNav(`/app/actuel/${key}`)}
+                  onClick={() => {
+                    let path = `/app/actuel/${key}`;
+                    if (key === "referentiel") path = "/referentiel";
+                    if (key === "schema") path = "/schema-process";
+                    if (key === "chronogramme") path = "/app/actuel/chronogramme/taches";
+                    handleNav(path);
+                  }}
                   className="relative pl-6"
                 >
                   <span className="pointer-events-none absolute left-2 top-1.5 w-3 h-3 border-l border-t border-slate-200/80 rounded-tl" />
-                  {label}
+                  {label === "Chronogramme" ? "Chronogramme de Traitement Unitaire" : label}
                 </ItemButton>
               ))}
             </div>
@@ -328,11 +335,21 @@ export default function Sidebar({
               {commonElements.map(({ label, key }) => (
                 <ItemButton
                   key={`recommande-${key}`}
-                  onClick={() => handleNav(`/app/recommande/${key}`)}
+                  onClick={() => {
+                    let path = `/app/recommande/${key}`;
+                    if (key === "schema") path = "/dimensionnement-recommande/schema-process";
+                    if (key === "referentiel") path = "/referentiel";
+                    if (key === "chronogramme") path = "/dimensionnement-recommande/chronogramme/taches";
+                    handleNav(path);
+                  }}
                   className="relative pl-6"
                 >
                   <span className="pointer-events-none absolute left-2 top-1.5 w-3 h-3 border-l border-t border-slate-200/80 rounded-tl" />
-                  {label}
+                  {
+                    label === "Schéma" ? "Schéma Process recommandé" :
+                      label === "Chronogramme" ? "Chronogramme recommandé" :
+                        label
+                  }
                 </ItemButton>
               ))}
             </div>

@@ -1,4 +1,4 @@
-// Shell au niveau des routes
+﻿// Shell au niveau des routes
 
 
 import { UserGroupIcon, DocumentTextIcon, Cog6ToothIcon, ClockIcon, BookOpenIcon, ChartBarIcon } from '@heroicons/react/24/outline'
@@ -18,16 +18,16 @@ export default function ProcessRecommended(){
     <>
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-900">Résultats de la simulation – Processus recommandé</h1>
+          <h1 className="text-2xl font-extrabold text-slate-900">RÃ©sultats de la simulation â€“ Processus recommandÃ©</h1>
           <p className="text-slate-600">Choisissez un module ci-dessous</p>
         </div>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           <Tile to="/process/reco/positions" title="Simulation Par Position" icon={UserGroupIcon} />
-          <Tile to="/process/reco/global" title="Simulation Globale" icon={DocumentTextIcon} />
+          <Tile to="/app/effectif-global" title="Simulation Globale" icon={DocumentTextIcon} />
           <Tile to="/process/reco/norms" title="Normes de dimensionnement" icon={Cog6ToothIcon} />
           <Tile to="/process/reco/chrono" title="Chronogramme de Traitement Unitaire" icon={ClockIcon} />
-          <Tile to="/process/reco/referentiel" title="Référentiel" icon={BookOpenIcon} />
-          <Tile to="/process/reco/schema" title="Schéma Process" icon={ChartBarIcon} />
+          <Tile to="/process/reco/referentiel" title="RÃ©fÃ©rentiel" icon={BookOpenIcon} />
+          <Tile to="/process/reco/schema" title="SchÃ©ma Process" icon={ChartBarIcon} />
         </div>
       </div>
     </>

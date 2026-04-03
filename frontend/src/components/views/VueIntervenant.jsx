@@ -1060,6 +1060,12 @@ export default function VueIntervenant({
     console.log("??? [VueIntervenant] Click Simuler. State Taux:", tauxComplexite, "NatureGeo:", natureGeo);
     const ratioCollecte = Math.max(1, parseNonNeg(colisParCollecte) ?? 1);
 
+    // Volumes à propager vers la page Centre (grille détaillée + flux aggregés éventuels)
+    const volumesOverride = {
+      grid_values: gridValues || null,
+      volumes_flux_grid: volumesFluxGrid || null,
+    };
+
     onSimuler({
       colis_amana_par_sac: parseNonNeg(colisAmanaParSac) ?? 5,
       courriers_par_sac: parseNonNeg(courriersParSac) ?? 4500,
@@ -1070,8 +1076,9 @@ export default function VueIntervenant({
       ed_percent: Number(edPercent || 0), // ?? % En dehors
       pct_collecte: Number(pctCollecte || 0), // ?? % Collecte
       pct_retour: Number(pctRetour || 0), // ?? % Retour
+      volumes: volumesOverride,
     });
-  }, [onSimuler, colisParCollecte, colisAmanaParSac, courriersParSac, partParticuliers, tauxComplexite, natureGeo, edPercent, pctCollecte, pctRetour, pctInternational]);
+  }, [onSimuler, colisParCollecte, colisAmanaParSac, courriersParSac, partParticuliers, tauxComplexite, natureGeo, edPercent, pctCollecte, pctRetour, pctInternational, gridValues, volumesFluxGrid]);
 
   // ?? Organigramme Data Logic (Align� sur Bandoeng)
   const orgChartData = useMemo(() => {
@@ -1918,7 +1925,6 @@ export default function VueIntervenant({
     </div>
   );
 }
-
 
 
 

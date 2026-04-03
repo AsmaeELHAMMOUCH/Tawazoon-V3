@@ -53,7 +53,9 @@ export function computeCapaciteNominalePositions({
       const k = (key || "").toLowerCase();
       if (typeof node === "number" || typeof node === "string") {
         if (useGlobal) {
-          return k === "global" ? safeNum(node) : 0;
+          // Pour EBARKIA/LRH : accepter les feuilles numériques même sans clé "global"
+          if (k === "global" || k === "") return safeNum(node);
+          return 0;
         }
         return (k === "local" || k === "axes") ? safeNum(node) : 0;
       }
@@ -89,7 +91,15 @@ export function computeCapaciteNominalePositions({
   validPostes.forEach(posteDef => {
     const posteIds = [posteDef.id, posteDef.poste_id, posteDef.centre_poste_id].filter(Boolean).map(String);
     const posteIdStr = posteIds[0] || "";
-    const posteLabel = posteDef.label || posteDef.nom_poste || "Poste " + posteIdStr;
+    const posteLabel =
+      posteDef.label ||
+      posteDef.nom_poste ||
+      posteDef.poste_label ||
+      posteDef.intitule_rh ||
+      posteDef.intitule ||
+      posteDef.name ||
+      posteDef.titre ||
+      "Poste " + posteIdStr;
     const effectifActuel = getEff(posteDef);
     const hRef = heuresNetParJour || 0;
 

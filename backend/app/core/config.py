@@ -1,13 +1,17 @@
 from pydantic_settings import BaseSettings
+from pathlib import Path
 from typing import Optional
 
 class Settings(BaseSettings):
     # Database
     DB_DRIVER: str = "ODBC Driver 17 for SQL Server"
-    DB_SERVER: str = "BK-P-06"
+    DB_SERVER: str = "BK-P-07"
     DB_NAME: str = "simulateur"
     DB_USER: str = "sa"
-    DB_PASSWORD: str = "Dev@2000"
+    DB_PASSWORD: str = "Sql@123"
+    LOGO_BARID: str = "BaridLogo.png"
+    LOGO_ALMAV: str = "AlmavLogo.png"
+    SCHEMA_REC: str = "schema_rec.png"
     
     # API
     API_V1_PREFIX: str = "/api"
@@ -27,9 +31,14 @@ class Settings(BaseSettings):
             f"TrustServerCertificate=yes;"  # Ajoute cela si tu utilises un certificat auto-signé
     )
 
+    @property
+    def assets_dir(self) -> Path:
+        return Path(__file__).resolve().parents[2] / "assets"
+
     
     class Config:
         env_file = ".env"
         case_sensitive = True
+        extra = "allow"
 
 settings = Settings()
